@@ -26,7 +26,7 @@ jobs:
       - name: Assemble site
         run: |
           mkdir _site
-          cp index.html _site/
+          cp index.html README.md _site/
           cp -R docs examples src _site/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v4
