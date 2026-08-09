@@ -62,6 +62,7 @@ const webAudio = document.querySelector('compost-audio');
 const webMIDI = document.querySelector('compost-midi');
 const midiMappingsEditor = document.querySelector('compost-midi-mappings');
 const midiDrawer = document.querySelector('[data-midi-drawer]');
+const midiActivityLED = document.querySelector('[data-midi-activity]');
 const settingsDrawer = document.querySelector('.settings-drawer');
 const midiMapButton = document.querySelector('[data-midi-map-button]');
 const mobileLayout = matchMedia('(max-width: 560px)');
@@ -78,6 +79,7 @@ let scopeCaptureFrame = 0;
 let scopeFrameCount = 0;
 let scopeFrameStartedAt = performance.now();
 let mobileDrawerLayout = false;
+let midiActivityTimeout = 0;
 
 scope.addEventListener('scope-frame', ({ detail }) => {
   if (audio) recordScopeFrameRate(detail.time);
@@ -323,6 +325,9 @@ keyboard.addEventListener('note-up', (event) => {
 
 webMIDI.addEventListener('midi-message', (event) => {
   const { message } = event.detail;
+  clearTimeout(midiActivityTimeout);
+  midiActivityLED.classList.add('active');
+  midiActivityTimeout = setTimeout(() => midiActivityLED.classList.remove('active'), 60);
   mappings.handleMIDIMessage(event);
   keyboard.handleExternalMIDI(message);
 

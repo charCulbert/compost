@@ -221,6 +221,8 @@ test('the signal generator is a drawer-based plain AudioWorklet integration', ()
 
   assert.match(midiDrawer, /edge="left"/u);
   assert.match(html, /\.midi-drawer:not\(\[open\]\) \{[\s\S]*width: var\(--demo-toolbar-control-height\)/u);
+  assert.match(midiDrawer, /data-midi-activity aria-hidden="true"/u);
+  assert.match(main, /midi-message[\s\S]*midiActivityLED\.classList\.add\('active'\)[\s\S]*setTimeout/u);
   assert.match(midiDrawer, /<compost-midi id="midi">/u);
   assert.match(midiDrawer, /<compost-midi-mappings/u);
   assert.match(midiDrawer, /<compost-drawer class="midi-monitor-drawer" edge="top" label="MIDI Monitor">[\s\S]*<compost-midi-monitor/u);

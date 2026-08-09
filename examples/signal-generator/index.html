@@ -91,6 +91,27 @@
         width: var(--demo-toolbar-control-height);
       }
 
+      .midi-drawer-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .midi-activity-led {
+        width: 7px;
+        height: 7px;
+        flex: none;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 72%, transparent);
+        opacity: 0.18;
+        transition: opacity 20ms linear;
+      }
+
+      .midi-activity-led.active {
+        opacity: 1;
+      }
+
       .drawer-stack {
         display: grid;
         gap: 16px;
@@ -861,7 +882,10 @@
         min-size="420"
         max-size="640"
       >
-        <span slot="title">MIDI</span>
+        <span slot="title" class="midi-drawer-title">
+          MIDI
+          <span class="midi-activity-led" data-midi-activity aria-hidden="true"></span>
+        </span>
         <div class="drawer-stack">
           <section class="drawer-section">
             <h2>Devices</h2>
