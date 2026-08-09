@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <style>
+      /* Keep the option controls reachable above the stopped modal scrim. */
+      [data-demo="compost-audio"] .demo-options {
+        position: relative;
+        z-index: 1100;
+        background: var(--panel);
+      }
+    </style>
+    <script type="module" src="../../../src/components/compost-audio.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-audio">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-audio">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Options</legend>
+            <label class="check">
+              <input type="checkbox" data-option="audio-modal" checked>
+              Modal while stopped
+            </label>
+            <label class="check">
+              <input type="checkbox" data-option="audio-centered">
+              Center while stopped
+            </label>
+            <label>
+              Latency hint
+              <compost-select data-option="audio-latency">
+                <option value="0" selected>Exact 0</option>
+                <option value="interactive">Interactive</option>
+                <option value="balanced">Balanced</option>
+                <option value="playback">Playback</option>
+              </compost-select>
+            </label>
+            <button class="example-nav-button" type="button" data-option="audio-close">
+              Close context
+            </button>
+            <small class="muted">The power button suspends. Close the context to apply a new latency hint on the next start.</small>
+            <output data-option-state>Modal · exact 0</output>
+          </fieldset>
+          <div class="demo-showcase">
+            <p class="muted">The component owns one AudioContext: start, suspend, and resume it. Toggle presentation options while stopped.</p>
+            <compost-audio
+              modal
+              latency-hint="0"
+              start-label="Start context"
+              stop-label="Suspend context"
+              data-option-target="audio"
+            ></compost-audio>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide" data-usage-after>
+        <h2>AudioContext</h2>
+        <dl class="audio-stats" data-audio-stats aria-label="Audio context statistics">
+          <dt>State</dt>
+          <dd data-audio-stat="state">not started</dd>
+          <dt>Sample rate</dt>
+          <dd data-audio-stat="sampleRate">not available</dd>
+          <dt>Base latency</dt>
+          <dd data-audio-stat="baseLatency">not available</dd>
+          <dt>Current time</dt>
+          <dd data-audio-stat="currentTime">not available</dd>
+        </dl>
+      </section>
+    </main>
+  </body>
+</html>

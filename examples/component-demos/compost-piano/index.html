@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-piano.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-piano">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-piano">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Options</legend>
+            <label>
+              Root note
+              <input type="number" data-option="piano-root" min="0" max="127" step="1" value="60">
+            </label>
+            <label>
+              Note count
+              <input type="number" data-option="piano-count" min="1" max="49" step="1" value="25">
+            </label>
+            <label class="check">
+              <input type="checkbox" data-option="piano-docked" checked>
+              Docked keyboard
+            </label>
+            <output data-option-state>60 · 25 notes · docked</output>
+          </fieldset>
+          <div class="demo-showcase">
+            <p class="muted">Use pointer or computer keys. Turn docking off to place the keyboard in the normal layout flow.</p>
+            <compost-piano root-note="60" note-count="25" dock data-option-target="piano"></compost-piano>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+  </body>
+</html>

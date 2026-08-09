@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost Parameter Sync</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <script type="module" src="../shared/example-page.js"></script>
+    <script type="module" src="./main.js"></script>
+    <style>
+      .parameter-sync-controls {
+        display: grid;
+        grid-template-columns: minmax(140px, 0.45fr) minmax(240px, 1fr);
+        gap: clamp(24px, 6vw, 72px);
+        align-items: center;
+        max-width: 720px;
+      }
+
+      .parameter-sync-controls compost-slider {
+        display: block;
+        width: min(100%, 360px);
+      }
+
+      .parameter-sync-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+
+      @media (max-width: 560px) {
+        .parameter-sync-controls { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body data-example-id="parameter-sync" data-no-theme-selector>
+    <main class="shell">
+      <header class="topbar" data-example-nav>
+        <div>
+          <p>Compost example</p>
+          <h1>Parameter Sync</h1>
+        </div>
+      </header>
+
+      <section class="workbench">
+        <div class="panel wide">
+          <p class="muted">
+            Both controls use <code>parameter-id="frequency"</code>. Edit either one and the host mirrors the value to both.
+          </p>
+        </div>
+        <div class="panel wide">
+          <div class="parameter-sync-controls">
+            <compost-knob parameter-id="frequency" label="Freq" curve="log" mid="1000"></compost-knob>
+            <compost-slider parameter-id="frequency" label="Frequency" curve="log" mid="1000"></compost-slider>
+          </div>
+          <div class="parameter-sync-actions">
+            <button class="example-nav-button" id="set-880">Host sets Frequency to 880 Hz</button>
+          </div>
+        </div>
+      </section>
+      <div class="demo-corner-title">Parameter Sync</div>
+    </main>
+  </body>
+</html>

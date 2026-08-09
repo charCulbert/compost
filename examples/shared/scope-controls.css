@@ -1,0 +1,171 @@
+.scope-stack {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  gap: 0;
+  align-content: start;
+  justify-items: center;
+  position: relative;
+}
+
+.scope-stack compost-scope {
+  width: 100%;
+  height: var(--signal-scope-height);
+  --scope-height: 100%;
+  --scope-border: transparent;
+}
+
+.scope-fps {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.scope-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  align-items: start;
+  justify-content: start;
+}
+
+.scope-toggle {
+  position: absolute;
+  top: calc(var(--signal-scope-height) - 32px);
+  z-index: 3;
+}
+
+.scope-trigger-toggle { left: 6px; }
+.scope-window-toggle { right: 6px; }
+.scope-toggle > span { display: none; }
+
+.scope-toggle-buttons {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  min-width: 0;
+  height: 26px;
+  overflow: hidden;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+}
+
+.scope-toggle-buttons button {
+  min-width: 0;
+  padding: 0 3px;
+  border: 0;
+  border-right: 1px solid var(--control-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.scope-toggle-buttons button:last-child { border-right: 0; }
+
+.scope-toggle-buttons button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--active-text);
+}
+
+.scope-toggle-buttons button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.scope-control-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(210px, 260px);
+  width: 100%;
+  gap: 0;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.scope-number-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.scope-number-control compost-number-box {
+  --number-box-width: 100%;
+  --number-box-height: 28px;
+  min-width: 0;
+}
+
+.scope-trigger-level {
+  grid-template-columns: max-content 100px;
+  align-self: start;
+  padding: 10px;
+}
+
+.scope-number-column {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.scope-number-column .scope-number-control {
+  grid-template-columns: max-content 100px;
+  justify-content: end;
+  gap: 2px;
+}
+
+.scope-label-editors {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.scope-label-editor {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.scope-label-editor input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--control-border);
+  border-radius: 0;
+  background: var(--control-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.scope-label-editor input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.scope-number-control[hidden] { display: none; }

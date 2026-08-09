@@ -1,0 +1,56 @@
+{
+  "name": "compost",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Web Components and utilities for audio app UIs.",
+  "author": "Charlie Culbert",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/charCulbert/compost.git"
+  },
+  "homepage": "https://charculbert.github.io/compost/",
+  "bugs": "https://github.com/charCulbert/compost/issues",
+  "main": "./src/components/index.js",
+  "exports": {
+    ".": "./src/components/index.js",
+    "./components": "./src/components/index.js",
+    "./components/compost-audio": "./src/components/compost-audio.js",
+    "./components/compost-button": "./src/components/compost-button.js",
+    "./components/compost-device-selector": "./src/components/compost-device-selector.js",
+    "./components/compost-drawer": "./src/components/compost-drawer.js",
+    "./components/compost-knob": "./src/components/compost-knob.js",
+    "./components/compost-midi": "./src/components/compost-midi.js",
+    "./components/compost-midi-mappings": "./src/components/compost-midi-mappings.js",
+    "./components/compost-midi-monitor": "./src/components/compost-midi-monitor.js",
+    "./components/compost-number-box": "./src/components/compost-number-box.js",
+    "./components/compost-piano": "./src/components/compost-piano.js",
+    "./components/compost-scope": "./src/components/compost-scope.js",
+    "./components/compost-select": "./src/components/compost-select.js",
+    "./components/compost-slider": "./src/components/compost-slider.js",
+    "./themes": "./src/themes.css",
+    "./device-settings": "./src/device-settings.js",
+    "./midi": "./src/midi.js",
+    "./midi-learn-ui": "./src/midi-learn-ui.js",
+    "./midi-mapping": "./src/midi-mapping.js",
+    "./midi-mappings": "./src/midi-mappings.js",
+    "./parameter-controller": "./src/parameter-controller.js",
+    "./parameter-scale": "./src/parameter-scale.js",
+    "./utils": "./src/utils.js"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "dev": "python3 -m http.server 8000",
+    "test": "node --test"
+  },
+  "keywords": [
+    "web-components",
+    "audio",
+    "midi",
+    "audio-worklet",
+    "synth"
+  ]
+}

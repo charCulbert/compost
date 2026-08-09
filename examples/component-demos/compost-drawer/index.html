@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-drawer.js" data-usage-import></script>
+    <script type="module" src="../../../src/components/compost-knob.js"></script>
+    <script type="module" src="../../../src/components/compost-slider.js"></script>
+    <script type="module" src="../shared-demo.js"></script>
+    <script type="module" src="./main.js"></script>
+    <style>
+      .panel,
+      .example-nav-button {
+        border-radius: 0;
+      }
+      .drawer-playground {
+        display: grid;
+        grid-template-columns: minmax(210px, 0.28fr) minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+      }
+      .drawer-options {
+        display: grid;
+        gap: 12px;
+        margin: 0;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 0;
+      }
+      .drawer-options label {
+        display: grid;
+        gap: 5px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .drawer-options input:not([type="checkbox"]),
+      .drawer-options compost-select,
+      .drawer-options button {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 32px;
+        font: inherit;
+      }
+      .drawer-options .check {
+        grid-template-columns: auto 1fr;
+        align-items: center;
+      }
+      [data-drawer-demo] {
+        --compost-drawer-size: 240px;
+        --compost-drawer-bg: #242424;
+        --compost-drawer-border: #575757;
+        --compost-drawer-text: #f1f1ef;
+        --compost-drawer-title-bg: #353535;
+        --compost-drawer-title-hover-bg: #414141;
+        --compost-drawer-focus: #71b7ff;
+      }
+      .drawer-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 28px;
+        min-height: 150px;
+      }
+      .drawer-controls compost-slider {
+        width: min(260px, 100%);
+      }
+      .drawer-showcases {
+        display: grid;
+        gap: 14px;
+        min-width: 0;
+      }
+      .drawer-stage {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+        height: 520px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        background: var(--bg);
+      }
+      .drawer-stage-main {
+        grid-column: 2;
+        grid-row: 1;
+        display: grid;
+        place-items: center;
+        min-height: 0;
+        color: var(--muted);
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: 44px 44px;
+      }
+      [data-drawer-id="left"] {
+        grid-column: 1;
+        grid-row: 1 / 3;
+        --compost-drawer-size: 230px;
+      }
+      [data-drawer-id="bottom"] {
+        grid-column: 2;
+        grid-row: 2;
+        width: 100%;
+        --compost-drawer-size: 220px;
+      }
+      .browser-list {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .browser-list li {
+        padding-bottom: 7px;
+        border-bottom: 1px solid var(--compost-drawer-border);
+      }
+      .drawer-state {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      @media (max-width: 720px) {
+        .drawer-playground {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body data-demo="compost-drawer">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-drawer">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <template data-usage-example>
+          <compost-drawer open>
+            <span slot="title">Instrument</span>
+            Any elements can live here.
+          </compost-drawer>
+        </template>
+        <div class="drawer-playground">
+          <fieldset class="drawer-options">
+            <legend>Options</legend>
+            <label>
+              Drawer
+              <compost-select data-option="target">
+                <option value="bottom">Docked bottom</option>
+                <option value="left">Docked left</option>
+              </compost-select>
+            </label>
+            <label class="check">
+              <input type="checkbox" data-option="open" checked>
+              Open
+            </label>
+            <label>
+              Title
+              <input type="text" data-option="title" value="Instrument">
+            </label>
+            <label>
+              Size
+              <input type="range" data-option="size" min="120" max="420" value="240">
+            </label>
+            <label>
+              Min size
+              <input type="number" data-option="min-size" min="0" max="1200" step="1" value="100">
+            </label>
+            <label>
+              Max size
+              <input type="number" data-option="max-size" min="0" max="1200" step="1" value="420">
+            </label>
+            <output class="drawer-state" data-drawer-state>Open</output>
+          </fieldset>
+          <div class="drawer-showcases">
+            <div class="drawer-stage">
+              <compost-drawer open resizable edge="left"
+                min-size="100" max-size="420" data-drawer-demo data-drawer-id="left">
+                <span slot="title" data-drawer-title>Browser</span>
+                <ul class="browser-list">
+                  <li>Sounds</li>
+                  <li>Drums</li>
+                  <li>Instruments</li>
+                  <li>Audio Effects</li>
+                  <li>Plug-ins</li>
+                  <li>Samples</li>
+                </ul>
+              </compost-drawer>
+              <div class="drawer-stage-main">Left and bottom drawers resize independently.</div>
+              <compost-drawer open resizable edge="bottom" min-size="100" max-size="420"
+                data-drawer-demo data-drawer-id="bottom">
+                <span slot="title" data-drawer-title>Instrument</span>
+                <div class="drawer-controls">
+                  <compost-knob label="Gain" value="0.7"></compost-knob>
+                  <compost-slider label="Tone" value="0.45"></compost-slider>
+                  <label class="drawer-enabled"><input type="checkbox" checked> Enabled</label>
+                </div>
+              </compost-drawer>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

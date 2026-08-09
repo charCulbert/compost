@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-button.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-button">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-button">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Options</legend>
+            <label>
+              Mode
+              <compost-select data-option="button-mode">
+                <option value="momentary" selected>Momentary ping</option>
+                <option value="switch">Latch / switch</option>
+              </compost-select>
+            </label>
+            <label>
+              Label
+              <input type="text" data-option="button-label" value="Ping">
+            </label>
+            <output data-option-state>Momentary · square corners</output>
+          </fieldset>
+          <div class="demo-showcase">
+            <p class="muted">Momentary buttons emit a ping; switch mode latches. Buttons use square corners.</p>
+            <div class="control-row">
+              <compost-button name="ping" parameter-id="ping" label="Ping" data-option-target="button"></compost-button>
+              <compost-button mode="switch" name="latch" parameter-id="latch" label="Latch"></compost-button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+  </body>
+</html>

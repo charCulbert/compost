@@ -1,0 +1,221 @@
+:root,
+[data-compost-theme="dark"] {
+  --compost-theme-bg: #1f1f1f;
+  --compost-theme-panel: #2c2c2c;
+  --compost-theme-panel-glass: rgba(44, 44, 44, 0.94);
+  --compost-theme-line: rgba(255, 255, 255, 0.18);
+  --compost-theme-text: #f2f2f2;
+  --compost-theme-muted: #aaaaaa;
+  --compost-theme-accent: #8ea9c7;
+  --compost-theme-learn: #6fa8eb;
+  --compost-theme-danger: #d06455;
+  --compost-theme-control-bg: #151515;
+  --compost-theme-control-border: rgba(255, 255, 255, 0.24);
+  --compost-theme-track: rgba(255, 255, 255, 0.16);
+  --compost-theme-active-text: #12161b;
+  --compost-theme-color-scheme: dark;
+  --compost-theme-scope-bg: #121212;
+  --compost-theme-scope-trace: var(--compost-theme-accent);
+}
+
+[data-compost-theme="light"] {
+  --compost-theme-bg: #d0d1ce;
+  --compost-theme-panel: #e5e5e2;
+  --compost-theme-panel-glass: rgba(229, 229, 226, 0.96);
+  --compost-theme-line: rgba(33, 38, 43, 0.24);
+  --compost-theme-text: #24282c;
+  --compost-theme-muted: #5f656a;
+  --compost-theme-accent: #6689ad;
+  --compost-theme-learn: #176ca8;
+  --compost-theme-danger: #a64d45;
+  --compost-theme-control-bg: #f3f3f0;
+  --compost-theme-control-border: rgba(33, 38, 43, 0.34);
+  --compost-theme-track: rgba(33, 38, 43, 0.18);
+  --compost-theme-active-text: #111820;
+  --compost-theme-color-scheme: light;
+  --compost-theme-scope-bg: #f7f7f4;
+  --compost-theme-scope-trace: #3f6389;
+}
+
+[data-compost-theme="gruvbox"] {
+  --compost-theme-bg: #282828;
+  --compost-theme-panel: #3c3836;
+  --compost-theme-panel-glass: rgba(60, 56, 54, 0.88);
+  --compost-theme-line: rgba(146, 131, 116, 0.5);
+  --compost-theme-text: #ebdbb2;
+  --compost-theme-muted: #a89984;
+  --compost-theme-accent: #d79921;
+  --compost-theme-learn: #fabd2f;
+  --compost-theme-danger: #fb4934;
+  --compost-theme-control-bg: #1d2021;
+  --compost-theme-control-border: rgba(146, 131, 116, 0.58);
+  --compost-theme-track: rgba(146, 131, 116, 0.3);
+  --compost-theme-active-text: #1d2021;
+  --compost-theme-color-scheme: dark;
+  --compost-theme-scope-bg: #1d2021;
+  --compost-theme-scope-trace: var(--compost-theme-accent);
+}
+
+:where(
+  compost-audio,
+  compost-button,
+  compost-device-selector,
+  compost-drawer,
+  compost-knob,
+  compost-midi,
+  compost-midi-mappings,
+  compost-midi-monitor,
+  compost-number-box,
+  compost-scope,
+  compost-select,
+  compost-slider
+) {
+  color: var(--compost-theme-text);
+}
+
+compost-select {
+  --compost-select-bg: var(--compost-theme-control-bg);
+  --compost-select-border: var(--compost-theme-control-border);
+  --compost-select-text: var(--compost-theme-text);
+  --compost-select-active-bg: var(--compost-theme-accent);
+  --compost-select-active-text: var(--compost-theme-active-text);
+  --compost-select-hover-bg: color-mix(in srgb, var(--compost-theme-control-bg) 82%, var(--compost-theme-text));
+  --compost-select-focus: var(--compost-theme-accent);
+}
+
+compost-button {
+  --compost-button-bg: var(--compost-theme-control-bg);
+  --compost-button-border: var(--compost-theme-control-border);
+  --compost-button-text: var(--compost-theme-text);
+  --compost-button-fill: var(--compost-theme-accent);
+  --compost-button-fill-text: var(--compost-theme-active-text);
+  --compost-button-focus-bracket-color: var(--compost-theme-accent);
+  --compost-button-gap: var(--compost-theme-control-bg);
+  --compost-button-color-scheme: var(--compost-theme-color-scheme);
+  --midi-map-learn-color: var(--compost-theme-learn);
+  --midi-map-label-text: var(--compost-theme-learn);
+}
+
+compost-audio {
+  --compost-audio-text: var(--compost-theme-text);
+  --compost-audio-muted: var(--compost-theme-muted);
+  --compost-audio-button-bg: var(--compost-theme-control-bg);
+  --compost-audio-active-text: var(--compost-theme-active-text);
+  --compost-audio-inactive-color: var(--compost-theme-text);
+  --compost-audio-active-color: var(--compost-theme-accent);
+  --compost-audio-focus-bracket-color: var(--compost-theme-accent);
+  --compost-audio-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-drawer {
+  --compost-drawer-bg: var(--compost-theme-panel);
+  --compost-drawer-border: var(--compost-theme-line);
+  --compost-drawer-text: var(--compost-theme-text);
+  --compost-drawer-title-bg: color-mix(in srgb, var(--compost-theme-panel) 92%, var(--compost-theme-bg));
+  --compost-drawer-title-hover-bg: color-mix(in srgb, var(--compost-theme-panel) 84%, var(--compost-theme-text));
+  --compost-drawer-focus: var(--compost-theme-accent);
+}
+
+compost-midi {
+  --compost-midi-text: var(--compost-theme-text);
+  --compost-midi-muted: var(--compost-theme-muted);
+  --compost-midi-control-bg: var(--compost-theme-panel);
+  --compost-midi-control-border: var(--compost-theme-control-border);
+  --compost-midi-active-text: var(--compost-theme-active-text);
+  --compost-midi-focus-color: var(--compost-theme-accent);
+  --compost-midi-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-midi-monitor {
+  --compost-midi-monitor-bg: var(--compost-theme-control-bg);
+  --compost-midi-monitor-border: var(--compost-theme-control-border);
+  --compost-midi-monitor-text: var(--compost-theme-text);
+  --compost-midi-monitor-muted: var(--compost-theme-muted);
+  --compost-midi-monitor-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-midi-mappings {
+  --compost-midi-mappings-bg: transparent;
+  --compost-midi-mappings-border: var(--compost-theme-control-border);
+  --compost-midi-mappings-text: var(--compost-theme-text);
+  --compost-midi-mappings-muted: var(--compost-theme-muted);
+  --compost-midi-mappings-row-bg: var(--compost-theme-panel);
+  --compost-midi-mappings-row-alt-bg: color-mix(in srgb, var(--compost-theme-panel) 92%, var(--compost-theme-bg));
+  --compost-midi-mappings-head-bg: color-mix(in srgb, var(--compost-theme-panel) 88%, var(--compost-theme-text));
+  --compost-midi-mappings-head-text: var(--compost-theme-text);
+  --compost-midi-mappings-field-bg: transparent;
+  --compost-midi-mappings-field-text: var(--compost-theme-text);
+  --compost-midi-mappings-field-border: var(--compost-theme-control-border);
+  --compost-midi-mappings-field-fill: color-mix(in srgb, var(--compost-theme-accent) 42%, transparent);
+  --compost-midi-mappings-focus-color: var(--compost-theme-learn);
+  --compost-midi-mappings-action-text: var(--compost-theme-text);
+  --compost-midi-mappings-action-border: var(--compost-theme-text);
+  --compost-midi-mappings-learn-color: var(--compost-theme-learn);
+  --compost-midi-mappings-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-slider {
+  --slider-text: var(--compost-theme-text);
+  --slider-value: var(--compost-theme-muted);
+  --slider-fill: var(--compost-theme-accent);
+  --slider-track: var(--compost-theme-track);
+  --slider-thumb: var(--compost-theme-text);
+  --slider-thumb-border: var(--compost-theme-control-bg);
+  --slider-value-editor-bg: var(--compost-theme-control-bg);
+  --slider-focus-bracket-color: var(--compost-theme-accent);
+  --slider-color-scheme: var(--compost-theme-color-scheme);
+  --midi-map-learn-color: var(--compost-theme-learn);
+  --midi-map-label-text: var(--compost-theme-learn);
+}
+
+compost-number-box {
+  --number-box-bg: var(--compost-theme-control-bg);
+  --number-box-text: var(--compost-theme-text);
+  --number-box-border: var(--compost-theme-control-border);
+  --number-box-active-bg: color-mix(in srgb, var(--compost-theme-control-bg) 72%, var(--compost-theme-accent));
+  --number-box-active-text: var(--compost-theme-text);
+  --number-box-fill: color-mix(in srgb, var(--compost-theme-accent) 42%, transparent);
+  --number-box-focus: var(--compost-theme-accent);
+  --number-box-color-scheme: var(--compost-theme-color-scheme);
+  --midi-map-learn-color: var(--compost-theme-learn);
+  --midi-map-label-text: var(--compost-theme-learn);
+}
+
+compost-knob {
+  --knob-text: var(--compost-theme-text);
+  --knob-value: var(--compost-theme-muted);
+  --knob-fill: var(--compost-theme-accent);
+  --knob-track: var(--compost-theme-track);
+  --knob-cap: var(--compost-theme-control-bg);
+  --knob-cap-border: var(--compost-theme-control-border);
+  --knob-indicator: var(--compost-theme-text);
+  --knob-focus-bracket-color: var(--compost-theme-accent);
+  --knob-color-scheme: var(--compost-theme-color-scheme);
+  --midi-map-learn-color: var(--compost-theme-learn);
+  --midi-map-label-text: var(--compost-theme-learn);
+}
+
+compost-scope {
+  --scope-background: var(--compost-theme-scope-bg);
+  --scope-trace: var(--compost-theme-scope-trace);
+  --scope-trigger: var(--compost-theme-muted);
+  --scope-zero: var(--compost-theme-track);
+  --scope-marker: var(--compost-theme-control-border);
+  --scope-label: var(--compost-theme-muted);
+  --scope-border: var(--compost-theme-line);
+}
+
+compost-device-selector {
+  --compost-device-selector-bg: var(--compost-theme-panel);
+  --compost-device-selector-border: var(--compost-theme-line);
+  --compost-device-selector-text: var(--compost-theme-text);
+  --compost-device-selector-muted: var(--compost-theme-muted);
+  --compost-device-selector-control-bg: var(--compost-theme-control-bg);
+  --compost-device-selector-control-border: var(--compost-theme-control-border);
+  --compost-device-selector-active-text: var(--compost-theme-active-text);
+  --compost-device-selector-button-bg: var(--compost-theme-control-bg);
+  --compost-device-selector-button-text: var(--compost-theme-text);
+  --compost-device-selector-error: var(--compost-theme-danger);
+  --compost-device-selector-focus-color: var(--compost-theme-accent);
+  --compost-device-selector-color-scheme: var(--compost-theme-color-scheme);
+}

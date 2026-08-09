@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MIDI Controller</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <script type="module" src="../shared/example-page.js"></script>
+    <script type="module" src="./main.js"></script>
+    <style>
+      .controller-bank {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 118px), 1fr));
+        gap: 1px;
+        border: 1px solid var(--line);
+        background: var(--line);
+      }
+
+      .cc-slot {
+        display: grid;
+        justify-items: center;
+        gap: 10px;
+        min-width: 0;
+        padding: 14px 10px;
+        background: var(--panel);
+      }
+
+      .cc-slot compost-knob {
+        --knob-dial-size: 72px;
+        --knob-cap-size: 60px;
+        --knob-value-editor-width: 58px;
+      }
+
+      .cc-assignment {
+        width: 100%;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .cc-assignment input {
+        min-width: 0;
+        min-height: 30px;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        background: var(--control-bg);
+        color: var(--text);
+        font: inherit;
+        text-align: center;
+      }
+
+      .panic-action {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        align-items: center;
+      }
+
+      .midi-controller-workbench {
+        grid-template-columns: 1fr;
+        gap: 1px;
+        border: 1px solid var(--line);
+        background: var(--line);
+      }
+
+      .midi-controller-workbench > .panel {
+        border: 0;
+      }
+
+      @media (max-width: 560px) {
+        .midi-controller-workbench compost-piano {
+          position: relative;
+          inset: auto;
+          width: 100% !important;
+          max-width: 100% !important;
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body data-example-id="midi-controller">
+    <main class="shell">
+      <header class="patch-header">
+        <div class="midi-header">
+          <compost-midi output-only></compost-midi>
+          <div class="midi-actions">
+            <compost-button parameter-id="all-notes-off" label="All Notes Off"></compost-button>
+          </div>
+        </div>
+
+        <div class="theme-section">
+          <compost-select class="example-theme-selector" data-shared-theme-group name="example-theme" aria-label="Theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="gruvbox">Gruvbox</option>
+          </compost-select>
+        </div>
+      </header>
+
+      <nav class="examples-nav" aria-label="Example navigation" data-example-nav></nav>
+
+      <section class="workbench midi-controller-workbench">
+        <div class="panel">
+          <p>Output-only MIDI generator with a keyboard, eight assignable CC knobs, and all-channel output.</p>
+        </div>
+        <div class="panel wide">
+          <div class="controller-bank" role="group" aria-label="Assignable MIDI CC knobs">
+            <div class="cc-slot">
+              <compost-knob data-cc-knob name="knob1" parameter-id="knob1" label="Knob 1" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
+              <label class="cc-assignment">
+                <span>CC</span>
+                <input data-cc-assignment="knob1" type="number" min="0" max="127" step="1" value="20" inputmode="numeric" aria-label="Knob 1 CC">
+              </label>
+            </div>
+            <div class="cc-slot">
+              <compost-knob data-cc-knob name="knob2" parameter-id="knob2" label="Knob 2" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
+              <label class="cc-assignment">
+                <span>CC</span>
+                <input data-cc-assignment="knob2" type="number" min="0" max="127" step="1" value="21" inputmode="numeric" aria-label="Knob 2 CC">
+              </label>
+            </div>
+            <div class="cc-slot">
+              <compost-knob data-cc-knob name="knob3" parameter-id="knob3" label="Knob 3" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
+              <label class="cc-assignment">
+                <span>CC</span>
+                <input data-cc-assignment="knob3" type="number" min="0" max="127" step="1" value="22" inputmode="numeric" aria-label="Knob 3 CC">
+              </label>
+            </div>
+            <div class="cc-slot">
+              <compost-knob data-cc-knob name="knob4" parameter-id="knob4" label="Knob 4" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
+              <label class="cc-assignment">
+                <span>CC</span>
+                <input data-cc-assignment="knob4" type="number" min="0" max="127" step="1" value="23" inputmode="numeric" aria-label="Knob 4 CC">
+              </label>
+            </div>
+            <div class="cc-slot">
+              <compost-knob data-cc-knob name="knob5" parameter-id="knob5" label="Knob 5" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
+              <label class="cc-assignment">
+                <span>CC</span>
+                <input data-cc-assignment="knob5" type="number" min="0" max="127" step="1" value="24" inputmode="numeric" aria-label="Knob 5 CC">
+              </label>
+            </div>
+            <div class="cc-slot">
+              <compost-knob data-cc-knob name="knob6" parameter-id="knob6" label="Knob 6" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
+              <label class="cc-assignment">
+                <span>CC</span>
+                <input data-cc-assignment="knob6" type="number" min="0" max="127" step="1" value="25" inputmode="numeric" aria-label="Knob 6 CC">
+              </label>
+            </div>
+            <div class="cc-slot">
+              <compost-knob data-cc-knob name="knob7" parameter-id="knob7" label="Knob 7" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
+              <label class="cc-assignment">
+                <span>CC</span>
+                <input data-cc-assignment="knob7" type="number" min="0" max="127" step="1" value="26" inputmode="numeric" aria-label="Knob 7 CC">
+              </label>
+            </div>
+            <div class="cc-slot">
+              <compost-knob data-cc-knob name="knob8" parameter-id="knob8" label="Knob 8" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
+              <label class="cc-assignment">
+                <span>CC</span>
+                <input data-cc-assignment="knob8" type="number" min="0" max="127" step="1" value="27" inputmode="numeric" aria-label="Knob 8 CC">
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="panel wide">
+          <compost-piano root-note="36" note-count="49"></compost-piano>
+        </div>
+        <div class="panel wide">
+          <pre class="log" data-log></pre>
+        </div>
+      </section>
+      <div class="demo-corner-title">MIDI Controller</div>
+    </main>
+  </body>
+</html>

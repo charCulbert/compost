@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost Signal Generator</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link rel="stylesheet" href="../shared/scope-controls.css">
+    <script src="../shared/example-page.js" type="module"></script>
+    <script src="./main.js" type="module"></script>
+    <style>
+      :root {
+        --demo-panel-width: min(100%, 480px);
+        --demo-page-pad-x: clamp(16px, 4vw, 44px);
+        --demo-toolbar-height: 50px;
+        --demo-toolbar-control-height: calc(var(--demo-toolbar-height) - 1px);
+        --footer-space: 150px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      select,
+      input {
+        min-height: 30px;
+        border: 1px solid var(--control-border);
+        border-radius: 0;
+        background: var(--control-bg);
+        color: var(--text);
+        font: inherit;
+      }
+
+      select:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .app-frame {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100vh;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .midi-drawer {
+        --compost-drawer-size: 470px;
+        --compost-drawer-bg: var(--panel);
+        --compost-drawer-border: var(--line);
+        --compost-drawer-text: var(--text);
+        --compost-drawer-title-bg: color-mix(in srgb, var(--panel) 94%, #000);
+        --compost-drawer-title-hover-bg: color-mix(in srgb, var(--panel) 90%, #000);
+        --compost-drawer-focus: var(--accent);
+        --compost-drawer-content-padding: 12px;
+        --compost-drawer-title-padding: 9px 11px;
+        --compost-drawer-title-size: var(--demo-toolbar-control-height);
+        grid-column: 1;
+        grid-row: 2;
+        align-self: stretch;
+        z-index: 20;
+        height: 100%;
+        min-width: 0;
+      }
+
+      .midi-drawer:not([open]) {
+        width: var(--demo-toolbar-control-height);
+      }
+
+      .drawer-stack {
+        display: grid;
+        gap: 16px;
+      }
+
+      .drawer-section {
+        display: grid;
+        gap: 9px;
+        min-width: 0;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .drawer-section:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .drawer-section h2 {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .drawer-section p {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      compost-midi {
+        --compost-midi-columns: 1fr;
+      }
+
+      compost-midi-mappings {
+        --compost-midi-mappings-table-width: 100%;
+      }
+
+      compost-midi-mappings::part(heading) {
+        display: none;
+      }
+
+      compost-midi-monitor {
+        --compost-midi-monitor-height: 190px;
+        --compost-midi-monitor-max-height: 260px;
+      }
+
+      .midi-monitor-drawer {
+        --compost-drawer-bg: color-mix(in srgb, var(--panel) 97%, #000);
+        --compost-drawer-border: var(--line);
+        --compost-drawer-text: var(--text);
+        --compost-drawer-title-bg: color-mix(in srgb, var(--panel) 94%, #000);
+        --compost-drawer-title-hover-bg: color-mix(in srgb, var(--panel) 90%, #000);
+        --compost-drawer-focus: var(--accent);
+        --compost-drawer-content-padding: 8px;
+        --compost-drawer-title-padding: 8px 9px;
+        width: 100%;
+      }
+
+      .midi-monitor-drawer::part(title) {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .demo-page {
+        display: flex;
+        flex-direction: column;
+        grid-column: 1 / -1;
+        grid-row: 2;
+        min-width: 0;
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
+        gap: clamp(22px, 3vh, 36px);
+        padding:
+          clamp(22px, 3vh, 36px)
+          var(--demo-page-pad-x)
+          calc(var(--footer-space) + 14px);
+      }
+
+      body[data-midi-drawer-open] .demo-page {
+        grid-column: 2;
+      }
+
+      .demo-header {
+        --demo-toolbar-font-size: 12px;
+        --demo-toolbar-font-weight: 500;
+        position: sticky;
+        top: 0;
+        display: flex;
+        grid-column: 1 / -1;
+        grid-row: 1;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0;
+        min-width: 0;
+        width: 100%;
+        height: var(--demo-toolbar-height);
+        min-height: var(--demo-toolbar-height);
+        padding: 0 170px 0 0;
+        background: var(--panel);
+        border-bottom: 0;
+        font-size: var(--demo-toolbar-font-size);
+        font-weight: var(--demo-toolbar-font-weight);
+        z-index: 30;
+      }
+
+      .demo-header::after {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 90;
+        height: 1px;
+        content: '';
+        pointer-events: none;
+        background: var(--line);
+      }
+
+      .audio-output {
+        display: flex;
+        flex: 1 1 560px;
+        flex-wrap: nowrap;
+        gap: 0;
+        align-items: center;
+        min-width: 0;
+        position: relative;
+      }
+
+      .audio-output::before {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: var(--demo-toolbar-control-height);
+        z-index: 2;
+        width: 1px;
+        content: '';
+        pointer-events: none;
+        background: var(--line);
+      }
+
+      [data-midi-map-button] {
+        --compost-button-width: 88px;
+        --compost-button-height: var(--demo-toolbar-control-height);
+        --compost-button-ring-space: 0;
+        --compost-button-label-padding: 0 6px;
+        flex: 0 0 auto;
+        height: var(--demo-toolbar-control-height);
+        font: inherit;
+      }
+
+      .demo-header compost-button {
+        --compost-button-focus-bracket-offset: 0px;
+        --compost-button-focus-bracket-pulse-offset: 0px;
+        --compost-button-focus-bracket-length: 0px;
+        --compost-button-focus-bracket-thickness: 0px;
+      }
+
+      compost-audio {
+        --compost-audio-button-size: var(--demo-toolbar-control-height);
+        --compost-audio-button-border: transparent;
+        --compost-audio-button-border-width: 0;
+        --compost-audio-ring-width: 0;
+        --compost-audio-ring-space: 0;
+        --compost-audio-focus-bracket-offset: 0px;
+        --compost-audio-focus-bracket-pulse-offset: 0px;
+        --compost-button-width: var(--demo-toolbar-control-height);
+        --compost-button-height: var(--demo-toolbar-control-height);
+        align-self: stretch;
+        height: var(--demo-toolbar-control-height);
+        font-size: 22px;
+      }
+
+      .demo-header compost-audio::part(power-button),
+      .demo-header compost-audio::part(button) {
+        --compost-button-focus-bracket-offset: 0px;
+        --compost-button-focus-bracket-pulse-offset: 0px;
+        --compost-button-focus-bracket-length: 0px;
+        --compost-button-focus-bracket-thickness: 0px;
+      }
+
+      .audio-output > compost-slider {
+        --slider-label-gap: 2px;
+        --slider-row-gap: 8px;
+        --slider-label-size: 11px;
+        --slider-thumb-size: 14px;
+        --slider-value-width: 52px;
+        flex: 1 1 180px;
+        width: min(100%, 220px);
+        max-width: 220px;
+        min-width: min(160px, 100%);
+        margin-inline: 12px;
+      }
+
+      .toolbar-preset {
+        display: flex;
+        align-items: center;
+        flex: 0 0 174px;
+        width: 174px;
+        height: var(--demo-toolbar-control-height);
+        gap: 8px;
+        padding: 0 12px;
+        border-left: 1px solid var(--line);
+      }
+
+      .toolbar-preset > span {
+        flex: none;
+        color: var(--muted);
+        font: inherit;
+        line-height: 1;
+      }
+
+      body[data-example-id] .demo-header compost-select.toolbar-select {
+        --compost-select-height: var(--demo-toolbar-control-height);
+        --compost-select-popup-offset: 0px;
+        --compost-select-bg: var(--panel);
+        --compost-select-border: transparent;
+        --compost-select-hover-bg: color-mix(in srgb, var(--panel) 88%, var(--text));
+        flex: 1 1 auto;
+        width: 100%;
+      }
+
+      body[data-example-id] .demo-header compost-button[data-midi-map-button] {
+        --compost-button-bg: var(--panel);
+        --compost-button-border: transparent;
+        --compost-button-gap: var(--panel);
+      }
+
+      body[data-example-id] .demo-header compost-button[data-midi-map-button][pressed] {
+        --compost-button-fill: color-mix(in srgb, var(--panel) 90%, var(--accent));
+        --compost-button-fill-text: var(--text);
+      }
+
+      .demo-header compost-button[data-midi-map-button]::part(button) {
+        border: 0;
+        border-left: 1px solid var(--line);
+        box-shadow: inset -1px 0 var(--line);
+      }
+
+      .demo-header compost-button[data-midi-map-button]::part(button):focus-visible,
+      .demo-header compost-audio::part(button):focus-visible,
+      .demo-header compost-select.toolbar-select::part(button):focus-visible,
+      .settings-drawer::part(title):focus-visible,
+      .example-link-group .example-nav-button:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 2px var(--accent);
+      }
+
+      .demo-header compost-button[data-midi-map-button][pressed]::part(button) {
+        animation: midi-map-breathe 2.5s ease-in-out infinite;
+      }
+
+      @keyframes midi-map-breathe {
+        0%, 100% { background: color-mix(in srgb, var(--panel) 90%, var(--accent)); }
+        50% { background: color-mix(in srgb, var(--panel) 82%, var(--accent)); }
+      }
+
+      .demo-header compost-select.toolbar-select::part(button) {
+        border: 0;
+      }
+
+      [data-signal-preset-group] {
+        min-width: 0;
+      }
+
+      .settings-drawer {
+        --compost-drawer-bg: var(--panel);
+        --compost-drawer-border: var(--line);
+        --compost-drawer-text: var(--text);
+        --compost-drawer-title-bg: color-mix(in srgb, var(--panel) 94%, #000);
+        --compost-drawer-title-hover-bg: color-mix(in srgb, var(--panel) 90%, #000);
+        --compost-drawer-focus: var(--accent);
+        --compost-drawer-content-padding: 14px;
+        --compost-drawer-title-padding: 0;
+        position: absolute;
+        top: 0;
+        right: 120px;
+        z-index: 32;
+        width: 50px;
+        height: var(--demo-toolbar-control-height);
+      }
+
+      .settings-drawer[open] {
+        width: min(390px, calc(100vw - 24px));
+        height: auto;
+      }
+
+      .settings-drawer::part(drawer) {
+        height: var(--demo-toolbar-control-height);
+        overflow: visible;
+        border: 0;
+        background: transparent;
+      }
+
+      .settings-drawer::part(marker) {
+        display: none;
+      }
+
+      .settings-drawer::part(title) {
+        box-sizing: border-box;
+        justify-self: end;
+        justify-content: center;
+        width: 50px;
+        height: var(--demo-toolbar-control-height);
+        min-height: var(--demo-toolbar-control-height);
+        border: 0;
+        border-left: 1px solid var(--line);
+        background: var(--compost-drawer-title-bg);
+        font: inherit;
+        line-height: 1;
+      }
+
+      .theme-icon {
+        display: grid;
+        place-items: center;
+      }
+
+      .theme-icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+
+      .settings-drawer::part(content) {
+        max-height: calc(100vh - var(--demo-toolbar-height) - 12px);
+        border: 1px solid var(--line);
+        border-top: 0;
+        background: var(--panel);
+      }
+
+      .settings-drawer[open]::part(drawer) {
+        height: auto;
+      }
+
+      .settings-grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .theme-menu,
+      .wave-shape-switch {
+        display: grid;
+        overflow: hidden;
+        border: 1px solid var(--control-border);
+        background: var(--control-bg);
+      }
+
+      .theme-menu {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .theme-menu button,
+      .wave-shape-switch button {
+        min-width: 0;
+        border: 0;
+        border-right: 1px solid var(--control-border);
+        border-radius: 0;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .theme-menu button:last-child,
+      .wave-shape-switch button:last-child {
+        border-right: 0;
+      }
+
+      .theme-menu button {
+        min-height: 34px;
+        padding: 0 8px;
+        font-size: 12px;
+      }
+
+      .theme-menu button[aria-checked="true"],
+      .wave-shape-switch button[aria-pressed="true"] {
+        background: var(--accent);
+        color: var(--active-text);
+      }
+
+      .theme-menu button:focus-visible,
+      .wave-shape-switch button:focus-visible {
+        position: relative;
+        z-index: 1;
+        outline: 2px solid var(--accent);
+        outline-offset: -3px;
+      }
+
+      .example-link-group {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 80;
+        width: 120px;
+        height: var(--demo-toolbar-control-height);
+        margin: 0;
+      }
+
+      .example-link-group .example-nav-button:first-child {
+        display: none;
+      }
+
+      .example-link-group .example-nav-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: var(--demo-toolbar-control-height);
+        min-height: var(--demo-toolbar-control-height);
+        padding: 0 10px;
+        border: 0;
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--muted);
+        font: inherit;
+        font-weight: inherit;
+        text-transform: uppercase;
+      }
+
+      .example-link-group .example-nav-button:focus-visible {
+        position: relative;
+        z-index: 1;
+      }
+
+      .workbench {
+        display: grid;
+        grid-template-columns: minmax(0, 520px);
+        flex: 0 0 auto;
+        width: min(100%, 520px);
+        margin: auto;
+        gap: 0;
+        border: 1px solid var(--line);
+        align-items: start;
+        min-height: 0;
+      }
+
+      .left-stack {
+        display: grid;
+        grid-column: 1;
+        grid-row: 1;
+        justify-self: center;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        gap: 0;
+        align-content: start;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .parameter-zone {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        width: 100%;
+        gap: 12px;
+        padding: 10px;
+        align-items: center;
+        justify-items: center;
+      }
+
+      .knob-section {
+        display: grid;
+        grid-column: 2;
+        grid-row: 1;
+        width: 100%;
+        gap: 8px;
+      }
+
+      .control-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        justify-content: center;
+        width: 100%;
+        gap: 12px;
+      }
+
+      .control-row compost-knob {
+        flex: 1 1 84px;
+        min-width: 0;
+        max-width: 110px;
+        --knob-dial-size: 66px;
+        --knob-ring-width: 6px;
+      }
+
+      .oscillator-toolbar {
+        display: flex;
+        grid-column: 1;
+        grid-row: 1;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+      }
+
+      .wave-shape-switch {
+        grid-template-columns: 42px;
+        grid-template-rows: repeat(3, 42px);
+        width: 42px;
+        height: 126px;
+      }
+
+      .wave-shape-switch button {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        padding: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--control-border);
+      }
+
+      .wave-shape-switch button:last-child {
+        border-bottom: 0;
+      }
+
+      .wave-shape-switch svg {
+        width: 26px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+        stroke-width: 1.7;
+      }
+
+      .scope-stack {
+        --signal-scope-height: clamp(160px, 18vw, 176px);
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .demo-header compost-button[data-midi-map-button][pressed]::part(button) {
+          animation: none;
+        }
+      }
+
+      .keyboard-footer {
+        position: fixed;
+        left: var(--midi-drawer-space, 0px);
+        right: 0;
+        bottom: 0;
+        z-index: 10;
+        display: flex;
+        justify-content: center;
+        align-items: end;
+        padding-top: 12px;
+        background: var(--bg);
+        pointer-events: none;
+      }
+
+      .keyboard-footer compost-piano {
+        --compost-piano-dock-offset: calc(var(--midi-drawer-space, 0px) / 2);
+        width: min(calc(100% - var(--demo-page-pad-x) - var(--demo-page-pad-x)), 760px);
+        pointer-events: auto;
+      }
+
+      @media (max-width: 760px) {
+        :root {
+          --demo-page-pad-x: 14px;
+        }
+
+        .demo-header {
+          grid-column: 1 / -1;
+          padding-right: 0;
+        }
+
+        .settings-drawer {
+          right: 120px;
+        }
+
+        .workbench {
+          grid-template-columns: minmax(0, 520px);
+        }
+
+        .scope-stack,
+        .left-stack {
+          grid-column: 1;
+        }
+
+        .scope-stack {
+          grid-row: 2;
+        }
+
+        .left-stack {
+          grid-row: 1;
+        }
+
+        .scope-control-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .scope-number-column {
+          width: min(260px, 100%);
+          justify-self: end;
+        }
+      }
+
+      @media (max-width: 560px) {
+        :root {
+          --footer-space: calc(126px + env(safe-area-inset-bottom));
+        }
+
+        html,
+        body {
+          height: auto;
+          min-height: 100%;
+          overflow-x: hidden;
+          overflow-y: auto;
+        }
+
+        .app-frame {
+          display: flex;
+          flex-direction: column;
+          height: auto;
+          min-height: 100dvh;
+          overflow: visible;
+        }
+
+        .demo-header {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 50px 120px;
+          grid-template-rows: 50px 50px;
+          height: 100px;
+          min-height: 100px;
+        }
+
+        .audio-output {
+          grid-column: 1 / -1;
+          grid-row: 1;
+          width: 100%;
+        }
+
+        .audio-output > compost-slider {
+          flex: 1 1 auto;
+          width: auto;
+          min-width: 0;
+          max-width: none;
+        }
+
+        .toolbar-preset {
+          grid-column: 1;
+          grid-row: 2;
+          width: 100%;
+          height: 50px;
+          border-top: 1px solid var(--line);
+          border-left: 0;
+        }
+
+        .settings-drawer {
+          top: 50px;
+        }
+
+        .settings-drawer[open] {
+          right: 0;
+          width: 100vw;
+        }
+
+        .settings-drawer::part(content) {
+          max-height: calc(100dvh - 100px);
+        }
+
+        .example-link-group {
+          top: 50px;
+        }
+
+        .midi-drawer {
+          --compost-drawer-size: min(70dvh, 470px);
+          order: 2;
+          width: 100%;
+          height: auto;
+        }
+
+        .midi-drawer:not([open]) {
+          width: 100%;
+        }
+
+        .demo-page,
+        body[data-midi-drawer-open] .demo-page {
+          order: 3;
+          width: 100%;
+          height: auto;
+          overflow: visible;
+          gap: 14px;
+          padding: 14px var(--demo-page-pad-x) calc(var(--footer-space) + 14px);
+        }
+
+        .workbench {
+          width: 100%;
+          margin: 0;
+        }
+
+        .keyboard-footer {
+          left: 0;
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .keyboard-footer compost-piano {
+          --compost-piano-dock-offset: 0px;
+        }
+      }
+    </style>
+  </head>
+  <body data-example-id="signal-generator">
+    <div class="app-frame">
+      <header class="demo-header" data-example-nav>
+        <div class="audio-output">
+          <compost-audio
+            modal
+            start-label="⏻"
+            stop-label="⏻"
+            start-aria-label="Start audio"
+            stop-aria-label="Suspend audio"
+            latency-hint="0"
+          ></compost-audio>
+
+          <compost-slider
+            name="Master"
+            parameter-id="outputGain"
+            label="Master"
+            min="0"
+            max="1"
+            value="0.75"
+            step="0.01"
+            reset-value="0.75"
+            editable
+          ></compost-slider>
+
+          <compost-button data-midi-map-button mode="switch" label="MIDI Map"></compost-button>
+
+        </div>
+
+        <div class="toolbar-preset">
+          <span>Preset</span>
+          <compost-select
+            class="toolbar-select"
+            data-signal-preset-group
+            name="signal-preset"
+            aria-label="Preset"
+            value="saw-standard"
+            placeholder="Custom"
+          >
+            <option value="saw-standard" selected>Saw</option>
+            <option value="sine-labels">Sine + labels</option>
+            <option value="unipolar-square">Unipolar square</option>
+          </compost-select>
+        </div>
+
+        <compost-drawer class="settings-drawer" edge="top" label="Theme">
+          <span slot="title" class="theme-icon" aria-hidden="true">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5a6.5 6.5 0 1 0 0 13z" fill="currentColor"></path><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.25"></circle></svg>
+          </span>
+          <div class="settings-grid">
+            <div class="theme-menu" data-theme-group role="menu" aria-label="Theme">
+              <button type="button" role="menuitemradio" data-theme-value="dark" aria-checked="true">Dark</button>
+              <button type="button" role="menuitemradio" data-theme-value="light" aria-checked="false">Light</button>
+              <button type="button" role="menuitemradio" data-theme-value="gruvbox" aria-checked="false">Gruv</button>
+            </div>
+          </div>
+        </compost-drawer>
+      </header>
+
+      <compost-drawer
+        class="midi-drawer"
+        data-midi-drawer
+        edge="left"
+        resizable
+        min-size="420"
+        max-size="640"
+      >
+        <span slot="title">MIDI</span>
+        <div class="drawer-stack">
+          <section class="drawer-section">
+            <h2>Devices</h2>
+            <compost-midi id="midi"></compost-midi>
+          </section>
+
+          <section class="drawer-section midi-monitor-section">
+            <compost-drawer class="midi-monitor-drawer" edge="top" label="MIDI Monitor">
+              <span slot="title">MIDI Monitor</span>
+              <compost-midi-monitor for="midi" max-lines="18"></compost-midi-monitor>
+            </compost-drawer>
+          </section>
+
+          <section class="drawer-section">
+            <h2>Mappings</h2>
+            <p>Use MIDI Map, then move a real MIDI CC over a focused control.</p>
+            <compost-midi-mappings></compost-midi-mappings>
+          </section>
+        </div>
+      </compost-drawer>
+
+      <main class="demo-page">
+        <h1 class="sr-only">Signal Generator</h1>
+
+        <section class="workbench">
+          <div class="left-stack">
+            <div class="parameter-zone">
+              <div class="oscillator-toolbar">
+                <div
+                  class="wave-shape-switch"
+                  data-wave-shape-group
+                  name="Wave Shape"
+                  parameter-id="waveShape"
+                  parameter-kind="discrete"
+                  min="0"
+                  max="2"
+                  step="1"
+                  value="1"
+                  reset-value="1"
+                  role="group"
+                  aria-label="Wave shape"
+                  tabindex="0"
+                >
+                  <button type="button" data-wave-shape="0" aria-label="Sine wave" aria-pressed="false">
+                    <svg viewBox="0 0 28 18" aria-hidden="true"><path d="M1 9C4 1 10 1 14 9S24 17 27 9"/></svg>
+                  </button>
+                  <button type="button" data-wave-shape="1" aria-label="Saw wave" aria-pressed="true">
+                    <svg viewBox="0 0 28 18" aria-hidden="true"><path d="M1 2L13 16V2L27 16"/></svg>
+                  </button>
+                  <button type="button" data-wave-shape="2" aria-label="Square wave" aria-pressed="false">
+                    <svg viewBox="0 0 28 18" aria-hidden="true"><path d="M1 15V3h12v12h14V3"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="knob-section">
+                <div class="control-row" aria-label="Oscillator controls">
+                  <compost-knob
+                    name="Frequency"
+                    parameter-id="frequency"
+                    label="Frequency"
+                    min="55"
+                    max="880"
+                    mid="220"
+                    curve="log"
+                    value="220"
+                    unit="Hz"
+                    reset-value="220"
+                    editable
+                  ></compost-knob>
+
+                  <compost-knob
+                    name="Amplitude"
+                    parameter-id="amplitude"
+                    label="Amplitude"
+                    min="0"
+                    max="2"
+                    value="1"
+                    step="0.01"
+                    reset-value="1"
+                    editable
+                  ></compost-knob>
+
+                  <compost-knob
+                    name="Offset"
+                    parameter-id="offset"
+                    label="Offset"
+                    min="-1"
+                    max="1"
+                    value="0"
+                    step="0.01"
+                    reset-value="0"
+                    editable
+                  ></compost-knob>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+
+          <div class="scope-stack">
+            <compost-scope
+              source-channels="2"
+              trigger-channel="3"
+              frequency="220"
+              fft-size="32768"
+              periods-shown="4"
+              samples-shown="1024"
+              trigger="external"
+              x-markers="1,2,3,4"
+              y-markers="-0.5,0,0.5"
+              x-marker-labels="1,2,3,4"
+              y-marker-labels="-0.5,0,0.5"
+            ></compost-scope>
+            <output class="scope-fps" data-scope-fps aria-label="Scope render rate unavailable">— fps</output>
+
+            <div class="scope-controls">
+              <div class="scope-toggle scope-trigger-toggle" role="group" aria-label="Trigger type">
+                <span>Trigger</span>
+                <div class="scope-toggle-buttons">
+                  <button type="button" data-trigger-value="off" aria-pressed="false">Off</button>
+                  <button type="button" data-trigger-value="up" aria-label="Rising edge" aria-pressed="false">↑</button>
+                  <button type="button" data-trigger-value="down" aria-label="Falling edge" aria-pressed="false">↓</button>
+                  <button type="button" data-trigger-value="external" aria-pressed="true">Ext</button>
+                  <button type="button" data-trigger-value="manual" aria-pressed="false">Man</button>
+                </div>
+              </div>
+
+              <div class="scope-toggle scope-window-toggle" role="group" aria-label="Window type">
+                <span>Window</span>
+                <div class="scope-toggle-buttons">
+                  <button type="button" data-window-mode="periods" aria-label="Periods" aria-pressed="true">Periods</button>
+                  <button type="button" data-window-mode="samples" aria-label="Samples" aria-pressed="false">Samples</button>
+                </div>
+              </div>
+
+              <div class="scope-control-grid">
+                <div class="scope-number-control scope-trigger-level">
+                  <span>Trigger level</span>
+                  <compost-number-box
+                    name="Trigger Level"
+                    parameter-id="triggerLevel"
+                    label="Trigger Level"
+                    min="-1"
+                    max="1"
+                    value="0"
+                    step="0.01"
+                    reset-value="0"
+                  ></compost-number-box>
+                </div>
+
+                <div class="scope-number-column">
+                  <div class="scope-number-control" data-samples-control hidden>
+                    <span>Samples shown</span>
+                    <compost-number-box
+                      name="Samples Shown"
+                      parameter-id="samplesShown"
+                      label="Samples Shown"
+                      min="64"
+                      max="8192"
+                      value="1024"
+                      step="1"
+                      reset-value="1024"
+                    ></compost-number-box>
+                  </div>
+
+                  <div class="scope-number-control" data-periods-control>
+                    <span>Periods shown</span>
+                    <compost-number-box
+                      name="Periods Shown"
+                      parameter-id="periodsShown"
+                      label="Periods Shown"
+                      min="1"
+                      max="16"
+                      value="4"
+                      step="1"
+                      reset-value="4"
+                    ></compost-number-box>
+                  </div>
+
+                  <div class="scope-number-control">
+                    <span>Vertical range</span>
+                    <compost-number-box
+                      name="Vertical Range"
+                      parameter-id="valueRange"
+                      label="Vertical Range"
+                      min="0.1"
+                      max="2"
+                      value="1"
+                      step="0.01"
+                      reset-value="1"
+                    ></compost-number-box>
+                  </div>
+
+                  <div class="scope-number-control">
+                    <span>Vertical center</span>
+                    <compost-number-box
+                      name="Vertical Center"
+                      parameter-id="yOffset"
+                      label="Vertical Center"
+                      min="-2"
+                      max="2"
+                      value="0"
+                      step="0.01"
+                      reset-value="0"
+                    ></compost-number-box>
+                  </div>
+                </div>
+
+                <div class="scope-label-editors">
+                  <label class="scope-label-editor">
+                    <span>X labels</span>
+                    <input data-scope-x-labels aria-label="X labels" value="1,2,3,4">
+                  </label>
+                  <label class="scope-label-editor">
+                    <span>Y labels</span>
+                    <input data-scope-y-labels aria-label="Y labels" value="-0.5,0,0.5">
+                  </label>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        <footer class="keyboard-footer">
+          <compost-piano dock root-note="36" note-count="49"></compost-piano>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,1156 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import test from 'node:test';
+
+globalThis.HTMLElement = class HTMLElement {
+  constructor() {
+    this.attributes = new Set();
+  }
+
+  hasAttribute(name) {
+    return this.attributes.has(name);
+  }
+};
+
+globalThis.customElements = {
+  elements: new Map(),
+  get(name) {
+    return this.elements.get(name);
+  },
+  define(name, constructor) {
+    this.elements.set(name, constructor);
+  },
+};
+
+const { WebAudio } = await import('../src/components/compost-audio.js');
+const { SynthKnob } = await import('../src/components/compost-knob.js');
+const { CompostNumberBox } = await import('../src/components/compost-number-box.js');
+const { ScopeVisualizer } = await import('../src/components/compost-scope.js');
+const { CompostSelect } = await import('../src/components/compost-select.js');
+const { PianoKeyboard } = await import('../src/components/compost-piano.js');
+const { ParameterSlider } = await import('../src/components/compost-slider.js');
+const { CompostDrawer } = await import('../src/components/compost-drawer.js');
+const { CircleButton } = await import('../src/components/compost-button.js');
+const { MIDIMappingsEditor } = await import('../src/components/compost-midi-mappings.js');
+const {
+  beginParameterGesture,
+  editParameterGesture,
+  endParameterGesture,
+} = await import('../src/utils.js');
+
+test('a suspended audio context is resumable rather than treated as running', async () => {
+  const audio = Object.create(WebAudio.prototype);
+  audio.context = { state: 'suspended' };
+  let starts = 0;
+  let stops = 0;
+  audio.start = async () => { starts += 1; };
+  audio.stop = async () => { stops += 1; };
+
+  assert.equal(audio.isRunning, false);
+  await audio.toggle();
+  assert.equal(starts, 1);
+  assert.equal(stops, 0);
+});
+
+test('audio can separate an icon label from its accessible name', () => {
+  assert.ok(WebAudio.observedAttributes.includes('start-aria-label'));
+  assert.ok(WebAudio.observedAttributes.includes('stop-aria-label'));
+  const source = fs.readFileSync(new URL('../src/components/compost-audio.js', import.meta.url), 'utf8');
+  assert.match(source, /--compost-audio-button-border/u);
+  assert.match(source, /--compost-audio-button-border-width/u);
+
+  const audio = Object.create(WebAudio.prototype);
+  audio.getAttribute = (name) => ({
+    'start-label': '⏻',
+    'stop-label': '⏻',
+    'start-aria-label': 'Start audio',
+    'stop-aria-label': 'Suspend audio',
+  })[name] ?? null;
+
+  assert.equal(audio.startLabel, '⏻');
+  assert.equal(audio.stopLabel, '⏻');
+  assert.equal(audio.startAriaLabel, 'Start audio');
+  assert.equal(audio.stopAriaLabel, 'Suspend audio');
+});
+
+test('styled select exposes native-like value and disabled attributes', () => {
+  assert.ok(CompostSelect.observedAttributes.includes('value'));
+  assert.ok(CompostSelect.observedAttributes.includes('disabled'));
+  assert.ok(CompostSelect.observedAttributes.includes('aria-label'));
+  assert.ok(CompostSelect.observedAttributes.includes('aria-labelledby'));
+  assert.ok(CompostSelect.observedAttributes.includes('aria-description'));
+  assert.ok(CompostSelect.observedAttributes.includes('aria-describedby'));
+});
+
+test('styled select keeps its accessible name separate from its value', () => {
+  const labels = new Map([['wave-label', { textContent: 'Wave shape' }]]);
+  const select = Object.create(CompostSelect.prototype);
+  select.getAttribute = (name) => ({
+    'aria-labelledby': 'wave-label',
+    'aria-label': 'Fallback label',
+  })[name] ?? null;
+  select.getRootNode = () => ({
+    getElementById(id) { return labels.get(id) || null; },
+    querySelectorAll() { return []; },
+  });
+
+  assert.equal(select.accessibleLabel(), 'Wave shape');
+});
+
+test('range controls expose one semantic slider with actual values', () => {
+  const knobSource = fs.readFileSync(
+    new URL('../src/components/compost-knob.js', import.meta.url), 'utf8');
+  const sliderSource = fs.readFileSync(
+    new URL('../src/components/compost-slider.js', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(knobSource, /type="range"/u);
+  assert.doesNotMatch(sliderSource, /type="range"/u);
+  for (const source of [knobSource, sliderSource]) {
+    assert.match(source, /this\.setAttribute\('role', 'slider'\)/u);
+    assert.match(source, /this\.setAttribute\('aria-valuenow', String\(this\.value\)\)/u);
+  }
+});
+
+test('dialog and high-rate monitor accessibility defaults stay deliberate', () => {
+  const selectorSource = fs.readFileSync(
+    new URL('../src/components/compost-device-selector.js', import.meta.url), 'utf8');
+  const monitorSource = fs.readFileSync(
+    new URL('../src/components/compost-midi-monitor.js', import.meta.url), 'utf8');
+
+  assert.match(selectorSource, /dialog\.setAttribute\('aria-labelledby', this\.heading\.id\)/u);
+  assert.match(selectorSource, /this\.openButton\.setAttribute\('aria-haspopup', 'dialog'\)/u);
+  assert.doesNotMatch(selectorSource, /this\.setAttribute\('role', 'button'\)/u);
+  assert.match(monitorSource, /aria-live="off"/u);
+  assert.match(monitorSource, /'max-lines', 'announce'/u);
+  assert.match(monitorSource, /this\.logElement\.prepend/u);
+});
+
+test('stopping suspends the context and keeps the audio graph alive', async () => {
+  const audio = Object.create(WebAudio.prototype);
+  const events = [];
+  const context = {
+    state: 'running',
+    async suspend() {
+      this.state = 'suspended';
+    },
+  };
+  Object.assign(audio, {
+    context,
+    setStatus() {},
+    dispatchAudioEvent(type) { events.push(type); },
+    refresh() {},
+    focusPowerButton() {},
+  });
+
+  await audio.stop();
+
+  assert.equal(audio.context, context);
+  assert.equal(context.state, 'suspended');
+  assert.deepEqual(events, ['audio-suspended']);
+});
+
+test('force-stopping reflects a closed context before close resolves', async () => {
+  const audio = Object.create(WebAudio.prototype);
+  const events = [];
+  let resolveClose;
+  const context = {
+    state: 'running',
+    close() {
+      return new Promise((resolve) => {
+        resolveClose = resolve;
+      });
+    },
+  };
+  let refreshes = 0;
+  Object.assign(audio, {
+    context,
+    setStatus() {},
+    dispatchAudioEvent(type) { events.push(type); },
+    refresh() { refreshes += 1; },
+    focusPowerButton() {},
+  });
+
+  const closing = audio.stop(true);
+  await Promise.resolve();
+  assert.equal(audio.context, null);
+  assert.equal(refreshes, 1);
+
+  resolveClose();
+  await closing;
+  assert.deepEqual(events, ['audio-stopped']);
+  assert.equal(refreshes, 2);
+});
+
+test('resuming emits audio-resumed instead of rebuilding the graph', async () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { AudioContext: class AudioContext {} };
+  const audio = Object.create(WebAudio.prototype);
+  const events = [];
+  const context = {
+    state: 'suspended',
+    async resume() {
+      this.state = 'running';
+    },
+  };
+  Object.assign(audio, {
+    context,
+    dispatchAudioEvent(type) { events.push(type); },
+    handleStateChange() {},
+  });
+
+  try {
+    await audio.start();
+  } finally {
+    globalThis.window = previousWindow;
+  }
+
+  assert.equal(audio.context, context);
+  assert.deepEqual(events, ['audio-resumed']);
+});
+
+test('piano computer keys stay inside the displayed MIDI range', () => {
+  const piano = Object.create(PianoKeyboard.prototype);
+  Object.defineProperty(piano, 'config', {
+    value: { rootNote: 120, noteCount: 8 },
+  });
+
+  assert.equal(piano.isPlayableNote(120), true);
+  assert.equal(piano.isPlayableNote(127), true);
+  assert.equal(piano.isPlayableNote(119), false);
+  assert.equal(piano.isPlayableNote(128), false);
+});
+
+test('piano touch drag transfers the active note between keys', () => {
+  const piano = Object.create(PianoKeyboard.prototype);
+  const events = [];
+  Object.assign(piano, {
+    touchNotes: new Map([[1, 60]]),
+    root: { elementFromPoint: (x) => ({ note: x < 20 ? 60 : 62 }) },
+    getNoteFromElement: (element) => element.note,
+    isPlayableNote: (note) => note >= 0,
+    addKeyboardNote: (note) => events.push(['down', note]),
+    removeKeyboardNote: (note) => events.push(['up', note]),
+  });
+  const event = {
+    cancelable: true,
+    changedTouches: [{ identifier: 1, clientX: 25, clientY: 10 }],
+    preventDefault() { this.defaultPrevented = true; },
+  };
+
+  piano.handleTouchMove(event);
+
+  assert.deepEqual(events, [['up', 60], ['down', 62]]);
+  assert.equal(piano.touchNotes.get(1), 62);
+  assert.equal(event.defaultPrevented, true);
+});
+
+test('scope period windows derive samples while keeping X markers in periods', () => {
+  const scope = Object.create(ScopeVisualizer.prototype);
+  Object.assign(scope, {
+    audioContext: { sampleRate: 48000 },
+    frequency: 200,
+    periodsShown: 4,
+    sampleRate: 44100,
+    samplesShown: 1024,
+  });
+
+  assert.equal(scope.visibleSampleCount(), 960);
+  assert.equal(scope.xAxisRange(), 4);
+
+  scope.periodsShown = null;
+  assert.equal(scope.visibleSampleCount(), 1024);
+  assert.equal(scope.xAxisRange(), 1024);
+});
+
+test('scope frequency changes do not rebuild an adequately sized audio tap', () => {
+  const scope = Object.create(ScopeVisualizer.prototype);
+  Object.assign(scope, {
+    channelIndexes: [0],
+    triggerChannel: null,
+    fftSize: 2048,
+    smoothingTimeConstant: 0,
+    frequency: 220,
+    periodsShown: 4,
+    samplesShown: 1024,
+    sampleRate: 48000,
+    audioContext: { sampleRate: 48000 },
+  });
+
+  const key = scope.audioConfigKey();
+  scope.frequency = 440;
+  assert.equal(scope.audioConfigKey(), key);
+
+  scope.fftSize = 4096;
+  assert.notEqual(scope.audioConfigKey(), key);
+});
+
+test('scope demo signal supplies external trigger pulses', () => {
+  const scope = Object.create(ScopeVisualizer.prototype);
+  Object.assign(scope, {
+    channelSamples: [new Float32Array(1024)],
+    triggerSamples: new Float32Array(1024),
+    frequency: 220,
+    drive: 0.2,
+    gain: 0.75,
+    gate: 1,
+    _level: 1,
+    _phase: 0.4,
+    ensureSampleBuffer() {},
+  });
+
+  scope.generateDemoSamples();
+
+  assert.ok(scope.triggerSamples.some((sample) => sample === 1));
+  assert.ok(scope.triggerSamples.some((sample) => sample === 0));
+});
+
+test('knobs and sliders expose disabled as a real control state', () => {
+  assert.ok(SynthKnob.observedAttributes.includes('disabled'));
+  assert.ok(ParameterSlider.observedAttributes.includes('disabled'));
+
+  for (const Control of [SynthKnob, ParameterSlider]) {
+    const control = Object.create(Control.prototype);
+    control.attributes = new Set(['disabled', 'editable']);
+    control.beginValueEdit();
+    assert.notEqual(control.isEditingValue, true);
+  }
+});
+
+test('knobs and sliders share range and curve attributes', () => {
+  assert.deepEqual(
+    SynthKnob.observedAttributes.filter((attribute) => attribute !== 'pointer-lock'),
+    ParameterSlider.observedAttributes,
+  );
+  for (const Control of [SynthKnob, ParameterSlider, CompostNumberBox]) {
+    assert.equal(Control.observedAttributes.includes('taper'), false);
+    assert.equal(Control.observedAttributes.includes('scale'), false);
+  }
+});
+
+test('knobs and sliders use global fine and coarse keyboard travel', () => {
+  for (const Control of [SynthKnob, ParameterSlider]) {
+    const control = Object.create(Control.prototype);
+    Object.defineProperties(control, {
+      disabled: { value: false },
+      value: {
+        get() { return this.currentValue; },
+      },
+    });
+    Object.assign(control, {
+      currentValue: 0.2,
+      min: 0,
+      max: 1,
+      mid: null,
+      curve: 'linear',
+      shape: 1,
+      step: 0.000001,
+      positionStep: null,
+      resetValue: 0.5,
+      handleValueEditKey: () => false,
+      parameterID: 'keyboard-test',
+      dispatchEvent: () => {},
+      setValue(value) {
+        this.currentValue = value;
+      },
+    });
+
+    const press = (key, altKey = false) => {
+      let prevented = false;
+      control.handleKey({
+        key,
+        altKey,
+        preventDefault() { prevented = true; },
+      });
+      assert.equal(prevented, true);
+    };
+
+    press('ArrowRight');
+    assert.ok(Math.abs(control.value - 0.21) < 1e-9);
+    press('ArrowRight', true);
+    assert.ok(Math.abs(control.value - 0.31) < 1e-9);
+    press('PageDown');
+    assert.ok(Math.abs(control.value - 0.21) < 1e-9);
+    press('Delete');
+    assert.equal(control.value, 0.5);
+  }
+});
+
+test('exact-value editors use the shared visible precision', () => {
+  for (const Control of [SynthKnob, ParameterSlider, CompostNumberBox]) {
+    const control = Object.create(Control.prototype);
+    Object.assign(control, {
+      _value: 0.68471234,
+      step: 0,
+      displayFractionDigits: null,
+      empty: false,
+    });
+    assert.equal(control.editableValueText(), '0.68');
+  }
+});
+
+test('piano is docked by default with an inline opt-out', () => {
+  assert.ok(PianoKeyboard.observedAttributes.includes('inline'));
+  const source = fs.readFileSync(
+    new URL('../src/components/compost-piano.js', import.meta.url), 'utf8');
+  assert.match(source, /this\.hasAttribute\('dock'\) \|\| !this\.hasAttribute\('inline'\)/u);
+  assert.match(source, /:host\(\[data-docked\]\)/u);
+});
+
+test('button labels allow wrapping and default to square corners', () => {
+  const buttonSource = fs.readFileSync(
+    new URL('../src/components/compost-button.js', import.meta.url), 'utf8');
+
+  assert.match(buttonSource, /slot \{[\s\S]*overflow-wrap: anywhere;[\s\S]*white-space: normal;/u);
+  assert.match(buttonSource, /--compost-button-radius: 0;/u);
+});
+
+test('drawer keeps native details semantics and reflects open state', () => {
+  assert.deepEqual(
+    CompostDrawer.observedAttributes,
+    ['open', 'edge', 'orientation', 'min-size', 'max-size', 'label']);
+
+  const drawer = Object.create(CompostDrawer.prototype);
+  drawer.attributes = new Set();
+  drawer.toggleAttribute = (name, value) => {
+    if (value) drawer.attributes.add(name);
+    else drawer.attributes.delete(name);
+  };
+
+  drawer.open = true;
+  assert.equal(drawer.open, true);
+  drawer.open = false;
+  assert.equal(drawer.open, false);
+
+  const source = fs.readFileSync(
+    new URL('../src/components/compost-drawer.js', import.meta.url), 'utf8');
+  assert.match(source, /<details part="drawer">/u);
+  assert.match(source, /<summary part="title">/u);
+  assert.match(source, /<slot name="title">Drawer<\/slot>/u);
+  assert.match(source, /<div class="content" part="content"><slot><\/slot><\/div>/u);
+  assert.match(source, /role="separator"/u);
+  assert.match(source, /setPointerCapture/u);
+  assert.match(source, /titleBar\.addEventListener\('click'/u);
+  assert.match(source, /event\.preventDefault\(\);[\s\S]*this\.open = !this\.open;/u);
+  assert.match(source, /z-index: 2;/u);
+  assert.match(source, /background-color: var\(--compost-drawer-border\);/u);
+  assert.match(source, /opacity: 1;/u);
+  assert.match(source, /summary \{[\s\S]*z-index: 2;[\s\S]*background-color: var\(--compost-drawer-title-bg\);/u);
+  assert.doesNotMatch(source, /compost-drawer-(?:min|max)-outer-size/u);
+  assert.doesNotMatch(source, /--compost-drawer-max-size/u);
+  assert.match(source, /--compost-drawer-radius: 0;/u);
+  assert.match(source, /border-left: 7px solid currentColor;/u);
+  assert.doesNotMatch(source, /border-inline-start/u);
+  assert.match(source, /:host\(\[open\]\[edge="top"\]\) summary \{\s*grid-row: 1;/u);
+  assert.match(source, /:host\(\[open\]\[edge="right"\]\) summary \{\s*grid-column: 2;/u);
+  assert.match(source, /--compost-drawer-title-size: 40px;/u);
+  assert.match(source, /:host\(:not\(\[open\]\)\[data-axis="horizontal"\]\) \{[\s\S]*width: var\(--compost-drawer-title-size\);/u);
+  assert.match(source, /:host\(\[data-axis="horizontal"\]\) summary \{[\s\S]*width: 100%;[\s\S]*min-width: 0;/u);
+  assert.match(source, /:host\(\[data-axis="vertical"\]\) summary \{\s*min-height: calc\(var\(--compost-drawer-title-size\) - 2px\);/u);
+  assert.match(source, /edge="bottom"\]\) \.marker \{ transform: rotate\(0deg\); \}/u);
+  assert.match(source, /edge="top"\]\) details\[open\] \.marker \{ transform: rotate\(90deg\); \}/u);
+  assert.match(source, /edge="bottom"\]\) details\[open\] \.marker \{ transform: rotate\(-90deg\); \}/u);
+  assert.match(source, /edge="right"\]\) \.marker \{ transform: rotate\(90deg\); \}/u);
+  assert.match(source, /edge="left"\]\) details\[open\] \.marker \{ transform: rotate\(0deg\); \}/u);
+  assert.match(source, /edge="right"\]\) details\[open\] \.marker \{ transform: rotate\(180deg\); \}/u);
+});
+
+test('an untitled drawer keeps an accessible title name', () => {
+  let ariaLabel = '';
+  const drawer = Object.create(CompostDrawer.prototype);
+  Object.assign(drawer, {
+    getAttribute() { return ''; },
+    titleSlot: { assignedNodes() { return []; } },
+    titleBar: {
+      setAttribute(name, value) { if (name === 'aria-label') ariaLabel = value; },
+      removeAttribute() { ariaLabel = ''; },
+    },
+  });
+
+  drawer.refreshLabel();
+  assert.equal(ariaLabel, 'Toggle drawer');
+});
+
+test('drawer resize separators include their drawer name and pixel value', () => {
+  const attributes = new Map();
+  const drawer = Object.create(CompostDrawer.prototype);
+  Object.assign(drawer, {
+    getAttribute(name) { return name === 'label' ? null : null; },
+    titleSlot: { assignedNodes() { return [{ textContent: 'Instrument' }]; } },
+    titleBar: { removeAttribute() {} },
+    resizeHandle: {
+      setAttribute(name, value) { attributes.set(name, value); },
+    },
+  });
+
+  drawer.refreshLabel();
+  assert.equal(attributes.get('aria-label'), 'Resize Instrument drawer');
+
+  drawer.style = { setProperty() {} };
+  Object.defineProperties(drawer, {
+    minSize: { value: 80 },
+    maxSize: { value: 480 },
+  });
+  drawer.setSize(240);
+  assert.equal(attributes.get('aria-valuetext'), '240 pixels');
+});
+
+test('drawer resizing clamps to its declared bounds', () => {
+  const drawer = Object.create(CompostDrawer.prototype);
+  const properties = new Map();
+  Object.assign(drawer, {
+    attributes: new Set(['open']),
+    getAttribute(name) {
+      return { 'min-size': '120', 'max-size': '420' }[name] ?? null;
+    },
+    getBoundingClientRect() {
+      const size = Number.parseFloat(properties.get('--compost-drawer-size')) || 0;
+      return { width: size, height: size };
+    },
+    style: {
+      getPropertyValue(name) { return properties.get(name) ?? ''; },
+      setProperty(name, value) { properties.set(name, value); },
+    },
+  });
+
+  drawer.setSize(600);
+  assert.equal(properties.get('--compost-drawer-size'), '420px');
+  drawer.setSize(40);
+  assert.equal(properties.get('--compost-drawer-size'), '120px');
+});
+
+test('drawer resizing follows its attached edge', () => {
+  const drawer = Object.create(CompostDrawer.prototype);
+  let edge = 'bottom';
+  Object.assign(drawer, {
+    getAttribute(name) { return name === 'edge' ? edge : null; },
+  });
+
+  assert.equal(drawer.resizePosition({ clientX: 20, clientY: 80 }), -80);
+  edge = 'top';
+  assert.equal(drawer.resizePosition({ clientX: 20, clientY: 80 }), 80);
+  edge = 'left';
+  assert.equal(drawer.resizePosition({ clientX: 20, clientY: 80 }), 20);
+  edge = 'right';
+  assert.equal(drawer.resizePosition({ clientX: 20, clientY: 80 }), -20);
+});
+
+test('drawer min and max sizes stay manual', () => {
+  const drawer = Object.create(CompostDrawer.prototype);
+  Object.assign(drawer, {
+    getAttribute(name) {
+      return { 'min-size': '120', 'max-size': '420' }[name] ?? null;
+    },
+  });
+
+  assert.equal(drawer.minSize, 120);
+  assert.equal(drawer.maxSize, 420);
+});
+
+test('drawer reopens from its declared size without reading intrinsic growth', () => {
+  const drawer = Object.create(CompostDrawer.prototype);
+  Object.assign(drawer, {
+    ownerDocument: {
+      defaultView: {
+        getComputedStyle() {
+          return { getPropertyValue() { return '180px'; } };
+        },
+      },
+    },
+    getAttribute(name) { return name === 'edge' ? 'left' : null; },
+    getBoundingClientRect() { return { width: 420, height: 100 }; },
+  });
+
+  assert.equal(drawer.size, 180);
+});
+
+test('parameter lifecycle details always state whether the gesture was cancelled', () => {
+  const events = [];
+  const control = {
+    parameterID: 'gain',
+    parameterKind: 'continuous',
+    value: 0.5,
+    dispatchEvent(event) { events.push(event); },
+  };
+
+  beginParameterGesture(control);
+  editParameterGesture(control, 0.75);
+  endParameterGesture(control, 0.75);
+
+  assert.deepEqual(events.map((event) => event.detail.cancelled), [false, false, false]);
+});
+
+test('stateful parameter controls carry explicit lifecycle paths', () => {
+  for (const file of ['compost-knob.js', 'compost-slider.js', 'compost-number-box.js']) {
+    const source = fs.readFileSync(new URL(`../src/components/${file}`, import.meta.url), 'utf8');
+    assert.match(source, /beginParameterGesture/u);
+    assert.match(source, /endParameterGesture\(this, this\.value, \{ cancelled: true \}\)/u);
+    assert.match(source, /begin(?:Value)?Edit/u);
+  }
+});
+
+test('number box MIDI labels replace the inline value', () => {
+  const source = fs.readFileSync(new URL('../src/components/compost-number-box.js', import.meta.url), 'utf8');
+  assert.match(source, /\.midi-map-label::after \{[\s\S]*top: 50%;[\s\S]*transform: translate\(-50%, -50%\)/u);
+  assert.match(source, /\[data-midi-map-mode\]\[data-midi-map-label\]\) \.value \{[\s\S]*opacity: 0/u);
+});
+
+test('momentary button ignores silent backend reflection', () => {
+  const button = Object.create(CircleButton.prototype);
+  let triggers = 0;
+  Object.assign(button, {
+    wasMappedActive: false,
+    getAttribute(name) { return name === 'mode' ? 'momentary' : null; },
+    trigger() { triggers += 1; },
+  });
+  button.setValue(1, false, 'backend');
+  assert.equal(triggers, 0);
+});
+
+function lifecycleHarness(Control, attrs = {}) {
+  const attributes = new Map(Object.entries({
+    'parameter-id': 'gain',
+    ...attrs,
+  }));
+  const events = [];
+  const control = Object.create(Control.prototype);
+
+  Object.assign(control, {
+    _parameterGestureActive: false,
+    lastUpdateSource: 'control',
+    dispatchEvent(event) {
+      events.push(event);
+      return true;
+    },
+    getAttribute(name) {
+      return attributes.has(name) ? attributes.get(name) : null;
+    },
+    hasAttribute(name) {
+      return attributes.has(name);
+    },
+    setAttribute(name, value) {
+      attributes.set(name, String(value));
+    },
+    removeAttribute(name) {
+      attributes.delete(name);
+    },
+    toggleAttribute(name, force) {
+      if (force) attributes.set(name, '');
+      else attributes.delete(name);
+    },
+    refresh() {},
+  });
+
+  return { control, events };
+}
+
+function lifecycleTypes(events) {
+  return events
+    .filter((event) => event.type.startsWith('parameter-'))
+    .map((event) => event.type);
+}
+
+test('knob executes keyboard/reset edits and keeps silent backend updates silent', () => {
+  const { control, events } = lifecycleHarness(SynthKnob, { min: '0', max: '1' });
+  Object.assign(control, {
+    _value: 0.5,
+    min: 0,
+    max: 1,
+    step: 0,
+    mid: null,
+    curve: 'linear',
+    shape: 1,
+    positionStep: null,
+    resetValue: 0.25,
+    displayFractionDigits: null,
+    valueText: '',
+    unit: '',
+  });
+
+  control.mid = 0.8;
+  assert.equal(control.scaleOptions().mid, 0.8);
+  control.handleKey({ key: 'ArrowRight', preventDefault() {} });
+  assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+  assert.ok(control.value > 0.5);
+
+  events.length = 0;
+  control.handleKey({ key: 'Delete', preventDefault() {} });
+  assert.equal(control.value, 0.25);
+  assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+
+  events.length = 0;
+  control.setValue(0.8, false, 'backend');
+  assert.equal(control.value, 0.8);
+  assert.deepEqual(events, []);
+});
+
+test('knob pointer and typed gestures close once with cancellation details', () => {
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const previousFocus = HTMLElement.prototype.focus;
+  const windowListeners = new Map();
+  const documentListeners = new Map();
+  const dialListeners = new Map();
+  globalThis.window = {
+    addEventListener(type, listener) { windowListeners.set(type, listener); },
+    removeEventListener(type, listener) {
+      if (windowListeners.get(type) === listener) windowListeners.delete(type);
+    },
+  };
+  globalThis.document = {
+    pointerLockElement: null,
+    addEventListener(type, listener) { documentListeners.set(type, listener); },
+    removeEventListener(type, listener) {
+      if (documentListeners.get(type) === listener) documentListeners.delete(type);
+    },
+    createElement() { return fakeInput(); },
+    exitPointerLock() {},
+  };
+  HTMLElement.prototype.focus = () => {};
+
+  try {
+    const { control, events } = lifecycleHarness(SynthKnob, {
+      min: '0', max: '1', editable: '', 'parameter-id': 'gain',
+    });
+    Object.assign(control, {
+      _value: 0.5,
+      min: 0,
+      max: 1,
+      step: 0,
+      mid: null,
+      curve: 'linear',
+      shape: 1,
+      positionStep: null,
+      resetValue: 0.25,
+      displayFractionDigits: null,
+      valueText: '',
+      unit: '',
+      label: 'Gain',
+      valueElement: {
+        replaceChildren(input) { this.child = input; },
+      },
+      dial: {
+        setPointerCapture() {},
+        hasPointerCapture() { return false; },
+        releasePointerCapture() {},
+        addEventListener(type, listener) { dialListeners.set(type, listener); },
+        removeEventListener(type, listener) {
+          if (dialListeners.get(type) === listener) dialListeners.delete(type);
+        },
+      },
+    });
+
+    control.beginDrag({
+      pointerId: 1,
+      clientX: 0,
+      clientY: 0,
+      preventDefault() {},
+    });
+    control.setValue(0.7, true, 'control');
+    windowListeners.get('pointerup')?.({ pointerId: 1, type: 'pointerup' });
+    assert.deepEqual(lifecycleTypes(events), [
+      'parameter-begin', 'parameter-edit', 'parameter-end',
+    ]);
+    assert.equal(events.at(-1).detail.cancelled, false);
+
+    events.length = 0;
+    control.beginDrag({
+      pointerId: 2,
+      clientX: 0,
+      clientY: 0,
+      preventDefault() {},
+    });
+    control.setValue(0.8, true, 'control');
+    windowListeners.get('blur')?.();
+    windowListeners.get('blur')?.();
+    assert.deepEqual(lifecycleTypes(events), [
+      'parameter-begin', 'parameter-edit', 'parameter-end',
+    ]);
+    assert.equal(events.at(-1).detail.cancelled, true);
+
+    events.length = 0;
+    control.beginValueEdit('0.5');
+    const validInput = control.valueElement.child;
+    validInput.value = '0.75';
+    validInput.dispatch('blur');
+    assert.deepEqual(lifecycleTypes(events), [
+      'parameter-begin', 'parameter-edit', 'parameter-end',
+    ]);
+    assert.equal(events.at(-1).detail.cancelled, false);
+
+    events.length = 0;
+    control.beginValueEdit('0.5');
+    const invalidInput = control.valueElement.child;
+    invalidInput.value = 'bad';
+    invalidInput.dispatch('blur');
+    assert.deepEqual(lifecycleTypes(events), [
+      'parameter-begin', 'parameter-end',
+    ]);
+    assert.equal(events.at(-1).detail.cancelled, true);
+  } finally {
+    HTMLElement.prototype.focus = previousFocus;
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
+test('slider pointer cancellation, typed edits, reset, and silent updates close once', () => {
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const windowListeners = new Map();
+  globalThis.window = {
+    addEventListener(type, listener) { windowListeners.set(type, listener); },
+    removeEventListener(type, listener) {
+      if (windowListeners.get(type) === listener) windowListeners.delete(type);
+    },
+  };
+  globalThis.document = { createElement() { return fakeInput(); } };
+  try {
+    const { control, events } = lifecycleHarness(ParameterSlider, {
+      min: '0', max: '1', editable: '', 'parameter-id': 'gain',
+    });
+    Object.assign(control, {
+      _value: 0.5,
+      min: 0,
+      max: 1,
+      step: 0,
+      mid: null,
+      curve: 'linear',
+      shape: 1,
+      positionStep: null,
+      resetValue: 0.25,
+      displayFractionDigits: null,
+      valueText: '',
+      unit: '',
+      label: 'Gain',
+      output: { replaceChildren(input) { this.child = input; } },
+    });
+    control.handleWindowBlur = () => control.cancelPointer();
+
+    control.beginPointer({ pointerId: 1, clientX: 0, clientY: 0 });
+    control.setValue(0.7, true, 'control');
+    control.endPointer({ pointerId: 1, clientX: 0, clientY: 10 });
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+    assert.equal(events.at(-1).detail.cancelled, false);
+
+    events.length = 0;
+    control.beginPointer({ pointerId: 2, clientX: 0, clientY: 0 });
+    control.setValue(0.8, true, 'control');
+    control.cancelPointer();
+    control.cancelPointer();
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+    assert.equal(events.at(-1).detail.cancelled, true);
+
+    events.length = 0;
+    control.beginPointer({ pointerId: 3, clientX: 0, clientY: 0 });
+    control.setValue(0.6, true, 'control');
+    windowListeners.get('blur')?.();
+    windowListeners.get('blur')?.();
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+    assert.equal(events.at(-1).detail.cancelled, true);
+
+    events.length = 0;
+    control.handleKey({ key: 'ArrowRight', preventDefault() {} });
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+
+    events.length = 0;
+    control.reset();
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+    assert.equal(control.value, 0.25);
+
+    events.length = 0;
+    control.beginValueEdit('0.5');
+    const validInput = control.output.child;
+    validInput.value = '0.75';
+    validInput.dispatch('blur');
+    assert.equal(control.value, 0.75);
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+    assert.equal(events.at(-1).detail.cancelled, false);
+
+    events.length = 0;
+    control.beginValueEdit('0.5');
+    const invalidInput = control.output.child;
+    invalidInput.value = 'bad';
+    invalidInput.dispatch('blur');
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-end']);
+    assert.equal(events.at(-1).detail.cancelled, true);
+
+    events.length = 0;
+    control.setValue(0.9, false, 'backend');
+    assert.deepEqual(events, []);
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
+});
+
+function fakeInput() {
+  const listeners = new Map();
+  return {
+    value: '',
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+    setAttribute() {},
+    focus() {},
+    select() {},
+    setSelectionRange() {},
+    dispatch(type, event = {}) {
+      listeners.get(type)?.({ ...event, target: this });
+    },
+  };
+}
+
+test('number box pointer, typed commit/cancel, reset, and silent backend paths are executable', () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const windowListeners = new Map();
+  globalThis.window = {
+    addEventListener(type, listener) { windowListeners.set(type, listener); },
+    removeEventListener(type, listener) {
+      if (windowListeners.get(type) === listener) windowListeners.delete(type);
+    },
+  };
+  const documentListeners = new Map();
+  const documentStub = {
+    pointerLockElement: null,
+    addEventListener(type, listener) { documentListeners.set(type, listener); },
+    removeEventListener(type, listener) {
+      if (documentListeners.get(type) === listener) documentListeners.delete(type);
+    },
+    createElement() { return fakeInput(); },
+  };
+  globalThis.document = documentStub;
+  try {
+    const { control, events } = lifecycleHarness(CompostNumberBox, {
+      min: '0', max: '1', 'pointer-lock': '', 'parameter-id': 'gain',
+    });
+    let pointerLockRequests = 0;
+    const box = {
+      isConnected: false,
+      focus() {},
+      setPointerCapture() {},
+      requestPointerLock() { pointerLockRequests += 1; },
+    };
+    Object.assign(control, {
+      _value: 0.5,
+      min: 0,
+      max: 1,
+      step: 0,
+      mid: null,
+      curve: 'linear',
+      shape: 1,
+      resetValue: 0.25,
+      empty: false,
+      editing: false,
+      box,
+      valueElement: { replaceChildren(input) { this.child = input; } },
+      isConnected: false,
+    });
+    control.handleWindowBlur = () => control.endActiveDrag(false);
+
+    control.beginDrag({
+      pointerId: 1,
+      clientX: 0,
+      clientY: 0,
+      button: 0,
+      preventDefault() {},
+    });
+    control.applyDragDistance(40, { preventDefault() {} });
+    control.endDrag({ pointerId: 1 });
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+    assert.equal(events.at(-1).detail.cancelled, false);
+    assert.equal(pointerLockRequests, 1);
+
+    events.length = 0;
+    control.beginDrag({
+      pointerId: 2,
+      clientX: 0,
+      clientY: 0,
+      button: 0,
+      preventDefault() {},
+    });
+    control.applyDragDistance(20, { preventDefault() {} });
+    control.endDrag({ pointerId: 2 }, false);
+    control.endDrag({ pointerId: 2 }, false);
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+    assert.equal(events.at(-1).detail.cancelled, true);
+
+    events.length = 0;
+    control.beginDrag({
+      pointerId: 3,
+      clientX: 0,
+      clientY: 0,
+      button: 0,
+      preventDefault() {},
+    });
+    control.applyDragDistance(20, { preventDefault() {} });
+    windowListeners.get('blur')?.();
+    windowListeners.get('blur')?.();
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+    assert.equal(events.at(-1).detail.cancelled, true);
+
+    events.length = 0;
+    control.handleKey({ key: 'Escape', preventDefault() {} });
+    assert.equal(control.value, 0.25);
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+
+    events.length = 0;
+    control.beginEdit('0.5');
+    const invalidInput = control.valueElement.child;
+    assert.equal(control.editing, true);
+    invalidInput.value = 'not a number';
+    invalidInput.dispatch('blur');
+    assert.equal(control.editing, false);
+    assert.equal(events.at(-1).type, 'parameter-end');
+    assert.equal(events.at(-1).detail.cancelled, true);
+
+    events.length = 0;
+    control.beginEdit('0.5');
+    const validInput = control.valueElement.child;
+    validInput.value = '0.75';
+    validInput.dispatch('blur');
+    assert.equal(control.value, 0.75);
+    assert.deepEqual(lifecycleTypes(events), ['parameter-begin', 'parameter-edit', 'parameter-end']);
+
+    events.length = 0;
+    control.setValue(0.9, false, 'backend');
+    assert.deepEqual(events, []);
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
+test('number box uses normal, split-zone, and second-click fine drag scaling', () => {
+  const control = Object.create(CompostNumberBox.prototype);
+  const values = [];
+  Object.assign(control, {
+    drag: {
+      value: 0.5,
+      moved: false,
+      fineCandidate: false,
+      fine: false,
+      zoneScale: 1,
+    },
+    min: 0,
+    max: 1,
+    mid: null,
+    curve: 'linear',
+    shape: 1,
+    toggleAttribute() {},
+    setValue(value) { values.push(value); },
+  });
+
+  control.applyDragDistance(90, { preventDefault() {} });
+  assert.equal(values.at(-1), 1);
+
+  control.drag = {
+    value: 0.5,
+    moved: false,
+    fineCandidate: false,
+    fine: false,
+    zoneScale: 4,
+  };
+  control.applyDragDistance(9, { preventDefault() {} });
+  assert.equal(values.at(-1), 0.7);
+
+  control.drag = {
+    value: 0.5,
+    moved: false,
+    fineCandidate: true,
+    fine: false,
+  };
+  control.applyDragDistance(90, { preventDefault() {} });
+  assert.equal(values.at(-1), 0.55);
+  assert.equal(CompostNumberBox.observedAttributes.includes('split-drag'), true);
+  assert.equal(CompostNumberBox.observedAttributes.includes('drag-step-left'), true);
+  assert.equal(CompostNumberBox.observedAttributes.includes('drag-step-middle'), true);
+  assert.equal(CompostNumberBox.observedAttributes.includes('drag-step-right'), true);
+  assert.equal(ParameterSlider.observedAttributes.includes('compact'), false);
+});
+
+test('number box split-drag selects configurable left, middle, and right rates', () => {
+  const values = new Map([
+    ['drag-step-left', '6'],
+    ['drag-step-middle', '1.5'],
+    ['drag-step-right', '0.2'],
+  ]);
+  const control = Object.create(CompostNumberBox.prototype);
+  Object.assign(control, {
+    box: { getBoundingClientRect: () => ({ left: 10, width: 90 }) },
+    hasAttribute(name) { return name === 'split-drag' || values.has(name); },
+    getAttribute(name) { return values.get(name) ?? ''; },
+  });
+
+  assert.equal(control.dragScaleFor({ clientX: 12 }), 6);
+  assert.equal(control.dragScaleFor({ clientX: 55 }), 1.5);
+  assert.equal(control.dragScaleFor({ clientX: 98 }), 0.2);
+});
+
+test('MIDI mapping range editors use the full parameter bounds', () => {
+  const editor = Object.create(MIDIMappingsEditor.prototype);
+  editor._mappings = {
+    parameters: {
+      definition(parameterID) {
+        return parameterID === 'frequency' ? { min: 20, max: 20000 } : null;
+      },
+    },
+  };
+
+  assert.deepEqual(editor.parameterBoundsFor({ parameterID: 'frequency', min: 440, max: 1000 }), {
+    min: 20,
+    max: 20000,
+  });
+  assert.deepEqual(editor.parameterBoundsFor({ parameterID: 'unknown', min: 0, max: 1 }), {
+    min: 0,
+    max: 1,
+  });
+});
+
+test('MIDI mapping row delete buttons request one clear', () => {
+  const editor = Object.create(MIDIMappingsEditor.prototype);
+  let cleared = '';
+  Object.assign(editor, {
+    _mappings: {},
+    hasAttribute: () => false,
+    clearMapping(parameterID) { cleared = parameterID; },
+  });
+
+  editor.handleRowClick({
+    target: {
+      closest: () => ({ dataset: { clearMapping: 'frequency' } }),
+    },
+  });
+
+  assert.equal(cleared, 'frequency');
+});
+
+test('button triggers emit exact pulses and silent setters do nothing', () => {
+  const button = lifecycleHarness(CircleButton);
+  button.control.flashActive = () => {};
+  button.control.trigger('control');
+  assert.deepEqual(lifecycleTypes(button.events), [
+    'parameter-begin', 'parameter-edit', 'parameter-edit', 'parameter-end',
+  ]);
+  button.events.length = 0;
+  button.control.setValue(1, false, 'backend');
+  assert.deepEqual(button.events, []);
+
+  const switchButton = lifecycleHarness(CircleButton, { mode: 'switch' });
+  switchButton.control.setValue(1, true, 'api');
+  assert.equal(switchButton.control.value, 1);
+  assert.deepEqual(lifecycleTypes(switchButton.events), [
+    'parameter-begin', 'parameter-edit', 'parameter-end',
+  ]);
+  assert.equal(switchButton.events.at(-1).detail.cancelled, false);
+  switchButton.events.length = 0;
+  switchButton.control.setValue(0, false, 'backend');
+  assert.equal(switchButton.control.value, 0);
+  assert.deepEqual(switchButton.events, []);
+});
