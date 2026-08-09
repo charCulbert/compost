@@ -44,7 +44,8 @@
   ],
   "scripts": {
     "dev": "python3 -m http.server 8000",
-    "test": "node --test"
+    "test": "node --test 'test/*.test.js'",
+    "test:e2e": "playwright test"
   },
   "keywords": [
     "web-components",
@@ -52,5 +53,8 @@
     "midi",
     "audio-worklet",
     "synth"
-  ]
+  ],
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
 }

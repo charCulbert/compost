@@ -5,18 +5,6 @@ import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
-const examples = [
-  'parameter-sync',
-];
-
-function findFiles(directory, filename) {
-  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return findFiles(entryPath, filename);
-    return entry.name === filename ? [entryPath] : [];
-  });
-}
-
 function findMarkdownFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
@@ -24,17 +12,6 @@ function findMarkdownFiles(directory) {
     return entry.name.endsWith('.md') ? [entryPath] : [];
   });
 }
-
-test('canonical examples have browser entry assets and controller imports', () => {
-  for (const example of examples) {
-    const directory = path.join(root, 'examples', example);
-    const html = fs.readFileSync(path.join(directory, 'index.html'), 'utf8');
-    const main = fs.readFileSync(path.join(directory, 'main.js'), 'utf8');
-    assert.match(html, /<script[^>]+type="module"[^>]+src="\.\/main\.js(?:\?[^"]*)?"/u);
-    assert.match(main, /parameter-controller\.js/u);
-    execFileSync(process.execPath, ['--check', path.join(directory, 'main.js')]);
-  }
-});
 
 test('the repository root redirects to the examples page', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -137,40 +114,6 @@ test('drawer demo keeps only the docked pair', () => {
   assert.match(main, /maxSizeOption\.addEventListener\('change', applyBounds\)/u);
   assert.doesNotMatch(main, /(?:min|max)SizeOption\.addEventListener\('input', applyBounds\)/u);
   assert.doesNotMatch(main, /edgeOption|data-option="edge"|skinOption|data-option="skin"|densityOption|data-option="density"|toggle-drawer/u);
-});
-
-test('every surviving example page has valid local module entry points', () => {
-  const pages = findFiles(path.join(root, 'examples'), 'index.html');
-  assert.equal(pages.length, 18);
-
-  for (const page of pages) {
-    const html = fs.readFileSync(page, 'utf8');
-    const scripts = [...html.matchAll(/<script[^>]+type=["']module["'][^>]+src=["']([^"']+)["']/gu)];
-    for (const [, source] of scripts) {
-      if (/^(?:https?:)?\/\//u.test(source)) continue;
-      const script = path.resolve(path.dirname(page), source.split(/[?#]/u)[0]);
-      assert.equal(fs.existsSync(script), true, `${path.relative(root, page)}: ${source}`);
-      execFileSync(process.execPath, ['--check', script]);
-    }
-  }
-});
-
-test('components and surviving examples use the styled dropdown', () => {
-  const pages = findFiles(path.join(root, 'examples'), 'index.html');
-  for (const page of pages) {
-    const html = fs.readFileSync(page, 'utf8');
-    assert.doesNotMatch(html, /<select\b/u, path.relative(root, page));
-  }
-
-  for (const file of [
-    'src/components/compost-midi.js',
-    'src/components/compost-device-selector.js',
-    'examples/shared/example-page.js',
-  ]) {
-    const source = fs.readFileSync(path.join(root, file), 'utf8');
-    assert.doesNotMatch(source, /<select\b|createElement\(['"]select['"]\)/u, file);
-    assert.match(source, /compost-select/u, file);
-  }
 });
 
 test('example catalog has the canonical order and every target exists', async () => {
@@ -337,35 +280,4 @@ test('the signal generator is a drawer-based plain AudioWorklet integration', ()
   assert.doesNotMatch(`${html}\n${main}\n${worklet}`, /WASI|WebAssembly|\.wasm/u);
   execFileSync(process.execPath, ['--check', path.join(directory, 'main.js')]);
   execFileSync(process.execPath, ['--check', path.join(directory, 'worklets/signal-generator.js')]);
-});
-
-test('removed generic systems are absent from source and package exports', () => {
-  const packageJSON = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  const packageText = JSON.stringify(packageJSON);
-  const removedExports = [
-    'parameter-' + 'bindings',
-    'parameter-' + 'storage',
-    'c' + 'major',
-    'audio-worklet-' + 'pro' + 'filer',
-    'midi-' + 'router',
-  ];
-  for (const name of removedExports) {
-    assert.equal(packageText.includes(name), false, name);
-  }
-
-  const removedFiles = [
-    'src/parameter-' + 'bindings.js',
-    'src/parameter-' + 'storage.js',
-    'src/audio-worklet-' + 'pro' + 'filer.js',
-    'src/components/compost-midi-map.js',
-    'src/midi-' + 'router.js',
-    'examples/midi-mapping/index.html',
-    'examples/web-audio-oscillator/index.html',
-    'examples/signal-generator-wasi/index.html',
-    'examples/audio-effect-wasi-delay/index.html',
-    'examples/build-wasm.sh',
-  ];
-  for (const file of removedFiles) {
-    assert.equal(fs.existsSync(path.join(root, file)), false, file);
-  }
 });

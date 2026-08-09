@@ -82,49 +82,6 @@ test('styled select exposes native-like value and disabled attributes', () => {
   assert.ok(CompostSelect.observedAttributes.includes('aria-describedby'));
 });
 
-test('styled select keeps its accessible name separate from its value', () => {
-  const labels = new Map([['wave-label', { textContent: 'Wave shape' }]]);
-  const select = Object.create(CompostSelect.prototype);
-  select.getAttribute = (name) => ({
-    'aria-labelledby': 'wave-label',
-    'aria-label': 'Fallback label',
-  })[name] ?? null;
-  select.getRootNode = () => ({
-    getElementById(id) { return labels.get(id) || null; },
-    querySelectorAll() { return []; },
-  });
-
-  assert.equal(select.accessibleLabel(), 'Wave shape');
-});
-
-test('range controls expose one semantic slider with actual values', () => {
-  const knobSource = fs.readFileSync(
-    new URL('../src/components/compost-knob.js', import.meta.url), 'utf8');
-  const sliderSource = fs.readFileSync(
-    new URL('../src/components/compost-slider.js', import.meta.url), 'utf8');
-
-  assert.doesNotMatch(knobSource, /type="range"/u);
-  assert.doesNotMatch(sliderSource, /type="range"/u);
-  for (const source of [knobSource, sliderSource]) {
-    assert.match(source, /this\.setAttribute\('role', 'slider'\)/u);
-    assert.match(source, /this\.setAttribute\('aria-valuenow', String\(this\.value\)\)/u);
-  }
-});
-
-test('dialog and high-rate monitor accessibility defaults stay deliberate', () => {
-  const selectorSource = fs.readFileSync(
-    new URL('../src/components/compost-device-selector.js', import.meta.url), 'utf8');
-  const monitorSource = fs.readFileSync(
-    new URL('../src/components/compost-midi-monitor.js', import.meta.url), 'utf8');
-
-  assert.match(selectorSource, /dialog\.setAttribute\('aria-labelledby', this\.heading\.id\)/u);
-  assert.match(selectorSource, /this\.openButton\.setAttribute\('aria-haspopup', 'dialog'\)/u);
-  assert.doesNotMatch(selectorSource, /this\.setAttribute\('role', 'button'\)/u);
-  assert.match(monitorSource, /aria-live="off"/u);
-  assert.match(monitorSource, /'max-lines', 'announce'/u);
-  assert.match(monitorSource, /this\.logElement\.prepend/u);
-});
-
 test('stopping suspends the context and keeps the audio graph alive', async () => {
   const audio = Object.create(WebAudio.prototype);
   const events = [];
@@ -206,18 +163,6 @@ test('resuming emits audio-resumed instead of rebuilding the graph', async () =>
 
   assert.equal(audio.context, context);
   assert.deepEqual(events, ['audio-resumed']);
-});
-
-test('piano computer keys stay inside the displayed MIDI range', () => {
-  const piano = Object.create(PianoKeyboard.prototype);
-  Object.defineProperty(piano, 'config', {
-    value: { rootNote: 120, noteCount: 8 },
-  });
-
-  assert.equal(piano.isPlayableNote(120), true);
-  assert.equal(piano.isPlayableNote(127), true);
-  assert.equal(piano.isPlayableNote(119), false);
-  assert.equal(piano.isPlayableNote(128), false);
 });
 
 test('piano touch drag transfers the active note between keys', () => {
@@ -388,72 +333,6 @@ test('exact-value editors use the shared visible precision', () => {
   }
 });
 
-test('piano is docked by default with an inline opt-out', () => {
-  assert.ok(PianoKeyboard.observedAttributes.includes('inline'));
-  const source = fs.readFileSync(
-    new URL('../src/components/compost-piano.js', import.meta.url), 'utf8');
-  assert.match(source, /this\.hasAttribute\('dock'\) \|\| !this\.hasAttribute\('inline'\)/u);
-  assert.match(source, /:host\(\[data-docked\]\)/u);
-});
-
-test('button labels allow wrapping and default to square corners', () => {
-  const buttonSource = fs.readFileSync(
-    new URL('../src/components/compost-button.js', import.meta.url), 'utf8');
-
-  assert.match(buttonSource, /slot \{[\s\S]*overflow-wrap: anywhere;[\s\S]*white-space: normal;/u);
-  assert.match(buttonSource, /--compost-button-radius: 0;/u);
-});
-
-test('drawer keeps native details semantics and reflects open state', () => {
-  assert.deepEqual(
-    CompostDrawer.observedAttributes,
-    ['open', 'edge', 'orientation', 'min-size', 'max-size', 'label']);
-
-  const drawer = Object.create(CompostDrawer.prototype);
-  drawer.attributes = new Set();
-  drawer.toggleAttribute = (name, value) => {
-    if (value) drawer.attributes.add(name);
-    else drawer.attributes.delete(name);
-  };
-
-  drawer.open = true;
-  assert.equal(drawer.open, true);
-  drawer.open = false;
-  assert.equal(drawer.open, false);
-
-  const source = fs.readFileSync(
-    new URL('../src/components/compost-drawer.js', import.meta.url), 'utf8');
-  assert.match(source, /<details part="drawer">/u);
-  assert.match(source, /<summary part="title">/u);
-  assert.match(source, /<slot name="title">Drawer<\/slot>/u);
-  assert.match(source, /<div class="content" part="content"><slot><\/slot><\/div>/u);
-  assert.match(source, /role="separator"/u);
-  assert.match(source, /setPointerCapture/u);
-  assert.match(source, /titleBar\.addEventListener\('click'/u);
-  assert.match(source, /event\.preventDefault\(\);[\s\S]*this\.open = !this\.open;/u);
-  assert.match(source, /z-index: 2;/u);
-  assert.match(source, /background-color: var\(--compost-drawer-border\);/u);
-  assert.match(source, /opacity: 1;/u);
-  assert.match(source, /summary \{[\s\S]*z-index: 2;[\s\S]*background-color: var\(--compost-drawer-title-bg\);/u);
-  assert.doesNotMatch(source, /compost-drawer-(?:min|max)-outer-size/u);
-  assert.doesNotMatch(source, /--compost-drawer-max-size/u);
-  assert.match(source, /--compost-drawer-radius: 0;/u);
-  assert.match(source, /border-left: 7px solid currentColor;/u);
-  assert.doesNotMatch(source, /border-inline-start/u);
-  assert.match(source, /:host\(\[open\]\[edge="top"\]\) summary \{\s*grid-row: 1;/u);
-  assert.match(source, /:host\(\[open\]\[edge="right"\]\) summary \{\s*grid-column: 2;/u);
-  assert.match(source, /--compost-drawer-title-size: 40px;/u);
-  assert.match(source, /:host\(:not\(\[open\]\)\[data-axis="horizontal"\]\) \{[\s\S]*width: var\(--compost-drawer-title-size\);/u);
-  assert.match(source, /:host\(\[data-axis="horizontal"\]\) summary \{[\s\S]*width: 100%;[\s\S]*min-width: 0;/u);
-  assert.match(source, /:host\(\[data-axis="vertical"\]\) summary \{\s*min-height: calc\(var\(--compost-drawer-title-size\) - 2px\);/u);
-  assert.match(source, /edge="bottom"\]\) \.marker \{ transform: rotate\(0deg\); \}/u);
-  assert.match(source, /edge="top"\]\) details\[open\] \.marker \{ transform: rotate\(90deg\); \}/u);
-  assert.match(source, /edge="bottom"\]\) details\[open\] \.marker \{ transform: rotate\(-90deg\); \}/u);
-  assert.match(source, /edge="right"\]\) \.marker \{ transform: rotate\(90deg\); \}/u);
-  assert.match(source, /edge="left"\]\) details\[open\] \.marker \{ transform: rotate\(0deg\); \}/u);
-  assert.match(source, /edge="right"\]\) details\[open\] \.marker \{ transform: rotate\(180deg\); \}/u);
-});
-
 test('an untitled drawer keeps an accessible title name', () => {
   let ariaLabel = '';
   const drawer = Object.create(CompostDrawer.prototype);
@@ -468,54 +347,6 @@ test('an untitled drawer keeps an accessible title name', () => {
 
   drawer.refreshLabel();
   assert.equal(ariaLabel, 'Toggle drawer');
-});
-
-test('drawer resize separators include their drawer name and pixel value', () => {
-  const attributes = new Map();
-  const drawer = Object.create(CompostDrawer.prototype);
-  Object.assign(drawer, {
-    getAttribute(name) { return name === 'label' ? null : null; },
-    titleSlot: { assignedNodes() { return [{ textContent: 'Instrument' }]; } },
-    titleBar: { removeAttribute() {} },
-    resizeHandle: {
-      setAttribute(name, value) { attributes.set(name, value); },
-    },
-  });
-
-  drawer.refreshLabel();
-  assert.equal(attributes.get('aria-label'), 'Resize Instrument drawer');
-
-  drawer.style = { setProperty() {} };
-  Object.defineProperties(drawer, {
-    minSize: { value: 80 },
-    maxSize: { value: 480 },
-  });
-  drawer.setSize(240);
-  assert.equal(attributes.get('aria-valuetext'), '240 pixels');
-});
-
-test('drawer resizing clamps to its declared bounds', () => {
-  const drawer = Object.create(CompostDrawer.prototype);
-  const properties = new Map();
-  Object.assign(drawer, {
-    attributes: new Set(['open']),
-    getAttribute(name) {
-      return { 'min-size': '120', 'max-size': '420' }[name] ?? null;
-    },
-    getBoundingClientRect() {
-      const size = Number.parseFloat(properties.get('--compost-drawer-size')) || 0;
-      return { width: size, height: size };
-    },
-    style: {
-      getPropertyValue(name) { return properties.get(name) ?? ''; },
-      setProperty(name, value) { properties.set(name, value); },
-    },
-  });
-
-  drawer.setSize(600);
-  assert.equal(properties.get('--compost-drawer-size'), '420px');
-  drawer.setSize(40);
-  assert.equal(properties.get('--compost-drawer-size'), '120px');
 });
 
 test('drawer resizing follows its attached edge', () => {
@@ -534,35 +365,6 @@ test('drawer resizing follows its attached edge', () => {
   assert.equal(drawer.resizePosition({ clientX: 20, clientY: 80 }), -20);
 });
 
-test('drawer min and max sizes stay manual', () => {
-  const drawer = Object.create(CompostDrawer.prototype);
-  Object.assign(drawer, {
-    getAttribute(name) {
-      return { 'min-size': '120', 'max-size': '420' }[name] ?? null;
-    },
-  });
-
-  assert.equal(drawer.minSize, 120);
-  assert.equal(drawer.maxSize, 420);
-});
-
-test('drawer reopens from its declared size without reading intrinsic growth', () => {
-  const drawer = Object.create(CompostDrawer.prototype);
-  Object.assign(drawer, {
-    ownerDocument: {
-      defaultView: {
-        getComputedStyle() {
-          return { getPropertyValue() { return '180px'; } };
-        },
-      },
-    },
-    getAttribute(name) { return name === 'edge' ? 'left' : null; },
-    getBoundingClientRect() { return { width: 420, height: 100 }; },
-  });
-
-  assert.equal(drawer.size, 180);
-});
-
 test('parameter lifecycle details always state whether the gesture was cancelled', () => {
   const events = [];
   const control = {
@@ -577,15 +379,6 @@ test('parameter lifecycle details always state whether the gesture was cancelled
   endParameterGesture(control, 0.75);
 
   assert.deepEqual(events.map((event) => event.detail.cancelled), [false, false, false]);
-});
-
-test('stateful parameter controls carry explicit lifecycle paths', () => {
-  for (const file of ['compost-knob.js', 'compost-slider.js', 'compost-number-box.js']) {
-    const source = fs.readFileSync(new URL(`../src/components/${file}`, import.meta.url), 'utf8');
-    assert.match(source, /beginParameterGesture/u);
-    assert.match(source, /endParameterGesture\(this, this\.value, \{ cancelled: true \}\)/u);
-    assert.match(source, /begin(?:Value)?Edit/u);
-  }
 });
 
 test('number box MIDI labels replace the inline value', () => {

@@ -46,7 +46,9 @@ export class PianoKeyboard extends HTMLElement {
     this.addEventListener('keydown', (event) => this.handleKey(event, true));
     this.addEventListener('keyup', (event) => this.handleKey(event, false));
     this.addEventListener('focusout', () => this.handleFocusOut());
+  }
 
+  connectedCallback() {
     this.refreshHTML();
   }
 
