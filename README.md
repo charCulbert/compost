@@ -33,6 +33,3 @@ npm install github:charCulbert/compost
 import 'compost/components/compost-knob';
 import { createParameterController } from 'compost/parameter-controller';
 ```
-
-Run `npm test` to test the package. Run `npm run dev` to serve the examples and
-documentation from a source checkout.
