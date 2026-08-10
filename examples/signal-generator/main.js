@@ -311,7 +311,6 @@ keyboard.addEventListener('note-down', (event) => {
   activeNotes.add(note);
   setAudioParameter('frequency', midiNoteToFrequency(note), 'keyboard');
   audio?.synth.port.postMessage({ type: 'noteOn', note });
-  webMIDI.sendPackedMessage(0x900000 | (note << 8) | 100);
   syncDemo();
 });
 
@@ -319,7 +318,6 @@ keyboard.addEventListener('note-up', (event) => {
   const { note } = event.detail;
   activeNotes.delete(note);
   audio?.synth.port.postMessage({ type: 'noteOff', note });
-  webMIDI.sendPackedMessage(0x800000 | (note << 8));
   syncDemo();
 });
 
