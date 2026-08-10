@@ -253,6 +253,34 @@ test('piano keyboard emits notes and its dock option changes layout state', asyn
     ['up', 72],
   ]);
 
+  await piano.evaluate((element) => { element.testEvents = []; });
+  const keptFocus = await piano.locator('#note72').evaluate((note) => {
+    const marker = document.createElement('button');
+    document.body.append(marker);
+    marker.focus();
+
+    const touch = { identifier: 1, target: note };
+    const touchStart = new Event('touchstart', { bubbles: true, cancelable: true });
+    Object.defineProperty(touchStart, 'changedTouches', { value: [touch] });
+    note.dispatchEvent(touchStart);
+    return document.activeElement === marker;
+  });
+  expect(keptFocus).toBe(true);
+  await expect(piano.locator('#note72')).toHaveClass(/active/u);
+
+  await piano.locator('#note72').evaluate((note) => {
+    const touchEnd = new Event('touchend', { bubbles: true, cancelable: true });
+    Object.defineProperty(touchEnd, 'changedTouches', {
+      value: [{ identifier: 1, target: note }],
+    });
+    note.dispatchEvent(touchEnd);
+  });
+  await expect(piano.locator('#note72')).not.toHaveClass(/active/u);
+  expect(await piano.evaluate((element) => element.testEvents)).toEqual([
+    ['down', 72],
+    ['up', 72],
+  ]);
+
   await page.locator('[data-option="piano-root"]').fill('120');
   await page.locator('[data-option="piano-count"]').fill('8');
   await piano.evaluate((element) => { element.testEvents = []; });

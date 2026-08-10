@@ -201,8 +201,6 @@ export class PianoKeyboard extends HTMLElement {
   }
 
   handleTouchStart(event) {
-    HTMLElement.prototype.focus.call(this, { preventScroll: true });
-
     for (const touch of event.changedTouches) {
       const note = Number(touch.target.id.substring(4));
       if (!Number.isNaN(note)) {
