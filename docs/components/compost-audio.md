@@ -11,6 +11,9 @@ import 'compost/components/compost-audio';
 <compost-audio modal centered-while-off></compost-audio>
 ```
 
+Centered mode preserves the control's inline footprint and animates the power
+button between its modal and inline positions unless reduced motion is enabled.
+
 Build the graph when `audio-started` provides the new context. Later changes
 emit `audio-resumed`, `audio-suspended`, `audio-stopped`, and `audio-error`.
 

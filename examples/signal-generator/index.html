@@ -273,17 +273,23 @@
 
       compost-audio {
         --compost-audio-button-size: var(--demo-toolbar-control-height);
+        --compost-audio-button-font-size: 20px;
         --compost-audio-button-border: transparent;
         --compost-audio-button-border-width: 0;
         --compost-audio-ring-width: 0;
         --compost-audio-ring-space: 0;
         --compost-audio-focus-bracket-offset: 0px;
         --compost-audio-focus-bracket-pulse-offset: 0px;
-        --compost-button-width: var(--demo-toolbar-control-height);
-        --compost-button-height: var(--demo-toolbar-control-height);
         align-self: stretch;
         height: var(--demo-toolbar-control-height);
-        font-size: 22px;
+      }
+
+      .demo-header compost-audio[centered-while-off]:not([running]) {
+        --compost-audio-button-size: 96px;
+        --compost-audio-button-font-size: 34px;
+        --compost-audio-centered-placeholder-width: var(--demo-toolbar-control-height);
+        --compost-audio-centered-placeholder-height: var(--demo-toolbar-control-height);
+        --compost-audio-modal-scrim: rgba(8, 9, 8, 0.88);
       }
 
       .demo-header compost-audio::part(power-button),

@@ -102,6 +102,26 @@ test('drawer summary toggles its public open state', async ({ page }) => {
   await expect(resizeHandle).toHaveAttribute('aria-valuenow', '420');
 });
 
+test('centered audio keeps its toolbar footprint while moving', async ({ page }) => {
+  await page.goto('/examples/signal-generator/');
+  const audio = page.locator('compost-audio');
+  const slider = page.locator('.audio-output > compost-slider');
+  const offHostWidth = await audio.evaluate((element) => element.getBoundingClientRect().width);
+  const sliderLeft = await slider.evaluate((element) => element.getBoundingClientRect().left);
+
+  const animationDuration = await audio.evaluate((element) => {
+    element.context = { state: 'running', close: async () => {} };
+    element.refresh();
+    return element.panelMoveAnimation?.effect.getTiming().duration ?? 0;
+  });
+
+  expect(await audio.evaluate((element) => element.getBoundingClientRect().width))
+    .toBeCloseTo(offHostWidth);
+  expect(await slider.evaluate((element) => element.getBoundingClientRect().left))
+    .toBeCloseTo(sliderLeft);
+  expect(animationDuration).toBe(220);
+});
+
 test('parameter controller reflects host updates to both controls', async ({ page }) => {
   await page.goto('/examples/parameter-sync/');
   const controls = page.locator('[parameter-id="frequency"]');

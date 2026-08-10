@@ -35,6 +35,7 @@ export class WebAudio extends HTMLElement {
           --compost-audio-button-bg: #ffffff;
           --compost-audio-active-text: #ffffff;
           --compost-audio-button-size: 74px;
+          --compost-audio-button-font-size: 1em;
           --compost-audio-ring-width: 2px;
           --compost-audio-focus-bracket-color: #111111;
           --compost-audio-focus-bracket-offset: 9px;
@@ -53,6 +54,10 @@ export class WebAudio extends HTMLElement {
           z-index: 1001;
         }
         :host([modal][centered-while-off]:not([running])) {
+          min-width: var(
+            --compost-audio-centered-placeholder-width,
+            calc(var(--compost-audio-button-size) + (var(--compost-audio-ring-space) * 2))
+          );
           min-height: var(
             --compost-audio-centered-placeholder-height,
             calc(var(--compost-audio-button-size) + (var(--compost-audio-ring-space) * 2))
@@ -93,6 +98,7 @@ export class WebAudio extends HTMLElement {
           align-items: center;
         }
         compost-button {
+          font-size: var(--compost-audio-button-font-size);
           --compost-button-size: var(--compost-audio-button-size);
           --compost-button-bg: var(--compost-audio-button-bg);
           --compost-button-border: var(--compost-audio-button-border, var(--compost-audio-inactive-color));
@@ -148,8 +154,10 @@ export class WebAudio extends HTMLElement {
         <div class="status" part="status" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>`;
 
+    this.panel = this.root.querySelector('.panel');
     this.powerButton = this.root.querySelector('compost-button');
     this.statusElement = this.root.querySelector('.status');
+    this.panelMoveAnimation = null;
 
     this.powerButton.addEventListener('click', this.handlePowerClick, { capture: true });
     this.powerButton.addEventListener('change', this.stopInternalControlEvent);
@@ -171,6 +179,7 @@ export class WebAudio extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this.panelMoveAnimation?.cancel();
     this.stop(true);
   }
 
@@ -339,6 +348,15 @@ export class WebAudio extends HTMLElement {
 
   refresh() {
     const isRunning = this.isRunning;
+    const view = this.ownerDocument?.defaultView;
+    const shouldAnimateMove = this.isConnected
+      && this.hasAttribute('running') !== isRunning
+      && this.hasAttribute('modal')
+      && this.hasAttribute('centered-while-off')
+      && typeof this.panel?.animate === 'function'
+      && !view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const previousBounds = shouldAnimateMove ? this.panel.getBoundingClientRect() : null;
+    if (shouldAnimateMove) this.panelMoveAnimation?.cancel();
     const label = isRunning ? this.stopLabel : this.startLabel;
     const ariaLabel = isRunning ? this.stopAriaLabel : this.startAriaLabel;
     const stateStatus = this.status || this.statusForState(this.context?.state || (isRunning ? 'running' : 'closed'));
@@ -362,6 +380,22 @@ export class WebAudio extends HTMLElement {
     this.toggleAttribute('data-status-visible', shouldShowStatus);
     this.statusElement.textContent = this.status;
     this.statusElement.hidden = !this.status;
+
+    if (previousBounds) {
+      const nextBounds = this.panel.getBoundingClientRect();
+      const x = previousBounds.left + (previousBounds.width / 2)
+        - nextBounds.left - (nextBounds.width / 2);
+      const y = previousBounds.top + (previousBounds.height / 2)
+        - nextBounds.top - (nextBounds.height / 2);
+      const scale = nextBounds.width > 0 ? previousBounds.width / nextBounds.width : 1;
+      this.panelMoveAnimation = this.panel.animate([
+        { translate: `${x}px ${y}px`, scale },
+        { translate: '0 0', scale: 1 },
+      ], {
+        duration: 220,
+        easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+      });
+    }
 
     if (!isRunning && this.hasAttribute('modal')) {
       this.focusPowerButton();

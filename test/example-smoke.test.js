@@ -252,6 +252,7 @@ test('the signal generator is a drawer-based plain AudioWorklet integration', ()
   assert.doesNotMatch(html, /Triangle/u);
   assert.match(html, /start-label="⏻"[\s\S]*start-aria-label="Start audio"/u);
   assert.match(html, /<compost-audio\s+[\s\S]*?modal\s+[\s\S]*?centered-while-off/u);
+  assert.match(html, /compost-audio\[centered-while-off\]:not\(\[running\]\)[\s\S]*--compost-audio-button-size: 96px;[\s\S]*--compost-audio-button-font-size: 34px;[\s\S]*--compost-audio-modal-scrim: rgba\(8, 9, 8, 0\.88\)/u);
   assert.match(html, /<header class="demo-header" data-example-nav>[\s\S]*data-signal-preset-group/u);
   assert.match(html, /<compost-select[\s\S]*data-signal-preset-group/u);
   assert.doesNotMatch(html, /<select[\s\S]{0,160}data-signal-preset-group/u);
