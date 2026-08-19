@@ -104,7 +104,10 @@ export class CompostDrawer extends HTMLElement {
         }
         :host([data-axis="horizontal"]) summary {
           width: 100%;
-          min-width: 0;
+          /* Mirrors the vertical axis: the open grid column is auto-sized, so
+             without this the title collapses to the width of its rotated text
+             and the handle is thinner open than closed. */
+          min-width: calc(var(--compost-drawer-title-size) - 2px);
           writing-mode: vertical-rl;
         }
         :host([data-axis="vertical"]) summary {
