@@ -1,6 +1,6 @@
 const ids = [
   'compost-audio', 'compost-midi', 'compost-device-selector', 'compost-drawer',
-  'compost-knob', 'compost-slider', 'compost-number-box', 'compost-button',
+  'compost-knob', 'compost-slider', 'compost-gain', 'compost-number-box', 'compost-button',
   'compost-select', 'compost-piano', 'compost-scope', 'compost-midi-monitor',
   'compost-midi-mappings',
 ];
@@ -15,6 +15,7 @@ export const demos = ids.map((id) => ({
     'compost-drawer': 'Collapsible content with native details behavior and docked resizing.',
     'compost-knob': 'Curve-aware drag, fine movement, editing, and reset behavior.',
     'compost-slider': 'Orientation, range, curve, midpoint, step, fine drag, editing, and reset behavior.',
+    'compost-gain': 'A channel-strip fader with an independent live peak meter, peak hold, and clip.',
     'compost-number-box': 'Typed values plus normal and fine drag movement.',
     'compost-button': 'One square momentary trigger and one square latching switch.',
     'compost-select': 'A styled popup select with native-like keyboard and typeahead behavior.',

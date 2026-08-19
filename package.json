@@ -20,6 +20,7 @@
     "./components/compost-button": "./src/components/compost-button.js",
     "./components/compost-device-selector": "./src/components/compost-device-selector.js",
     "./components/compost-drawer": "./src/components/compost-drawer.js",
+    "./components/compost-gain": "./src/components/compost-gain.js",
     "./components/compost-knob": "./src/components/compost-knob.js",
     "./components/compost-midi": "./src/components/compost-midi.js",
     "./components/compost-midi-mappings": "./src/components/compost-midi-mappings.js",

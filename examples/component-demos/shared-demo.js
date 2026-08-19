@@ -474,7 +474,57 @@ function setupScopeDemo() {
   applyOptions();
 }
 
+function setupGainDemo() {
+  const meters = [...document.querySelectorAll('[data-gain-meter]')];
+  if (!meters.length) return;
+
+  const state = document.querySelector('[data-option-state]');
+  const running = option('gain-running');
+  const phases = new Map(meters.map((meter) => [meter, meter.channels === 1 ? [0] : [0, Math.PI / 3]]));
+  let animate = true;
+  let last = performance.now();
+
+  const tick = (now) => {
+    const dt = (now - last) / 1000;
+    last = now;
+    if (animate) {
+      for (const meter of meters) {
+        const phase = phases.get(meter);
+        const levels = phase.map((base, i) => {
+          const next = base + dt * (1.7 + i * 0.6);
+          phase[i] = next;
+          // A wandering peak that occasionally spikes into the clip region.
+          const swell = (Math.sin(next) * 0.5 + 0.5) ** 2;
+          const spike = Math.sin(next * 0.17) > 0.93 ? 10 : 0;
+          return -54 + swell * 56 + spike;
+        });
+        meter.setLevels(levels);
+      }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+
+  running?.addEventListener('change', () => {
+    animate = running.checked;
+    if (state) state.textContent = animate ? 'Meters running' : 'Meters paused';
+  });
+  document.querySelector('[data-gain-clip]')?.addEventListener('click', () => {
+    for (const meter of meters) {
+      const count = meter.channels;
+      meter.setLevels(Array.from({ length: count }, () => 3));
+    }
+    writeLog('host pushed a clip on every channel');
+  });
+  document.querySelector('[data-gain-clear]')?.addEventListener('click', () => {
+    for (const meter of meters) meter.clearClip();
+    writeLog('clearClip() called on every meter');
+  });
+  if (state) state.textContent = 'Meters running';
+}
+
 if (demo?.id === 'compost-audio') setupAudioDemo();
+if (demo?.id === 'compost-gain') setupGainDemo();
 if (demo?.id === 'compost-device-selector') setupDeviceSelectorDemo();
 if (demo?.id === 'compost-scope') setupScopeDemo();
 if (demo?.id === 'compost-knob') setupKnobOptions();
