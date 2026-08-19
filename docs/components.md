@@ -14,6 +14,7 @@ Import the components a page uses, or register the full set with
 - [compost-button](components/compost-button.md)
 - [compost-select](components/compost-select.md)
 - [compost-piano](components/compost-piano.md)
+- [compost-piano-roll](components/compost-piano-roll.md)
 - [compost-scope](components/compost-scope.md)
 - [compost-midi-monitor](components/compost-midi-monitor.md)
 - [compost-midi-mappings](components/compost-midi-mappings.md)

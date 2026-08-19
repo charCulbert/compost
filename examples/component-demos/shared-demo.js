@@ -533,6 +533,40 @@ if (demo?.id === 'compost-number-box') setupNumberBoxOptions();
 if (demo?.id === 'compost-button') setupButtonOptions();
 if (demo?.id === 'compost-piano') setupPianoOptions();
 
+function setupPianoRollDemo() {
+  const roll = document.querySelector('#roll');
+  const state = document.querySelector('[data-option-state]');
+  const grid = document.querySelector('[data-option="roll-grid"]');
+  const snap = document.querySelector('[data-option="roll-snap"]');
+  if (!roll) return;
+
+  roll.setNotes([
+    { note: 60, start: 0, duration: 1, velocity: 100, channel: 0 },
+    { note: 64, start: 1, duration: 0.5, velocity: 90, channel: 0 },
+    { note: 67, start: 1.75, duration: 0.75, velocity: 110, channel: 0 },
+    { note: 72, start: 3.1, duration: 1.4, velocity: 80, channel: 0 },
+  ]);
+
+  const report = () => {
+    if (state) {
+      state.textContent = `1/${roll.getAttribute('grid')} · `
+        + `${snap?.checked ? 'snapping' : 'free'} · ${roll.notes.length} notes`;
+    }
+  };
+  grid?.addEventListener('change', () => { roll.setAttribute('grid', grid.value); report(); });
+  snap?.addEventListener('change', () => {
+    roll.setAttribute('snap', snap.checked ? 'grid' : 'off'); report();
+  });
+  document.querySelector('[data-roll-quantize]')?.addEventListener('click', () => roll.quantize());
+  document.querySelector('[data-roll-quantize-lengths]')
+    ?.addEventListener('click', () => roll.quantize({ lengths: true }));
+  document.querySelector('[data-roll-clear]')?.addEventListener('click', () => roll.setNotes([], true));
+  roll.addEventListener('notes-change', report);
+  report();
+}
+
+if (demo?.id === 'compost-piano-roll') setupPianoRollDemo();
+
 function writeLog(line) {
   if (!log) return;
   log.textContent = `${line}\n${log.textContent}`.slice(0, 4000);

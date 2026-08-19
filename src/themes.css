@@ -66,6 +66,7 @@
   compost-midi-mappings,
   compost-midi-monitor,
   compost-number-box,
+  compost-piano-roll,
   compost-scope,
   compost-select,
   compost-slider
@@ -190,6 +191,26 @@ compost-gain {
   --gain-color-scheme: var(--compost-theme-color-scheme);
   --midi-map-learn-color: var(--compost-theme-learn);
   --midi-map-label-text: var(--compost-theme-learn);
+}
+
+compost-piano-roll {
+  --piano-roll-bg: var(--compost-theme-control-bg);
+  --piano-roll-text: var(--compost-theme-text);
+  --piano-roll-muted: var(--compost-theme-muted);
+  --piano-roll-line: var(--compost-theme-track);
+  --piano-roll-beat-line: var(--compost-theme-control-border);
+  --piano-roll-bar-line: var(--compost-theme-text);
+  --piano-roll-row-accidental: color-mix(in srgb, var(--compost-theme-text) 6%, transparent);
+  --piano-roll-past-end: var(--compost-theme-bg);
+  --piano-roll-key-bg: var(--compost-theme-panel);
+  --piano-roll-key-accidental-bg: color-mix(in srgb, var(--compost-theme-text) 10%, var(--compost-theme-panel));
+  --piano-roll-note: var(--compost-theme-accent);
+  --piano-roll-note-text: var(--compost-theme-active-text);
+  --piano-roll-note-selected: var(--compost-theme-learn);
+  --piano-roll-marquee: color-mix(in srgb, var(--compost-theme-accent) 24%, transparent);
+  --piano-roll-focus: var(--compost-theme-accent);
+  --piano-roll-playhead: var(--compost-theme-danger);
+  --piano-roll-color-scheme: var(--compost-theme-color-scheme);
 }
 
 compost-number-box {

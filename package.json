@@ -27,6 +27,7 @@
     "./components/compost-midi-monitor": "./src/components/compost-midi-monitor.js",
     "./components/compost-number-box": "./src/components/compost-number-box.js",
     "./components/compost-piano": "./src/components/compost-piano.js",
+    "./components/compost-piano-roll": "./src/components/compost-piano-roll.js",
     "./components/compost-scope": "./src/components/compost-scope.js",
     "./components/compost-select": "./src/components/compost-select.js",
     "./components/compost-slider": "./src/components/compost-slider.js",
@@ -37,6 +38,7 @@
     "./midi-mapping": "./src/midi-mapping.js",
     "./midi-mappings": "./src/midi-mappings.js",
     "./parameter-controller": "./src/parameter-controller.js",
+    "./piano-roll-model": "./src/piano-roll-model.js",
     "./parameter-scale": "./src/parameter-scale.js",
     "./utils": "./src/utils.js"
   },

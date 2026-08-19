@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-piano-roll.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-piano-roll">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-piano-roll">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Grid</legend>
+            <label>
+              Division
+              <select data-option="roll-grid">
+                <option value="1">1/1</option>
+                <option value="2">1/2</option>
+                <option value="4">1/4</option>
+                <option value="8">1/8</option>
+                <option value="16" selected>1/16</option>
+                <option value="32">1/32</option>
+              </select>
+            </label>
+            <label class="check">
+              <input type="checkbox" data-option="roll-snap" checked>
+              Snap to grid
+            </label>
+            <button type="button" class="example-nav-button" data-roll-quantize>Quantize</button>
+            <button type="button" class="example-nav-button" data-roll-quantize-lengths>Quantize + lengths</button>
+            <button type="button" class="example-nav-button" data-roll-clear>Clear</button>
+            <output data-option-state>1/16 · snapping</output>
+            <p class="muted">
+              Drag on empty grid to draw, drag a note to move it, drag its right
+              edge to resize. Shift-drag marquee-selects; double-click or
+              right-click removes. Delete removes the selection, Cmd-A selects
+              all, Cmd-Q quantizes (add Shift for lengths).
+            </p>
+          </fieldset>
+          <div class="demo-showcase" style="display:block">
+            <compost-piano-roll
+              id="roll"
+              label="Clip notes"
+              beats="8"
+              grid="16"
+              root-note="48"
+              note-count="25"
+              style="height:340px;border:1px solid var(--example-line, #8884)"
+            ></compost-piano-roll>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

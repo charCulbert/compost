@@ -1,0 +1,95 @@
+// Pure note-list maths for compost-piano-roll, kept DOM-free so the editing
+// rules can be unit-tested directly.
+
+import { clamp } from './utils.js';
+
+/** @typedef {{id: string, note: number, start: number, duration: number, velocity: number, channel: number}} RollNote */
+
+export const MIN_DURATION = 1 / 64;
+
+/** Beats per cell for a grid division, where 4 means a quarter of a beat. */
+export function gridStep(division, beatsPerBar = 4) {
+  const number = Number(division);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  return beatsPerBar / number;
+}
+
+/** Snaps a position to the grid, or leaves it alone when snapping is off. */
+export function snapBeats(value, step, mode = 'grid') {
+  if (mode === 'off' || !(step > 0)) return Math.max(0, value);
+  return Math.max(0, Math.round(value / step) * step);
+}
+
+/** Rounds a value that must stay strictly positive, such as a note length. */
+export function snapDuration(value, step, mode = 'grid') {
+  if (mode === 'off' || !(step > 0)) return Math.max(MIN_DURATION, value);
+  return Math.max(step, Math.round(value / step) * step);
+}
+
+export function normaliseNote(note, beats) {
+  const start = clamp(Number(note.start) || 0, 0, Math.max(0, beats - MIN_DURATION));
+  const duration = clamp(Number(note.duration) || MIN_DURATION, MIN_DURATION, beats - start);
+  return {
+    id: String(note.id ?? ''),
+    note: clamp(Math.round(Number(note.note) || 0), 0, 127),
+    start,
+    duration,
+    velocity: clamp(Math.round(Number(note.velocity ?? 100)), 1, 127),
+    channel: clamp(Math.round(Number(note.channel) || 0), 0, 15),
+  };
+}
+
+export function normaliseNotes(notes, beats) {
+  if (!Array.isArray(notes)) return [];
+  return notes.map((note) => normaliseNote(note, beats)).sort(
+    (a, b) => a.start - b.start || a.note - b.note,
+  );
+}
+
+/** Moves notes by a pitch and time delta, keeping them inside the clip. */
+export function movedNotes(notes, ids, deltaBeats, deltaNote, beats, step, mode = 'grid') {
+  const moving = new Set(ids);
+  return notes.map((note) => {
+    if (!moving.has(note.id)) return note;
+    const start = snapBeats(note.start + deltaBeats, step, mode);
+    return normaliseNote({
+      ...note,
+      note: note.note + deltaNote,
+      start: Math.min(start, Math.max(0, beats - note.duration)),
+    }, beats);
+  });
+}
+
+/** Resizes notes from their right edge. */
+export function resizedNotes(notes, ids, deltaBeats, beats, step, mode = 'grid') {
+  const sizing = new Set(ids);
+  return notes.map((note) => {
+    if (!sizing.has(note.id)) return note;
+    return normaliseNote({
+      ...note,
+      duration: Math.min(snapDuration(note.duration + deltaBeats, step, mode), beats - note.start),
+    }, beats);
+  });
+}
+
+/** Snaps starts to the grid, and lengths too unless lengths are left alone. */
+export function quantizedNotes(notes, step, { ids = null, lengths = false, beats = Infinity } = {}) {
+  if (!(step > 0)) return notes;
+  const chosen = ids ? new Set(ids) : null;
+  return notes.map((note) => {
+    if (chosen && !chosen.has(note.id)) return note;
+    const start = Math.round(note.start / step) * step;
+    const duration = lengths ? Math.max(step, Math.round(note.duration / step) * step) : note.duration;
+    return normaliseNote({ ...note, start, duration }, Number.isFinite(beats) ? beats : start + duration);
+  });
+}
+
+/** Notes overlapping a marquee, in beats and MIDI note numbers. */
+export function notesInBox(notes, box) {
+  const startBeat = Math.min(box.fromBeat, box.toBeat);
+  const endBeat = Math.max(box.fromBeat, box.toBeat);
+  const lowNote = Math.min(box.fromNote, box.toNote);
+  const highNote = Math.max(box.fromNote, box.toNote);
+  return notes.filter((note) => note.note >= lowNote && note.note <= highNote
+    && note.start < endBeat && note.start + note.duration > startBeat);
+}
