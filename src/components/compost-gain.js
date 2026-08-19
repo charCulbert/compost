@@ -109,6 +109,7 @@ export class CompostGain extends HTMLElement {
           --gain-value: #555555;
           --gain-track: rgba(17, 17, 17, 0.16);
           --gain-rail-bg: rgba(17, 17, 17, 0.06);
+          --gain-meter-unlit: #efefef;
           --gain-thumb: #111111;
           --gain-thumb-border: #ffffff;
           --gain-scale-line: rgba(17, 17, 17, 0.22);
@@ -271,7 +272,7 @@ export class CompostGain extends HTMLElement {
           right: 0;
           top: 0;
           block-size: calc(100% - var(--fill, 0%));
-          background: var(--gain-rail-bg);
+          background: var(--gain-meter-unlit);
         }
         .meter-channel[data-clip] { background: var(--gain-clip-on); }
         .meter-peak {

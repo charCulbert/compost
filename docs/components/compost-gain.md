@@ -94,4 +94,9 @@ and the shadow parts `panel`, `row`, `label`, `value`, `clip`, `rail`, `meter`,
 `thumb`, and `scale` are available for `::part()` styling. The Compost theme maps
 these to the shared `--compost-theme-*` palette.
 
+`--gain-meter-unlit` fills the part of each meter channel above the current level.
+It must be opaque: each channel paints the full-scale green/yellow/red gradient and
+this layer masks the unreached part of it, so a translucent value lets the gradient
+show through at silence.
+
 User gestures emit `parameter-begin`, `parameter-edit`, and `parameter-end`.

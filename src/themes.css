@@ -173,6 +173,7 @@ compost-gain {
   --gain-value: var(--compost-theme-muted);
   --gain-track: var(--compost-theme-track);
   --gain-rail-bg: color-mix(in srgb, var(--compost-theme-track) 55%, transparent);
+  --gain-meter-unlit: var(--compost-theme-control-bg);
   --gain-thumb: var(--compost-theme-text);
   --gain-thumb-border: var(--compost-theme-control-bg);
   --gain-scale-line: var(--compost-theme-track);
