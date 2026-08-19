@@ -29,7 +29,8 @@ const { ScopeVisualizer } = await import('../src/components/compost-scope.js');
 const { CompostSelect } = await import('../src/components/compost-select.js');
 const { PianoKeyboard } = await import('../src/components/compost-piano.js');
 const { ParameterSlider } = await import('../src/components/compost-slider.js');
-const { CompostGain, meterFraction } = await import('../src/components/compost-gain.js');
+const { CompostGain, meterFraction, railFraction } = await import('../src/components/compost-gain.js');
+const { valueToNormalisedPosition } = await import('../src/parameter-scale.js');
 const { CompostDrawer } = await import('../src/components/compost-drawer.js');
 const { CircleButton } = await import('../src/components/compost-button.js');
 const { MIDIMappingsEditor } = await import('../src/components/compost-midi-mappings.js');
@@ -409,6 +410,34 @@ test('meterFraction maps the dB range onto 0..1', () => {
   assert.equal(meterFraction(-90, -60, 6), 0);
   assert.equal(meterFraction(12, -60, 6), 1);
   assert.ok(Math.abs(meterFraction(-27, -60, 6) - 0.5) < 1e-9);
+});
+
+test('railFraction puts the meter and the fader on one shared dB axis', () => {
+  // A default channel strip: fader -90..+12 with the Ableton-style taper, and a
+  // meter scale that only labels down to -60.
+  const scale = { min: -90, max: 12, mid: -12, curve: 'linear', shape: null };
+
+  // The whole point: 0 dB on the fader is 0 dB on the printed scale.
+  assert.equal(railFraction(0, scale), valueToNormalisedPosition(0, scale));
+  assert.equal(railFraction(-12, scale), valueToNormalisedPosition(-12, scale));
+
+  // mid is the halfway mark of the rail, so -12 dB sits at the middle.
+  assert.ok(Math.abs(railFraction(-12, scale) - 0.5) < 1e-9);
+
+  // Silence and overs clamp to the ends rather than running off the rail.
+  assert.equal(railFraction(-90, scale), 0);
+  assert.equal(railFraction(-150, scale), 0);
+  assert.equal(railFraction(12, scale), 1);
+  assert.equal(railFraction(48, scale), 1);
+  assert.equal(railFraction(Number.NEGATIVE_INFINITY, scale), 0);
+
+  // Monotonic: louder is always higher up the rail.
+  let previous = -1;
+  for (const db of [-90, -60, -48, -36, -24, -12, -6, 0, 6, 12]) {
+    const fraction = railFraction(db, scale);
+    assert.ok(fraction > previous, `${db} dB should sit above the previous mark`);
+    previous = fraction;
+  }
 });
 
 test('setLevels drives the meter without touching the gain value or emitting events', () => {

@@ -22,6 +22,15 @@ const FINE_DRAG_SCALE = 0.1;
 const MAX_CHANNELS = 16;
 
 // Meter fraction is DOM-free so it can be unit-tested directly.
+// The fader and the meter share one rail, so they must share one dB -> position
+// mapping or unity on the fader lands nowhere near 0 on the printed scale.
+// The fader's scale is the authority: it is the one that has to span min..max.
+export function railFraction(db, scaleOptions) {
+  const value = Number(db);
+  if (!Number.isFinite(value)) return 0;
+  return clamp(valueToNormalisedPosition(value, scaleOptions), 0, 1);
+}
+
 export function meterFraction(level, meterMin, meterMax) {
   const value = Number(level);
   if (!Number.isFinite(value)) return 0;
@@ -530,7 +539,7 @@ export class CompostGain extends HTMLElement {
 
     for (let i = 0; i < this.channels; i += 1) {
       const raw = Number(list[i]);
-      const level = Number.isFinite(raw) ? raw : this.meterMin;
+      const level = Number.isFinite(raw) ? raw : this.min;
       next[i] = level;
 
       // Peak-hold: adopt a new high immediately; otherwise hold until it ages out.
@@ -838,7 +847,7 @@ export class CompostGain extends HTMLElement {
     const html = marks
       .filter((db) => db <= this.meterMax && db >= this.meterMin)
       .map((db) => {
-        const pos = (1 - meterFraction(db, this.meterMin, this.meterMax)) * 100;
+        const pos = (1 - railFraction(db, this.scaleOptions())) * 100;
         const text = db === 0 ? '0' : String(db);
         return `<span style="top:${pos}%">${text}</span>`;
       })
@@ -848,8 +857,9 @@ export class CompostGain extends HTMLElement {
 
   renderMeter() {
     this.renderChannels();
-    const warnPos = meterFraction(this.clipLevel - 12, this.meterMin, this.meterMax) * 100;
-    const clipPos = meterFraction(this.clipLevel, this.meterMin, this.meterMax) * 100;
+    const scale = this.scaleOptions();
+    const warnPos = railFraction(this.clipLevel - 12, scale) * 100;
+    const clipPos = railFraction(this.clipLevel, scale) * 100;
     this.style.setProperty('--gain-warn-pos', `${warnPos}%`);
     this.style.setProperty('--gain-clip-pos', `${clipPos}%`);
 
@@ -858,11 +868,9 @@ export class CompostGain extends HTMLElement {
     for (let i = 0; i < channelNodes.length; i += 1) {
       const node = channelNodes[i];
       const level = this._levels[i];
-      const fill = Number.isFinite(level)
-        ? meterFraction(level, this.meterMin, this.meterMax) * 100
-        : 0;
+      const fill = Number.isFinite(level) ? railFraction(level, scale) * 100 : 0;
       const peak = Number.isFinite(this._peaks[i])
-        ? meterFraction(this._peaks[i], this.meterMin, this.meterMax) * 100
+        ? railFraction(this._peaks[i], scale) * 100
         : 0;
       node.style.setProperty('--fill', `${fill}%`);
       node.style.setProperty('--peak', `${peak}%`);

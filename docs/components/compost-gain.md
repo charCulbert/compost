@@ -60,14 +60,25 @@ Use `setValue(value, false, source)` to update the fader without emitting events
 | Attribute | Default | Meaning |
 | --- | --- | --- |
 | `channels` | `2` | Number of meter fills, 1–16. |
-| `meter-min` | `-60` | Bottom of the displayed meter range, dBFS. |
-| `meter-max` | `6` | Top of the displayed meter range, dBFS. |
+| `meter-min` | `-60` | Quietest scale mark to label, dBFS. |
+| `meter-max` | `6` | Loudest scale mark to label, dBFS. |
 | `clip-level` | `0` | Clip threshold, dBFS. |
 | `peak-hold` | `1500` | Peak-hold and clip-hold duration, ms. |
 
-The meter shows a fixed dB scale (`0, -12, -24, -36, -48, -60`) and colours from
-low through a warning band to red near the top. Each channel holds a peak tick at
-its recent maximum for `peak-hold` ms. A level at or above `clip-level` turns the
+The fader and the meter share one rail, so they share one dB axis: the fader's
+own scale (`min`, `max`, `mid`/`curve`/`shape`). A given dB value lands on the
+same pixel row whether it is the fader position, a scale mark, or a meter level —
+setting the fader to 0 dB puts the handle exactly on the `0` mark. Levels below
+`min` or above `max` clamp to the ends of the rail.
+
+Because the axis follows the fader's taper, the marks are not evenly spaced: with
+the default `mid="-12"` the quiet marks bunch toward the bottom, the same way an
+Ableton or live.gain~ strip looks. `meter-min` and `meter-max` only choose which
+of the marks (`0, -12, -24, -36, -48, -60`) get labelled; widen `min`/`max` or
+change `mid` to change the spacing itself.
+
+The meter colours from low through a warning band to red near the top. Each
+channel holds a peak tick at its recent maximum for `peak-hold` ms. A level at or above `clip-level` turns the
 channel red, shows the `CLIP` state, and holds it for `peak-hold` ms; it clears
 automatically, or immediately via `clearClip()`.
 
