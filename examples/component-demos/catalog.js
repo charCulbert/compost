@@ -14,7 +14,7 @@ export const demos = ids.map((id) => ({
     'compost-device-selector': 'Exercise the host-backed audio and MIDI settings contract.',
     'compost-drawer': 'Collapsible content with native details behavior and docked resizing.',
     'compost-knob': 'Curve-aware drag, fine movement, editing, and reset behavior.',
-    'compost-slider': 'Range, curve, midpoint, step, fine drag, editing, and reset behavior.',
+    'compost-slider': 'Orientation, range, curve, midpoint, step, fine drag, editing, and reset behavior.',
     'compost-number-box': 'Typed values plus normal and fine drag movement.',
     'compost-button': 'One square momentary trigger and one square latching switch.',
     'compost-select': 'A styled popup select with native-like keyboard and typeahead behavior.',

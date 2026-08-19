@@ -52,6 +52,9 @@ test('knob and slider demos expose the same range and curve options', () => {
       assert.match(html, new RegExp(`data-option="(?:knob|slider)-${name}"`, 'u'));
     }
   }
+
+  assert.match(pages[1], /data-option="slider-orientation"/u);
+  assert.match(pages[1], /orientation="vertical"/u);
 });
 
 test('number box demo exposes its range, curve, reset, empty-value, and split-drag options', () => {

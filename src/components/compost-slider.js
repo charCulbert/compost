@@ -27,6 +27,7 @@ export class ParameterSlider extends HTMLElement {
       'parameter-id',
       'label',
       'section',
+      'orientation',
       'min',
       'max',
       'mid',
@@ -90,6 +91,9 @@ export class ParameterSlider extends HTMLElement {
           --slider-label-gap: 12px;
           --slider-row-gap: 12px;
           --slider-label-size: 13px;
+          --slider-vertical-length: 144px;
+          --slider-vertical-width: 72px;
+          --slider-vertical-row-gap: 2px;
           --slider-percent: 0%;
           --slider-focus-bracket-color: #111111;
           --slider-focus-bracket-offset: 7px;
@@ -203,6 +207,37 @@ export class ParameterSlider extends HTMLElement {
         }
         .range-input:active {
           opacity: 1;
+        }
+        :host([orientation="vertical"]) {
+          display: inline-block;
+          inline-size: var(--slider-vertical-width);
+        }
+        :host([orientation="vertical"]) .row {
+          align-items: center;
+          flex-direction: column;
+          gap: var(--slider-vertical-row-gap);
+        }
+        :host([orientation="vertical"]) .label,
+        :host([orientation="vertical"]) output {
+          box-sizing: border-box;
+          inline-size: 100%;
+          min-inline-size: 0;
+          text-align: center;
+        }
+        :host([orientation="vertical"]) .range-input {
+          width: var(--slider-thumb-size);
+          height: var(--slider-vertical-length);
+          margin-inline: auto;
+          background: linear-gradient(0deg,
+            var(--slider-fill) 0 var(--slider-percent),
+            var(--slider-track) var(--slider-percent) 100%);
+          background-position: center;
+          background-size: var(--slider-track-height) 100%;
+          background-repeat: no-repeat;
+        }
+        :host([orientation="vertical"]) .range-input::after {
+          left: 50%;
+          top: calc(100% - var(--slider-percent));
         }
         :host([disabled]) label {
           opacity: 0.45;
@@ -333,6 +368,10 @@ export class ParameterSlider extends HTMLElement {
 
   get parameterKind() { return this.getAttribute('parameter-kind') || 'continuous'; }
 
+  get orientation() {
+    return this.getAttribute('orientation') === 'vertical' ? 'vertical' : 'horizontal';
+  }
+
   setValue(value, shouldEmit = true, source = 'control') {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return;
@@ -440,6 +479,7 @@ export class ParameterSlider extends HTMLElement {
       fineCandidate,
       fine: Boolean(event.altKey || event.shiftKey),
       moved: false,
+      orientation: this.orientation,
     };
     if (!fineCandidate && !this.pointerStart.fine) {
       this.setValue(this.valueFromPointer(event));
@@ -451,7 +491,9 @@ export class ParameterSlider extends HTMLElement {
     const pointer = this.pointerStart;
     if (!pointer || event.pointerId !== pointer.pointerId) return;
 
-    const distance = event.clientX - pointer.x;
+    const distance = pointer.orientation === 'vertical'
+      ? pointer.y - event.clientY
+      : event.clientX - pointer.x;
     pointer.moved = pointer.moved || Math.abs(distance) > 4;
     event.preventDefault();
     if (pointer.fineCandidate || pointer.fine) {
@@ -470,9 +512,12 @@ export class ParameterSlider extends HTMLElement {
   valueFromPointer(event) {
     const bounds = this.input?.getBoundingClientRect?.();
     if (!bounds) return this.value;
-    const position = bounds.width > 0
-      ? clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
-      : this.getPosition();
+    const orientation = this.pointerStart?.orientation ?? this.orientation;
+    const extent = orientation === 'vertical' ? bounds.height : bounds.width;
+    const offset = orientation === 'vertical'
+      ? bounds.top + bounds.height - event.clientY
+      : event.clientX - bounds.left;
+    const position = extent > 0 ? clamp(offset / extent, 0, 1) : this.getPosition();
     return normalisedPositionToValue(position, this.scaleOptions());
   }
 
@@ -619,6 +664,7 @@ export class ParameterSlider extends HTMLElement {
     this.setAttribute('aria-valuemax', String(this.max));
     this.setAttribute('aria-valuenow', String(this.value));
     this.setAttribute('aria-valuetext', valueText);
+    this.setAttribute('aria-orientation', this.orientation);
     this.setAttribute('aria-disabled', this.disabled ? 'true' : 'false');
     this.refreshEditableValue(valueText);
   }

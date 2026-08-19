@@ -104,6 +104,7 @@ function setupKnobOptions() {
 
 function setupSliderOptions() {
   const target = document.querySelector('[data-option-target="slider"]');
+  const orientation = option('slider-orientation');
   const curve = option('slider-curve');
   const min = option('slider-min');
   const max = option('slider-max');
@@ -112,7 +113,7 @@ function setupSliderOptions() {
   const editable = option('slider-editable');
   const reset = option('slider-reset');
   const state = document.querySelector('[data-option-state]');
-  if (!target || !curve || !min || !max || !step || !mid || !editable || !reset) return;
+  if (!target || !orientation || !curve || !min || !max || !step || !mid || !editable || !reset) return;
 
   const apply = () => {
     const minValue = Number(min.value);
@@ -128,14 +129,16 @@ function setupSliderOptions() {
     target.setAttribute('min', String(minValue));
     target.setAttribute('max', String(maxValue));
     target.setAttribute('step', String(stepValue));
+    target.setAttribute('orientation', orientation.value);
     target.setAttribute('curve', curve.value);
     if (Number.isFinite(midValue)) target.setAttribute('mid', String(midValue));
     else target.removeAttribute('mid');
     target.toggleAttribute('editable', editable.checked);
     if (Number.isFinite(resetValue)) target.setAttribute('reset-value', String(resetValue));
-    state.textContent = `${curve.value} · ${minValue}–${maxValue} · step ${stepValue} · mid ${Number.isFinite(midValue) ? midValue : 'auto'} · reset ${Number.isFinite(resetValue) ? resetValue : 'default'} · ${editable.checked ? 'editable' : 'read-only'}`;
+    state.textContent = `${orientation.value} · ${curve.value} · ${minValue}–${maxValue} · step ${stepValue} · mid ${Number.isFinite(midValue) ? midValue : 'auto'} · reset ${Number.isFinite(resetValue) ? resetValue : 'default'} · ${editable.checked ? 'editable' : 'read-only'}`;
   };
 
+  orientation.addEventListener('change', apply);
   curve.addEventListener('change', apply);
   min.addEventListener('input', apply);
   max.addEventListener('input', apply);

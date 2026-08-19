@@ -25,6 +25,13 @@
           <fieldset class="demo-options">
             <legend>Options</legend>
             <label>
+              Orientation
+              <compost-select data-option="slider-orientation">
+                <option value="horizontal" selected>Horizontal</option>
+                <option value="vertical">Vertical</option>
+              </compost-select>
+            </label>
+            <label>
               Curve
               <compost-select data-option="slider-curve">
                 <option value="linear">Linear</option>
@@ -55,7 +62,7 @@
               Reset value
               <input type="number" data-option="slider-reset" min="20" max="20000" step="1" value="1000">
             </label>
-            <output data-option-state>Log · 20–20000 · step 1 · mid 1000 · reset 1000 · editable</output>
+            <output data-option-state>Horizontal · log · 20–20000 · step 1 · mid 1000 · reset 1000 · editable</output>
           </fieldset>
           <div class="demo-showcase">
             <p class="muted">Click or drag the track for normal travel. Option-drag, Shift-drag, or drag the second click for fine movement. Double-click without moving, Escape, Delete, or Backspace resets.</p>
@@ -66,6 +73,7 @@
               max="0.95"
               value="0.4"
               step="0.001"
+              orientation="vertical"
               editable
             ></compost-slider>
             <compost-slider

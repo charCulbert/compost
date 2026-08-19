@@ -261,15 +261,67 @@ test('knobs and sliders expose disabled as a real control state', () => {
   }
 });
 
-test('knobs and sliders share range and curve attributes', () => {
+test('knobs and sliders share range and curve attributes while sliders add orientation', () => {
   assert.deepEqual(
     SynthKnob.observedAttributes.filter((attribute) => attribute !== 'pointer-lock'),
-    ParameterSlider.observedAttributes,
+    ParameterSlider.observedAttributes.filter((attribute) => attribute !== 'orientation'),
   );
+  assert.ok(ParameterSlider.observedAttributes.includes('orientation'));
   for (const Control of [SynthKnob, ParameterSlider, CompostNumberBox]) {
     assert.equal(Control.observedAttributes.includes('taper'), false);
     assert.equal(Control.observedAttributes.includes('scale'), false);
   }
+});
+
+test('slider orientation controls pointer travel and accessible metadata', () => {
+  const control = Object.create(ParameterSlider.prototype);
+  const aria = new Map();
+  const values = [];
+  let orientation = 'vertical';
+  Object.assign(control, {
+    _value: 0.5,
+    min: 0,
+    max: 1,
+    mid: null,
+    curve: 'linear',
+    shape: 1,
+    step: 0,
+    positionStep: null,
+    displayFractionDigits: null,
+    valueText: '',
+    unit: '',
+    label: 'Level',
+    isEditingValue: false,
+    input: { getBoundingClientRect: () => ({ left: 10, top: 20, width: 200, height: 200 }) },
+    labelElement: {},
+    output: { removeAttribute() {} },
+    style: { setProperty() {} },
+    hasAttribute: () => false,
+    getAttribute: (name) => (name === 'orientation' ? orientation : null),
+    setAttribute(name, value) { aria.set(name, value); },
+    setValue(value) { values.push(value); },
+  });
+
+  assert.equal(control.valueFromPointer({ clientX: 10, clientY: 20 }), 1);
+  assert.equal(control.valueFromPointer({ clientX: 10, clientY: 220 }), 0);
+  control.pointerStart = {
+    pointerId: 1,
+    x: 10,
+    y: 200,
+    value: 0.5,
+    fineCandidate: true,
+    fine: false,
+    moved: false,
+    orientation: 'vertical',
+  };
+  control.movePointer({ pointerId: 1, clientX: 10, clientY: 110, preventDefault() {} });
+  assert.equal(values.at(-1), 0.55);
+
+  control.pointerStart = null;
+  control.refresh();
+  assert.equal(aria.get('aria-orientation'), 'vertical');
+  orientation = null;
+  assert.equal(control.orientation, 'horizontal');
 });
 
 test('knobs and sliders use global fine and coarse keyboard travel', () => {
