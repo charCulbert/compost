@@ -91,9 +91,19 @@ export function formatValue(
   unit = '',
   text = '',
   displayFractionDigits = null,
+  bounds = null,
 ) {
   const option = valueTextOption(value, text);
   if (option !== null) return option;
+
+  // A control that bottoms out at silence reads better as its own word than as
+  // whatever dB number the range happens to stop at.
+  if (bounds?.minLabel && Number.isFinite(bounds.min) && value <= bounds.min) {
+    return bounds.minLabel;
+  }
+  if (bounds?.maxLabel && Number.isFinite(bounds.max) && value >= bounds.max) {
+    return bounds.maxLabel;
+  }
 
   return `${formatNumber(value, step, displayFractionDigits)}${unit}`;
 }

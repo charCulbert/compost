@@ -41,6 +41,8 @@ export class SynthKnob extends HTMLElement {
       'editable',
       'unit',
       'reset-value',
+      'min-label',
+      'max-label',
       'init',
       'disabled',
       'pointer-lock',
@@ -66,6 +68,8 @@ export class SynthKnob extends HTMLElement {
     this.valueText = '';
     this._value = 0.5;
     this.resetValue = 0.5;
+    this.minLabel = '';
+    this.maxLabel = '';
     this.inputID = `compost-knob-${nextKnobID++}`;
     this.labelID = `${this.inputID}-label`;
     this.lastUpdateSource = 'control';
@@ -367,6 +371,8 @@ export class SynthKnob extends HTMLElement {
       : null;
     this.valueText = this.getAttribute('text') ?? this.getAttribute('options') ?? '';
     this.resetValue = numberAttr(this, 'reset-value', numberAttr(this, 'init', this.resetValue));
+    this.minLabel = this.getAttribute('min-label') ?? '';
+    this.maxLabel = this.getAttribute('max-label') ?? '';
     this.setValue(numberAttr(this, 'value', this._value), false);
   }
 
@@ -800,6 +806,7 @@ export class SynthKnob extends HTMLElement {
       this.unit,
       this.valueText,
       this.displayFractionDigits,
+      {min: this.min, max: this.max, minLabel: this.minLabel, maxLabel: this.maxLabel},
     );
     if (!this.isEditingValue) {
       this.valueElement.textContent = valueText;

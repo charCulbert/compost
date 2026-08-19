@@ -60,6 +60,8 @@ export class CompostGain extends HTMLElement {
       'editable',
       'unit',
       'reset-value',
+      'min-label',
+      'max-label',
       'init',
       'disabled',
       'channels',
@@ -90,6 +92,8 @@ export class CompostGain extends HTMLElement {
     this.valueText = '';
     this._value = 0;
     this.resetValue = 0;
+    this.minLabel = '';
+    this.maxLabel = '';
     this.inputID = `compost-gain-${nextGainID++}`;
     this.labelID = `${this.inputID}-label`;
     this.lastUpdateSource = 'control';
@@ -482,6 +486,8 @@ export class CompostGain extends HTMLElement {
       : null;
     this.valueText = this.getAttribute('text') ?? this.getAttribute('options') ?? '';
     this.resetValue = numberAttr(this, 'reset-value', numberAttr(this, 'init', this.resetValue));
+    this.minLabel = this.getAttribute('min-label') ?? '';
+    this.maxLabel = this.getAttribute('max-label') ?? '';
 
     this.channels = clamp(Math.round(numberAttr(this, 'channels', this.channels)), 1, MAX_CHANNELS);
     this.meterMin = numberAttr(this, 'meter-min', this.meterMin);
@@ -900,6 +906,7 @@ export class CompostGain extends HTMLElement {
       this.unit,
       this.valueText,
       this.displayFractionDigits,
+      {min: this.min, max: this.max, minLabel: this.minLabel, maxLabel: this.maxLabel},
     );
   }
 

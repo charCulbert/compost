@@ -44,6 +44,8 @@ export class CompostNumberBox extends HTMLElement {
       'options',
       'unit',
       'reset-value',
+      'min-label',
+      'max-label',
       'init',
       'placeholder',
       'allow-empty',
@@ -73,6 +75,8 @@ export class CompostNumberBox extends HTMLElement {
     this.unit = '';
     this.valueText = '';
     this.resetValue = 0;
+    this.minLabel = '';
+    this.maxLabel = '';
     this.placeholder = '';
     this._value = 0;
     this.empty = false;
@@ -284,6 +288,8 @@ export class CompostNumberBox extends HTMLElement {
       ? readNumberAttribute(this, 'display-fraction-digits', null)
       : null;
     this.resetValue = readNumberAttribute(this, 'reset-value', readNumberAttribute(this, 'init', this.resetValue));
+    this.minLabel = this.getAttribute('min-label') ?? '';
+    this.maxLabel = this.getAttribute('max-label') ?? '';
 
     if (this.hasAttribute('value')) {
       this.setValue(this.getAttribute('value'), false);
@@ -725,6 +731,7 @@ export class CompostNumberBox extends HTMLElement {
           this.unit,
           this.valueText,
           this.displayFractionDigits,
+          {min: this.min, max: this.max, minLabel: this.minLabel, maxLabel: this.maxLabel},
         );
     this.style.setProperty('--number-box-percent', `${this.empty ? 0 : this.getPercent()}%`);
     this.valueElement.textContent = valueText;

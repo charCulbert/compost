@@ -45,7 +45,9 @@ The fader is a `compost-slider` in disguise: click or drag for normal movement;
 Option-drag, Shift-drag, or a second drag for fine movement; double-click,
 Escape, Delete, or Backspace resets; Arrow, Page, Home, and End keys adjust it.
 `min`, `max`, `step`, `value`, `mid`, `curve`, `shape`, `unit`, `reset-value`,
-`init`, `editable`, and `disabled` work exactly as on `compost-slider`.
+`init`, `min-label`, `max-label`, `editable`, and `disabled` work exactly as on
+`compost-slider`. Set `min-label="-inf dB"` on a fader whose `min` is its
+silence floor so the readout says so instead of printing that dB number.
 
 The default `mid="-12"` gives an Ableton-style taper — finer resolution near 0 dB
 and a compressed quiet tail. Set `mid` (or `curve`/`shape`) to change the taper,
