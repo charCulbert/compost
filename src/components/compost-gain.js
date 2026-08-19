@@ -143,6 +143,7 @@ export class CompostGain extends HTMLElement {
           --gain-row-gap: 6px;
           --gain-label-size: 13px;
           --gain-scale-size: 9px;
+          --gain-radius: 0;
           --gain-percent: 0%;
           --gain-focus-bracket-color: #111111;
           --gain-focus-bracket-offset: 7px;
@@ -205,7 +206,7 @@ export class CompostGain extends HTMLElement {
         }
         :host([editable]:not([disabled])) .value {
           cursor: text;
-          border-radius: 4px;
+          border-radius: var(--gain-radius);
           padding: 1px 4px;
         }
         .value-editor {
@@ -215,7 +216,7 @@ export class CompostGain extends HTMLElement {
           z-index: 5;
           width: var(--gain-value-editor-width, 64px);
           border: 1px solid var(--gain-thumb);
-          border-radius: 4px;
+          border-radius: var(--gain-radius);
           background: var(--gain-value-editor-bg);
           color: var(--gain-text);
           font: inherit;
@@ -231,7 +232,7 @@ export class CompostGain extends HTMLElement {
           min-block-size: 14px;
           display: grid;
           place-items: center;
-          border-radius: 3px;
+          border-radius: var(--gain-radius);
           background: var(--gain-clip-off);
           color: transparent;
           font-size: 9px;
@@ -254,7 +255,7 @@ export class CompostGain extends HTMLElement {
           inline-size: var(--gain-rail-width);
           block-size: var(--gain-rail-length);
           background: var(--gain-rail-bg);
-          border-radius: 4px;
+          border-radius: var(--gain-radius);
           cursor: pointer;
           touch-action: none;
           overflow: hidden;
@@ -272,7 +273,7 @@ export class CompostGain extends HTMLElement {
           position: relative;
           flex: 1 1 0;
           min-inline-size: 0;
-          border-radius: 2px;
+          border-radius: var(--gain-radius);
           overflow: hidden;
           background: linear-gradient(0deg,
             var(--gain-meter-low) 0 var(--gain-warn-pos, 70%),
@@ -304,7 +305,7 @@ export class CompostGain extends HTMLElement {
           top: calc(100% - var(--gain-percent));
           block-size: var(--gain-thumb-line);
           background: var(--gain-thumb);
-          border-radius: 2px;
+          border-radius: var(--gain-radius);
           box-shadow: 0 0 0 1px var(--gain-thumb-border);
           transform: translateY(-50%);
           pointer-events: none;
