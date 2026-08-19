@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-gain.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-gain">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-gain">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Meter (host-driven)</legend>
+            <label class="check">
+              <input type="checkbox" data-option="gain-running" checked>
+              Animate live levels
+            </label>
+            <button type="button" class="example-nav-button" data-gain-clip>Force clip</button>
+            <button type="button" class="example-nav-button" data-gain-clear>clearClip()</button>
+            <output data-option-state>Meters running</output>
+            <p class="muted">
+              The fader and the meter are independent. Dragging the fader emits
+              <code>parameter-*</code> events (see the log); the meter is driven by
+              <code>setLevels()</code> and emits nothing.
+            </p>
+          </fieldset>
+          <div class="demo-showcase" style="display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap;">
+            <compost-gain
+              parameter-id="gain-mono"
+              label="Mono"
+              channels="1"
+              value="-6"
+              editable
+              data-gain-meter
+            ></compost-gain>
+            <compost-gain
+              parameter-id="gain-stereo"
+              label="Volume"
+              channels="2"
+              value="0"
+              editable
+              data-gain-meter
+            ></compost-gain>
+            <compost-gain
+              parameter-id="gain-multi"
+              label="Bus (4)"
+              channels="4"
+              meter-min="-48"
+              value="-3"
+              editable
+              data-gain-meter
+            ></compost-gain>
+            <compost-gain
+              parameter-id="gain-disabled"
+              label="Disabled"
+              channels="2"
+              value="-12"
+              disabled
+              data-gain-meter
+            ></compost-gain>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+  </body>
+</html>

@@ -168,6 +168,29 @@ compost-slider {
   --midi-map-label-text: var(--compost-theme-learn);
 }
 
+compost-gain {
+  --gain-text: var(--compost-theme-text);
+  --gain-value: var(--compost-theme-muted);
+  --gain-track: var(--compost-theme-track);
+  --gain-rail-bg: color-mix(in srgb, var(--compost-theme-track) 55%, transparent);
+  --gain-thumb: var(--compost-theme-text);
+  --gain-thumb-border: var(--compost-theme-control-bg);
+  --gain-scale-line: var(--compost-theme-track);
+  --gain-scale-text: var(--compost-theme-muted);
+  --gain-meter-low: #2fa84f;
+  --gain-meter-mid: #d8a021;
+  --gain-meter-high: #d83a2f;
+  --gain-meter-peak: var(--compost-theme-text);
+  --gain-clip-off: color-mix(in srgb, var(--compost-theme-track) 70%, transparent);
+  --gain-clip-on: #d83a2f;
+  --gain-clip-text: #ffffff;
+  --gain-value-editor-bg: var(--compost-theme-control-bg);
+  --gain-focus-bracket-color: var(--compost-theme-accent);
+  --gain-color-scheme: var(--compost-theme-color-scheme);
+  --midi-map-learn-color: var(--compost-theme-learn);
+  --midi-map-label-text: var(--compost-theme-learn);
+}
+
 compost-number-box {
   --number-box-bg: var(--compost-theme-control-bg);
   --number-box-text: var(--compost-theme-text);

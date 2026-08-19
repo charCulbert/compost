@@ -29,6 +29,7 @@ const { ScopeVisualizer } = await import('../src/components/compost-scope.js');
 const { CompostSelect } = await import('../src/components/compost-select.js');
 const { PianoKeyboard } = await import('../src/components/compost-piano.js');
 const { ParameterSlider } = await import('../src/components/compost-slider.js');
+const { CompostGain, meterFraction } = await import('../src/components/compost-gain.js');
 const { CompostDrawer } = await import('../src/components/compost-drawer.js');
 const { CircleButton } = await import('../src/components/compost-button.js');
 const { MIDIMappingsEditor } = await import('../src/components/compost-midi-mappings.js');
@@ -370,6 +371,129 @@ test('knobs and sliders use global fine and coarse keyboard travel', () => {
     press('Delete');
     assert.equal(control.value, 0.5);
   }
+});
+
+function makeGain(overrides = {}) {
+  const control = Object.create(CompostGain.prototype);
+  Object.assign(control, {
+    channels: 2,
+    meterMin: -60,
+    meterMax: 6,
+    clipLevel: 0,
+    peakHold: 1500,
+    _value: 0,
+    _levels: [],
+    _peaks: [],
+    _peakTimes: [],
+    _clipUntil: [],
+    _clipTimer: null,
+    renderMeter() {},
+    refreshValueText() {},
+    updateClipState() {},
+  }, overrides);
+  return control;
+}
+
+test('compost-gain exposes both the slider fader attrs and the meter attrs', () => {
+  for (const attribute of ['min', 'max', 'step', 'value', 'mid', 'unit', 'orientation', 'disabled', 'editable']) {
+    assert.ok(CompostGain.observedAttributes.includes(attribute), `missing ${attribute}`);
+  }
+  for (const attribute of ['channels', 'meter-min', 'meter-max', 'clip-level', 'peak-hold']) {
+    assert.ok(CompostGain.observedAttributes.includes(attribute), `missing ${attribute}`);
+  }
+});
+
+test('meterFraction maps the dB range onto 0..1', () => {
+  assert.equal(meterFraction(-60, -60, 6), 0);
+  assert.equal(meterFraction(6, -60, 6), 1);
+  assert.equal(meterFraction(-90, -60, 6), 0);
+  assert.equal(meterFraction(12, -60, 6), 1);
+  assert.ok(Math.abs(meterFraction(-27, -60, 6) - 0.5) < 1e-9);
+});
+
+test('setLevels drives the meter without touching the gain value or emitting events', () => {
+  const dispatched = [];
+  const control = makeGain({
+    _value: -6,
+    parameterID: 'gain',
+    dispatchEvent: (event) => { dispatched.push(event.type); return true; },
+  });
+
+  control.setLevels([-12.4, -13.1]);
+
+  assert.equal(control._value, -6);
+  assert.deepEqual(dispatched, []);
+  assert.deepEqual(control.levels, [-12.4, -13.1]);
+});
+
+test('gain levels and clipping getters return copies of read-only state', () => {
+  const control = makeGain();
+  control.setLevels([-20, -18]);
+
+  const copy = control.levels;
+  copy[0] = 999;
+  assert.deepEqual(control.levels, [-20, -18]);
+  assert.equal(control.clipping, false);
+});
+
+test('a level at or above the clip threshold latches clipping until cleared', () => {
+  const control = makeGain();
+
+  control.setLevels([-30, -30]);
+  assert.equal(control.clipping, false);
+
+  control.setLevels([1.2, -30]);
+  assert.equal(control.clipping, true);
+
+  // Still held while a later sub-clip level arrives within the hold window.
+  control.setLevels([-40, -40]);
+  assert.equal(control.clipping, true);
+
+  control.clearClip();
+  assert.equal(control.clipping, false);
+});
+
+test('the meter peak holds its maximum then follows the level after the hold window', () => {
+  const control = makeGain();
+
+  control.setLevels([-10]);
+  control.setLevels([-40]);
+  assert.equal(control._peaks[0], -10);
+
+  control._peakTimes[0] = Date.now() - (control.peakHold + 1000);
+  control.setLevels([-40]);
+  assert.equal(control._peaks[0], -40);
+});
+
+test('the accessible meter readout names channels and reports clipping', () => {
+  const stereo = makeGain({ _levels: [-12.4, -13.1] });
+  assert.equal(stereo.meterReadout(), ', peak L -12.4 dB, R -13.1 dB');
+
+  const clipped = makeGain({ _levels: [1, -20], _clipUntil: [Date.now() + 1000, 0] });
+  assert.match(clipped.meterReadout(), /clipping$/u);
+
+  assert.equal(makeGain({ _levels: [] }).meterReadout(), '');
+});
+
+test('the gain fader stays a silent-updateable parameter like the slider', () => {
+  const dispatched = [];
+  const control = makeGain({
+    min: -90,
+    max: 12,
+    step: 0.1,
+    parameterID: 'gain',
+    getAttribute: () => null,
+    refresh() {},
+    dispatchEvent: (event) => { dispatched.push(event.type); return true; },
+  });
+
+  control.setValue(-6, false, 'controller');
+  assert.equal(control._value, -6);
+  assert.deepEqual(dispatched, []);
+
+  control.setValue(-3);
+  assert.equal(control._value, -3);
+  assert.ok(dispatched.includes('parameter-edit'));
 });
 
 test('exact-value editors use the shared visible precision', () => {

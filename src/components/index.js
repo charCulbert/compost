@@ -2,6 +2,7 @@ import './compost-audio.js';
 import './compost-button.js';
 import './compost-device-selector.js';
 import './compost-drawer.js';
+import './compost-gain.js';
 import './compost-knob.js';
 import './compost-midi.js';
 import './compost-midi-mappings.js';
