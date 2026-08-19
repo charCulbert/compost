@@ -41,11 +41,26 @@ test('MIDILearnUI leaves Backspace in text inputs alone', () => {
   ui.disconnect();
 });
 
-test('MIDILearnUI Escape exits and keyboard M enters map mode', () => {
+test('MIDILearnUI Escape exits and Cmd-M enters map mode', () => {
   const { target, ui } = setup();
-  ui.handleKeyDown(keyEvent('m', target));
+  ui.handleKeyDown(keyEvent('m', target, { metaKey: true }));
   assert.equal(ui.state, 'learning');
   ui.handleKeyDown(keyEvent('Escape', target));
+  assert.equal(ui.state, 'idle');
+  ui.disconnect();
+});
+
+test('MIDILearnUI ignores an unmodified m so typing stays safe', () => {
+  const { target, ui } = setup();
+  ui.handleKeyDown(keyEvent('m', target));
+  assert.equal(ui.state, 'idle');
+  ui.disconnect();
+});
+
+test('MIDILearnUI ignores Cmd-M while the caret is in a text field', () => {
+  const { ui } = setup();
+  const input = new FakeControl({ type: 'text' }, 'input');
+  ui.handleKeyDown(keyEvent('m', input, { metaKey: true }));
   assert.equal(ui.state, 'idle');
   ui.disconnect();
 });

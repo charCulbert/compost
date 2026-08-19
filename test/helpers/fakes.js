@@ -141,10 +141,12 @@ export class FakeStorage {
   }
 }
 
-export function keyEvent(key, target) {
+export function keyEvent(key, target, modifiers = {}) {
   return {
     key,
     target,
+    metaKey: Boolean(modifiers.metaKey),
+    ctrlKey: Boolean(modifiers.ctrlKey),
     composedPath: () => [target],
     preventDefault() {
       this.defaultPrevented = true;

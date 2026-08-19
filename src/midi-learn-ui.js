@@ -239,7 +239,11 @@ export class MIDILearnUI {
       return;
     }
 
-    if (event.key === 'm' || event.key === 'M') {
+    // Cmd/Ctrl-M, and never while the caret is in a text field: a bare "m" fired
+    // in the middle of typing into a search box or a name field.
+    if ((event.key === 'm' || event.key === 'M') && (event.metaKey || event.ctrlKey)) {
+      if (isTextEditingTarget(event)) return;
+
       if (this.state !== 'idle') {
         event.preventDefault();
         event.stopPropagation();
