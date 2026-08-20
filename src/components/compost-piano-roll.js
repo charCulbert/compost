@@ -40,7 +40,7 @@ export class CompostPianoRoll extends HTMLElement {
     /** @type {RollNote[]} */ this._notes = [];
     /** @type {Set<string>} */ this.selection = new Set();
     this.inputID = `compost-piano-roll-${nextRollID += 1}`;
-    /** @type {object|null} */ this.drag = null;
+    /** @type {any} */ this.drag = null;
     this.activeNoteId = null;
 
     this.root = this.attachShadow({ mode: 'open' });
@@ -218,21 +218,25 @@ export class CompostPianoRoll extends HTMLElement {
         </div>
       </div>`;
 
-    this.frame = this.root.querySelector('.frame');
-    this.ruler = this.root.querySelector('.ruler');
-    this.keys = this.root.querySelector('.keys');
-    this.scroll = this.root.querySelector('.scroll');
-    this.canvas = this.root.querySelector('.canvas');
-    this.rowLayer = this.root.querySelector('.rows');
-    this.lineLayer = this.root.querySelector('.lines');
-    this.playheadElement = this.root.querySelector('.playhead');
+    /** @param {string} selector @returns {HTMLElement} */
+    const part = (selector) => /** @type {HTMLElement} */ (this.root.querySelector(selector));
+    this.frame = part('.frame');
+    this.ruler = part('.ruler');
+    this.keys = part('.keys');
+    this.scroller = part('.scroll');
+    this.canvas = part('.canvas');
+    this.rowLayer = part('.rows');
+    this.lineLayer = part('.lines');
+    this.playheadElement = part('.playhead');
 
+    /** @param {any} event */
     this.handlePointerMove = (event) => this.movePointer(event);
+    /** @param {any} event */
     this.handlePointerUp = (event) => this.endPointer(event);
-    this.scroll.addEventListener('pointerdown', (event) => this.startPointer(event));
-    this.scroll.addEventListener('dblclick', (event) => this.handleDoubleClick(event));
-    this.scroll.addEventListener('contextmenu', (event) => this.handleContextMenu(event));
-    this.scroll.addEventListener('scroll', () => this.syncScroll());
+    this.scroller.addEventListener('pointerdown', (event) => this.startPointer(event));
+    this.scroller.addEventListener('dblclick', (event) => this.handleDoubleClick(event));
+    this.scroller.addEventListener('contextmenu', (event) => this.handleContextMenu(event));
+    this.scroller.addEventListener('scroll', () => this.syncScroll());
     this.keys.addEventListener('pointerdown', (event) => this.previewFromKey(event));
     this.addEventListener('keydown', (event) => this.handleKey(event));
   }
@@ -276,6 +280,7 @@ export class CompostPianoRoll extends HTMLElement {
   }
 
   /** Replaces the note list. Silent by default so a host can push state back. */
+  /** @param {any[]} notes @param {boolean} [shouldEmit] */
   setNotes(notes, shouldEmit = false) {
     this._notes = normaliseNotes(notes, this.beats).map((note) => (
       note.id ? note : { ...note, id: crypto.randomUUID() }
@@ -295,11 +300,13 @@ export class CompostPianoRoll extends HTMLElement {
   }
 
   /** Snaps the selection, or everything when nothing is selected. */
+  /** @param {{lengths?: boolean, division?: number}} [options] */
   quantize({ lengths = false, division = this.grid } = {}) {
     if (this.readonly) return;
+    /** @type {string[]|null} */
     const ids = this.selection.size > 0 ? [...this.selection] : null;
     const next = quantizedNotes(this._notes, gridStep(division, this.beatsPerBar),
-      { ids, lengths, beats: this.beats });
+      /** @type {any} */ ({ ids, lengths, beats: this.beats }));
     this.commit(next);
   }
 
@@ -326,15 +333,20 @@ export class CompostPianoRoll extends HTMLElement {
 
   get highNote() { return Math.min(127, this.rootNote + this.noteCount - 1); }
 
+  /** @param {number} beat */
   beatToX(beat) { return beat * this.beatWidth; }
 
+  /** @param {number} x */
   xToBeat(x) { return x / this.beatWidth; }
 
+  /** @param {number} note */
   noteToY(note) { return (this.highNote - note) * this.rowHeight; }
 
+  /** @param {number} y */
   yToNote(y) { return this.highNote - Math.floor(y / this.rowHeight); }
 
   /** Pointer position in beats and note number, relative to the scrolled canvas. */
+  /** @param {{clientX: number, clientY: number}} event */
   pointerPosition(event) {
     const bounds = this.canvas.getBoundingClientRect();
     return {
@@ -428,17 +440,18 @@ export class CompostPianoRoll extends HTMLElement {
 
   /** Keys and ruler are separate panes, so they follow the grid by transform. */
   syncScroll() {
-    if (!this.scroll) return;
+    if (!this.scroller) return;
     for (const key of this.keys.children) {
-      key.style.transform = `translateY(${-this.scroll.scrollTop}px)`;
+      /** @type {HTMLElement} */ (key).style.transform = `translateY(${-this.scroller.scrollTop}px)`;
     }
     for (const mark of this.ruler.children) {
-      mark.style.transform = `translateX(${-this.scroll.scrollLeft}px)`;
+      /** @type {HTMLElement} */ (mark).style.transform = `translateX(${-this.scroller.scrollLeft}px)`;
     }
   }
 
   // ---- Editing ------------------------------------------------------------
 
+  /** @param {any[]} notes */
   commit(notes) {
     this._notes = normaliseNotes(notes, this.beats);
     this.refresh();
@@ -452,6 +465,7 @@ export class CompostPianoRoll extends HTMLElement {
     }));
   }
 
+  /** @param {number} note */
   preview(note) {
     this.dispatchEvent(new CustomEvent('note-preview', {
       bubbles: true,
@@ -459,16 +473,21 @@ export class CompostPianoRoll extends HTMLElement {
     }));
   }
 
+  /** @param {any} event */
   previewFromKey(event) {
-    const note = Number(event.target?.dataset?.note);
+    const note = Number(/** @type {HTMLElement} */ (event.target)?.dataset?.note);
     if (Number.isInteger(note)) this.preview(note);
   }
 
+  /** @param {Event} event @returns {HTMLElement|null} */
   noteElementFrom(event) {
-    const path = event.composedPath();
-    return path.find((node) => node instanceof HTMLElement && node.classList.contains('note')) ?? null;
+    const found = event.composedPath().find(
+      (node) => node instanceof HTMLElement && node.classList.contains('note'),
+    );
+    return found instanceof HTMLElement ? found : null;
   }
 
+  /** @param {any} event */
   startPointer(event) {
     if (this.readonly || event.button !== 0) return;
     const element = this.noteElementFrom(event);
@@ -499,7 +518,7 @@ export class CompostPianoRoll extends HTMLElement {
       }
     } else {
       event.preventDefault();
-      const id = element.dataset.id;
+      const id = element.dataset.id ?? '';
       const note = this._notes.find((entry) => entry.id === id);
       if (!note) return;
       if (event.shiftKey || event.metaKey || event.ctrlKey) {
@@ -509,7 +528,7 @@ export class CompostPianoRoll extends HTMLElement {
         this.selection = new Set([id]);
       }
       const resizing = event.composedPath().some(
-        (node) => node instanceof HTMLElement && node.classList.contains('note-edge'),
+        (/** @type {any} */ node) => node instanceof HTMLElement && node.classList.contains('note-edge'),
       );
       this.drag = {
         kind: resizing ? 'resize' : 'move',
@@ -522,13 +541,14 @@ export class CompostPianoRoll extends HTMLElement {
       this.refresh();
     }
 
-    this.scroll.setPointerCapture(event.pointerId);
+    this.scroller.setPointerCapture(event.pointerId);
     this.drag.pointerId = event.pointerId;
-    this.scroll.addEventListener('pointermove', this.handlePointerMove);
-    this.scroll.addEventListener('pointerup', this.handlePointerUp);
-    this.scroll.addEventListener('pointercancel', this.handlePointerUp);
+    this.scroller.addEventListener('pointermove', this.handlePointerMove);
+    this.scroller.addEventListener('pointerup', this.handlePointerUp);
+    this.scroller.addEventListener('pointercancel', this.handlePointerUp);
   }
 
+  /** @returns {HTMLElement} */
   makeMarquee() {
     const element = document.createElement('div');
     element.className = 'marquee';
@@ -536,6 +556,7 @@ export class CompostPianoRoll extends HTMLElement {
     return element;
   }
 
+  /** @param {any} event */
   movePointer(event) {
     if (!this.drag || event.pointerId !== this.drag.pointerId) return;
     const position = this.pointerPosition(event);
@@ -555,7 +576,7 @@ export class CompostPianoRoll extends HTMLElement {
         left: `${left}px`, top: `${top}px`,
         width: `${Math.max(1, right - left)}px`, height: `${Math.max(1, bottom - top)}px`,
       });
-      this.selection = new Set(notesInBox(this._notes, box).map((note) => note.id));
+      this.selection = new Set(notesInBox(this._notes, box).map((/** @type {any} */ note) => note.id));
       this.renderNotes();
       return;
     }
@@ -578,40 +599,44 @@ export class CompostPianoRoll extends HTMLElement {
     this.renderNotes();
   }
 
+  /** @param {any} event */
   endPointer(event) {
     if (!this.drag || event.pointerId !== this.drag.pointerId) return;
     const wasMarquee = this.drag.kind === 'marquee';
     this.drag.element?.remove();
     const changed = !wasMarquee;
     this.drag = null;
-    this.scroll.removeEventListener('pointermove', this.handlePointerMove);
-    this.scroll.removeEventListener('pointerup', this.handlePointerUp);
-    this.scroll.removeEventListener('pointercancel', this.handlePointerUp);
+    this.scroller.removeEventListener('pointermove', this.handlePointerMove);
+    this.scroller.removeEventListener('pointerup', this.handlePointerUp);
+    this.scroller.removeEventListener('pointercancel', this.handlePointerUp);
     if (changed) this.commit(this._notes);
     else this.refresh();
   }
 
+  /** @param {Event} event */
   handleDoubleClick(event) {
     if (this.readonly) return;
     const element = this.noteElementFrom(event);
     if (!element) return;
     event.preventDefault();
     // A double-click on a note removes it; drawing already happens on drag.
-    const id = element.dataset.id;
+    const id = element.dataset.id ?? '';
     this.selection.delete(id);
     this.commit(this._notes.filter((note) => note.id !== id));
   }
 
+  /** @param {Event} event */
   handleContextMenu(event) {
     if (this.readonly) return;
     const element = this.noteElementFrom(event);
     if (!element) return;
     event.preventDefault();
-    const id = element.dataset.id;
+    const id = element.dataset.id ?? '';
     this.selection.delete(id);
     this.commit(this._notes.filter((note) => note.id !== id));
   }
 
+  /** @param {KeyboardEvent} event */
   handleKey(event) {
     if (this.readonly) return;
     if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -633,6 +658,7 @@ export class CompostPianoRoll extends HTMLElement {
     if (this.selection.size === 0) return;
 
     const step = event.altKey ? this.step / 2 : this.step;
+    /** @type {Record<string, [number, number]>} */
     const moves = {
       ArrowLeft: [-step, 0], ArrowRight: [step, 0],
       ArrowUp: [0, 1], ArrowDown: [0, -1],

@@ -8,6 +8,7 @@ import { clamp } from './utils.js';
 export const MIN_DURATION = 1 / 64;
 
 /** Beats per cell for a grid division, where 4 means a quarter of a beat. */
+/** @param {number} division @param {number} [beatsPerBar] */
 export function gridStep(division, beatsPerBar = 4) {
   const number = Number(division);
   if (!Number.isFinite(number) || number <= 0) return 0;
@@ -15,17 +16,20 @@ export function gridStep(division, beatsPerBar = 4) {
 }
 
 /** Snaps a position to the grid, or leaves it alone when snapping is off. */
+/** @param {number} value @param {number} step @param {string} [mode] */
 export function snapBeats(value, step, mode = 'grid') {
   if (mode === 'off' || !(step > 0)) return Math.max(0, value);
   return Math.max(0, Math.round(value / step) * step);
 }
 
 /** Rounds a value that must stay strictly positive, such as a note length. */
+/** @param {number} value @param {number} step @param {string} [mode] */
 export function snapDuration(value, step, mode = 'grid') {
   if (mode === 'off' || !(step > 0)) return Math.max(MIN_DURATION, value);
   return Math.max(step, Math.round(value / step) * step);
 }
 
+/** @param {any} note @param {number} beats @returns {RollNote} */
 export function normaliseNote(note, beats) {
   const start = clamp(Number(note.start) || 0, 0, Math.max(0, beats - MIN_DURATION));
   const duration = clamp(Number(note.duration) || MIN_DURATION, MIN_DURATION, beats - start);
@@ -39,6 +43,7 @@ export function normaliseNote(note, beats) {
   };
 }
 
+/** @param {any[]} notes @param {number} beats @returns {RollNote[]} */
 export function normaliseNotes(notes, beats) {
   if (!Array.isArray(notes)) return [];
   return notes.map((note) => normaliseNote(note, beats)).sort(
@@ -47,6 +52,8 @@ export function normaliseNotes(notes, beats) {
 }
 
 /** Moves notes by a pitch and time delta, keeping them inside the clip. */
+/** @param {RollNote[]} notes @param {string[]} ids @param {number} deltaBeats
+ * @param {number} deltaNote @param {number} beats @param {number} step @param {string} [mode] */
 export function movedNotes(notes, ids, deltaBeats, deltaNote, beats, step, mode = 'grid') {
   const moving = new Set(ids);
   return notes.map((note) => {
@@ -61,6 +68,8 @@ export function movedNotes(notes, ids, deltaBeats, deltaNote, beats, step, mode 
 }
 
 /** Resizes notes from their right edge. */
+/** @param {RollNote[]} notes @param {string[]} ids @param {number} deltaBeats
+ * @param {number} beats @param {number} step @param {string} [mode] */
 export function resizedNotes(notes, ids, deltaBeats, beats, step, mode = 'grid') {
   const sizing = new Set(ids);
   return notes.map((note) => {
@@ -73,6 +82,8 @@ export function resizedNotes(notes, ids, deltaBeats, beats, step, mode = 'grid')
 }
 
 /** Snaps starts to the grid, and lengths too unless lengths are left alone. */
+/** @param {RollNote[]} notes @param {number} step
+ * @param {{ids?: string[]|null, lengths?: boolean, beats?: number}} [options] */
 export function quantizedNotes(notes, step, { ids = null, lengths = false, beats = Infinity } = {}) {
   if (!(step > 0)) return notes;
   const chosen = ids ? new Set(ids) : null;
@@ -85,6 +96,8 @@ export function quantizedNotes(notes, step, { ids = null, lengths = false, beats
 }
 
 /** Notes overlapping a marquee, in beats and MIDI note numbers. */
+/** @param {RollNote[]} notes
+ * @param {{fromBeat: number, toBeat: number, fromNote: number, toNote: number}} box */
 export function notesInBox(notes, box) {
   const startBeat = Math.min(box.fromBeat, box.toBeat);
   const endBeat = Math.max(box.fromBeat, box.toBeat);
