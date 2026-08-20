@@ -144,6 +144,8 @@ export class CompostGain extends HTMLElement {
           --gain-label-size: 13px;
           --gain-scale-size: 9px;
           --gain-radius: 0;
+          --gain-scale-width: 22px;
+          --gain-scale-gap: 6px;
           --gain-percent: 0%;
           --gain-focus-bracket-color: #111111;
           --gain-focus-bracket-offset: 7px;
@@ -247,7 +249,14 @@ export class CompostGain extends HTMLElement {
         .strip {
           display: flex;
           align-items: stretch;
-          gap: 6px;
+          gap: var(--gain-scale-gap);
+        }
+        /* Balances the scale column so the rail sits centred under the readout
+           instead of being pushed left by the labels beside it. */
+        .strip::before {
+          content: "";
+          flex: none;
+          inline-size: var(--gain-scale-width);
         }
         .rail {
           position: relative;
@@ -288,7 +297,13 @@ export class CompostGain extends HTMLElement {
           block-size: calc(100% - var(--fill, 0%));
           background: var(--gain-meter-unlit);
         }
-        .meter-channel[data-clip] { background: var(--gain-clip-on); }
+        /* A clipped channel keeps its level gradient; the CLIP badge and a red
+           peak tick carry the state, so the meter stays readable. */
+        .meter-channel[data-clip] .meter-peak {
+          background: var(--gain-clip-on);
+          opacity: 1;
+          block-size: 3px;
+        }
         .meter-peak {
           position: absolute;
           left: 0;
@@ -314,7 +329,8 @@ export class CompostGain extends HTMLElement {
         .scale {
           position: relative;
           display: block;
-          inline-size: 22px;
+          flex: none;
+          inline-size: var(--gain-scale-width);
           block-size: var(--gain-rail-length);
           font-size: var(--gain-scale-size);
           color: var(--gain-scale-text);
@@ -368,7 +384,8 @@ export class CompostGain extends HTMLElement {
           inline-size: var(--gain-thumb-line);
           transform: translateX(-50%);
         }
-        :host([orientation="horizontal"]) .scale { display: none; }
+        :host([orientation="horizontal"]) .scale,
+        :host([orientation="horizontal"]) .strip::before { display: none; }
 
         :host([disabled]) label { opacity: 0.45; }
 

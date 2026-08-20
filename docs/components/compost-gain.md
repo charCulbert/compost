@@ -79,7 +79,9 @@ Ableton or live.gain~ strip looks. `meter-min` and `meter-max` only choose which
 of the marks (`0, -12, -24, -36, -48, -60`) get labelled; widen `min`/`max` or
 change `mid` to change the spacing itself.
 
-The meter colours from low through a warning band to red near the top. Each
+The meter colours from low through a warning band to red near the top. A
+clipped channel keeps that gradient rather than turning solid — the `CLIP`
+badge and a red peak tick carry the state, so the level stays readable. Each
 channel holds a peak tick at its recent maximum for `peak-hold` ms. A level at or above `clip-level` turns the
 channel red, shows the `CLIP` state, and holds it for `peak-hold` ms; it clears
 automatically, or immediately via `clearClip()`.
