@@ -2,6 +2,31 @@ import { defineElement } from '../utils.js';
 
 let nextListboxID = 0;
 
+export function popupPlacement({
+  trigger,
+  viewportWidth,
+  viewportHeight,
+  contentWidth,
+  contentHeight,
+  popupOffset = 0,
+  margin = 8,
+}) {
+  const availableBelow = viewportHeight - trigger.bottom - popupOffset - margin;
+  const availableAbove = trigger.top - popupOffset - margin;
+  const openAbove = availableBelow < Math.min(contentHeight, 180)
+    && availableAbove > availableBelow;
+  const maxHeight = Math.max(60, Math.min(320,
+    openAbove ? availableAbove : availableBelow));
+  const width = Math.min(Math.max(trigger.width, contentWidth), viewportWidth - margin * 2);
+  const left = Math.min(Math.max(margin, trigger.right - width),
+    viewportWidth - width - margin);
+  const height = Math.min(contentHeight, maxHeight);
+  const top = openAbove
+    ? Math.max(margin, trigger.top - popupOffset - height)
+    : Math.min(viewportHeight - margin - height, trigger.bottom + popupOffset);
+  return { left, top, width, maxHeight, openAbove };
+}
+
 export class CompostSelect extends HTMLElement {
   static get observedAttributes() {
     return [
@@ -24,6 +49,7 @@ export class CompostSelect extends HTMLElement {
     this.typeaheadTimer = 0;
     this.listboxID = `compost-select-listbox-${nextListboxID += 1}`;
     this.handleDocumentPointerDown = this.handleDocumentPointerDown.bind(this);
+    this.positionListbox = this.positionListbox.bind(this);
 
     this.root = this.attachShadow({ mode: 'open' });
     this.root.innerHTML = `
@@ -96,15 +122,15 @@ export class CompostSelect extends HTMLElement {
           transform: rotate(-90deg);
         }
         .listbox {
-          position: absolute;
-          top: calc(100% + var(--compost-select-popup-offset));
-          right: 0;
+          position: fixed;
+          inset: auto;
           z-index: 100;
           box-sizing: border-box;
           width: max-content;
-          min-width: 100%;
           max-width: min(360px, calc(100vw - 16px));
           max-height: min(320px, calc(100vh - 70px));
+          margin: 0;
+          padding: 0;
           overflow: auto;
           border: 1px solid var(--compost-select-border);
           border-top: 0;
@@ -142,7 +168,7 @@ export class CompostSelect extends HTMLElement {
         <span class="label" part="label"></span>
         <span class="marker" part="marker" aria-hidden="true"></span>
       </button>
-      <div class="listbox" part="listbox" role="listbox" hidden></div>
+      <div class="listbox" part="listbox" role="listbox" popover="manual" hidden></div>
       <slot></slot>`;
 
     this.trigger = this.root.querySelector('.trigger');
@@ -171,12 +197,16 @@ export class CompostSelect extends HTMLElement {
       attributeFilter: ['disabled', 'label', 'selected', 'value'],
     });
     document.addEventListener('pointerdown', this.handleDocumentPointerDown);
+    document.addEventListener('scroll', this.positionListbox, true);
+    window.addEventListener('resize', this.positionListbox);
     this.refresh();
   }
 
   disconnectedCallback() {
     this.observer?.disconnect();
     document.removeEventListener('pointerdown', this.handleDocumentPointerDown);
+    document.removeEventListener('scroll', this.positionListbox, true);
+    window.removeEventListener('resize', this.positionListbox);
     clearTimeout(this.typeaheadTimer);
   }
 
@@ -207,15 +237,47 @@ export class CompostSelect extends HTMLElement {
   set open(value) {
     const next = Boolean(value) && !this.disabled;
     this.toggleAttribute('open', next);
-    this.listbox.hidden = !next;
     this.trigger.setAttribute('aria-expanded', String(next));
 
     if (next) {
+      this.listbox.hidden = false;
+      if (typeof this.listbox.showPopover === 'function') this.listbox.showPopover();
+      this.positionListbox();
       this.activeIndex = Math.max(0, this.selectedIndex());
       this.refreshActiveOption();
     } else {
+      if (typeof this.listbox.hidePopover === 'function'
+        && this.listbox.matches(':popover-open')) this.listbox.hidePopover();
+      this.listbox.hidden = true;
       this.trigger.removeAttribute('aria-activedescendant');
     }
+  }
+
+  positionListbox() {
+    if (!this.open || this.listbox.hidden) return;
+
+    const margin = 8;
+    const trigger = this.trigger.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    const popupOffset = Number.parseFloat(getComputedStyle(this)
+      .getPropertyValue('--compost-select-popup-offset')) || 0;
+    const placement = popupPlacement({
+      trigger,
+      viewportWidth,
+      viewportHeight,
+      contentWidth: this.listbox.scrollWidth,
+      contentHeight: this.listbox.scrollHeight,
+      popupOffset,
+      margin,
+    });
+
+    Object.assign(this.listbox.style, {
+      left: `${placement.left}px`,
+      top: `${placement.top}px`,
+      width: `${placement.width}px`,
+      maxHeight: `${placement.maxHeight}px`,
+    });
   }
 
   optionElements() {
