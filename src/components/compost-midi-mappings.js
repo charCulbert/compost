@@ -186,6 +186,11 @@ export class MIDIMappingsEditor extends HTMLElement {
           font-weight: 700;
           letter-spacing: 0.05em;
         }
+        table {
+          /* the UA gives tables their own font, which would cut the component
+             off from the host typography every other size here is relative to */
+          font: inherit;
+        }
         th {
           text-align: left;
           text-transform: uppercase;
