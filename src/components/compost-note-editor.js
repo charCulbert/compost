@@ -101,6 +101,7 @@ export class CompostNoteEditor extends HTMLElement {
           --compost-note-editor-bar-line: #6a6a6a;
           --compost-note-editor-row: rgba(128, 128, 128, 0.055);
           --compost-note-editor-signal: #c45a2c;
+          --compost-note-editor-loop: var(--compost-note-editor-signal);
           --compost-note-editor-select: #2f6da8;
           --compost-note-editor-marquee: rgba(47, 109, 168, 0.12);
           --compost-note-editor-wash: rgba(196, 90, 44, 0.15);
@@ -159,7 +160,7 @@ export class CompostNoteEditor extends HTMLElement {
           height: 1em;
           left: 0;
           background: var(--compost-note-editor-wash);
-          box-shadow: inset 0 0 0 1px var(--compost-note-editor-signal);
+          box-shadow: inset 0 0 0 1px var(--compost-note-editor-loop);
           cursor: grab;
           touch-action: none;
         }
@@ -172,7 +173,7 @@ export class CompostNoteEditor extends HTMLElement {
           z-index: 3;
           touch-action: none;
         }
-        .handle::before { content: ""; position: absolute; top: 0; bottom: 0; width: 3px; background: var(--compost-note-editor-signal); }
+        .handle::before { content: ""; position: absolute; top: 0; bottom: 0; width: 3px; background: var(--compost-note-editor-loop); }
         .handle.start::before { left: 0; }
         .handle.end::before { right: 0; }
         .handle:hover::before, .handle[data-on]::before { width: 4px; }
