@@ -308,8 +308,13 @@ export class CompostChannelCard extends HTMLElement {
         .switch:hover { color: var(--compost-channel-card-muted); }
         .switch svg { display: block; width: 1.4em; height: 1.2em; fill: currentColor; stroke: currentColor;
           stroke-linecap: round; opacity: 0.9; }
+        /* monitor: off is the dot and faint arcs; auto ("monitor while armed") is
+           the dot and the near arc; in is the dot and both arcs — the attribute
+           may carry the mode, monitor="auto" or monitor="in" (bare = in) */
         .switch svg .far { opacity: 0.45; }
         .switch[aria-pressed="true"] svg .far { opacity: 1; }
+        :host([monitor="auto"]) .switch[data-switch="monitor"][aria-pressed="true"] svg .far { opacity: 0.28; }
+        :host([monitor="auto"]) .switch[data-switch="monitor"][aria-pressed="true"] svg circle { opacity: 0.85; }
         .switch[data-switch="arm"][aria-pressed="true"],
         .switch[data-switch="mute"][aria-pressed="true"] { color: var(--compost-channel-card-over); }
         .switch[data-switch="monitor"][aria-pressed="true"] { color: var(--compost-channel-card-signal); }
@@ -705,7 +710,8 @@ export class CompostChannelCard extends HTMLElement {
       button.setAttribute('aria-pressed', String(on));
       button.setAttribute('aria-label', `${name === 'arm' ? 'Arm' : name === 'monitor' ? 'Monitor'
         : name === 'mute' ? 'Mute' : 'Solo'} ${this.label}`);
-      button.title = name === 'arm' ? 'arm for recording' : name === 'monitor' ? 'monitor input: off · auto · in'
+      button.title = name === 'arm' ? 'arm for recording'
+        : name === 'monitor' ? 'monitor input: off · auto · in (now ' + (this.hasAttribute('monitor') ? (this.getAttribute('monitor') || 'in') : 'off') + ')'
         : name === 'mute' ? 'mute  (m on a focused column)' : 'solo  (s on a focused column · alt-click: solo defeat)';
       if (name === 'solo') button.title = 'Option-click for solo defeat';
       button.toggleAttribute('disabled', this.disabled);
