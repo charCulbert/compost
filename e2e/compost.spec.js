@@ -546,16 +546,41 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   await page.mouse.up();
   expect((await firstNote()).duration).toBe(1.5);
 
-  // Alt-drag sets velocity and the tooltip says so
+  // Cmd-drag sets velocity and the tooltip says so
   box = await editor.locator('.note').first().boundingBox();
-  await page.keyboard.down('Alt');
+  await page.keyboard.down('Meta');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 20, { steps: 4 });
   await expect(editor.locator('.tip')).toContainText('vel 120');
   await page.mouse.up();
-  await page.keyboard.up('Alt');
+  await page.keyboard.up('Meta');
   expect((await firstNote()).velocity).toBe(120);
+
+  // with two notes selected, one right edge resizes both, and Alt-drag copies both
+  await page.keyboard.press('Meta+a');
+  const selectedBefore = await editor.evaluate((element) => element.selectedIds.length);
+  const lengthsBefore = await editor.evaluate((element) => element.notes.map((note) => note.duration));
+  box = await editor.locator('.note').first().boundingBox();
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 2 + pxPerBeat * 0.5, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.up();
+  const lengthsAfter = await editor.evaluate((element) => element.notes.map((note) => note.duration));
+  expect(lengthsAfter.every((length, index) => Math.abs(length - (lengthsBefore[index] + 0.5)) < 1e-6)).toBe(true);
+  const countBefore = lengthsAfter.length;
+  box = await editor.locator('.note').first().boundingBox();
+  await page.keyboard.down('Alt');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * 2, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(countBefore * 2);
+  expect(await editor.evaluate((element) => element.selectedIds.length)).toBe(selectedBefore);
+  await page.keyboard.press('Backspace');
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(countBefore);
+  await page.keyboard.press('Meta+a');
 
   // the loop end drags out by a beat
   const handle = await editor.locator('.handle.end').boundingBox();
@@ -577,7 +602,7 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   await page.keyboard.press('Backspace');
   expect(await editor.evaluate((element) => element.notes.length)).toBe(5);
   const events = await editor.evaluate((element) => element.testEvents);
-  expect(events.filter((entry) => entry === 'notes-change').length).toBe(5);
+  expect(events.filter((entry) => entry === 'notes-change').length).toBe(8);
   expect(events).toContainEqual(['loop-change', 9]);
 
   // n adds a note without a pointer, on the middle visible row, and selects it
