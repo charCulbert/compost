@@ -76,7 +76,7 @@ export class CompostWindow extends HTMLElement {
     return [
       'open', 'heading', 'x', 'y', 'width', 'height',
       'min-width', 'min-height', 'max-width', 'max-height',
-      'aspect-ratio', 'resizable', 'fullscreen', 'static',
+      'aspect-ratio', 'resizable', 'fullscreen', 'sheet', 'static',
     ];
   }
 
@@ -158,6 +158,10 @@ export class CompostWindow extends HTMLElement {
           flex: none;
           display: flex;
           align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
+          min-width: var(--compost-window-control-min, 0px);
+          min-height: var(--compost-window-control-min, 0px);
           padding: 0.25em;
           margin: 0 -0.25em 0 0;
           border: 0;
@@ -165,6 +169,12 @@ export class CompostWindow extends HTMLElement {
           color: var(--compost-window-close-color);
           cursor: pointer;
           font: inherit;
+        }
+        /* whatever a host slots into the bar is a target too, not just the close box */
+        ::slotted([slot="controls"]) {
+          min-height: var(--compost-window-control-min, 0px);
+          display: flex;
+          align-items: center;
         }
         .close svg { display: block; width: 0.8em; height: 0.8em; }
         .close rect { fill: none; stroke: currentColor; }
@@ -211,7 +221,29 @@ export class CompostWindow extends HTMLElement {
           max-width: none;
           max-height: none;
         }
-        :host([fullscreen]) header { cursor: default; }
+        :host([fullscreen]) header, :host([sheet]) header { cursor: default; }
+        /* a sheet keeps the bottom of the screen and grows upward: for a phone
+           keyboard or a picker, where taking the whole screen buys nothing */
+        :host([sheet]) {
+          left: 0 !important;
+          right: 0;
+          top: auto !important;
+          bottom: 0;
+          width: 100vw !important;
+          height: auto;
+          max-width: none;
+        }
+        :host([sheet]) .grip { display: none; }
+        /* the bar clears the notch when the frame owns an edge of the screen */
+        :host([fullscreen]) header, :host([sheet]) header {
+          height: calc(var(--compost-window-header-height) + env(safe-area-inset-top, 0px));
+          padding-top: env(safe-area-inset-top, 0px);
+        }
+        :host([sheet]) header {
+          height: var(--compost-window-header-height);
+          padding-top: 0;
+        }
+        :host([sheet]) .content { padding-bottom: env(safe-area-inset-bottom, 0px); }
       </style>
       <header part="header">
         <slot name="title"><span class="title" part="title"></span></slot>
@@ -365,13 +397,13 @@ export class CompostWindow extends HTMLElement {
   }
 
   keepInView() {
-    if (!this.open || this.hasAttribute('fullscreen')) return;
+    if (!this.open || this.hasAttribute('fullscreen') || this.hasAttribute('sheet')) return;
     const position = this.currentPosition();
     this.moveTo(position.x, position.y);
   }
 
   handleViewportResize() {
-    if (!this.open || this.hasAttribute('fullscreen')) return;
+    if (!this.open || this.hasAttribute('fullscreen') || this.hasAttribute('sheet')) return;
     // shrinking the viewport must not strand a window outside it, or make it larger than the screen
     const size = this.contentSize;
     this.setContentSize(size.width, size.height);
@@ -405,12 +437,13 @@ export class CompostWindow extends HTMLElement {
     if (!this.open) return;
     const width = numberAttr(this, 'width', NaN);
     const height = numberAttr(this, 'height', NaN);
-    if (Number.isFinite(width) && Number.isFinite(height)) {
+    if (this.hasAttribute('sheet')) { this.style.width = ''; this.style.height = ''; }
+    else if (Number.isFinite(width) && Number.isFinite(height)) {
       const current = this.contentSize;
       if (Math.abs(current.width - width) > 0.5 || Math.abs(current.height - height) > 0.5
         || !this.style.width) this.setContentSize(width, height);
     }
-    if (!this.hasAttribute('fullscreen')) {
+    if (!this.hasAttribute('fullscreen') && !this.hasAttribute('sheet')) {
       const position = this.currentPosition();
       this.moveTo(numberAttr(this, 'x', position.x), numberAttr(this, 'y', position.y));
     }
@@ -420,7 +453,8 @@ export class CompostWindow extends HTMLElement {
 
   /** @param {PointerEvent} event */
   beginDrag(event) {
-    if (event.button !== 0 || this.hasAttribute('static') || this.hasAttribute('fullscreen')) return;
+    if (event.button !== 0 || this.hasAttribute('static') || this.hasAttribute('fullscreen')
+      || this.hasAttribute('sheet')) return;
     // controls in the bar own their own press
     if (event.composedPath().some((node) => node instanceof Element && node !== this.header
       && (node === this.closeButton || node.closest?.('[slot="controls"]')

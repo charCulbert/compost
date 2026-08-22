@@ -78,6 +78,8 @@ the return it names into view.
 
 `--compost-channel-card-*` custom properties cover text, signal, over and
 select colours, the hover background and the notch background; sizes are in
-`em` against the host, so the whole card scales with its font size. Parts:
+`em` against the host, so the whole card scales with its font size. A host on
+a small screen can grow the targets without changing the desk layout with
+`--compost-channel-card-switch-min`, `-send-label-min` and `-send-height`. Parts:
 `input`, `pan`, `pan-rail`, `pan-figure`, `level`, `sends`, `send`, `switches`,
 `switch`.

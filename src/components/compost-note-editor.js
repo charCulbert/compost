@@ -125,6 +125,7 @@ export class CompostNoteEditor extends HTMLElement {
           --compost-note-editor-playhead: #111111;
           --compost-note-editor-tip-bg: #ffffff;
           --compost-note-editor-key-width: 5.3em;
+          --compost-note-editor-min-row: 1.1em;
           --compost-note-editor-ruler-height: 2.36em;
           --compost-note-editor-numeral-font: ui-monospace, SFMono-Regular, Menlo, monospace;
           --compost-note-editor-color-scheme: light;
@@ -503,6 +504,25 @@ export class CompostNoteEditor extends HTMLElement {
     return (this.gridWrap?.clientHeight || 300) / Math.max(1, this.visibleKeys.length);
   }
 
+  /** The height a row will not go below, from `--compost-note-editor-min-row`.
+   * A landscape phone has too little height for 25 rows at a readable size, so
+   * the editor shows fewer of them rather than squeezing all of them. */
+  get minRowHeight() {
+    const style = getComputedStyle(this);
+    const fontSize = parseFloat(style.fontSize) || 12;
+    const raw = style.getPropertyValue('--compost-note-editor-min-row').trim();
+    const value = parseFloat(raw);
+    if (!Number.isFinite(value) || value <= 0) return fontSize * 1.1;
+    return raw.endsWith('em') ? value * fontSize : raw.endsWith('rem')
+      ? value * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) : value;
+  }
+
+  /** How many rows the height can hold without going under the floor. */
+  get rowCapacity() {
+    const height = this.gridWrap?.clientHeight || 300;
+    return clamp(Math.floor(height / Math.max(1, this.minRowHeight)), MIN_ROWS, 128);
+  }
+
   /** @param {number} note */
   noteToY(note) {
     const index = this.visibleKeys.indexOf(note);
@@ -516,12 +536,21 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   computeVisibleKeys() {
+    const capacity = this.rowCapacity;
     if (this.hasAttribute('fold')) {
       const used = [...new Set(this._notes.map((note) => note.note))].sort((a, b) => b - a);
-      if (used.length) return used;
+      if (used.length && used.length <= capacity) return used;
+      // too many pitches in use for the height: keep the ones around the middle
+      if (used.length) {
+        const from = clamp(Math.round((used.length - capacity) / 2), 0, used.length - capacity);
+        return used.slice(from, from + capacity);
+      }
     }
-    const lo = clamp(this.rootNote, 0, 128 - this.noteCount);
-    return Array.from({ length: this.noteCount }, (_, index) => lo + this.noteCount - 1 - index);
+    const count = Math.min(this.noteCount, capacity);
+    // fewer rows, still centred on the range the host asked for
+    const middle = this.rootNote + this.noteCount / 2;
+    const lo = clamp(Math.round(middle - count / 2), 0, 128 - count);
+    return Array.from({ length: count }, (_, index) => lo + count - 1 - index);
   }
 
   /** Pointer position in grid pixels. */

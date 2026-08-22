@@ -100,6 +100,10 @@ export class CompostChannelCard extends HTMLElement {
           --compost-channel-card-hover: rgba(17, 17, 17, 0.07);
           --compost-channel-card-editor-bg: #ffffff;
           --compost-channel-card-figure-size: 1.09em;
+          /* a host on a small screen sets these to give fingers something to hit */
+          --compost-channel-card-switch-min: 0px;
+          --compost-channel-card-send-label-min: 0px;
+          --compost-channel-card-send-height: 1.36em;
           --compost-channel-card-numeral-font: ui-monospace, SFMono-Regular, Menlo, monospace;
           --compost-channel-card-gutter-left: var(--compost-channel-strip-meter-left, 50%);
           --compost-channel-card-gutter-width: var(--compost-channel-strip-meter-measured-width, 0px);
@@ -224,12 +228,16 @@ export class CompostChannelCard extends HTMLElement {
           background: var(--compost-channel-card-notch-bg, var(--compost-channel-strip-bg, #ffffff)); }
         .sends { grid-column: 3; justify-self: stretch; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
         .send { display: flex; align-items: center; justify-content: flex-end; gap: 0.45em; min-width: 0; }
-        .send label { flex: none; width: 0.64em; font-family: var(--compost-channel-card-numeral-font); letter-spacing: 0;
-          font-size: 0.73em; color: var(--compost-channel-card-faint); }
+        .send label { flex: none; box-sizing: border-box; width: 0.64em;
+          min-width: var(--compost-channel-card-send-label-min, 0px);
+          min-height: var(--compost-channel-card-send-label-min, 0px);
+          display: flex; align-items: center;
+          font-family: var(--compost-channel-card-numeral-font); letter-spacing: 0;
+          font-size: 0.73em; color: var(--compost-channel-card-faint); cursor: pointer; }
         .send[data-live] label { color: var(--compost-channel-card-signal); }
         .send compost-number-box {
           --number-box-width: 4.2em;
-          --number-box-height: 1.36em;
+          --number-box-height: var(--compost-channel-card-send-height, 1.36em);
           --number-box-font-size: 0.82em;
           --number-box-font-weight: 300;
           --number-box-text-align: right;
@@ -289,7 +297,9 @@ export class CompostChannelCard extends HTMLElement {
           display: flex;
           align-items: center;
           justify-content: center;
-          min-height: 1.4em;
+          box-sizing: border-box;
+          min-width: var(--compost-channel-card-switch-min, 0px);
+          min-height: max(1.4em, var(--compost-channel-card-switch-min, 0px));
           padding: 0.1em 0.3em;
           font-weight: 300;
           color: var(--compost-channel-card-faint);

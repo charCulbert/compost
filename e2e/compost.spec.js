@@ -616,6 +616,24 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   expect(events.filter((entry) => entry === 'notes-change').length).toBe(5);
   expect(events).toContainEqual(['loop-change', 9]);
 
+  // a height too short for every row shows fewer of them rather than slivers
+  const rows = await editor.evaluate((element) => {
+    element.style.height = '150px';
+    element.style.fontSize = '13px';
+    element.setAttribute('note-count', '48');
+    element.refresh();
+    return { visible: element.visibleKeys.length, rowHeight: element.rowHeight,
+      floor: element.minRowHeight, asked: element.noteCount };
+  });
+  console.log('U-22 rows', JSON.stringify(rows));
+  expect(rows.visible).toBeLessThan(rows.asked);
+  expect(rows.rowHeight).toBeGreaterThanOrEqual(rows.floor - 0.5);
+  await editor.evaluate((element) => {
+    element.style.height = '';
+    element.style.fontSize = '';
+    element.setAttribute('note-count', '25');
+  });
+
   // n adds a note without a pointer, on the middle visible row, and selects it
   await editor.evaluate((element) => { element.clearSelection(); element.testEvents = []; });
   const before = await editor.evaluate((element) => element.notes.length);
@@ -659,6 +677,30 @@ test('window stays in the viewport, resizes in bounds, and asks before closing',
   const size = await window_.evaluate((element) => element.contentSize);
   expect(size.width).toBeGreaterThanOrEqual(200);
   expect(Math.abs(size.width / size.height - 4 / 3)).toBeLessThan(0.02);
+
+  // a sheet keeps the bottom edge and hides its grip, for a phone
+  await window_.evaluate((element) => {
+    element.style.setProperty('--compost-window-control-min', '44px');
+    element.setAttribute('sheet', '');
+  });
+  const sheet = await window_.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const close = element.shadowRoot.querySelector('.close').getBoundingClientRect();
+    return { left: Math.round(box.left), right: Math.round(box.right), bottom: Math.round(box.bottom),
+      width: Math.round(box.width), viewport: innerWidth, viewportBottom: innerHeight,
+      grip: getComputedStyle(element.shadowRoot.querySelector('.grip')).display,
+      close: [Math.round(close.width), Math.round(close.height)] };
+  });
+  expect(sheet.left).toBe(0);
+  expect(sheet.width).toBe(sheet.viewport);
+  expect(sheet.bottom).toBe(sheet.viewportBottom);
+  expect(sheet.grip).toBe('none');
+  expect(sheet.close[0]).toBeGreaterThanOrEqual(44);
+  expect(sheet.close[1]).toBeGreaterThanOrEqual(44);
+  await window_.evaluate((element) => {
+    element.removeAttribute('sheet');
+    element.style.removeProperty('--compost-window-control-min');
+  });
 
   await window_.evaluate((element) => {
     element.addEventListener('window-close', (event) => event.preventDefault(), { once: true });

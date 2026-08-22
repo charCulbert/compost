@@ -25,7 +25,15 @@ the viewport shrinks around it. Resizing stays inside `min-width`,
 (`4/3` or a number) it follows whichever edge the pointer moved further along
 so the frame tracks the drag instead of fighting it. `resizable` can be
 `both`, `horizontal`, `vertical` or `none`. `fullscreen` takes the screen, for
-a phone; `static` disables dragging.
+a phone; `sheet` keeps the bottom edge and the full width and grows upward
+around its content, for a keyboard or a picker that gains nothing from the
+whole screen — its grip is hidden and its header stays; `static` disables
+dragging.
+
+`--compost-window-control-min` gives the close box and anything slotted into
+`controls` a minimum size, so a phone host can make them 44×44. A `fullscreen`
+window pads its header below the notch with `env(safe-area-inset-top)`, and a
+`sheet` pads its content above `env(safe-area-inset-bottom)`.
 
 `constrainedSize` and `boundedPosition` are exported for hosts that want the
 same maths against a plug-in's resize hints.
@@ -41,6 +49,6 @@ is raised.
 ## Styling
 
 `--compost-window-*` custom properties cover the ground, border, header,
-close and grip colours and the header height (`em`). Parts: `header`,
+close and grip colours, the header height (`em`) and the control minimum. Parts: `header`,
 `title`, `close`, `content`, `grip`. Slots: `title`, `controls`, and the
 default for content.

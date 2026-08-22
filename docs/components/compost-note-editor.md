@@ -73,7 +73,12 @@ key is pressed, `note-context` on a right-click.
 
 ## Styling
 
+Rows never go under `--compost-note-editor-min-row` (`1.1em`): where the
+height cannot hold `note-count` rows at that size — a phone in landscape — the
+editor shows as many as fit, centred on the range asked for, and the wheel on
+the keys scrolls through the rest instead of every row shrinking to a sliver.
+
 `--compost-note-editor-*` custom properties cover the ground, lines, keys,
-signal, selection, marquee, past-loop shading, playhead and tooltip; sizes are
-in `em`. Parts: `frame`, `ruler`, `loop`, `loop-start`, `loop-end`, `keys`,
+signal, selection, marquee, past-loop shading, playhead, tooltip and the row
+floor; sizes are in `em`. Parts: `frame`, `ruler`, `loop`, `loop-start`, `loop-end`, `keys`,
 `grid`, `note`, `playhead`, `division`.
