@@ -154,7 +154,7 @@ export class CompostTimeline extends HTMLElement {
         .frame { display: grid; grid-template-columns: 10.5em minmax(0, 1fr); grid-template-rows: 2.45em minmax(0, 1fr); height: 100%; min-height: 0; }
         .corner, .header-wrap { background: var(--compost-timeline-header-bg); border-right: 1px solid var(--compost-timeline-line); }
         .corner { border-bottom: 1px solid var(--compost-timeline-line); }
-        .ruler-wrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--compost-timeline-line); }
+        .ruler-wrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--compost-timeline-line); touch-action: none; }
         .ruler, .ruler-world { position: absolute; inset: 0 auto 0 0; }
         .ruler-world { height: 100%; }
         .ruler-label { position: absolute; top: .28em; border-left: 1px solid var(--compost-timeline-line); padding-left: 3px; color: var(--compost-timeline-muted); font: .72em/1 var(--compost-timeline-numeral-font); white-space: nowrap; }
@@ -176,7 +176,7 @@ export class CompostTimeline extends HTMLElement {
         .lane-header .lane-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .back-pip { flex: none; width: .58em; height: .58em; border: 0; border-radius: 50%; padding: 0; background: var(--compost-timeline-loop); cursor: pointer; }
         .back-pip:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 2px; }
-        .lanes-wrap { position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+        .lanes-wrap { position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; touch-action: none; }
         .lanes-world { position: relative; min-height: 100%; }
         .grid-world { position: absolute; inset: 0 auto auto 0; z-index: 1; pointer-events: none; }
         .grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-line); opacity: .35; }
@@ -238,7 +238,7 @@ export class CompostTimeline extends HTMLElement {
     this.addEventListener('keydown', (event) => this.handleKey(event));
     this.lanesWrap.addEventListener('wheel', (event) => this.handleWheel(event), { passive: false });
     this.rulerWrap.addEventListener('wheel', (event) => this.handleWheel(event), { passive: false });
-    this.lanesWrap.addEventListener('scroll', () => { this.headers.scrollTop = this.lanesWrap.scrollTop; });
+    this.lanesWrap.addEventListener('scroll', () => this.paintLaneScroll());
     for (const [node, kind] of [[this.rulerStart, 'start'], [this.rulerEnd, 'end'], [this.rulerBand, 'move']]) {
       node.addEventListener('pointerdown', (event) => this.startLoopDrag(event, kind));
       node.addEventListener('pointermove', (event) => this.moveLoopDrag(event));
@@ -457,6 +457,7 @@ export class CompostTimeline extends HTMLElement {
     this.renderRulerLabels(end);
     this.renderLanes();
     this.paintScroll();
+    this.paintLaneScroll();
     this.paintPlayhead();
     this.paintLoop();
   }
@@ -640,6 +641,10 @@ export class CompostTimeline extends HTMLElement {
     this.paintLoop();
   }
 
+  paintLaneScroll() {
+    this.headers.style.transform = `translateY(${-this.lanesWrap.scrollTop}px)`;
+  }
+
   paintPlayhead() {
     if (!this.playheadElement || !this.rulerPlayhead) return;
     const left = (this._playhead - this._scrollBeat) * this._pxPerBeat;
@@ -808,7 +813,8 @@ export class CompostTimeline extends HTMLElement {
     }
     const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
     if (lane instanceof HTMLElement) {
-      this.drag = { pointerId: event.pointerId, type: 'marquee', laneId: lane.dataset.laneId, startX: event.clientX, startY: event.clientY, moved: false, base: event.shiftKey ? new Set(this._selected) : new Set() };
+      this.drag = { pointerId: event.pointerId, type: 'marquee', laneId: lane.dataset.laneId, startX: event.clientX, startY: event.clientY, startScrollBeat: this._scrollBeat, moved: false, base: event.shiftKey ? new Set(this._selected) : new Set() };
+      if (event.isTrusted) lane.setPointerCapture?.(event.pointerId);
       return;
     }
   }
@@ -830,6 +836,16 @@ export class CompostTimeline extends HTMLElement {
     const dy = event.clientY - drag.startY;
     if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) drag.moved = true;
     if (drag.type === 'seek-ruler') return;
+    if (drag.type === 'marquee') {
+      if (event.pointerType === 'touch' && drag.moved && Math.abs(dx) > Math.abs(dy)) {
+        drag.type = 'scroll-time';
+        this.marquee.style.display = 'none';
+      }
+    }
+    if (drag.type === 'scroll-time') {
+      this.scrollBeat = Math.max(0, drag.startScrollBeat - dx / this._pxPerBeat);
+      return;
+    }
     if (drag.type === 'marquee') {
       if (!drag.moved) return;
       const rect = this.lanesWrap.getBoundingClientRect();
@@ -917,6 +933,7 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('seek', { beat, source: 'ruler' }));
       return;
     }
+    if (drag.type === 'scroll-time') return;
     for (const element of this.clipElements()) element.style.transform = '';
     if (drag.element) drag.element.style.cursor = 'grab';
     if (drag.type === 'trim-left' || drag.type === 'trim-right') {
@@ -1004,6 +1021,15 @@ export class CompostTimeline extends HTMLElement {
     }
   }
 
+  entryClip(key) {
+    const clips = this._lanes.flatMap((lane) => lane.clips);
+    if (!clips.length) return null;
+    if (key === 'Home' || key === 'ArrowLeft' || key === 'ArrowUp') return clips[0];
+    if (key === 'End') return clips[clips.length - 1];
+    return clips.reduce((nearest, clip) => Math.abs((Number(clip.start) || 0) - this._playhead)
+      < Math.abs((Number(nearest.start) || 0) - this._playhead) ? clip : nearest, clips[0]);
+  }
+
   handleKey(event) {
     if (this.hasAttribute('disabled')) return;
     const source = event.composedPath()[0];
@@ -1031,7 +1057,22 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (!found) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+        const entry = this.entryClip(event.key);
+        if (entry) {
+          event.preventDefault();
+          this.selectOne(entry.id);
+          this.focusClip(entry.id);
+        }
+        return;
+      }
       if (event.key === '[' || event.key === ']') { event.preventDefault(); this.zoomBy(event.key === ']' ? 1.16 : .86); }
+      return;
+    }
+    if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault();
+      const step = gridStep(this.beatsPerBar, this.grid) * (event.key === 'ArrowRight' ? 1 : -1);
+      this.dispatchEvent(eventOf('clip-nudge', { ids: this.selected.length ? this.selected : [found.clip.id], deltaBeats: step }));
       return;
     }
     const adjacent = this.adjacentClip(found, event.key);
@@ -1058,10 +1099,6 @@ export class CompostTimeline extends HTMLElement {
     } else if (meta && event.key.toLowerCase() === 'e') {
       event.preventDefault();
       this.dispatchEvent(eventOf('clip-split', { ids: this.selected.length ? this.selected : [found.clip.id], beat: this._playhead }));
-    } else if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-      event.preventDefault();
-      const step = gridStep(this.beatsPerBar, this.grid) * (event.key === 'ArrowRight' ? 1 : -1);
-      this.dispatchEvent(eventOf('clip-nudge', { ids: this.selected.length ? this.selected : [found.clip.id], deltaBeats: step }));
     } else if (event.key === '[' || event.key === ']') {
       event.preventDefault();
       this.zoomBy(event.key === ']' ? 1.16 : .86);

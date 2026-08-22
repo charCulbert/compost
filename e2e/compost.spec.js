@@ -595,6 +595,83 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   expect(events.some((event) => event.type === 'seek' && event.detail.source === 'ruler')).toBe(true);
 });
 
+test('timeline enters from the keyboard and nudges before arrow navigation', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.addEventListener('clip-select', (event) => element.testEvents.push({ type: 'clip-select', detail: event.detail }));
+    element.addEventListener('clip-nudge', (event) => element.testEvents.push({ type: 'clip-nudge', detail: event.detail }));
+  });
+
+  await timeline.focus();
+  await page.keyboard.press('ArrowRight');
+  const entry = await timeline.evaluate((element) => ({
+    activeId: element.shadowRoot.activeElement?.dataset.id,
+    selected: element.selected,
+  }));
+  expect(entry.activeId).toBe('beat');
+  expect(entry.selected).toEqual(['beat']);
+
+  await timeline.evaluate((element) => { element.testEvents = []; });
+  await page.keyboard.press('Alt+ArrowRight');
+  const nudge = await timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'clip-nudge'));
+  expect(nudge.detail).toEqual({ ids: ['beat'], deltaBeats: 1 });
+  expect(await timeline.evaluate((element) => element.selected)).toEqual(['beat']);
+});
+
+test('timeline keeps lane headers aligned and touch drags scroll time', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.addEventListener('seek', (event) => element.testEvents.push({ type: 'seek', detail: event.detail }));
+    element.setLanes(Array.from({ length: 12 }, (_, index) => ({
+      id: `lane-${index}`,
+      name: `Lane ${index}`,
+      clips: index === 0 ? [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] : [],
+    })));
+  });
+
+  const alignment = await timeline.evaluate((element) => {
+    const lanes = element.shadowRoot.querySelector('.lanes-wrap');
+    lanes.scrollTop = 84;
+    lanes.dispatchEvent(new Event('scroll'));
+    const header = element.shadowRoot.querySelector('.lane-header[data-lane-id="lane-4"]');
+    const row = element.shadowRoot.querySelector('.lane[data-lane-id="lane-4"]');
+    return { delta: header.getBoundingClientRect().top - row.getBoundingClientRect().top, scrollTop: lanes.scrollTop };
+  });
+  expect(alignment.scrollTop).toBe(84);
+  expect(Math.abs(alignment.delta)).toBeLessThan(0.5);
+
+  const touchDrag = await timeline.evaluate((element) => {
+    const lanes = element.shadowRoot.querySelector('.lanes-wrap');
+    lanes.scrollTop = 0;
+    lanes.dispatchEvent(new Event('scroll'));
+    const lane = element.shadowRoot.querySelector('.lane[data-lane-id="lane-11"]');
+    const send = (type, clientX, clientY) => lane.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 17, pointerType: 'touch', button: 0, clientX, clientY,
+    }));
+    send('pointerdown', 320, 180);
+    send('pointermove', 200, 180);
+    send('pointerup', 200, 180);
+    return element.scrollBeat;
+  });
+  expect(touchDrag).toBe(5);
+
+  const touchTap = await timeline.evaluate((element) => {
+    element.testEvents = [];
+    const lane = element.shadowRoot.querySelector('.lane[data-lane-id="lane-11"]');
+    const send = (type) => lane.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 18, pointerType: 'touch', button: 0, clientX: 320, clientY: 180,
+    }));
+    send('pointerdown');
+    send('pointerup');
+    return element.testEvents.find((event) => event.type === 'seek');
+  });
+  expect(touchTap.detail.source).toBe('lane');
+});
+
 test('note editor moves, trims, velocity-drags and loops through real gestures', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
