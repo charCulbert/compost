@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-timeline.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-timeline">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-timeline">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Host</legend>
+            <label class="check"><input type="checkbox" data-play> Play head</label>
+            <label class="check"><input type="checkbox" data-loop> Loop</label>
+            <button type="button" data-reset>Reset view</button>
+            <output data-state>stopped · beat 0</output>
+            <p class="muted">The host supplies three lanes and receives every timeline intent in the log. Drag a clip, trim an edge, or use the keyboard while the play head runs.</p>
+          </fieldset>
+          <compost-timeline id="timeline" label="Timeline" beats-per-bar="4" grid="4" snap="off" style="height:360px; width:100%;"></compost-timeline>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+    <script type="module">
+      const requestedTheme = new URLSearchParams(location.search).get('theme');
+      if (requestedTheme === 'light' || requestedTheme === 'dark') document.documentElement.dataset.compostTheme = requestedTheme;
+      const timeline = document.querySelector('#timeline');
+      const log = document.querySelector('[data-log]');
+      const state = document.querySelector('[data-state]');
+      const play = document.querySelector('[data-play]');
+      const loop = document.querySelector('[data-loop]');
+      const lanes = [
+        { id: 'drums', name: 'Drums', color: '#c45a2c', clips: [
+          { id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, offset: 0, loop: true, state: 'stopped', notes: [{ start: 0, duration: .25, note: 36 }, { start: .5, duration: .25, note: 42 }, { start: 1, duration: .25, note: 38 }] },
+          { id: 'fill', name: 'fill', start: 10, length: 4, duration: 4, offset: 0, loop: false, state: 'stopped', notes: [{ start: 0, duration: .5, note: 45 }, { start: 1, duration: .25, note: 48 }] },
+        ] },
+        { id: 'bass', name: 'Bass', color: '#6689ad', clips: [
+          { id: 'bass-line', name: 'bass line', start: 4, length: 12, duration: 4, offset: 0, loop: true, state: 'playing', notes: [{ start: 0, duration: 1, note: 40 }, { start: 1.5, duration: .5, note: 43 }] },
+        ] },
+        { id: 'keys', name: 'Keys', color: '#a58bbd', clips: [
+          { id: 'pad', name: 'pad', start: 2, length: 6, duration: 6, offset: 0, loop: false, state: 'open', notes: [{ start: 0, duration: 2, note: 60 }, { start: 2, duration: 2, note: 64 }] },
+        ] },
+      ];
+      timeline.setLanes(lanes);
+      timeline.setLoop(0, 8, false);
+      timeline.setPlayhead(0);
+      for (const type of ['seek', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lane-back', 'lane-header-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
+        timeline.addEventListener(type, (event) => {
+          const detail = { ...event.detail };
+          delete detail.clientX;
+          delete detail.clientY;
+          log.textContent = `${type} ${JSON.stringify(detail)}\n${log.textContent}`.slice(0, 5000);
+          if (type === 'loop-change' || type === 'loop-toggle') loop.checked = detail.enabled;
+          if (type === 'seek') timeline.setPlayhead(detail.beat);
+        });
+      }
+      let frame = 0;
+      let last = performance.now();
+      function tick(now) {
+        const delta = Math.max(0, now - last) / 1000;
+        last = now;
+        if (play.checked) {
+          let beat = timeline.playhead + delta * 2;
+          if (loop.checked && beat >= 8) beat %= 8;
+          timeline.setPlayhead(beat);
+          state.textContent = `playing · beat ${beat.toFixed(2)}`;
+        } else state.textContent = `stopped · beat ${timeline.playhead.toFixed(2)}`;
+        frame = requestAnimationFrame(tick);
+      }
+      frame = requestAnimationFrame(tick);
+      loop.addEventListener('change', () => timeline.setLoop(0, 8, loop.checked, true));
+      document.querySelector('[data-reset]').addEventListener('click', () => {
+        timeline.scrollTo(0);
+        timeline.zoomToFit(16);
+        timeline.setPlayhead(0);
+      });
+      window.addEventListener('pagehide', () => cancelAnimationFrame(frame));
+    </script>
+  </body>
+</html>

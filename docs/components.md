@@ -22,5 +22,6 @@ Import the components a page uses, or register the full set with
 - [compost-channel-card](components/compost-channel-card.md)
 - [compost-clip-grid](components/compost-clip-grid.md)
 - [compost-note-editor](components/compost-note-editor.md)
+- [compost-timeline](components/compost-timeline.md)
 - [compost-window](components/compost-window.md)
 - [compost-popup](components/compost-popup.md)

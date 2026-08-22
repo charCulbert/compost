@@ -308,6 +308,16 @@ compost-clip-grid {
   --compost-clip-grid-color-scheme: var(--compost-theme-color-scheme);
 }
 
+compost-timeline {
+  --compost-timeline-bg: var(--compost-theme-bg);
+  --compost-timeline-text: var(--compost-theme-text);
+  --compost-timeline-muted: var(--compost-theme-muted);
+  --compost-timeline-line: var(--compost-theme-line);
+  --compost-timeline-select: var(--compost-theme-learn);
+  --compost-timeline-loop: var(--compost-theme-accent);
+  --compost-timeline-color-scheme: var(--compost-theme-color-scheme);
+}
+
 compost-note-editor {
   --compost-note-editor-bg: var(--compost-theme-bg);
   --compost-note-editor-text: var(--compost-theme-text);

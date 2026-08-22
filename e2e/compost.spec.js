@@ -555,6 +555,46 @@ test('clip grid reports launches, stops and drops between grids', async ({ page 
   await expect(log).toContainText('clip-open break.a');
 });
 
+test('timeline reports move, trim, delete and ruler seek intents', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const clip = timeline.locator('.clip[data-id="beat"]');
+  const ruler = timeline.locator('.ruler-wrap');
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    for (const type of ['clip-move', 'clip-trim', 'clip-delete', 'seek']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+  });
+  const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
+
+  let box = await clip.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 200, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  let events = await timeline.evaluate((element) => element.testEvents);
+  const move = events.find((event) => event.type === 'clip-move');
+  expect(move.detail.deltaBeats).toBe(200 / pxPerBeat);
+
+  box = await clip.boundingBox();
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 40, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.up();
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.some((event) => event.type === 'clip-trim')).toBe(true);
+
+  await clip.press('Delete');
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.some((event) => event.type === 'clip-delete')).toBe(true);
+
+  const rulerBox = await ruler.boundingBox();
+  await page.mouse.click(rulerBox.x + 100, rulerBox.y + rulerBox.height / 2);
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.some((event) => event.type === 'seek' && event.detail.source === 'ruler')).toBe(true);
+});
+
 test('note editor moves, trims, velocity-drags and loops through real gestures', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');

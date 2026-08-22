@@ -12,6 +12,7 @@ const { DEFAULT_TAPER, dragAxis, parseTaper, washPosition } = await import('../s
 const { panBar, panText } = await import('../src/components/compost-channel-card.js');
 const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
+const { snapBeat, clipBox, loopPassLines, rulerStep } = await import('../src/components/compost-timeline.js');
 const { boundedPosition, constrainedSize } = await import('../src/components/compost-window.js');
 const { pointPlacement } = await import('../src/components/compost-popup.js');
 const { duplicatedNotes, selectionSpan, trimmedNotes, velocityShiftedNotes } = await import('../src/piano-roll-model.js');
@@ -67,6 +68,19 @@ test('note lengths and ruler labels read musically', () => {
   assert.deepEqual(rulerLabels(8, 4, 20).map((label) => label.text), ['1', '2']);
   assert.deepEqual(rulerLabels(8, 4, 60).map((label) => label.text),
     ['1', '1.2', '1.3', '1.4', '2', '2.2', '2.3', '2.4']);
+});
+
+test('timeline geometry snaps, scales and marks looping passes', () => {
+  assert.equal(snapBeat(1.13, 4, 16, 'grid'), 1.25);
+  assert.equal(snapBeat(1.13, 4, 16, 'off'), 1.13);
+  assert.deepEqual(clipBox({ start: 4, length: 2 }, 20, 1), { left: 60, width: 40 });
+  assert.deepEqual(clipBox({ start: 4, length: 0 }, 20, 1), { left: 60, width: 1 });
+  assert.deepEqual(loopPassLines({ length: 10, duration: 4, offset: 1, loop: true }), [3, 7]);
+  assert.deepEqual(loopPassLines({ length: 10, duration: 4, offset: 1, loop: false }), []);
+  assert.equal(rulerStep(24, 4), 1);
+  assert.equal(rulerStep(12, 4), 2);
+  assert.equal(rulerStep(6, 4), 4);
+  assert.equal(rulerStep(3, 4), 8);
 });
 
 test('a window never leaves the viewport and resizes in ratio from the dominant edge', () => {

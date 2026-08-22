@@ -27,6 +27,7 @@ const docs = [
   ['compost-channel-card', 'compost-channel-card', './components/compost-channel-card.md'],
   ['compost-clip-grid', 'compost-clip-grid', './components/compost-clip-grid.md'],
   ['compost-note-editor', 'compost-note-editor', './components/compost-note-editor.md'],
+  ['compost-timeline', 'compost-timeline', './components/compost-timeline.md'],
   ['compost-window', 'compost-window', './components/compost-window.md'],
   ['compost-popup', 'compost-popup', './components/compost-popup.md'],
 ];
