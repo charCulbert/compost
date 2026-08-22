@@ -615,6 +615,8 @@ test('popup anchors, keeps on screen, picks by keyboard and closes on an outside
 
   await page.locator('[data-popup-anchor]').click();
   await expect(menu).toBeVisible();
+  expect(await menu.getByRole('menuitemradio').first().evaluate((item) =>
+    getComputedStyle(item, '::before').backgroundColor)).toBe('rgb(127, 196, 106)');
   const anchor = await page.locator('[data-popup-anchor]').boundingBox();
   const placed = await menu.boundingBox();
   expect(placed.y).toBeGreaterThanOrEqual(anchor.y + anchor.height - 1);

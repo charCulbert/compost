@@ -7,7 +7,7 @@ has to go.
 
 ```html
 <compost-popup heading="input" label="Track input">
-  <option value="none">no input</option>
+  <option value="none" data-color="#7fc46a">no input</option>
   <option value="midi-1-1" selected>MIDI 1 · 1</option>
   <hr>
   <option value="midi-1" data-detail="16">MIDI 1 all</option>
@@ -24,9 +24,11 @@ popup.addEventListener('popup-select', ({ detail }) => apply(detail.value));
 
 `open({anchor})` hangs the list from an element or a `DOMRect`, using the
 same `popupPlacement` as `compost-select`; `openAt(x, y)` puts it beside a
-point. `setItems([{value, label, detail, disabled, selected}, '-', …])`
+point. `setItems([{value, label, detail, color, disabled, selected}, '-', …])`
 replaces the options from data. `value` (or an option's `selected`) marks the
 current entry with a dot; `data-detail` on an option shows trailing text.
+`data-color` (or `color` in `setItems`) keeps that entry's dot visible as a
+colour swatch, with an extra ring when selected.
 
 Arrows, Home, End, Enter and Escape work; an outside press closes it; the
 menu renders in the top layer, above any window. `sheet` lays it along the

@@ -112,7 +112,15 @@ export class CompostPopup extends HTMLElement {
         }
         .menu[data-marks] .item::before { opacity: 0; }
         .menu[data-marks] .item[aria-checked="true"]::before { opacity: 1; }
+        .item[data-color]::before {
+          background: var(--compost-popup-item-color);
+          opacity: 1;
+        }
+        .item[data-color][aria-checked="true"]::before {
+          box-shadow: 0 0 0 1px currentColor;
+        }
         .menu:not([data-marks]) .item::before { display: none; }
+        .menu:not([data-marks]) .item[data-color]::before { display: block; }
         .item .label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .item .detail { margin-left: auto; color: var(--compost-popup-muted); font-style: normal; }
         .item[aria-checked="true"] .detail { color: var(--compost-popup-active-text); }
@@ -188,16 +196,17 @@ export class CompostPopup extends HTMLElement {
       .filter((child) => child.tagName === 'OPTION'));
   }
 
-  /** Replaces the options from plain data: [{value, label, detail, disabled, selected}] or '-'. */
-  /** @param {Array<{value?: string, label?: string, detail?: string, disabled?: boolean, selected?: boolean}|string>} items */
+  /** Replaces the options from plain data: [{value, label, detail, color, disabled, selected}] or '-'. */
+  /** @param {Array<{value?: string, label?: string, detail?: string, color?: string, disabled?: boolean, selected?: boolean}|string>} items */
   setItems(items) {
     this.replaceChildren(...items.map((item) => {
       if (item === '-' || item === null) return document.createElement('hr');
       const option = document.createElement('option');
-      const entry = /** @type {{value?: string, label?: string, detail?: string, disabled?: boolean, selected?: boolean}} */ (item);
+      const entry = /** @type {{value?: string, label?: string, detail?: string, color?: string, disabled?: boolean, selected?: boolean}} */ (item);
       option.value = String(entry.value ?? entry.label ?? '');
       option.textContent = String(entry.label ?? entry.value ?? '');
       if (entry.detail !== undefined) option.dataset.detail = String(entry.detail);
+      if (entry.color !== undefined) option.dataset.color = String(entry.color);
       if (entry.disabled) option.disabled = true;
       if (entry.selected) option.setAttribute('selected', '');
       return option;
@@ -240,6 +249,10 @@ export class CompostPopup extends HTMLElement {
       const checked = value !== null ? option.value === value : option.hasAttribute('selected');
       item.setAttribute('aria-checked', String(checked));
       item.setAttribute('aria-disabled', String(option.disabled));
+      if (option.dataset.color !== undefined) {
+        item.dataset.color = option.dataset.color;
+        item.style.setProperty('--compost-popup-item-color', option.dataset.color);
+      }
       const label = document.createElement('span');
       label.className = 'label';
       label.textContent = option.label || option.textContent || option.value;
