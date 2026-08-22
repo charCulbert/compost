@@ -446,6 +446,27 @@ export class CompostNoteEditor extends HTMLElement {
     this.commit([...this._notes, ...copies]);
   }
 
+  /** Adds one note without a pointer: at the loop start, or just after the
+   * selection, on the middle visible row. Selects it and reports the change. */
+  addNote() {
+    if (this.readonly) return null;
+    const span = selectionSpan(this._notes, this.selection.size ? [...this.selection] : null);
+    const raw = this.selection.size && span ? span.end : this.loopStart;
+    const start = clamp(this.snapBeat(raw, false), 0, Math.max(0, this.beats - this.step));
+    const created = {
+      id: crypto.randomUUID(),
+      note: this.visibleKeys[Math.floor(this.visibleKeys.length / 2)] ?? this.rootNote,
+      start,
+      duration: Math.max(this.step, MIN_DURATION),
+      velocity: this.defaultVelocity,
+      channel: this.defaultChannel,
+    };
+    this.selection = new Set([created.id]);
+    this.commit([...this._notes, created]);
+    this.preview(created.note);
+    return created;
+  }
+
   /** Sets the loop to the selection's span. */
   loopToSelection() {
     const span = selectionSpan(this._notes, this.selection.size ? [...this.selection] : null);
@@ -943,6 +964,9 @@ export class CompostNoteEditor extends HTMLElement {
     } else if (meta && event.key.toLowerCase() === 'd') {
       event.preventDefault();
       this.duplicateSelection();
+    } else if (!meta && !event.altKey && event.key === 'n') {
+      event.preventDefault();
+      this.addNote();
     } else if (meta && event.key.toLowerCase() === 'l') {
       event.preventDefault();
       this.loopToSelection();

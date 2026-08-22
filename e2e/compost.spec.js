@@ -507,6 +507,16 @@ test('clip grid reports launches, stops and drops between grids', async ({ page 
   await page.locator('[data-option="grid-armed"]').check();
   await drums.getByRole('button', { name: 'Record into Drums slot 5' }).click();
   await expect(drums.getByRole('button', { name: /^take 5/ })).toHaveCount(1);
+
+  // a focused name opens from the keyboard too: Shift-Enter, or e
+  const log = page.locator('[data-log]');
+  await drums.getByRole('button', { name: /^break\.a/ }).focus();
+  await page.keyboard.press('Shift+Enter');
+  await expect(log).toContainText('clip-open break.a');
+  await page.locator('[data-log]').evaluate((node) => { node.textContent = ''; });
+  await drums.getByRole('button', { name: /^break\.a/ }).focus();
+  await page.keyboard.press('e');
+  await expect(log).toContainText('clip-open break.a');
 });
 
 test('note editor moves, trims, velocity-drags and loops through real gestures', async ({ page }) => {
@@ -569,6 +579,21 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   const events = await editor.evaluate((element) => element.testEvents);
   expect(events.filter((entry) => entry === 'notes-change').length).toBe(5);
   expect(events).toContainEqual(['loop-change', 9]);
+
+  // n adds a note without a pointer, on the middle visible row, and selects it
+  await editor.evaluate((element) => { element.clearSelection(); element.testEvents = []; });
+  const before = await editor.evaluate((element) => element.notes.length);
+  await editor.focus();
+  await page.keyboard.press('n');
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(before + 1);
+  const added = await editor.evaluate((element) => {
+    const id = element.selectedIds[0];
+    const note = element.notes.find((entry) => entry.id === id);
+    return { note: note?.note, start: note?.start, middle: element.visibleKeys[Math.floor(element.visibleKeys.length / 2)], loopStart: element.loopStart };
+  });
+  expect(added.note).toBe(added.middle);
+  expect(added.start).toBe(added.loopStart);
+  expect(await editor.evaluate((element) => element.testEvents)).toContain('notes-change');
 });
 
 test('window stays in the viewport, resizes in bounds, and asks before closing', async ({ page }) => {

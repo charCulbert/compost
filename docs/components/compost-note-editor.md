@@ -33,6 +33,7 @@ for `compost-piano-roll`; the two share `piano-roll-model.js`.
 | `draw` | A press adds a note and the drag sets its length |
 | Drag the loop bar's ends, or its middle | Sets the loop region |
 | Right-click a note | `note-context` for the host's menu |
+| `n` | Adds a note at the loop start — or just after the selection — on the middle visible row |
 | `Delete` / `Backspace` | Removes the selection |
 | Arrows | Pitch by a semitone (Alt an octave), time by a cell (Alt a quarter cell) |
 | `Cmd/Ctrl-A`, `-D`, `-L`, `-Q` | Select all, duplicate one span later, loop to selection, quantize |
@@ -64,7 +65,7 @@ Velocity reads twice, as the note's weight and a line across it.
 
 `setNotes(notes, shouldEmit)`, `setLoop(start, end, shouldEmit)`,
 `quantize({lengths})`, `selectAll()`, `clearSelection()`, `deleteSelection()`,
-`duplicateSelection()`, `loopToSelection()`, `zoomReset()`.
+`duplicateSelection()`, `addNote()`, `loopToSelection()`, `zoomReset()`.
 
 `notes-change` after any edit, `loop-change` after a loop drag (`loop-input`
 during), `selection-change`, `note-preview` when a note is grabbed, drawn or a

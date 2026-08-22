@@ -511,7 +511,10 @@ export class CompostClipGrid extends HTMLElement {
     const hit = this.actionFrom(event);
     if (hit?.action !== 'clip') return;
     const meta = event.metaKey || event.ctrlKey;
-    if (event.key === 'Enter' || event.key === ' ') {
+    // the same door the double-click opens, for a keyboard: Shift-Enter, or e
+    if ((event.shiftKey && event.key === 'Enter') || (!meta && !event.altKey && event.key === 'e')) {
+      event.preventDefault(); this.emit('clip-open', { index: hit.index, altKey: event.altKey });
+    } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault(); this.emit('clip-launch', { index: hit.index });
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault(); this.emit('clip-delete', { index: hit.index });
