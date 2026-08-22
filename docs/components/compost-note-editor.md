@@ -57,6 +57,7 @@ Velocity reads twice, as the note's weight and a line across it.
 | `draw` | — | Draw mode. |
 | `playhead` | — | A beat to draw the playhead at; omit to hide it. |
 | `velocity`, `channel` | `100`, `0` | Given to new notes. |
+| `lock-loop-start` | — | Only the loop's end moves, for clips that always start at zero. |
 | `readonly`, `disabled` | — | As named. |
 
 ## Methods and events

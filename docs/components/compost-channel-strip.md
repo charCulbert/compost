@@ -36,9 +36,13 @@ strip.addEventListener('parameter-edit', ({ detail }) => {
 | Arrows | ±1 dB, ±5% pan; Alt for ±6 dB, ±25% |
 | Home / End | Gain to its floor or ceiling |
 
-Slotted content receives its own pointer events. Form controls, links, other
-custom elements and anything marked `data-strip-ignore` keep their press; a
-press on anything else in the column starts the gain/pan drag.
+Slotted content receives its own pointer events. Form controls, links,
+elements with a `role` or `tabindex`, other custom elements and anything
+marked `data-strip-ignore` keep their press; a press on anything else in the
+column starts the gain/pan drag. A custom element marked
+`data-strip-passthrough` — `compost-clip-grid` and `compost-channel-card` mark
+themselves — lets a press on its idle parts through to the column, so an empty
+clip slot or the card's blank padding still move the wash.
 
 ## Parameters
 

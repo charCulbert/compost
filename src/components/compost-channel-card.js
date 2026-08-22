@@ -158,7 +158,7 @@ export class CompostChannelCard extends HTMLElement {
           text-overflow: ellipsis;
           text-align: left;
         }
-        .input[hidden] { display: none; }
+        .input[hidden] { display: none !important; }
         :host([input-live]) .input { color: var(--compost-channel-card-signal); }
         .input:hover { background: var(--compost-channel-card-hover); color: var(--compost-channel-card-text); }
         :host([input-live]) .input:hover { color: var(--compost-channel-card-signal-hi); }
@@ -171,7 +171,7 @@ export class CompostChannelCard extends HTMLElement {
           align-items: center;
           padding: 0.27em 0 0.18em;
         }
-        .panwrap[hidden] { display: none; }
+        .panwrap[hidden] { display: none !important; }
         .figure {
           font-family: var(--compost-channel-card-numeral-font);
           letter-spacing: 0;
@@ -277,7 +277,7 @@ export class CompostChannelCard extends HTMLElement {
           font-size: 0.91em;
           letter-spacing: 0.04em;
         }
-        .switches[hidden] { display: none; }
+        .switches[hidden] { display: none !important; }
         .switches .side { display: flex; justify-content: space-around; min-width: 0; }
         .switches .side.l { width: var(--ml); }
         .switches .side.r { width: var(--mr); }
@@ -363,6 +363,8 @@ export class CompostChannelCard extends HTMLElement {
     this.readAttributes();
     this.refresh();
     this.resizeObserver?.observe(this);
+    // a press on an idle part of this element is the column's to use
+    if (!this.hasAttribute('data-strip-passthrough')) this.setAttribute('data-strip-passthrough', '');
     // the strip publishes where its gutter is after it has measured; lay out again then
     this.strip = this.closest('compost-channel-strip');
     this.strip?.addEventListener('channel-strip-measure', this.measure);
@@ -606,6 +608,12 @@ export class CompostChannelCard extends HTMLElement {
       const label = document.createElement('label');
       label.textContent = send.label;
       label.htmlFor = `${this.cardID}-send-${index}`;
+      // the letter names the return; a host may take a press on it as "show me that return"
+      label.addEventListener('click', () => {
+        this.dispatchEvent(new CustomEvent('send-click', {
+          bubbles: true, composed: true, detail: { index, label: send.label },
+        }));
+      });
       const box = document.createElement('compost-number-box');
       box.id = `${this.cardID}-send-${index}`;
       if (send.parameterID) box.setAttribute('parameter-id', send.parameterID);

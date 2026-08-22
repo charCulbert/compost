@@ -433,17 +433,24 @@ export class CompostChannelStrip extends HTMLElement {
 
   // ---- Gestures -------------------------------------------------------------
 
-  /** Anything that has its own job — a control, a link, a marked element — keeps its press. */
+  /** Anything that has its own job — a control, a link, a focusable or role-bearing
+   * element, another custom element, a marked element — keeps its press. A custom
+   * element that marks itself `data-strip-passthrough` (the clip grid and the
+   * channel card do) lets a press on its idle parts reach the column. */
   /** @param {Event} event */
   ownsPointer(event) {
-    return event.composedPath().some((node) => {
-      if (!(node instanceof Element) || node === this) return false;
-      if (node.hasAttribute?.('data-strip-ignore')) return true;
+    for (const node of event.composedPath()) {
+      if (node === this) return false;
+      if (!(node instanceof Element)) continue;
+      if (node.hasAttribute('data-strip-ignore')) return true;
+      if (node.hasAttribute('data-strip-passthrough')) continue;
       const tag = node.tagName;
-      return tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
+      if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
         || (tag === 'A' && node.hasAttribute('href')) || node.getAttribute('contenteditable') === 'true'
-        || node.getAttribute('draggable') === 'true' || tag.includes('-');
-    });
+        || node.getAttribute('draggable') === 'true' || node.hasAttribute('role')
+        || node.hasAttribute('tabindex') || tag.includes('-')) return true;
+    }
+    return false;
   }
 
   /** @param {PointerEvent} event */

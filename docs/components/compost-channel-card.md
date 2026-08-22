@@ -46,7 +46,9 @@ The input is a button. It shows `input` and lights up with `input-live`; a
 click raises `input-click` with the button as `detail.anchor` so the host can
 hang its own chooser off it.
 
-`setValue`, `setPan`, `setSends` and `setSendValue` update silently.
+`setValue`, `setPan`, `setSends` and `setSendValue` update silently. A press on
+a send's letter raises `send-click` with `{index, label}`, so a host can bring
+the return it names into view.
 
 ## Attributes
 

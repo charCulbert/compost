@@ -67,7 +67,7 @@ export class CompostNoteEditor extends HTMLElement {
     return [
       'label', 'beats', 'beats-per-bar', 'grid', 'snap', 'loop-start', 'loop-end',
       'root-note', 'note-count', 'beat-width', 'fold', 'draw', 'playhead',
-      'velocity', 'channel', 'readonly', 'disabled',
+      'velocity', 'channel', 'lock-loop-start', 'readonly', 'disabled',
     ];
   }
 
@@ -186,6 +186,9 @@ export class CompostNoteEditor extends HTMLElement {
         .handle.start::before { left: 0; }
         .handle.end::before { right: 0; }
         .handle:hover::before, .handle[data-on]::before { width: 4px; }
+        /* a host whose clips always start at zero keeps the start where it is */
+        :host([lock-loop-start]) .handle.start { display: none; }
+        :host([lock-loop-start]) .region { cursor: default; }
         .keys {
           grid-column: 1; grid-row: 2;
           position: relative;
@@ -449,7 +452,8 @@ export class CompostNoteEditor extends HTMLElement {
     if (!span) return;
     this.zoomPxPerBeat = 0;
     this.offset = 0;
-    this.setLoop(span.start, span.end, true);
+    const locked = this.hasAttribute('lock-loop-start');
+    this.setLoop(locked ? 0 : span.start, span.end, true);
   }
 
   zoomReset() {
@@ -881,6 +885,7 @@ export class CompostNoteEditor extends HTMLElement {
   /** @param {PointerEvent} event @param {string} kind */
   startLoopDrag(event, kind) {
     if (this.readonly || event.button !== 0) return;
+    if (kind !== 'end' && this.hasAttribute('lock-loop-start')) return;
     event.preventDefault();
     event.stopPropagation();
     this.zoomPxPerBeat = this.pxPerBeat;   // pin the scale for the drag

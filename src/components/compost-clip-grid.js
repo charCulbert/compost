@@ -169,7 +169,7 @@ export class CompostClipGrid extends HTMLElement {
         .row[data-state="recording"] .name { color: var(--compost-clip-grid-over); }
         .preview { flex: none; width: 2.27em; height: 1.27em; color: var(--compost-clip-grid-faint); }
         .row[data-state="playing"] .preview { color: var(--compost-clip-grid-signal-hi); }
-        .preview[hidden] { display: none; }
+        .preview[hidden] { display: none !important; }
         .editor {
           box-sizing: border-box;
           width: 6.9em;
@@ -185,7 +185,7 @@ export class CompostClipGrid extends HTMLElement {
         }
         .stop { opacity: 0.55; transition: opacity 120ms; }
         .stop:hover, .stop[data-queued] { opacity: 1; }
-        .stop[hidden] { display: none; }
+        .stop[hidden] { display: none !important; }
         @media (prefers-reduced-motion: reduce) { .stop { transition: none; } }
       </style>`;
 
@@ -200,6 +200,8 @@ export class CompostClipGrid extends HTMLElement {
 
   connectedCallback() {
     this.setAttribute('role', 'group');
+    // a press on an idle part of this element is the column's to use
+    if (!this.hasAttribute('data-strip-passthrough')) this.setAttribute('data-strip-passthrough', '');
     this.readAttributes();
     this.render();
     this.resizeObserver?.observe(this);
@@ -210,10 +212,15 @@ export class CompostClipGrid extends HTMLElement {
     this.endDrag(true);
   }
 
-  attributeChangedCallback() {
+  /** @param {string} name */
+  attributeChangedCallback(name) {
     if (!this.isConnected) return;
     this.readAttributes();
-    this.render();
+    // the selection mark and the stop slot change in place: rebuilding the rows
+    // under a pointer would break the double-click that follows a click
+    if (name === 'selected') this.paintSelection();
+    else if (name === 'stop') this.paintStop();
+    else this.render();
   }
 
   readAttributes() {
@@ -319,6 +326,7 @@ export class CompostClipGrid extends HTMLElement {
         if (selected === index) {
           const mark = document.createElement('span');
           mark.className = 'mark';
+          mark.part.add('mark');
           row.append(mark);
         }
         const tri = document.createElement('button');
@@ -388,24 +396,48 @@ export class CompostClipGrid extends HTMLElement {
     stop.part.add('row');
     stop.part.add('stop');
     stop.hidden = !this._clips.some(Boolean) && !this.hasAttribute('show-stop');
-    const stopState = this.stopState;
-    if (stopState === 'queued') stop.setAttribute('data-queued', '');
     const tri = document.createElement('button');
     tri.type = 'button';
     tri.className = 'tri';
     tri.dataset.action = 'stop';
-    tri.innerHTML = square(stopState === 'queued' ? 'var(--compost-clip-grid-select)'
-      : stopState === 'active' ? 'var(--compost-clip-grid-text)' : 'var(--compost-clip-grid-faint)');
     tri.setAttribute('aria-label', `Stop ${this.label}`);
-    tri.title = stopState === 'queued' ? 'stop queued — click to cancel'
-      : 'stop this track at the next launch point';
     stop.append(tri);
     rows.push(stop);
     const style = this.root.querySelector('style');
     this.root.replaceChildren(...(style ? [style] : []), ...rows);
+    this.paintStop();
     // a host re-rendering mid-drag must not lose the slot the drag is over
     if (this.dropMark) this.markDrop(this.dropMark.index, this.dropMark.copy);
     this.fitNames();
+  }
+
+  /** Moves the selection mark without rebuilding the rows. */
+  paintSelection() {
+    const selected = this.selected;
+    this.rowElements().forEach((row, index) => {
+      const mark = row.querySelector('.mark');
+      if (index === selected && !mark && this._clips[index]) {
+        const span = document.createElement('span');
+        span.className = 'mark';
+        span.part.add('mark');
+        row.prepend(span);
+      } else if (index !== selected && mark) {
+        mark.remove();
+      }
+    });
+  }
+
+  /** Draws the stop slot's state without rebuilding the rows. */
+  paintStop() {
+    const stop = this.root.querySelector('.row.stop');
+    const tri = stop?.querySelector('.tri');
+    if (!(stop instanceof HTMLElement) || !(tri instanceof HTMLElement)) return;
+    const stopState = this.stopState;
+    stop.toggleAttribute('data-queued', stopState === 'queued');
+    tri.innerHTML = square(stopState === 'queued' ? 'var(--compost-clip-grid-select)'
+      : stopState === 'active' ? 'var(--compost-clip-grid-text)' : 'var(--compost-clip-grid-faint)');
+    tri.title = stopState === 'queued' ? 'stop queued — click to cancel'
+      : 'stop this track at the next launch point';
   }
 
   /** The preview mark is decoration; the clip's name is not. Give the mark up on
