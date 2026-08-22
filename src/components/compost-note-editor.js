@@ -97,7 +97,7 @@ export class CompostNoteEditor extends HTMLElement {
     /** @type {any} */ this.loopDrag = null;
     this.editorID = `compost-note-editor-${nextEditorID++}`;
     this.handleModifierKey = this.handleModifierKey.bind(this);
-    this.handleWindowBlur = () => this.removeAttribute('data-velmod');
+    this.handleWindowBlur = () => { this.removeAttribute('data-velmod'); this.removeAttribute('data-copymod'); };
     this.refresh = this.refresh.bind(this);
 
     this.root = this.attachShadow({ mode: 'open' });
@@ -237,6 +237,7 @@ export class CompostNoteEditor extends HTMLElement {
         :host([data-drag="move"]) .note, :host([data-drag="move"]) .note .ve { cursor: grabbing; }
         :host([data-velmod]) .note, :host([data-velmod]) .note .rs, :host([data-velmod]) .note .re,
         :host([data-velmod]) .note .ve, :host([data-drag="vel"]) .note, :host([data-drag="vel"]) .note .ve { cursor: ns-resize; }
+        :host([data-copymod]) .note .ve, :host([data-drag="copy"]) .note, :host([data-drag="copy"]) .note .ve { cursor: copy; }
         .past { position: absolute; top: 0; bottom: 0; background: var(--compost-note-editor-past); pointer-events: none; z-index: 1; }
         .playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-note-editor-playhead);
           box-shadow: 0 0 0 0.5px var(--compost-note-editor-bg), 0 0 5px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 6; display: none; }
@@ -762,7 +763,8 @@ export class CompostNoteEditor extends HTMLElement {
         };
         this._notes = normaliseNotes([...this._notes, created], this.beats);
         this.selection = new Set([created.id]);
-        this.drag = { pointerId: event.pointerId, mode: 'len', note: created, moved: true, hold: null };
+        this.drag = { pointerId: event.pointerId, mode: 'len', note: created, moved: true, hold: null,
+          origin: undefined, ids: [created.id] };
         this.preview(created.note);
       } else {
         if (!event.shiftKey) this.selection.clear();
@@ -781,15 +783,28 @@ export class CompostNoteEditor extends HTMLElement {
     if (!event.shiftKey && !this.selection.has(note.id)) this.selection = new Set([note.id]);
     else this.selection.add(note.id);
     const target = /** @type {HTMLElement} */ (event.composedPath()[0]);
+    const onEdge = target.classList.contains('re') || target.classList.contains('rs');
+    const copying = event.altKey && !onEdge;
+    const selectionBefore = [...this.selection];
+    let grabbed = note;
+    if (copying) {
+      // Alt-drag moves copies of the whole selection, which become the selection
+      const copies = this._notes.filter((entry) => this.selection.has(entry.id))
+        .map((entry) => ({ ...entry, id: crypto.randomUUID() }));
+      const copyOfGrabbed = copies[this._notes.filter((entry) => this.selection.has(entry.id)).findIndex((entry) => entry.id === note.id)];
+      this._notes = normaliseNotes([...this._notes, ...copies], this.beats);
+      this.selection = new Set(copies.map((entry) => entry.id));
+      grabbed = copyOfGrabbed ?? copies[0];
+    }
     const mode = target.classList.contains('re') ? 'len'
       : target.classList.contains('rs') ? 'lenL'
-        : (event.altKey || event.metaKey || event.ctrlKey) ? 'vel' : 'move';
+        : (event.metaKey || event.ctrlKey) ? 'vel' : 'move';
     this.drag = {
-      pointerId: event.pointerId, mode, note, x: event.clientX, y: event.clientY,
+      pointerId: event.pointerId, mode, note: grabbed, x: event.clientX, y: event.clientY,
       origin: this._notes.map((entry) => ({ ...entry })), ids: [...this.selection],
-      moved: false, hold: null,
+      moved: false, hold: null, copy: copying, selectionBefore,
     };
-    if (mode === 'move') {
+    if (mode === 'move' && !copying) {
       this.preview(note.note);
       // hold still for a moment and the drag becomes velocity
       this.drag.hold = setTimeout(() => {
@@ -802,7 +817,7 @@ export class CompostNoteEditor extends HTMLElement {
         this.renderNotes();
       }, HOLD_FOR_VELOCITY_MS);
     }
-    this.setAttribute('data-drag', mode);
+    this.setAttribute('data-drag', copying ? 'copy' : mode);
     this.gridElement.setPointerCapture(event.pointerId);
     this.renderNotes();
     this.emitSelection();
@@ -846,12 +861,14 @@ export class CompostNoteEditor extends HTMLElement {
       const current = this._notes.find((entry) => entry.id === drag.note.id);
       if (current) this.showTip(`vel ${current.velocity}`, event);
     } else if (drag.mode === 'len') {
-      const note = this._notes.find((entry) => entry.id === drag.note.id);
-      if (!note) return;
-      const raw = this.xToBeat(point.x) - note.start;
+      const origin = (drag.origin ?? this._notes).find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
+      if (!origin) return;
+      const raw = this.xToBeat(point.x) - origin.start;
       const duration = free || this.snapMode === 'off' ? Math.max(MIN_DURATION, raw) : snapDuration(raw, this.step, 'grid');
-      this._notes = resizedNotes(this._notes, [note.id], duration - note.duration, this.beats, this.step, 'off');
-      this.showTip(lengthText(Math.min(duration, this.beats - note.start)), event);
+      // every selected note takes the same change of length as the one being dragged
+      this._notes = resizedNotes(drag.origin ?? this._notes, drag.ids ?? [origin.id],
+        duration - origin.duration, this.beats, this.step, 'off');
+      this.showTip(lengthText(Math.min(duration, this.beats - origin.start)), event);
     } else if (drag.mode === 'lenL') {
       const origin = drag.origin.find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
       if (!origin) return;
@@ -862,11 +879,12 @@ export class CompostNoteEditor extends HTMLElement {
       if (current) this.showTip(lengthText(current.duration), event);
     } else {
       drag.moved = true;
+      this.setAttribute('data-drag', drag.copy ? 'copy' : 'move');
       const deltaBeats = this.xToBeat(event.clientX - drag.x);
       const deltaRows = Math.round((drag.y - event.clientY) / this.rowHeight);
       const origin = drag.origin.find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
       if (!origin) return;
-      const target = this.snapBeat(origin.start + deltaBeats, free);
+      const target = this.snapBeat(origin.start + deltaBeats, free && !drag.copy);
       const shiftBeats = target - origin.start;
       // pitch moves through the visible rows, so a folded view steps between used pitches
       const originRow = this.visibleKeys.indexOf(origin.note);
@@ -891,8 +909,17 @@ export class CompostNoteEditor extends HTMLElement {
       this.emitSelection();
       return;
     }
+    if (drag.copy && !drag.moved) {
+      // a press with Alt that went nowhere leaves nothing behind
+      const copies = new Set(drag.ids);
+      this._notes = this._notes.filter((entry) => !copies.has(entry.id));
+      this.selection = new Set(drag.selectionBefore ?? []);
+      this.renderNotes();
+      this.emitSelection();
+      return;
+    }
     const changed = JSON.stringify(this._notes) !== JSON.stringify(drag.origin ?? null);
-    if (changed || drag.mode === 'len' && drag.origin === undefined) this.commit(this._notes);
+    if (changed || drag.mode === 'len' && drag.origin === undefined || drag.copy) this.commit(this._notes);
     else this.renderNotes();
   }
 
@@ -927,7 +954,8 @@ export class CompostNoteEditor extends HTMLElement {
   /** A held Alt (or Cmd/Ctrl) says the next drag sets velocity; the cursor says so too. */
   /** @param {KeyboardEvent} event */
   handleModifierKey(event) {
-    this.toggleAttribute('data-velmod', event.altKey || event.metaKey || event.ctrlKey);
+    this.toggleAttribute('data-velmod', event.metaKey || event.ctrlKey);
+    this.toggleAttribute('data-copymod', event.altKey && !event.metaKey && !event.ctrlKey);
   }
 
   // ---- Loop region ----------------------------------------------------------------

@@ -25,9 +25,10 @@ for `compost-piano-roll`; the two share `piano-roll-model.js`.
 | Gesture | Does |
 | --- | --- |
 | Drag a note | Moves it, with the rest of the selection; Alt frees it from the grid |
-| Drag its right edge | Sets its length |
-| Drag its left edge | Trims the start and keeps the end put |
-| Alt-drag (or press and hold) | Sets velocity, Shift for fine |
+| Alt-drag a note | Copies the selection and moves the copies (they become the selection) |
+| Drag its right edge | Sets its length — and every selected note's, by the same amount |
+| Drag its left edge | Trims the start and keeps the end put, for every selected note |
+| Cmd/Ctrl-drag (or press and hold) | Sets velocity for the selection, Shift for fine |
 | Drag on empty grid | Marquee-selects; Shift adds to the selection |
 | Double-click empty grid | Adds a note |
 | `draw` | A press adds a note and the drag sets its length |
@@ -40,7 +41,8 @@ for `compost-piano-roll`; the two share `piano-roll-model.js`.
 | Wheel / Shift-wheel / Cmd-wheel | Scroll pitch, scroll time, zoom time (with Shift, rows) |
 | Wheel on the keys | Show more or fewer rows |
 
-The cursor says what a drag will do: grab, trim, or ns-resize for velocity.
+The cursor says what a drag will do: grab, trim, `copy` while Alt is held, or
+ns-resize for velocity while Cmd/Ctrl is held.
 Velocity reads twice, as the note's weight and a line across it.
 
 ## Attributes

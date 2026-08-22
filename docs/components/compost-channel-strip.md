@@ -28,10 +28,10 @@ strip.addEventListener('parameter-edit', ({ detail }) => {
 
 | Gesture | Does |
 | --- | --- |
-| Drag up or down | Sets gain, 0.22 dB per pixel |
+| Drag up or down | Sets gain, 0.12 dB per pixel |
 | Drag sideways | Sets pan; the axis is picked from the first movement |
 | Alt, Shift, or a second press | Drags fine |
-| Double-click | Resets gain; with Alt, resets pan |
+| Double-click | Resets gain; with Alt, resets pan. A second press that turns into a drag is a fine drag, not a reset |
 | Type a number, or Enter | Opens an editor at the wash edge and sets the gain |
 | Arrows | ±1 dB, ±5% pan; Alt for ±6 dB, ±25% |
 | Home / End | Gain to its floor or ceiling |
