@@ -64,6 +64,8 @@ export class CompostSelect extends HTMLElement {
           --compost-select-height: 38px;
           --compost-select-popup-offset: 0px;
           --compost-select-focus: #111111;
+          --compost-select-list-bg: var(--compost-select-bg);
+          --compost-select-list-border: var(--compost-select-border);
           position: relative;
           display: inline-block;
           min-width: 0;
@@ -132,9 +134,9 @@ export class CompostSelect extends HTMLElement {
           margin: 0;
           padding: 0;
           overflow: auto;
-          border: 1px solid var(--compost-select-border);
+          border: 1px solid var(--compost-select-list-border);
           border-top: 0;
-          background: var(--compost-select-bg);
+          background: var(--compost-select-list-bg);
           color: var(--compost-select-text);
           box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
         }

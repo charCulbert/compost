@@ -18,3 +18,7 @@ are supported.
 
 Use `--compost-select-*` variables or the `button`, `label`, `marker`, and
 `listbox` parts for styling.
+
+The open list paints with `--compost-select-list-bg` / `--compost-select-list-border`
+(default: the trigger's `--compost-select-bg` / `--compost-select-border`), so a
+trigger drawn flat on its surface can still drop an opaque list.
