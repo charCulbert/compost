@@ -14,6 +14,8 @@ import {
   trimmedNotes,
   velocityShiftedNotes,
 } from '../piano-roll-model.js';
+export { rulerLabels } from '../time-ruler.js';
+import { rulerLabels } from '../time-ruler.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextEditorID = 1;
@@ -38,19 +40,6 @@ export function lengthText(duration) {
     return `${whole}${sixteenths ? `.${sixteenths}` : ''} beat${duration >= 2 ? 's' : ''}`;
   }
   return `${Math.round(duration * 1000) / 1000} beat`;
-}
-
-/** The bar and beat labels a ruler shows, sparser when beats are tight. */
-/** @param {number} beats @param {number} beatsPerBar @param {number} pxPerBeat */
-export function rulerLabels(beats, beatsPerBar, pxPerBeat) {
-  const step = pxPerBeat * beatsPerBar > 150 ? 1 : beatsPerBar;
-  const labels = [];
-  for (let beat = 0; beat < beats; beat += step) {
-    const bar = Math.floor(beat / beatsPerBar) + 1;
-    const inBar = (beat % beatsPerBar) + 1;
-    labels.push({ beat, text: inBar === 1 ? String(bar) : `${bar}.${inBar}` });
-  }
-  return labels;
 }
 
 /**
