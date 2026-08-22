@@ -137,6 +137,7 @@ export class CompostChannelStrip extends HTMLElement {
           --compost-channel-strip-meter-top: 2.73em;
           --compost-channel-strip-meter-bottom: 0.36em;
           --compost-channel-strip-meter-right: 1.73em;
+          --compost-channel-strip-scale-offset: calc(var(--compost-channel-strip-meter-width) * 1.5);
           --compost-channel-strip-scale-font-size: 0.73em;
           --compost-channel-strip-numeral-font: ui-monospace, SFMono-Regular, Menlo, monospace;
           --compost-channel-strip-color-scheme: light;
@@ -246,7 +247,7 @@ export class CompostChannelStrip extends HTMLElement {
         }
         :host(:not([meter-position="right"])) .scale span {
           right: auto;
-          left: calc(50% + var(--compost-channel-strip-meter-width) * 1.5);
+          left: calc(50% + var(--compost-channel-strip-scale-offset));
         }
         .content {
           position: relative;

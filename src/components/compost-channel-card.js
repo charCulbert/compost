@@ -184,7 +184,7 @@ export class CompostChannelCard extends HTMLElement {
           font-size: var(--compost-channel-card-figure-size);
           color: var(--compost-channel-card-text);
           white-space: nowrap;
-          line-height: 1.3;
+          line-height: 1.4;
         }
         .pandb { grid-column: 1; justify-self: start; cursor: ew-resize; }
         .pandb[data-mid] { color: var(--compost-channel-card-muted); }
@@ -228,7 +228,7 @@ export class CompostChannelCard extends HTMLElement {
           background: var(--compost-channel-card-notch-bg, var(--compost-channel-strip-bg, #ffffff)); }
         .sends { grid-column: 3; justify-self: stretch; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
         .send { display: flex; align-items: center; justify-content: flex-end; gap: 0.45em; min-width: 0; }
-        .send label { flex: none; box-sizing: border-box; width: 0.64em;
+        .send label { flex: none; box-sizing: border-box; width: 0.87em;
           min-width: var(--compost-channel-card-send-label-min, 0px);
           min-height: var(--compost-channel-card-send-label-min, 0px);
           display: flex; align-items: center;

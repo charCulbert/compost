@@ -112,8 +112,10 @@ export class CompostClipGrid extends HTMLElement {
           inset: 0;
           background: var(--compost-clip-grid-highlight);
           pointer-events: none;
-          z-index: -1;
+          z-index: 0;
         }
+        /* the row's own content sits above the highlight rather than behind it */
+        .row > * { position: relative; z-index: 1; }
         .progress {
           position: absolute;
           left: 0;
@@ -493,7 +495,8 @@ export class CompostClipGrid extends HTMLElement {
     const hit = this.actionFrom(event);
     if (hit?.action === 'clip') {
       event.stopPropagation();
-      this.emit('clip-open', { index: hit.index, altKey: event.altKey });
+      this.emit('clip-open', { index: hit.index, altKey: event.altKey,
+        clientX: event.clientX, clientY: event.clientY });
     }
   }
 
