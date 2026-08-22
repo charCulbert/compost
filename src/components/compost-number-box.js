@@ -110,6 +110,7 @@ export class CompostNumberBox extends HTMLElement {
           --number-box-font-weight: 700;
           --number-box-text-align: center;
           --number-box-color-scheme: light;
+          --number-box-cursor: ns-resize;
           --number-box-percent: 0%;
           --midi-map-learn-color: #005fc0;
           --midi-map-label-text: var(--midi-map-learn-color);
@@ -136,7 +137,7 @@ export class CompostNumberBox extends HTMLElement {
               transparent var(--number-box-percent, 0%) 100%),
             var(--number-box-bg);
           color: var(--number-box-text);
-          cursor: ns-resize;
+          cursor: var(--number-box-cursor);
           font: inherit;
           font-size: var(--number-box-font-size);
           font-weight: var(--number-box-font-weight);

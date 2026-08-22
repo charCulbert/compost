@@ -185,10 +185,17 @@ export class CompostClipGrid extends HTMLElement {
           -webkit-user-select: text;
           user-select: text;
         }
+        /* a slot that is waiting for the launch point breathes, so you know it is about to go */
+        @keyframes compost-clip-grid-breath { 50% { opacity: 0.3; } }
+        .row[data-state="queued"] .name, .row[data-state="queued"] .tri svg,
+        .stop[data-queued] .tri svg { animation: compost-clip-grid-breath 1s ease-in-out infinite; }
         .stop { opacity: 0.55; transition: opacity 120ms; }
         .stop:hover, .stop[data-queued] { opacity: 1; }
         .stop[hidden] { display: none !important; }
-        @media (prefers-reduced-motion: reduce) { .stop { transition: none; } }
+        @media (prefers-reduced-motion: reduce) {
+          .stop { transition: none; }
+          .row[data-state="queued"] .name, .row[data-state="queued"] .tri svg, .stop[data-queued] .tri svg { animation: none; }
+        }
       </style>`;
 
     this.addEventListener('click', (event) => this.handleClick(event));

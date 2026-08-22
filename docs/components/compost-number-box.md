@@ -21,3 +21,7 @@ Delete and Backspace edit text and Escape cancels the edit.
 `label` names the box. A host that needs a longer name for assistive tech —
 `Send A · Keys` rather than `Send A` — can set `aria-label` on the element and
 the inner spinbutton reads that instead, leaving `label` for the visible text.
+
+A drag moves the value whether it runs up/down or left/right (the two are
+summed); `--number-box-cursor` (default `ns-resize`) lets a host advertise the
+direction that suits its layout, e.g. `ew-resize` for a box in a toolbar.

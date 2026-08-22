@@ -2,7 +2,7 @@
 
 `compost-clip-grid` is one track's column of clip slots. Each slot renders a
 clip's name and state — stopped, playing with its progress washed behind the
-name, queued for the next launch point, or recording — and an empty slot
+name, queued for the next launch point (breathing, so you know it is about to go), or recording — and an empty slot
 shows a record ring when the track is armed. A stop slot underneath takes the
 whole track out at the next launch point the way a clip is brought in.
 

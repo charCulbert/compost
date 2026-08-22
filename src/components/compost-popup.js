@@ -125,6 +125,20 @@ export class CompostPopup extends HTMLElement {
         .item .detail { margin-left: auto; color: var(--compost-popup-muted); font-style: normal; }
         .item[aria-checked="true"] .detail { color: var(--compost-popup-active-text); }
         .separator { height: 1px; margin: 0.35em 0; background: var(--compost-popup-border); }
+        /* colour choices are a grid of squares, not a list of words */
+        .swatches { display: flex; flex-wrap: wrap; gap: 0.45em; padding: 0.35em 1.1em; max-width: 13em; }
+        .item.swatch {
+          padding: 0; width: 1.35em; height: 1.35em; border-radius: 2px; gap: 0;
+          background: var(--compost-popup-item-color, transparent);
+          box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent);
+        }
+        .item.swatch::before { display: none !important; }
+        .item.swatch .label { display: none; }
+        .item.swatch:not([data-color]) {
+          background: linear-gradient(135deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%);
+        }
+        .item.swatch[aria-checked="true"] { box-shadow: 0 0 0 1px var(--compost-popup-bg), 0 0 0 2px currentColor; }
+        .item.swatch[data-active] { outline: 1px solid var(--compost-popup-active-text); outline-offset: 2px; }
         /* on a small screen the list is a sheet along the bottom edge */
         :host([sheet]) .menu {
           left: 0 !important;
@@ -202,11 +216,12 @@ export class CompostPopup extends HTMLElement {
     this.replaceChildren(...items.map((item) => {
       if (item === '-' || item === null) return document.createElement('hr');
       const option = document.createElement('option');
-      const entry = /** @type {{value?: string, label?: string, detail?: string, color?: string, disabled?: boolean, selected?: boolean}} */ (item);
+      const entry = /** @type {{value?: string, label?: string, detail?: string, color?: string, swatch?: boolean, disabled?: boolean, selected?: boolean}} */ (item);
       option.value = String(entry.value ?? entry.label ?? '');
       option.textContent = String(entry.label ?? entry.value ?? '');
       if (entry.detail !== undefined) option.dataset.detail = String(entry.detail);
       if (entry.color !== undefined) option.dataset.color = String(entry.color);
+      if (entry.swatch) option.dataset.swatch = '';
       if (entry.disabled) option.disabled = true;
       if (entry.selected) option.setAttribute('selected', '');
       return option;
@@ -241,7 +256,7 @@ export class CompostPopup extends HTMLElement {
       }
       const option = /** @type {HTMLOptionElement} */ (entry);
       const item = document.createElement('div');
-      item.className = 'item';
+      item.className = option.dataset.swatch !== undefined ? 'item swatch' : 'item';
       item.part.add('item');
       item.id = `${this.listID}-item-${index}`;
       item.dataset.index = String(index);
@@ -257,6 +272,18 @@ export class CompostPopup extends HTMLElement {
       label.className = 'label';
       label.textContent = option.label || option.textContent || option.value;
       item.append(label);
+      if (option.dataset.swatch !== undefined) {
+        // the square is the whole entry; its name stays for assistive tech
+        item.setAttribute('aria-label', label.textContent ?? '');
+        item.title = label.textContent ?? '';
+        const previous = nodes[nodes.length - 1];
+        const grid = previous instanceof HTMLElement && previous.classList.contains('swatches')
+          ? previous : Object.assign(document.createElement('div'), { className: 'swatches' });
+        if (grid !== previous) { grid.setAttribute('role', 'group'); nodes.push(grid); }
+        grid.append(item);
+        index += 1;
+        continue;
+      }
       if (option.dataset.detail !== undefined) {
         const detail = document.createElement('em');
         detail.className = 'detail';
