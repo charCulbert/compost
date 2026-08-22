@@ -139,6 +139,7 @@ export class CompostChannelStrip extends HTMLElement {
           --compost-channel-strip-meter-top: 2.73em;
           --compost-channel-strip-meter-bottom: 0.36em;
           --compost-channel-strip-meter-right: 1.73em;
+          --compost-channel-strip-floor: 0px;   /* -inf sits this far above the host's bottom edge */
           --compost-channel-strip-scale-offset: calc(var(--compost-channel-strip-meter-width) * 1.5);
           --compost-channel-strip-scale-font-size: 0.73em;
           --compost-channel-strip-numeral-font: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -155,9 +156,13 @@ export class CompostChannelStrip extends HTMLElement {
           outline: none;
         }
         :host([disabled]) { cursor: default; }
+        /* the surface is the dB axis: wash, meters, zero and scale all live in it,
+           so a floor raised above the host's bottom edge lifts -inf for all of them
+           at once — a host puts its card under the floor and the axis never crosses it */
         .surface {
           position: absolute;
           inset: 0;
+          bottom: var(--compost-channel-strip-floor);
           overflow: hidden;
           pointer-events: none;
         }
