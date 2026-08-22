@@ -134,17 +134,20 @@ export class CompostPopup extends HTMLElement {
           gap: 0.45em;
           padding: 0.35em 1.1em;
         }
+        /* a swatch is a ring of its colour; the chosen one is filled, and the
+           "no colour" swatch is a ring of the muted ink */
         .item.swatch {
-          padding: 0; width: 1.35em; height: 1.35em; border-radius: 2px; gap: 0;
-          background: var(--compost-popup-item-color, transparent);
-          box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent);
+          padding: 0; width: 1.35em; height: 1.35em; border-radius: 50%; gap: 0;
+          background: transparent;
+          box-shadow: inset 0 0 0 var(--compost-popup-swatch-ring, 1.5px) var(--compost-popup-item-color, currentColor);
         }
         .item.swatch::before { display: none !important; }
         .item.swatch .label { display: none; }
         .item.swatch:not([data-color]) {
-          background: linear-gradient(135deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%);
+          box-shadow: inset 0 0 0 var(--compost-popup-swatch-ring, 1.5px) var(--compost-popup-muted);
         }
-        .item.swatch[aria-checked="true"] { box-shadow: 0 0 0 1px var(--compost-popup-bg), 0 0 0 2px currentColor; }
+        .item.swatch[aria-checked="true"] { background: var(--compost-popup-item-color, currentColor); }
+        .item.swatch:not([data-color])[aria-checked="true"] { background: var(--compost-popup-muted); }
         .item.swatch[data-active] { outline: 1px solid var(--compost-popup-active-text); outline-offset: 2px; }
         /* on a small screen the list is a sheet along the bottom edge */
         :host([sheet]) .menu {
