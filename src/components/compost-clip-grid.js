@@ -345,8 +345,8 @@ export class CompostClipGrid extends HTMLElement {
         // every button says which track it belongs to, so a screen reader walking
         // a row of columns never hears "Launch take 1" four times over
         tri.setAttribute('aria-label', `${state === 'playing' || state === 'queued' ? 'Stop' : 'Launch'} ${clip.name} on ${this.label}`);
-        tri.title = state === 'recording' ? 'finish the take and launch it at the next launch point'
-          : state === 'playing' || state === 'queued' ? 'stop' : 'launch at the next launch point  (enter on the name)';
+        tri.title = state === 'recording' ? 'finish take · launch'
+          : state === 'playing' || state === 'queued' ? 'stop' : 'launch  ↵';
         tri.innerHTML = state === 'recording' ? dot('var(--compost-clip-grid-over)')
           : triangle(state === 'playing' ? 'var(--compost-clip-grid-signal-hi)'
             : state === 'queued' ? 'var(--compost-clip-grid-select)' : 'var(--compost-clip-grid-faint)');
@@ -397,7 +397,7 @@ export class CompostClipGrid extends HTMLElement {
           /** @type {HTMLButtonElement} */ (tri).type = 'button';
           tri.dataset.action = 'record';
           tri.setAttribute('aria-label', `Record into ${this.label} slot ${index + 1}`);
-          tri.title = 'record a take into this slot from the next launch point';
+          tri.title = 'record into this slot';
           tri.innerHTML = ring('var(--compost-clip-grid-rail)');
         }
         row.append(tri);
@@ -450,8 +450,7 @@ export class CompostClipGrid extends HTMLElement {
     stop.toggleAttribute('data-queued', stopState === 'queued');
     tri.innerHTML = square(stopState === 'queued' ? 'var(--compost-clip-grid-select)'
       : stopState === 'active' ? 'var(--compost-clip-grid-text)' : 'var(--compost-clip-grid-faint)');
-    tri.title = stopState === 'queued' ? 'stop queued — click to cancel'
-      : 'stop this track at the next launch point';
+    tri.title = stopState === 'queued' ? 'stop queued · click: cancel' : 'stop track';
   }
 
   /** The preview mark is decoration; the clip's name is not. Give the mark up on

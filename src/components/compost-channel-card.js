@@ -313,8 +313,8 @@ export class CompostChannelCard extends HTMLElement {
            may carry the mode, monitor="auto" or monitor="in" (bare = in) */
         .switch svg .far { opacity: 0.45; }
         .switch[aria-pressed="true"] svg .far { opacity: 1; }
+        :host([monitor="auto"]) .switch[data-switch="monitor"][aria-pressed="true"] { color: var(--compost-channel-card-text); }
         :host([monitor="auto"]) .switch[data-switch="monitor"][aria-pressed="true"] svg .far { opacity: 0.28; }
-        :host([monitor="auto"]) .switch[data-switch="monitor"][aria-pressed="true"] svg circle { opacity: 0.85; }
         .switch[data-switch="arm"][aria-pressed="true"],
         .switch[data-switch="mute"][aria-pressed="true"] { color: var(--compost-channel-card-over); }
         .switch[data-switch="monitor"][aria-pressed="true"] { color: var(--compost-channel-card-signal); }
@@ -710,10 +710,9 @@ export class CompostChannelCard extends HTMLElement {
       button.setAttribute('aria-pressed', String(on));
       button.setAttribute('aria-label', `${name === 'arm' ? 'Arm' : name === 'monitor' ? 'Monitor'
         : name === 'mute' ? 'Mute' : 'Solo'} ${this.label}`);
-      button.title = name === 'arm' ? 'arm for recording'
-        : name === 'monitor' ? 'monitor input: off · auto · in (now ' + (this.hasAttribute('monitor') ? (this.getAttribute('monitor') || 'in') : 'off') + ')'
-        : name === 'mute' ? 'mute  (m on a focused column)' : 'solo  (s on a focused column · alt-click: solo defeat)';
-      if (name === 'solo') button.title = 'Option-click for solo defeat';
+      button.title = name === 'arm' ? 'arm'
+        : name === 'monitor' ? 'monitor: off · auto · in'
+        : name === 'mute' ? 'mute  m' : 'solo  s · ⌥-click: solo defeat';
       button.toggleAttribute('disabled', this.disabled);
     }
   }
