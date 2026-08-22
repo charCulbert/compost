@@ -470,6 +470,39 @@ test('channel card lays out around the gutter and reports every control by id', 
   await page.keyboard.press('Enter');
   await expect(card).toHaveAttribute('input', 'MIDI 1 · 2');
 
+  // every send says whose it is, through the number box's forwarded aria-label
+  await expect(page.getByRole('spinbutton', { name: 'Send A · Keys' })).toHaveCount(1);
+
+  // the pan rail is a slider a keyboard can walk, reporting a whole gesture
+  const rail = card.locator('.pan');
+  await expect(rail).toHaveAttribute('role', 'slider');
+  await expect(rail).toHaveAttribute('aria-valuetext', 'C');
+  await card.evaluate((element) => {
+    element.panEvents = [];
+    for (const type of ['parameter-begin', 'parameter-edit', 'parameter-end']) {
+      element.addEventListener(type, (event) => {
+        if (event.detail.name === 'pan') element.panEvents.push(type);
+      });
+    }
+  });
+  await rail.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(rail).toHaveAttribute('aria-valuenow', '0.05');
+  await expect(rail).toHaveAttribute('aria-valuetext', '5R');
+  await page.keyboard.press('Alt+ArrowLeft');
+  await expect(rail).toHaveAttribute('aria-valuenow', '-0.2');
+  await expect(rail).toHaveAttribute('aria-valuetext', '20L');
+  expect(await card.evaluate((element) => element.panEvents)).toEqual([
+    'parameter-begin', 'parameter-edit', 'parameter-end',
+    'parameter-begin', 'parameter-edit', 'parameter-end',
+  ]);
+
+  // the input reads in the numeral face, like the prototype's
+  const inputFont = await card.evaluate((element) =>
+    getComputedStyle(element.shadowRoot.querySelector('.input')).fontFamily);
+  expect(inputFont).toContain(await card.evaluate((element) =>
+    getComputedStyle(element).getPropertyValue('--compost-channel-card-numeral-font').split(',')[0].trim()));
+
   // narrowing the column stacks the rows; narrower still notches the figure
   await page.locator('[data-option="card-width"]').fill('90');
   await expect(card).toHaveAttribute('data-tight', '');
@@ -482,7 +515,10 @@ test('clip grid reports launches, stops and drops between grids', async ({ page 
   const bass = page.locator('compost-clip-grid[data-grid="1"]');
   const state = page.locator('[data-option-state]');
 
-  await drums.getByRole('button', { name: 'Launch fill.b' }).click();
+  // every clip button says which track it is on
+  await expect(drums.getByRole('button', { name: 'Launch fill.b on Drums' })).toHaveCount(1);
+  await expect(bass.getByRole('button', { name: /^ride\.c on Bass, stopped/u })).toHaveCount(0);
+  await drums.getByRole('button', { name: 'Launch fill.b on Drums' }).click();
   await expect(state).toHaveText('fill.b queued · stopped');
   await expect(state).toHaveText('fill.b playing · stopped', { timeout: 3000 });
   await expect(drums.locator('.row[data-state="playing"] .progress')).toHaveCount(1);

@@ -151,6 +151,8 @@ export class CompostChannelCard extends HTMLElement {
           padding: 0.1em 0.36em;
           margin-left: -0.36em;
           border-radius: 2px;
+          font-family: var(--compost-channel-card-numeral-font);
+          letter-spacing: 0;
           font-size: 0.82em;
           color: var(--compost-channel-card-faint);
           white-space: nowrap;
@@ -191,6 +193,7 @@ export class CompostChannelCard extends HTMLElement {
           cursor: ew-resize;
           touch-action: none;
         }
+        .pan:focus-visible { outline: 1px solid var(--compost-channel-card-select); outline-offset: 2px; }
         .pan .track { position: absolute; left: 0; right: 0; top: 0.27em; height: 1px;
           background: var(--compost-channel-card-muted); opacity: 0.5; }
         .pan .bar { position: absolute; top: 0.18em; height: 0.27em;
@@ -312,7 +315,7 @@ export class CompostChannelCard extends HTMLElement {
       <button class="input" part="input" type="button" hidden></button>
       <div class="panwrap" part="pan" hidden>
         <span class="pandb figure" part="pan-figure"></span>
-        <div class="pan"><span class="track"></span><span class="bar"></span><span class="centre"></span></div>
+        <div class="pan" part="pan-rail" role="slider" tabindex="0"><span class="track"></span><span class="bar"></span><span class="centre"></span></div>
       </div>
       <div class="main">
         <span class="level figure" part="level" tabindex="0" role="spinbutton"></span>
@@ -347,6 +350,7 @@ export class CompostChannelCard extends HTMLElement {
         event.preventDefault(); event.stopPropagation(); this.resetPan();
       });
     }
+    this.panRail.addEventListener('keydown', (event) => this.handlePanKey(event));
     this.levelFigure.addEventListener('click', (event) => {
       event.stopPropagation(); this.beginEdit(this.editableValueText(), true);
     });
@@ -518,6 +522,23 @@ export class CompostChannelCard extends HTMLElement {
     endParameterGesture(this, this._pan, this.panDetail());
   }
 
+  /** Arrows walk the rail: a twentieth of the field, a quarter with Alt. */
+  /** @param {KeyboardEvent} event */
+  handlePanKey(event) {
+    if (this.disabled || event.metaKey || event.ctrlKey) return;
+    const direction = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1
+      : event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 0;
+    const home = event.key === 'Home' || event.key === 'End' || event.key === 'Escape';
+    if (!direction && !home) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const detail = this.panDetail();
+    beginParameterGesture(this, this._pan, detail);
+    if (home) this.setPan(event.key === 'End' ? 1 : event.key === 'Home' ? -1 : this.panResetValue);
+    else this.setPan(this._pan + direction * (event.altKey ? 0.25 : 0.05));
+    endParameterGesture(this, this._pan, detail);
+  }
+
   // ---- Level entry ------------------------------------------------------------
 
   editableValueText() {
@@ -613,6 +634,7 @@ export class CompostChannelCard extends HTMLElement {
       const label = document.createElement('label');
       label.textContent = send.label;
       label.htmlFor = `${this.cardID}-send-${index}`;
+      label.title = `Send ${send.label} · ${this.label}`;
       // the letter names the return; a host may take a press on it as "show me that return"
       label.addEventListener('click', () => {
         this.dispatchEvent(new CustomEvent('send-click', {
@@ -623,6 +645,8 @@ export class CompostChannelCard extends HTMLElement {
       box.id = `${this.cardID}-send-${index}`;
       if (send.parameterID) box.setAttribute('parameter-id', send.parameterID);
       box.setAttribute('label', `Send ${send.label}`);
+      // the card knows whose channel this is; the send says so out loud
+      box.setAttribute('aria-label', `Send ${send.label} · ${this.label}`);
       box.setAttribute('min', String(min));
       box.setAttribute('max', String(send.max ?? 6));
       box.setAttribute('step', String(send.step ?? 0.1));
@@ -692,6 +716,12 @@ export class CompostChannelCard extends HTMLElement {
       this.panBar.style.left = `${bar.left.toFixed(1)}%`;
       this.panBar.style.width = `${bar.width.toFixed(1)}%`;
       this.panRail.setAttribute('aria-label', `${this.label} pan`);
+      this.panRail.setAttribute('aria-valuemin', '-1');
+      this.panRail.setAttribute('aria-valuemax', '1');
+      this.panRail.setAttribute('aria-valuenow', String(this._pan));
+      this.panRail.setAttribute('aria-valuetext', panText(this._pan));
+      this.panRail.setAttribute('aria-disabled', this.disabled ? 'true' : 'false');
+      this.panRail.tabIndex = this.disabled ? -1 : 0;
     }
     if (!this.editing) {
       this.levelFigure.textContent = this._value <= this.min ? '-inf' : formatNumber(this._value, this.step);

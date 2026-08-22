@@ -17,3 +17,7 @@ Normal drag uses full travel. Option-drag or a second drag uses fine movement.
 
 Double-click, Escape, Delete, or Backspace resets the value. While typing,
 Delete and Backspace edit text and Escape cancels the edit.
+
+`label` names the box. A host that needs a longer name for assistive tech —
+`Send A · Keys` rather than `Send A` — can set `aria-label` on the element and
+the inner spinbutton reads that instead, leaving `label` for the visible text.

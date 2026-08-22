@@ -55,6 +55,10 @@ Dragging marks the exact slot the clip would land in, on whichever
 | `show-stop` | — | Show the stop slot even with no clips. |
 | `disabled` | — | Inert. |
 
+Every button carries the track: `label` turns `Launch take 1` into
+`Launch take 1 on MIDI 1`, and the name button and stop slot read the same way,
+so a screen reader walking a row of columns can tell them apart.
+
 `setClips(list)`, `setProgress(index, fraction)` for cheap per-frame updates,
 `highlightRow(index, on)` for a scene launcher's hover, `beginRename(index)`,
 `focusSlot(index)`, `slotIndexAtPoint(clientY)`.

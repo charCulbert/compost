@@ -333,7 +333,9 @@ export class CompostClipGrid extends HTMLElement {
         tri.type = 'button';
         tri.className = `tri${state === 'recording' ? ' rec' : ''}`;
         tri.dataset.action = 'launch';
-        tri.setAttribute('aria-label', `${state === 'playing' || state === 'queued' ? 'Stop' : 'Launch'} ${clip.name}`);
+        // every button says which track it belongs to, so a screen reader walking
+        // a row of columns never hears "Launch take 1" four times over
+        tri.setAttribute('aria-label', `${state === 'playing' || state === 'queued' ? 'Stop' : 'Launch'} ${clip.name} on ${this.label}`);
         tri.innerHTML = state === 'recording' ? dot('var(--compost-clip-grid-over)')
           : triangle(state === 'playing' ? 'var(--compost-clip-grid-signal-hi)'
             : state === 'queued' ? 'var(--compost-clip-grid-select)' : 'var(--compost-clip-grid-faint)');
@@ -373,7 +375,7 @@ export class CompostClipGrid extends HTMLElement {
           name.dataset.action = 'clip';
           name.tabIndex = 0;
           name.setAttribute('role', 'button');
-          name.setAttribute('aria-label', `${clip.name}, ${state}${clip.loop === false ? ', one shot' : ''}`);
+          name.setAttribute('aria-label', `${clip.name} on ${this.label}, ${state}${clip.loop === false ? ', one shot' : ''}`);
           name.textContent = clip.name;
           row.append(name);
         }

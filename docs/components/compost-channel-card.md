@@ -46,9 +46,16 @@ which of the four appear, in order; a return track might show `mute solo`.
 `solo-safe` draws a thin ring around the solo switch without changing its
 pressed state. Option/Alt-clicking solo reports `solo-safe` instead of `solo`.
 
-The input is a button. It shows `input` and lights up with `input-live`; a
-click raises `input-click` with the button as `detail.anchor` so the host can
-hang its own chooser off it.
+The pan rail is a `slider`: it takes focus, reads its value as `C`, `40L` or
+`40R`, and Arrow Left/Right (Alt for a quarter of the field, Home/End for the
+edges, Escape to centre) move it through the same gesture a drag does.
+
+Each send's `compost-number-box` is named `Send A · <label>`, so a screen
+reader hears whose send it is rather than four boxes called `Send A`.
+
+The input is a button in the numeral face. It shows `input` and lights up with
+`input-live`; a click raises `input-click` with the button as `detail.anchor`
+so the host can hang its own chooser off it.
 
 `setValue`, `setPan`, `setSends` and `setSendValue` update silently. A press on
 a send's letter raises `send-click` with `{index, label}`, so a host can bring
@@ -72,4 +79,5 @@ the return it names into view.
 `--compost-channel-card-*` custom properties cover text, signal, over and
 select colours, the hover background and the notch background; sizes are in
 `em` against the host, so the whole card scales with its font size. Parts:
-`input`, `pan`, `pan-figure`, `level`, `sends`, `send`, `switches`, `switch`.
+`input`, `pan`, `pan-rail`, `pan-figure`, `level`, `sends`, `send`, `switches`,
+`switch`.

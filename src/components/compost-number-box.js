@@ -31,6 +31,7 @@ export class CompostNumberBox extends HTMLElement {
       'name',
       'parameter-id',
       'label',
+      'aria-label',
       'section',
       'min',
       'max',
@@ -64,6 +65,7 @@ export class CompostNumberBox extends HTMLElement {
     this.name = '';
     this.parameterID = '';
     this.label = 'Value';
+    this.ariaLabelText = '';
     this.section = '';
     this.min = 0;
     this.max = 1;
@@ -274,6 +276,8 @@ export class CompostNumberBox extends HTMLElement {
     this.name = this.getAttribute('name') || this.name;
     this.parameterID = this.getAttribute('parameter-id') || '';
     this.label = this.getAttribute('label') || this.label;
+    // a host that names the box from outside owns the name the spinbutton reads
+    this.ariaLabelText = this.getAttribute('aria-label') || this.label;
     this.section = this.getAttribute('section') || '';
     this.unit = this.getAttribute('unit') || '';
     this.valueText = this.getAttribute('text') ?? this.getAttribute('options') ?? '';
@@ -738,7 +742,7 @@ export class CompostNumberBox extends HTMLElement {
     this.valueElement.classList.toggle('placeholder', this.empty);
     this.box.id = this.idBase;
     this.box.tabIndex = this.disabled ? -1 : 0;
-    this.box.setAttribute('aria-label', this.label);
+    this.box.setAttribute('aria-label', this.ariaLabelText || this.label);
     this.box.setAttribute('aria-valuemin', String(this.min));
     this.box.setAttribute('aria-valuemax', String(this.max));
     this.box.setAttribute('aria-valuenow', this.empty ? '' : String(this._value));
