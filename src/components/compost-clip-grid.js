@@ -334,6 +334,8 @@ export class CompostClipGrid extends HTMLElement {
         tri.className = `tri${state === 'recording' ? ' rec' : ''}`;
         tri.dataset.action = 'launch';
         tri.setAttribute('aria-label', `${state === 'playing' || state === 'queued' ? 'Stop' : 'Launch'} ${clip.name}`);
+        tri.title = state === 'recording' ? 'finish the take and launch it at the next launch point'
+          : state === 'playing' || state === 'queued' ? 'stop' : 'launch at the next launch point  (enter on the name)';
         tri.innerHTML = state === 'recording' ? dot('var(--compost-clip-grid-over)')
           : triangle(state === 'playing' ? 'var(--compost-clip-grid-signal-hi)'
             : state === 'queued' ? 'var(--compost-clip-grid-select)' : 'var(--compost-clip-grid-faint)');
@@ -384,6 +386,7 @@ export class CompostClipGrid extends HTMLElement {
           /** @type {HTMLButtonElement} */ (tri).type = 'button';
           tri.dataset.action = 'record';
           tri.setAttribute('aria-label', `Record into ${this.label} slot ${index + 1}`);
+          tri.title = 'record a take into this slot from the next launch point';
           tri.innerHTML = ring('var(--compost-clip-grid-rail)');
         }
         row.append(tri);

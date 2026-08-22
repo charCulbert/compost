@@ -402,6 +402,7 @@ export class CompostWindow extends HTMLElement {
     this.titleElement.textContent = this.heading;
     this.setAttribute('aria-label', this.heading || 'Window');
     this.closeButton.setAttribute('aria-label', this.heading ? `Close ${this.heading}` : 'Close');
+    this.closeButton.title = 'close';
     if (!this.open) return;
     const width = numberAttr(this, 'width', NaN);
     const height = numberAttr(this, 'height', NaN);

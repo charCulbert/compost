@@ -671,6 +671,8 @@ export class CompostChannelCard extends HTMLElement {
       button.setAttribute('aria-pressed', String(on));
       button.setAttribute('aria-label', `${name === 'arm' ? 'Arm' : name === 'monitor' ? 'Monitor'
         : name === 'mute' ? 'Mute' : 'Solo'} ${this.label}`);
+      button.title = name === 'arm' ? 'arm for recording' : name === 'monitor' ? 'monitor input: off · auto · in'
+        : name === 'mute' ? 'mute  (m on a focused column)' : 'solo  (s on a focused column · alt-click: solo defeat)';
       if (name === 'solo') button.title = 'Option-click for solo defeat';
       button.toggleAttribute('disabled', this.disabled);
     }

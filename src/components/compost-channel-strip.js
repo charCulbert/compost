@@ -13,8 +13,8 @@ let nextStripID = 1;
 const MAX_CHANNELS = 16;
 const AXIS_DEADZONE = 3;
 const PAN_BIAS = 1.4;
-const GAIN_PER_PIXEL = 0.22;
-const GAIN_PER_PIXEL_FINE = 0.06;
+const GAIN_PER_PIXEL = 0.12;
+const GAIN_PER_PIXEL_FINE = 0.03;
 const PAN_PER_PIXEL = 0.014;
 const PAN_PER_PIXEL_FINE = 0.004;
 const SECOND_PRESS_MS = 320;
@@ -110,6 +110,8 @@ export class CompostChannelStrip extends HTMLElement {
     this.inputID = `compost-channel-strip-${nextStripID++}`;
     this.lastUpdateSource = 'control';
     this.lastPressTime = 0;
+    // a double-click whose second press turned into a drag must not also reset
+    this.dragSwallowsDoubleClick = false;
     /** @type {{pointerId: number, x: number, y: number, gain: number, pan: number,
      * axis: 'gain'|'pan'|null, fine: boolean}|null} */
     this.drag = null;
@@ -458,6 +460,7 @@ export class CompostChannelStrip extends HTMLElement {
     if (this.disabled || event.button !== 0 || this.drag || this.ownsPointer(event)) return;
     const now = performance.now();
     const secondPress = this.lastPressTime > 0 && now - this.lastPressTime < SECOND_PRESS_MS;
+    this.dragSwallowsDoubleClick = false;
     this.drag = {
       pointerId: event.pointerId, x: event.clientX, y: event.clientY,
       gain: this._value, pan: this._pan, axis: null,
@@ -508,6 +511,7 @@ export class CompostChannelStrip extends HTMLElement {
     window.removeEventListener('blur', this.handleWindowBlur);
     this.removeAttribute('data-dragging');
     if (!drag) return;
+    if (drag.axis) this.dragSwallowsDoubleClick = true;
     if (drag.axis === 'gain') {
       endParameterGesture(this, this._value, cancelled ? { cancelled: true } : {});
       this.lastPressTime = 0;
@@ -524,6 +528,7 @@ export class CompostChannelStrip extends HTMLElement {
   handleDoubleClick(event) {
     if (this.disabled || this.ownsPointer(event)) return;
     event.preventDefault();
+    if (this.dragSwallowsDoubleClick) { this.dragSwallowsDoubleClick = false; return; }
     if (event.altKey || event.shiftKey) this.resetPan();
     else this.reset();
   }
