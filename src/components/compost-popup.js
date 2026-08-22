@@ -56,6 +56,7 @@ export class CompostPopup extends HTMLElement {
           --compost-popup-min-width: 12em;
           --compost-popup-z-index: 1000;
           --compost-popup-color-scheme: light;
+          --compost-popup-swatch-columns: 4;
           color-scheme: var(--compost-popup-color-scheme);
           display: contents;
           font: inherit;
@@ -126,7 +127,13 @@ export class CompostPopup extends HTMLElement {
         .item[aria-checked="true"] .detail { color: var(--compost-popup-active-text); }
         .separator { height: 1px; margin: 0.35em 0; background: var(--compost-popup-border); }
         /* colour choices are a grid of squares, not a list of words */
-        .swatches { display: flex; flex-wrap: wrap; gap: 0.45em; padding: 0.35em 1.1em; max-width: 13em; }
+        .swatches {
+          display: grid;
+          grid-template-columns: repeat(var(--compost-popup-swatch-columns, 4), max-content);
+          justify-content: start;
+          gap: 0.45em;
+          padding: 0.35em 1.1em;
+        }
         .item.swatch {
           padding: 0; width: 1.35em; height: 1.35em; border-radius: 2px; gap: 0;
           background: var(--compost-popup-item-color, transparent);
