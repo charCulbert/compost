@@ -14,7 +14,8 @@ rail, the same move as the 0 dB mark.
     value="-3.2" gain-parameter-id="keys-gain" pan="0" pan-parameter-id="keys-pan"
     switches="arm monitor mute solo" monitor
     arm-parameter-id="keys-arm" monitor-parameter-id="keys-monitor"
-    mute-parameter-id="keys-mute" solo-parameter-id="keys-solo"></compost-channel-card>
+    mute-parameter-id="keys-mute" solo-parameter-id="keys-solo"
+    solo-safe-parameter-id="keys-solo-safe"></compost-channel-card>
 </compost-channel-strip>
 ```
 
@@ -36,11 +37,14 @@ Every control reports through `parameter-begin`, `parameter-edit` and
 | Level figure (click, Enter or a digit to type) | `gain-parameter-id` | dB |
 | Pan rail and figure (drag; double-click centres) | `pan-parameter-id` | −1…1 |
 | Arm, monitor, mute, solo | `arm-parameter-id` … `solo-parameter-id` | `discrete` 0/1 |
+| Solo defeat (Option/Alt-click solo) | `solo-safe-parameter-id` | `discrete` 0/1 |
 | Each send (a `compost-number-box`) | the send's `parameterID` | dB |
 
 The switches are stateless: `arm`, `monitor`, `mute` and `solo` are boolean
 attributes the host sets after it has acted on the request. `switches` chooses
 which of the four appear, in order; a return track might show `mute solo`.
+`solo-safe` draws a thin ring around the solo switch without changing its
+pressed state. Option/Alt-clicking solo reports `solo-safe` instead of `solo`.
 
 The input is a button. It shows `input` and lights up with `input-live`; a
 click raises `input-click` with the button as `detail.anchor` so the host can
@@ -59,6 +63,7 @@ the return it names into view.
 | `value`, `min`, `max`, `step`, `reset-value` | `0`, `-90`, `12`, `0.1`, `0` | Level figure. |
 | `pan`, `pan-reset-value` | — | Pan; omit `pan` to hide the row. |
 | `switches` | — | Which of `arm monitor mute solo` to show. |
+| `solo-safe` | — | Rings the solo switch to show solo defeat. |
 | `muted` | — | Dims the level figure. |
 | `disabled` | — | Inert. |
 

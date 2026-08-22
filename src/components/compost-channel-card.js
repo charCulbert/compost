@@ -60,8 +60,8 @@ export class CompostChannelCard extends HTMLElement {
     return [
       'label', 'input', 'input-live', 'value', 'min', 'max', 'step', 'reset-value',
       'gain-parameter-id', 'pan', 'pan-parameter-id', 'pan-reset-value', 'switches',
-      'arm', 'monitor', 'mute', 'solo', 'arm-parameter-id', 'monitor-parameter-id',
-      'mute-parameter-id', 'solo-parameter-id', 'muted', 'disabled',
+      'arm', 'monitor', 'mute', 'solo', 'solo-safe', 'arm-parameter-id', 'monitor-parameter-id',
+      'mute-parameter-id', 'solo-parameter-id', 'solo-safe-parameter-id', 'muted', 'disabled',
     ];
   }
 
@@ -301,6 +301,10 @@ export class CompostChannelCard extends HTMLElement {
         .switch[data-switch="mute"][aria-pressed="true"] { color: var(--compost-channel-card-over); }
         .switch[data-switch="monitor"][aria-pressed="true"] { color: var(--compost-channel-card-signal); }
         .switch[data-switch="solo"][aria-pressed="true"] { color: var(--compost-channel-card-select); }
+        :host([solo-safe]) .switch[data-switch="solo"] {
+          border-radius: 2px;
+          box-shadow: inset 0 0 0 1px var(--compost-channel-card-select);
+        }
         :host([data-narrow]) .switch { padding: 0.1em 0; }
         :host([data-narrow]) .switch svg { width: 1.1em; height: 1em; }
         @media (prefers-reduced-motion: reduce) { :host { transition: none; } }
@@ -352,7 +356,8 @@ export class CompostChannelCard extends HTMLElement {
         node instanceof HTMLElement && node.classList.contains('switch'));
       if (button instanceof HTMLElement && button.dataset.switch) {
         event.stopPropagation();
-        this.toggleSwitch(button.dataset.switch);
+        this.toggleSwitch(event.altKey && button.dataset.switch === 'solo'
+          ? 'solo-safe' : button.dataset.switch);
       }
     });
     // a send's own gesture must not read as a press on the column behind it
@@ -666,6 +671,7 @@ export class CompostChannelCard extends HTMLElement {
       button.setAttribute('aria-pressed', String(on));
       button.setAttribute('aria-label', `${name === 'arm' ? 'Arm' : name === 'monitor' ? 'Monitor'
         : name === 'mute' ? 'Mute' : 'Solo'} ${this.label}`);
+      if (name === 'solo') button.title = 'Option-click for solo defeat';
       button.toggleAttribute('disabled', this.disabled);
     }
   }

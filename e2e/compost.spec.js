@@ -452,11 +452,15 @@ test('channel card lays out around the gutter and reports every control by id', 
   await page.getByRole('button', { name: 'Mute Keys' }).click();
   await expect(card).toHaveAttribute('mute', '');
   await expect(strip).toHaveAttribute('muted', '');
+  await page.getByRole('button', { name: 'Solo Keys' }).click({ modifiers: ['Alt'] });
+  await expect(card).toHaveAttribute('solo-safe', '');
   await page.getByRole('spinbutton', { name: 'Keys level' }).click();
   await page.getByRole('textbox', { name: 'Set Keys level' }).fill('-12');
   await page.keyboard.press('Enter');
   await expect(card).toHaveAttribute('value', '-12');
-  expect(await card.evaluate((element) => element.testEvents)).toEqual([['keys-mute', 1], ['keys-gain', -12]]);
+  expect(await card.evaluate((element) => element.testEvents)).toEqual([
+    ['keys-mute', 1], ['keys-solo-safe', 1], ['keys-gain', -12],
+  ]);
 
   // the input button asks the host, which opens its popup on the button
   await page.getByRole('button', { name: /Keys input/ }).click();

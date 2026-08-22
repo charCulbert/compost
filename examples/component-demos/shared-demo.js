@@ -613,6 +613,7 @@ function setupChannelCardDemo() {
   const width = option('card-width');
   const sendCount = option('card-sends');
   const pan = option('card-pan');
+  const soloSafe = option('card-solo-safe');
   const inputs = ['no input', 'MIDI 1 · 1', 'MIDI 1 · 2', 'MIDI 1 all', 'MIDI 2 all'];
   let inputIndex = 1;
   const apply = () => {
@@ -625,11 +626,13 @@ function setupChannelCardDemo() {
     }));
     if (pan?.checked) card.setAttribute('pan', String(card.pan));
     else card.removeAttribute('pan');
+    card.toggleAttribute('solo-safe', Boolean(soloSafe?.checked));
     if (state) state.textContent = `${px}px · ${count} send${count === 1 ? '' : 's'}`;
   };
   width?.addEventListener('input', apply);
   sendCount?.addEventListener('input', apply);
   pan?.addEventListener('change', apply);
+  soloSafe?.addEventListener('change', apply);
   apply();
   // the strip and the card are two views of one channel; the host keeps them in step
   strip.addEventListener('parameter-edit', ({ detail }) => {
@@ -639,7 +642,7 @@ function setupChannelCardDemo() {
   card.addEventListener('parameter-edit', ({ detail }) => {
     if (detail.parameterID === 'keys-gain') strip.setValue(detail.value, false, 'host');
     if (detail.parameterID === 'keys-pan') strip.setPan(detail.value, false, 'host');
-    if (detail.name && ['arm', 'monitor', 'mute', 'solo'].includes(detail.name)) {
+    if (detail.name && ['arm', 'monitor', 'mute', 'solo', 'solo-safe'].includes(detail.name)) {
       card.toggleAttribute(detail.name, detail.value >= 0.5);
       if (detail.name === 'mute') {
         strip.toggleAttribute('muted', detail.value >= 0.5);

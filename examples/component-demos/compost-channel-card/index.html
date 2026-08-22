@@ -38,6 +38,10 @@
               <input type="checkbox" data-option="card-pan" checked>
               Pan
             </label>
+            <label class="check">
+              <input type="checkbox" data-option="card-solo-safe">
+              Solo-safe
+            </label>
             <output data-option-state>180px · 1 send</output>
             <p class="muted">
               The card lays out around the meter gutter its column runs
@@ -56,6 +60,7 @@
                 switches="arm monitor mute solo" monitor
                 arm-parameter-id="keys-arm" monitor-parameter-id="keys-monitor"
                 mute-parameter-id="keys-mute" solo-parameter-id="keys-solo"
+                solo-safe-parameter-id="keys-solo-safe"
                 style="margin-top:auto"></compost-channel-card>
             </compost-channel-strip>
             <compost-popup data-card-inputs heading="input"></compost-popup>
