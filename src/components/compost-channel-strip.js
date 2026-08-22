@@ -13,8 +13,8 @@ let nextStripID = 1;
 const MAX_CHANNELS = 16;
 const AXIS_DEADZONE = 3;
 const PAN_BIAS = 1.4;
-const GAIN_PER_PIXEL = 0.12;
-const GAIN_PER_PIXEL_FINE = 0.03;
+/** A fine drag (alt, shift or a second press) moves the edge this fraction of the pointer. */
+const FINE_DRAG = 0.25;
 const PAN_PER_PIXEL = 0.014;
 const PAN_PER_PIXEL_FINE = 0.004;
 const SECOND_PRESS_MS = 320;
@@ -54,6 +54,24 @@ export function washPosition(db, taper = DEFAULT_TAPER) {
     if (value <= a && value >= b) return fb + (fa - fb) * (value - b) / (a - b);
   }
   return 0;
+}
+
+/** The level at a height of the column, as a 0..1 fraction: washPosition run backwards,
+ * so a drag can keep the wash edge under the pointer whatever the taper does. */
+/** @param {number} fraction @param {readonly (readonly [number, number])[]} [taper] */
+export function washLevel(fraction, taper = DEFAULT_TAPER) {
+  const value = Number(fraction);
+  if (!Number.isFinite(value)) return taper[taper.length - 1][0];
+  const top = taper[0];
+  const bottom = taper[taper.length - 1];
+  if (value >= top[1]) return top[0];
+  if (value <= bottom[1]) return bottom[0];
+  for (let index = 0; index < taper.length - 1; index += 1) {
+    const [a, fa] = taper[index];
+    const [b, fb] = taper[index + 1];
+    if (value <= fa && value >= fb) return fa === fb ? b : b + (a - b) * (value - fb) / (fa - fb);
+  }
+  return bottom[0];
 }
 
 /** Chooses the drag axis from the first movement: sideways means pan. */
@@ -493,7 +511,11 @@ export class CompostChannelStrip extends HTMLElement {
     event.preventDefault();
     const fine = drag.fine || event.altKey || event.shiftKey;
     if (drag.axis === 'gain') {
-      this.setValue(drag.gain + dy * (fine ? GAIN_PER_PIXEL_FINE : GAIN_PER_PIXEL));
+      // the wash edge follows the pointer: one pixel of drag is one pixel of
+      // edge, wherever on the taper the level is — the same feel top to bottom
+      const axis = this.surface.getBoundingClientRect().height || this.getBoundingClientRect().height || 1;
+      const fraction = this.position(drag.gain) + (dy * (fine ? FINE_DRAG : 1)) / axis;
+      this.setValue(washLevel(fraction, this.taper));
     } else {
       this.setPan(drag.pan + dx * (fine ? PAN_PER_PIXEL_FINE : PAN_PER_PIXEL));
     }

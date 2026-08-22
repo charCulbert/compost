@@ -8,7 +8,7 @@ globalThis.customElements ??= {
   define(name, constructor) { this.elements.set(name, constructor); },
 };
 
-const { DEFAULT_TAPER, dragAxis, parseTaper, washPosition } = await import('../src/components/compost-channel-strip.js');
+const { DEFAULT_TAPER, dragAxis, parseTaper, washLevel, washPosition } = await import('../src/components/compost-channel-strip.js');
 const { panBar, panText } = await import('../src/components/compost-channel-card.js');
 const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
@@ -124,4 +124,18 @@ test('trimming keeps the end, velocity pins to MIDI, duplicates land one span la
   let next = 0;
   const copies = duplicatedNotes(notes, ['a', 'b'], 0.25, 16, () => `c${next += 1}`);
   assert.deepEqual(copies.map((note) => [note.id, note.start]), [['c1', 3], ['c2', 4.5]]);
+});
+
+test('washLevel is washPosition run backwards, so a drag keeps the edge under the pointer', () => {
+  for (const db of [12, 6, 3, 0, -4.5, -12, -20, -36, -48, -60, -75, -90])
+    assert.ok(Math.abs(washLevel(washPosition(db)) - db) < 1e-9, `${db} dB round-trips`);
+  assert.equal(washLevel(0.7), 0);
+  assert.equal(washLevel(1), 12);
+  assert.equal(washLevel(0), -90);
+  assert.equal(washLevel(1.4), 12);
+  assert.equal(washLevel(-0.2), -90);
+  assert.equal(washLevel(Number.NaN), -90);
+  const taper = parseTaper('6:1 0:.5 -60:0');
+  assert.equal(washLevel(0.75, taper), 3);
+  assert.equal(washLevel(0.25, taper), -30);
 });
