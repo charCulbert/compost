@@ -2,7 +2,8 @@ const ids = [
   'compost-audio', 'compost-midi', 'compost-device-selector', 'compost-drawer',
   'compost-knob', 'compost-slider', 'compost-gain', 'compost-number-box', 'compost-button',
   'compost-select', 'compost-piano', 'compost-piano-roll', 'compost-scope', 'compost-midi-monitor',
-  'compost-midi-mappings',
+  'compost-midi-mappings', 'compost-channel-strip', 'compost-channel-card', 'compost-clip-grid',
+  'compost-note-editor', 'compost-window', 'compost-popup',
 ];
 
 export const demos = ids.map((id) => ({
@@ -24,6 +25,12 @@ export const demos = ids.map((id) => ({
     'compost-piano-roll': 'Draw, move, resize, select, and quantize MIDI notes on a grid.',
     'compost-midi-monitor': 'Log incoming messages from a selected real MIDI input.',
     'compost-midi-mappings': 'Learn, edit, and clear compact MIDI mappings.',
+    'compost-channel-strip': 'A track column that is the channel: wash fader, meters and 0 dB notch on one dB axis.',
+    'compost-channel-card': 'Input, pan, level, sends and state switches laid out around the meter gutter.',
+    'compost-clip-grid': 'Clip slots with stopped, queued, playing and recording states and a stop slot.',
+    'compost-note-editor': 'Notes on a grid with a loop region, velocity, marquee selection and a supplied playhead.',
+    'compost-window': 'A floating window: dragged by its header, resized in bounds, never off screen.',
+    'compost-popup': 'A small anchored menu or context menu, measured and kept on screen.',
   }[id] || `Interactive ${id} component demo.`,
   css: '',
   controls: [],

@@ -264,3 +264,87 @@ compost-device-selector {
   --compost-device-selector-focus-color: var(--compost-theme-accent);
   --compost-device-selector-color-scheme: var(--compost-theme-color-scheme);
 }
+
+compost-channel-strip {
+  --compost-channel-strip-bg: var(--compost-theme-bg);
+  --compost-channel-strip-signal: var(--compost-theme-accent);
+  --compost-channel-strip-over: var(--compost-theme-danger);
+  --compost-channel-strip-rail: var(--compost-theme-track);
+  --compost-channel-strip-zero: color-mix(in srgb, var(--compost-theme-accent) 42%, transparent);
+  --compost-channel-strip-scale-text: var(--compost-theme-muted);
+  --compost-channel-strip-editor-bg: var(--compost-theme-control-bg);
+  --compost-channel-strip-editor-text: var(--compost-theme-text);
+  --compost-channel-strip-focus: var(--compost-theme-accent);
+  --compost-channel-strip-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-channel-card {
+  --compost-channel-card-hover-bg: var(--compost-theme-panel-glass);
+  --compost-channel-card-text: var(--compost-theme-text);
+  --compost-channel-card-muted: var(--compost-theme-muted);
+  --compost-channel-card-faint: color-mix(in srgb, var(--compost-theme-muted) 70%, transparent);
+  --compost-channel-card-rule: var(--compost-theme-track);
+  --compost-channel-card-signal: var(--compost-theme-accent);
+  --compost-channel-card-signal-hi: var(--compost-theme-accent);
+  --compost-channel-card-over: var(--compost-theme-danger);
+  --compost-channel-card-select: var(--compost-theme-learn);
+  --compost-channel-card-hover: color-mix(in srgb, var(--compost-theme-text) 7%, transparent);
+  --compost-channel-card-editor-bg: var(--compost-theme-control-bg);
+  --compost-channel-card-notch-bg: var(--compost-theme-bg);
+  --compost-channel-card-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-clip-grid {
+  --compost-clip-grid-text: var(--compost-theme-text);
+  --compost-clip-grid-faint: color-mix(in srgb, var(--compost-theme-muted) 70%, transparent);
+  --compost-clip-grid-signal: var(--compost-theme-accent);
+  --compost-clip-grid-signal-hi: var(--compost-theme-accent);
+  --compost-clip-grid-select: var(--compost-theme-learn);
+  --compost-clip-grid-over: var(--compost-theme-danger);
+  --compost-clip-grid-rail: var(--compost-theme-track);
+  --compost-clip-grid-wash: color-mix(in srgb, var(--compost-theme-accent) 22%, transparent);
+  --compost-clip-grid-highlight: color-mix(in srgb, var(--compost-theme-text) 7%, transparent);
+  --compost-clip-grid-editor-bg: var(--compost-theme-control-bg);
+  --compost-clip-grid-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-note-editor {
+  --compost-note-editor-bg: var(--compost-theme-bg);
+  --compost-note-editor-text: var(--compost-theme-text);
+  --compost-note-editor-muted: var(--compost-theme-muted);
+  --compost-note-editor-faint: color-mix(in srgb, var(--compost-theme-muted) 70%, transparent);
+  --compost-note-editor-line: var(--compost-theme-track);
+  --compost-note-editor-bar-line: var(--compost-theme-muted);
+  --compost-note-editor-signal: var(--compost-theme-accent);
+  --compost-note-editor-select: var(--compost-theme-learn);
+  --compost-note-editor-marquee: color-mix(in srgb, var(--compost-theme-learn) 12%, transparent);
+  --compost-note-editor-wash: color-mix(in srgb, var(--compost-theme-accent) 15%, transparent);
+  --compost-note-editor-past: color-mix(in srgb, var(--compost-theme-bg) 60%, transparent);
+  --compost-note-editor-keys-bg: var(--compost-theme-control-bg);
+  --compost-note-editor-playhead: var(--compost-theme-text);
+  --compost-note-editor-tip-bg: var(--compost-theme-control-bg);
+  --compost-note-editor-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-window {
+  --compost-window-bg: var(--compost-theme-panel);
+  --compost-window-text: var(--compost-theme-text);
+  --compost-window-muted: var(--compost-theme-muted);
+  --compost-window-border: var(--compost-theme-line);
+  --compost-window-close-color: var(--compost-theme-muted);
+  --compost-window-close-hover-color: var(--compost-theme-text);
+  --compost-window-grip-color: var(--compost-theme-muted);
+  --compost-window-focus: var(--compost-theme-accent);
+  --compost-window-color-scheme: var(--compost-theme-color-scheme);
+}
+
+compost-popup {
+  --compost-popup-bg: var(--compost-theme-panel);
+  --compost-popup-text: var(--compost-theme-text);
+  --compost-popup-muted: var(--compost-theme-muted);
+  --compost-popup-border: var(--compost-theme-line);
+  --compost-popup-hover-bg: color-mix(in srgb, var(--compost-theme-text) 8%, transparent);
+  --compost-popup-active-text: var(--compost-theme-accent);
+  --compost-popup-heading-text: var(--compost-theme-muted);
+  --compost-popup-color-scheme: var(--compost-theme-color-scheme);
+}

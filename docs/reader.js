@@ -23,6 +23,12 @@ const docs = [
   ['compost-scope', 'compost-scope', './components/compost-scope.md'],
   ['compost-midi-monitor', 'compost-midi-monitor', './components/compost-midi-monitor.md'],
   ['compost-midi-mappings', 'compost-midi-mappings', './components/compost-midi-mappings.md'],
+  ['compost-channel-strip', 'compost-channel-strip', './components/compost-channel-strip.md'],
+  ['compost-channel-card', 'compost-channel-card', './components/compost-channel-card.md'],
+  ['compost-clip-grid', 'compost-clip-grid', './components/compost-clip-grid.md'],
+  ['compost-note-editor', 'compost-note-editor', './components/compost-note-editor.md'],
+  ['compost-window', 'compost-window', './components/compost-window.md'],
+  ['compost-popup', 'compost-popup', './components/compost-popup.md'],
 ];
 
 const docMap = new Map(docs.map(([id, title, href]) => [id, { id, title, href }]));

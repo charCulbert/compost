@@ -106,3 +106,51 @@ export function notesInBox(notes, box) {
   return notes.filter((note) => note.note >= lowNote && note.note <= highNote
     && note.start < endBeat && note.start + note.duration > startBeat);
 }
+
+/** Trims notes from their left edge: the start moves, the end stays put. */
+/** @param {RollNote[]} notes @param {string[]} ids @param {number} deltaBeats
+ * @param {number} beats @param {number} step @param {string} [mode] */
+export function trimmedNotes(notes, ids, deltaBeats, beats, step, mode = 'grid') {
+  const trimming = new Set(ids);
+  return notes.map((note) => {
+    if (!trimming.has(note.id)) return note;
+    const end = note.start + note.duration;
+    const minimum = mode === 'off' || !(step > 0) ? MIN_DURATION : step;
+    const start = clamp(snapBeats(note.start + deltaBeats, step, mode), 0, end - minimum);
+    return normaliseNote({ ...note, start, duration: end - start }, beats);
+  });
+}
+
+/** Shifts velocities, pinned to the MIDI range. */
+/** @param {RollNote[]} notes @param {string[]} ids @param {number} delta */
+export function velocityShiftedNotes(notes, ids, delta) {
+  const changing = new Set(ids);
+  return notes.map((note) => (changing.has(note.id)
+    ? { ...note, velocity: clamp(Math.round(note.velocity + delta), 1, 127) }
+    : note));
+}
+
+/** The first start and last end of a set of notes, or null when empty. */
+/** @param {RollNote[]} notes @param {string[]|null} [ids] */
+export function selectionSpan(notes, ids = null) {
+  const chosen = ids ? notes.filter((note) => ids.includes(note.id)) : notes;
+  if (!chosen.length) return null;
+  return {
+    start: Math.min(...chosen.map((note) => note.start)),
+    end: Math.max(...chosen.map((note) => note.start + note.duration)),
+  };
+}
+
+/** Copies notes one span later — rounded up to the grid so the copy lands on
+ * a cell — and returns the copies, which a caller usually selects. */
+/** @param {RollNote[]} notes @param {string[]} ids @param {number} step @param {number} beats
+ * @param {() => string} newId @param {string} [mode] */
+export function duplicatedNotes(notes, ids, step, beats, newId, mode = 'grid') {
+  const span = selectionSpan(notes, ids);
+  if (!span) return [];
+  const raw = span.end - span.start;
+  const shift = mode === 'off' || !(step > 0) ? raw : Math.max(step, Math.ceil(raw / step - 1e-9) * step);
+  return notes.filter((note) => ids.includes(note.id)).map((note) => normaliseNote({
+    ...note, id: newId(), start: Math.min(Math.max(0, beats - note.duration), note.start + shift),
+  }, beats));
+}

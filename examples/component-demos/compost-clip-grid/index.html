@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-clip-grid.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-clip-grid">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-clip-grid">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Host</legend>
+            <label class="check">
+              <input type="checkbox" data-option="grid-armed">
+              Armed
+            </label>
+            <label>
+              Launch quantization
+              <input type="number" data-option="grid-quant" min="0" max="4" value="1" step="0.25"> beats
+            </label>
+            <output data-option-state>stopped</output>
+            <p class="muted">
+              Two tracks of clip slots. A launch queues the clip until the
+              next quantization point — the demo plays host, runs a clock and
+              sets states back — then the progress washes behind the name.
+              The stop slot takes the track out the same way. Drag a name to
+              another slot or the other track (Alt copies); the grid reports
+              the drop and the host moves the data. Double-click opens,
+              right-click asks for a menu, F2 renames.
+            </p>
+          </fieldset>
+          <div class="demo-showcase" style="display:flex; gap:12px; align-items:flex-start;">
+            <compost-clip-grid data-option-target="grid" data-grid="0" label="Drums" slots="5" style="width:132px"></compost-clip-grid>
+            <compost-clip-grid data-grid="1" label="Bass" slots="5" style="width:132px"></compost-clip-grid>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+  </body>
+</html>

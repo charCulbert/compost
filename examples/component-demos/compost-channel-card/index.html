@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-channel-card.js" data-usage-import></script>
+    <script type="module" src="../../../src/components/compost-channel-strip.js"></script>
+    <script type="module" src="../../../src/components/compost-popup.js"></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-channel-card">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-channel-card">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Card</legend>
+            <label>
+              Column width
+              <input type="range" data-option="card-width" min="74" max="300" value="180" step="1">
+            </label>
+            <label>
+              Sends
+              <input type="number" data-option="card-sends" min="0" max="4" value="1" step="1">
+            </label>
+            <label class="check">
+              <input type="checkbox" data-option="card-pan" checked>
+              Pan
+            </label>
+            <output data-option-state>180px · 1 send</output>
+            <p class="muted">
+              The card lays out around the meter gutter its column runs
+              through: the level figure to its left, sends to its right, the
+              switches straddling it. Narrow the column and the rows stack;
+              narrower still and a wide figure sits in a notch cut through the
+              rail. The input is a button that asks the host for a chooser —
+              here a <code>compost-popup</code>.
+            </p>
+          </fieldset>
+          <div class="demo-showcase" style="display:flex; gap:0; align-items:stretch; height:420px;">
+            <compost-channel-strip data-option-target="card-strip" parameter-id="keys-gain" pan-parameter-id="keys-pan"
+              label="Keys" value="-3.2" pan="0" channels="2" style="width:180px">
+              <compost-channel-card data-option-target="card" label="Keys" input="MIDI 1 · 1" input-live
+                value="-3.2" gain-parameter-id="keys-gain" pan="0" pan-parameter-id="keys-pan"
+                switches="arm monitor mute solo" monitor
+                arm-parameter-id="keys-arm" monitor-parameter-id="keys-monitor"
+                mute-parameter-id="keys-mute" solo-parameter-id="keys-solo"
+                style="margin-top:auto"></compost-channel-card>
+            </compost-channel-strip>
+            <compost-popup data-card-inputs heading="input"></compost-popup>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+  </body>
+</html>

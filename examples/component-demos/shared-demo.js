@@ -567,6 +567,319 @@ function setupPianoRollDemo() {
 
 if (demo?.id === 'compost-piano-roll') setupPianoRollDemo();
 
+function setupChannelStripDemo() {
+  const strips = [...document.querySelectorAll('compost-channel-strip[data-strip-meter]')];
+  const target = document.querySelector('[data-option-target="strip"]');
+  if (!strips.length || !target) return;
+  const state = document.querySelector('[data-option-state]');
+  const running = option('strip-running');
+  const muted = option('strip-muted');
+  const meter = option('strip-meter');
+  const scale = option('strip-scale');
+  const channels = option('strip-channels');
+  let animate = true;
+  let phase = 0;
+  // a host would hand over real peak levels; here they wander near the gain
+  const tick = () => {
+    phase += 1 / 40;
+    if (animate) {
+      strips.forEach((strip, index) => {
+        const levels = Array.from({ length: strip.channels }, (_, channel) =>
+          strip.value - 4 + Math.sin(phase * (1.6 + index * 0.3) + channel) * 5
+          - Math.random() * 3);
+        strip.setLevels(levels);
+      });
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  running?.addEventListener('change', () => {
+    animate = running.checked;
+    if (!animate) strips.forEach((strip) => strip.setLevels(strip.levels.map(() => -90)));
+    if (state) state.textContent = animate ? 'Meters running' : 'Meters paused';
+  });
+  muted?.addEventListener('change', () => target.toggleAttribute('muted', muted.checked));
+  meter?.addEventListener('change', () => target.setAttribute('meter-position', meter.value));
+  scale?.addEventListener('change', () => target.setAttribute('scale', scale.value));
+  channels?.addEventListener('input', () => target.setAttribute('channels', channels.value));
+}
+
+function setupChannelCardDemo() {
+  const card = document.querySelector('[data-option-target="card"]');
+  const strip = document.querySelector('[data-option-target="card-strip"]');
+  const popup = document.querySelector('[data-card-inputs]');
+  if (!card || !strip) return;
+  const state = document.querySelector('[data-option-state]');
+  const width = option('card-width');
+  const sendCount = option('card-sends');
+  const pan = option('card-pan');
+  const inputs = ['no input', 'MIDI 1 · 1', 'MIDI 1 · 2', 'MIDI 1 all', 'MIDI 2 all'];
+  let inputIndex = 1;
+  const apply = () => {
+    const px = Number(width?.value) || 132;
+    strip.style.width = `${px}px`;
+    const count = Math.max(0, Math.min(4, Number(sendCount?.value) || 0));
+    card.sends = Array.from({ length: count }, (_, index) => ({
+      label: String.fromCharCode(65 + index), value: index === 0 ? -12 : -90,
+      parameterID: `keys-send-${String.fromCharCode(65 + index).toLowerCase()}`, min: -90, max: 6,
+    }));
+    if (pan?.checked) card.setAttribute('pan', String(card.pan));
+    else card.removeAttribute('pan');
+    if (state) state.textContent = `${px}px · ${count} send${count === 1 ? '' : 's'}`;
+  };
+  width?.addEventListener('input', apply);
+  sendCount?.addEventListener('input', apply);
+  pan?.addEventListener('change', apply);
+  apply();
+  // the strip and the card are two views of one channel; the host keeps them in step
+  strip.addEventListener('parameter-edit', ({ detail }) => {
+    if (detail.parameterID === 'keys-gain') card.setValue(detail.value, false, 'host');
+    if (detail.parameterID === 'keys-pan') card.setPan(detail.value, false, 'host');
+  });
+  card.addEventListener('parameter-edit', ({ detail }) => {
+    if (detail.parameterID === 'keys-gain') strip.setValue(detail.value, false, 'host');
+    if (detail.parameterID === 'keys-pan') strip.setPan(detail.value, false, 'host');
+    if (detail.name && ['arm', 'monitor', 'mute', 'solo'].includes(detail.name)) {
+      card.toggleAttribute(detail.name, detail.value >= 0.5);
+      if (detail.name === 'mute') {
+        strip.toggleAttribute('muted', detail.value >= 0.5);
+        card.toggleAttribute('muted', detail.value >= 0.5);
+      }
+    }
+  });
+  if (popup) {
+    popup.setItems(inputs.map((label, index) => ({ value: String(index), label, selected: index === inputIndex })));
+    card.addEventListener('input-click', ({ detail }) => popup.open({ anchor: detail.anchor }));
+    popup.addEventListener('popup-select', ({ detail }) => {
+      inputIndex = Number(detail.value);
+      card.setAttribute('input', inputs[inputIndex]);
+      card.toggleAttribute('input-live', inputIndex > 0);
+      popup.setItems(inputs.map((label, index) => ({ value: String(index), label, selected: index === inputIndex })));
+      writeLog(`input → ${inputs[inputIndex]}`);
+    });
+  }
+}
+
+function setupClipGridDemo() {
+  const grids = [...document.querySelectorAll('compost-clip-grid[data-grid]')];
+  if (!grids.length) return;
+  const state = document.querySelector('[data-option-state]');
+  const armed = option('grid-armed');
+  const quant = option('grid-quant');
+  // the demo is the host: it owns the clips, the clock and the launch rules
+  const tracks = [
+    [{ name: 'break.a', bars: 2 }, { name: 'fill.b', bars: 1 }, { name: 'ride.c', bars: 1 }, null, null],
+    [{ name: 'sub.a', bars: 4 }, { name: 'walk.b', bars: 2 }, null, null, null],
+  ];
+  const playing = tracks.map(() => ({ index: -1, queued: -1, at: 0, start: 0, stopQueued: false, stopAt: 0 }));
+  let beat = 0;
+  let last = performance.now();
+  const quantization = () => Math.max(0, Number(quant?.value) || 0);
+  const nextPoint = () => {
+    const q = quantization();
+    return q > 0 ? Math.ceil((beat + 1e-6) / q) * q : beat;
+  };
+  const render = (track) => {
+    const grid = grids[track];
+    const live = playing[track];
+    grid.setClips(tracks[track].map((clip, index) => clip && {
+      name: clip.name,
+      state: live.index === index ? 'playing' : live.queued === index ? 'queued' : 'stopped',
+      progress: live.index === index ? (((beat - live.start) / (clip.bars * 4)) % 1 + 1) % 1 : 0,
+    }));
+    grid.setAttribute('stop', live.stopQueued ? 'queued' : live.index >= 0 || live.queued >= 0 ? 'active' : '');
+  };
+  const renderAll = () => {
+    tracks.forEach((_, track) => render(track));
+    if (state) {
+      const words = playing.map((live, track) => (live.index >= 0
+        ? `${tracks[track][live.index]?.name} playing` : live.queued >= 0
+          ? `${tracks[track][live.queued]?.name} queued` : 'stopped'));
+      state.textContent = words.join(' · ');
+    }
+  };
+  grids.forEach((grid, track) => {
+    grid.addEventListener('clip-launch', ({ detail }) => {
+      const live = playing[track];
+      if (live.index === detail.index || live.queued === detail.index) {
+        live.index = -1; live.queued = -1;
+      } else {
+        live.queued = detail.index; live.at = nextPoint(); live.stopQueued = false;
+      }
+      renderAll();
+    });
+    grid.addEventListener('clip-stop', () => {
+      const live = playing[track];
+      if (live.stopQueued) live.stopQueued = false;
+      else if (quantization() > 0 && (live.index >= 0 || live.queued >= 0)) {
+        live.stopQueued = true; live.stopAt = nextPoint(); live.queued = -1;
+      } else { live.index = -1; live.queued = -1; }
+      renderAll();
+    });
+    grid.addEventListener('clip-record', ({ detail }) => {
+      tracks[track][detail.index] = { name: `take ${detail.index + 1}`, bars: 2 };
+      renderAll();
+      writeLog(`clip-record slot ${detail.index + 1} on ${grid.label}`);
+    });
+    grid.addEventListener('clip-drop', ({ detail }) => {
+      const from = grids.indexOf(detail.source);
+      const moved = tracks[from][detail.fromIndex];
+      if (!moved) return;
+      const landed = tracks[track][detail.toIndex];
+      tracks[track][detail.toIndex] = { ...moved, name: detail.copy ? `${moved.name} copy` : moved.name };
+      // slots are fixed cells, so a move swaps rather than overwriting
+      if (!detail.copy) tracks[from][detail.fromIndex] = landed ?? null;
+      renderAll();
+      writeLog(`clip-drop ${moved.name} → ${grid.label} slot ${detail.toIndex + 1}${detail.copy ? ' (copy)' : ''}`);
+    });
+    grid.addEventListener('clip-rename', ({ detail }) => {
+      const clip = tracks[track][detail.index];
+      if (clip) clip.name = detail.name;
+      renderAll();
+      writeLog(`clip-rename → ${detail.name}`);
+    });
+    grid.addEventListener('clip-open', ({ detail }) => writeLog(`clip-open ${tracks[track][detail.index]?.name}`));
+    grid.addEventListener('clip-context', ({ detail }) => writeLog(`clip-context ${tracks[track][detail.index]?.name} at ${detail.clientX},${detail.clientY}`));
+    grid.addEventListener('clip-select', ({ detail }) => {
+      grids.forEach((other) => { other.selected = other === grid ? detail.index : -1; });
+    });
+    grid.addEventListener('clip-delete', ({ detail }) => { tracks[track][detail.index] = null; renderAll(); });
+  });
+  armed?.addEventListener('change', () => grids.forEach((grid) => grid.toggleAttribute('armed', armed.checked)));
+  const tick = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    beat += dt * 2;   // 120 bpm
+    let changed = false;
+    playing.forEach((live, track) => {
+      if (live.stopQueued && beat >= live.stopAt) { live.stopQueued = false; live.index = -1; changed = true; }
+      if (live.queued >= 0 && beat >= live.at) { live.index = live.queued; live.queued = -1; live.start = live.at; changed = true; }
+      if (live.index >= 0) {
+        const clip = tracks[track][live.index];
+        if (clip) grids[track].setProgress(live.index, (((beat - live.start) / (clip.bars * 4)) % 1 + 1) % 1);
+      }
+    });
+    if (changed) renderAll();
+    requestAnimationFrame(tick);
+  };
+  renderAll();
+  requestAnimationFrame(tick);
+}
+
+function setupNoteEditorDemo() {
+  const editor = document.querySelector('[data-option-target="editor"]');
+  if (!editor) return;
+  const state = document.querySelector('[data-option-state]');
+  const grid = option('editor-grid');
+  const snap = option('editor-snap');
+  const draw = option('editor-draw');
+  const fold = option('editor-fold');
+  const playhead = option('editor-playhead');
+  editor.setNotes([
+    { note: 60, start: 0, duration: 0.5, velocity: 100 }, { note: 64, start: 2, duration: 0.5, velocity: 88 },
+    { note: 60, start: 4, duration: 0.5, velocity: 100 }, { note: 64, start: 6, duration: 0.5, velocity: 88 },
+    { note: 67, start: 6.5, duration: 0.5, velocity: 96 },
+  ]);
+  const report = () => {
+    if (!state) return;
+    const bars = Math.round((editor.loopEnd - editor.loopStart) / editor.beatsPerBar * 1000) / 1000;
+    state.textContent = `1/${editor.grid} · ${snap?.checked ? 'snapping' : 'free'} · ${bars} bar${bars === 1 ? '' : 's'} · ${editor.notes.length} notes`;
+  };
+  grid?.addEventListener('change', () => { editor.setAttribute('grid', grid.value); report(); });
+  snap?.addEventListener('change', () => { editor.setAttribute('snap', snap.checked ? 'grid' : 'off'); report(); });
+  draw?.addEventListener('change', () => editor.toggleAttribute('draw', draw.checked));
+  fold?.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
+  document.querySelector('[data-editor-quantize]')?.addEventListener('click', () => editor.quantize());
+  document.querySelector('[data-editor-zoom]')?.addEventListener('click', () => editor.zoomReset());
+  editor.addEventListener('notes-change', report);
+  editor.addEventListener('loop-change', ({ detail }) => { report(); writeLog(`loop-change ${detail.start}–${detail.end}`); });
+  editor.addEventListener('note-preview', ({ detail }) => writeLog(`note-preview ${detail.note}`));
+  // a host supplies the playhead: here a clock running round the loop
+  let last = performance.now();
+  let position = 0;
+  const tick = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (playhead?.checked) {
+      const span = Math.max(0.25, editor.loopEnd - editor.loopStart);
+      position = editor.loopStart + ((position - editor.loopStart + dt * 2) % span + span) % span;
+      editor.setAttribute('playhead', position.toFixed(3));
+    } else if (editor.hasAttribute('playhead')) editor.removeAttribute('playhead');
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  report();
+}
+
+function setupWindowDemo() {
+  const window_ = document.querySelector('[data-option-target="window"]');
+  if (!window_) return;
+  const state = document.querySelector('[data-option-state]');
+  const ratio = option('window-ratio');
+  const fullscreen = option('window-fullscreen');
+  const minimum = option('window-min');
+  const report = () => {
+    if (!state) return;
+    const size = window_.contentSize;
+    state.textContent = window_.open
+      ? `open at ${window_.getAttribute('x')},${window_.getAttribute('y')} · content ${size.width}×${size.height}` : 'closed';
+  };
+  document.querySelector('[data-window-open]')?.addEventListener('click', () => { window_.open = true; report(); });
+  ratio?.addEventListener('change', () => {
+    if (ratio.checked) window_.setAttribute('aspect-ratio', '4/3'); else window_.removeAttribute('aspect-ratio');
+    const size = window_.contentSize;
+    window_.setContentSize(size.width, size.height);
+    report();
+  });
+  fullscreen?.addEventListener('change', () => { window_.toggleAttribute('fullscreen', fullscreen.checked); report(); });
+  minimum?.addEventListener('input', () => {
+    window_.setAttribute('min-width', minimum.value);
+    window_.setAttribute('min-height', String(Math.round(Number(minimum.value) * 0.6)));
+  });
+  for (const type of ['window-open', 'window-close', 'window-move', 'window-resize', 'window-focus']) {
+    window_.addEventListener(type, ({ detail }) => {
+      if (type !== 'window-focus') writeLog(`${type}${detail && Object.keys(detail).length ? ` ${JSON.stringify(detail)}` : ''}`);
+      requestAnimationFrame(report);
+    });
+  }
+  report();
+}
+
+function setupPopupDemo() {
+  const popup = document.querySelector('[data-option-target="popup"]');
+  const quantMenu = document.querySelector('[data-popup-quant-menu]');
+  const context = document.querySelector('[data-popup-context]');
+  if (!popup || !quantMenu || !context) return;
+  const state = document.querySelector('[data-option-state]');
+  const anchor = document.querySelector('[data-popup-anchor]');
+  const quant = document.querySelector('[data-popup-quant]');
+  const surface = document.querySelector('[data-popup-surface]');
+  quantMenu.setItems([
+    { value: '8', label: '2 bars' }, { value: '4', label: '1 bar' }, { value: '2', label: '1/2' },
+    { value: '1', label: '1/4', selected: true }, { value: '0.5', label: '1/8' }, { value: '0', label: 'off' },
+  ]);
+  anchor?.addEventListener('click', () => popup.open({ anchor }));
+  quant?.addEventListener('click', () => quantMenu.open({ anchor: quant }));
+  surface?.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    context.openAt(event.clientX, event.clientY);
+  });
+  for (const menu of [popup, quantMenu, context]) {
+    menu.addEventListener('popup-select', ({ detail }) => {
+      menu.value = detail.value;
+      if (state) state.textContent = `${menu.getAttribute('label')}: ${detail.label}`;
+      writeLog(`popup-select ${menu.getAttribute('label')} → ${detail.value}`);
+    });
+  }
+}
+
+if (demo?.id === 'compost-channel-strip') setupChannelStripDemo();
+if (demo?.id === 'compost-channel-card') setupChannelCardDemo();
+if (demo?.id === 'compost-clip-grid') setupClipGridDemo();
+if (demo?.id === 'compost-note-editor') setupNoteEditorDemo();
+if (demo?.id === 'compost-window') setupWindowDemo();
+if (demo?.id === 'compost-popup') setupPopupDemo();
+
 function writeLog(line) {
   if (!log) return;
   log.textContent = `${line}\n${log.textContent}`.slice(0, 4000);

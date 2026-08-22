@@ -6,6 +6,7 @@
     <title>Compost demo</title>
     <link rel="stylesheet" href="../../shared/styles.css">
     <script type="module" src="../../../src/components/compost-piano-roll.js" data-usage-import></script>
+    <script type="module" src="../../../src/components/compost-select.js"></script>
     <script type="module" src="../shared-demo.js"></script>
   </head>
   <body data-demo="compost-piano-roll">
@@ -26,14 +27,14 @@
             <legend>Grid</legend>
             <label>
               Division
-              <select data-option="roll-grid">
+              <compost-select data-option="roll-grid" aria-label="Grid division" value="16">
                 <option value="1">1/1</option>
                 <option value="2">1/2</option>
                 <option value="4">1/4</option>
                 <option value="8">1/8</option>
-                <option value="16" selected>1/16</option>
+                <option value="16">1/16</option>
                 <option value="32">1/32</option>
-              </select>
+              </compost-select>
             </label>
             <label class="check">
               <input type="checkbox" data-option="roll-snap" checked>

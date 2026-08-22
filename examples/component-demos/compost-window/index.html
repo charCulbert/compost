@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-window.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-window">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-window">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Window</legend>
+            <button type="button" class="example-nav-button" data-window-open>Open</button>
+            <label class="check"><input type="checkbox" data-option="window-ratio"> Keep 4:3</label>
+            <label class="check"><input type="checkbox" data-option="window-fullscreen"> Take the screen</label>
+            <label>
+              Min size
+              <input type="number" data-option="window-min" min="100" max="600" value="200" step="10">
+            </label>
+            <output data-option-state>closed</output>
+            <p class="muted">
+              Drag the header; the frame never leaves the viewport. Resize from
+              the corner grip inside the minimum, the maximum and the screen,
+              and in ratio when one is set. <code>width</code> and
+              <code>height</code> name the content box — what a plug-in
+              negotiates — and the frame adds its chrome. Closing asks first:
+              the host may cancel <code>window-close</code>.
+            </p>
+          </fieldset>
+          <div class="demo-showcase" style="display:block; min-height:120px">
+            <compost-window data-option-target="window" heading="Plug-in window" x="320" y="140" width="320" height="220"
+              min-width="200" min-height="120">
+              <span slot="controls" class="muted" style="font-size:0.9em">wclap</span>
+              <div data-window-content style="height:100%; box-sizing:border-box; padding:14px; display:flex; align-items:center; justify-content:center; color:var(--example-muted,#888)">the plug-in&#8217;s own interface goes here</div>
+            </compost-window>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+  </body>
+</html>

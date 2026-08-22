@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-popup.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+  </head>
+  <body data-demo="compost-popup">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-popup">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Menus</legend>
+            <button type="button" class="example-nav-button" data-popup-anchor>Input ▾</button>
+            <button type="button" class="example-nav-button" data-popup-quant>Launch quantization ▾</button>
+            <p class="muted">Right-click the box below for a context menu at the pointer.</p>
+            <output data-option-state>nothing picked</output>
+            <p class="muted">
+              One small menu for every anchored list: a chooser hanging from a
+              control, a dropdown, a context menu at a point. Placement is
+              measured and kept on screen; the picked entry carries a mark;
+              arrows, Enter and Escape work; an outside press closes it.
+            </p>
+          </fieldset>
+          <div class="demo-showcase" style="display:block">
+            <div data-popup-surface style="height:160px; border:1px dashed var(--example-line,#8884); display:flex; align-items:center; justify-content:center; color:var(--example-muted,#888); user-select:none">right-click here</div>
+            <compost-popup data-option-target="popup" heading="input" label="Track input">
+              <option value="none">no input</option>
+              <option value="midi-1-1" selected>MIDI 1 · 1</option>
+              <option value="midi-1-2">MIDI 1 · 2</option>
+              <option value="midi-1">MIDI 1 all</option>
+            </compost-popup>
+            <compost-popup data-popup-quant-menu label="Launch quantization"></compost-popup>
+            <compost-popup data-popup-context label="Clip actions">
+              <option value="launch">Launch</option>
+              <option value="loop">Loop off</option>
+              <hr>
+              <option value="rename">Rename</option>
+              <option value="duplicate">Duplicate</option>
+              <option value="delete">Delete</option>
+            </compost-popup>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+  </body>
+</html>
