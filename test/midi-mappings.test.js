@@ -7,8 +7,24 @@ import { FakeControl, FakeRoot } from './helpers/fakes.js';
 function setup(kind = 'continuous') {
   const control = new FakeControl({ 'parameter-id': 'gain', min: 0, max: 1, value: 0 });
   const parameters = createParameterController({ root: new FakeRoot([control]), definitions: [{ parameterID: 'gain', kind, min: 0, max: 1, defaultValue: 0, step: kind === 'trigger' ? 1 : 0 }] });
-  return { control, parameters, mappings: createMIDIMappings({ parameters }) };
+  return { control, parameters, mappings: createMIDIMappings({ parameterProvider: parameters }) };
 }
+
+test('needs only a parameter definition provider', () => {
+  const parameterProvider = {
+    definition(parameterID) {
+      return parameterID === 'gain'
+        ? { parameterID, name: 'Gain', kind: 'continuous', min: 0, max: 1, step: 0 }
+        : null;
+    },
+  };
+  const mappings = createMIDIMappings({ parameterProvider });
+
+  assert.equal(mappings.applyMapping({ parameterID: 'gain', cc: 7 }), true);
+  assert.equal(mappings.get('gain').label, 'Gain');
+  assert.throws(() => createMIDIMappings({ parameters: parameterProvider }),
+    /parameter definition provider/u);
+});
 
 test('mapping request stays unconfirmed until applyMapping', () => {
   const { mappings } = setup();
@@ -67,7 +83,7 @@ test('one MIDI address fans out to multiple parameter targets', () => {
       { parameterID: 'tone', kind: 'continuous', min: 0, max: 1, defaultValue: 0, step: 0 },
     ],
   });
-  const mappings = createMIDIMappings({ parameters });
+  const mappings = createMIDIMappings({ parameterProvider: parameters });
   assert.equal(mappings.applyMapping({ parameterID: 'gain', cc: 7, channel: 1 }), true);
   assert.equal(mappings.applyMapping({ parameterID: 'tone', cc: 7, channel: 1 }), true);
   assert.equal(mappings.get('gain').cc, 7);
@@ -89,7 +105,7 @@ test('fixed-channel and wildcard MIDI mappings both receive matching CCs', () =>
       { parameterID: 'tone', kind: 'continuous', min: 0, max: 1, defaultValue: 0, step: 0 },
     ],
   });
-  const mappings = createMIDIMappings({ parameters });
+  const mappings = createMIDIMappings({ parameterProvider: parameters });
   mappings.applyMapping({ parameterID: 'gain', cc: 7, channel: null });
   mappings.applyMapping({ parameterID: 'tone', cc: 7, channel: 1 });
   const targets = [];
@@ -126,7 +142,7 @@ test('mapping snapshots expose ranges and cannot mutate controller state', () =>
       values: [0, 1, 2, 3],
     }],
   });
-  const mappings = createMIDIMappings({ parameters });
+  const mappings = createMIDIMappings({ parameterProvider: parameters });
 
   assert.equal(mappings.applyMapping({ parameterID: 'mode', cc: 9, min: 1, max: 2 }), true);
   const snapshot = mappings.get('mode');
@@ -162,7 +178,7 @@ test('discrete and stepped mappings use stable MIDI buckets', () => {
       values: [0, 1, 2, 3],
     }],
   });
-  const discreteMappings = createMIDIMappings({ parameters: discrete });
+  const discreteMappings = createMIDIMappings({ parameterProvider: discrete });
   discreteMappings.applyMapping({ parameterID: 'mode', cc: 1 });
   const values = [];
   discreteMappings.addEventListener('midi-parameter', ({ detail }) => values.push(detail.value));
@@ -200,7 +216,7 @@ test('applyMappings validates the full snapshot before replacing mappings', () =
       { parameterID: 'tone', kind: 'continuous', min: 0, max: 1, defaultValue: 0, step: 0 },
     ],
   });
-  const multiMappings = createMIDIMappings({ parameters: multiParameters });
+  const multiMappings = createMIDIMappings({ parameterProvider: multiParameters });
   assert.equal(multiMappings.applyMappings([
     { parameterID: 'gain', cc: 7, channel: 1 },
     { parameterID: 'tone', cc: 7, channel: 1 },

@@ -14,7 +14,7 @@ if (demo) {
 }
 
 const parameters = createParameterController({ root: document });
-const mappings = createMIDIMappings({ parameters });
+const mappings = createMIDIMappings({ parameterProvider: parameters });
 const mappingsEditor = document.querySelector('compost-midi-mappings');
 if (mappingsEditor) mappingsEditor.mappings = mappings;
 const webMIDI = document.querySelector('compost-midi');

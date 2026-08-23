@@ -117,7 +117,7 @@ syncMobileLayout();
 syncMIDIDrawerLayout();
 
 const parameters = createParameterController({ root: document });
-const mappings = createMIDIMappings({ parameters });
+const mappings = createMIDIMappings({ parameterProvider: parameters });
 midiMappingsEditor.mappings = mappings;
 mappings.addEventListener('midi-mapping-request', (event) => mappings.applyMapping(event.detail));
 mappings.addEventListener('midi-unmapping-request', (event) => mappings.applyClear(event.detail.parameterID));

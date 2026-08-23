@@ -534,7 +534,7 @@ export class MIDIMappingsEditor extends HTMLElement {
   }
 
   parameterBoundsFor(mapping) {
-    const definition = this._mappings?.parameters?.definition?.(mapping.parameterID);
+    const definition = this._mappings?.parameterProvider?.definition?.(mapping.parameterID);
     const definitionMin = Number(definition?.min);
     const definitionMax = Number(definition?.max);
     return {

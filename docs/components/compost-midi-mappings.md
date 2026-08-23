@@ -7,7 +7,7 @@
 import 'compost/components/compost-midi-mappings';
 import { createMIDIMappings } from 'compost/midi-mappings';
 
-const mappings = createMIDIMappings({ parameters });
+const mappings = createMIDIMappings({ parameterProvider: parameters });
 document.querySelector('compost-midi-mappings').mappings = mappings;
 ```
 

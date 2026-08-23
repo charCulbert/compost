@@ -23,9 +23,9 @@ function mappingDetail(mapping) {
   };
 }
 
-function normaliseMapping(mapping, parameters) {
+function normaliseMapping(mapping, parameterProvider) {
   const parameterID = String(mapping?.parameterID ?? '');
-  const definition = parameters.definition(parameterID);
+  const definition = parameterProvider.definition(parameterID);
   const midi = normaliseMIDIMapping(mapping);
   if (!parameterID || !definition || !midi) return null;
 
@@ -107,10 +107,12 @@ function valueForMapping(mapping, ccValue) {
 }
 
 export class MIDIMappings extends EventTarget {
-  constructor({ parameters, learnChannel = false } = {}) {
+  constructor({ parameterProvider, learnChannel = false } = {}) {
     super();
-    if (!parameters) throw new Error('MIDIMappings needs a ParameterController.');
-    this.parameters = parameters;
+    if (typeof parameterProvider?.definition !== 'function') {
+      throw new Error('MIDIMappings needs a parameter definition provider.');
+    }
+    this.parameterProvider = parameterProvider;
     this.learnChannel = learnChannel;
     this.mappingState = new Map();
     this.learning = null;
@@ -131,7 +133,7 @@ export class MIDIMappings extends EventTarget {
 
   beginLearn(parameterID, {learnChannel = this.learnChannel} = {}) {
     const id = String(parameterID ?? '');
-    const definition = this.parameters.definition(id);
+    const definition = this.parameterProvider.definition(id);
     if (!definition) return false;
     if (this.learning !== null) this.cancelLearn();
     this.learning = {parameterID: id, learnChannel};
@@ -150,7 +152,7 @@ export class MIDIMappings extends EventTarget {
   }
 
   requestSet(mapping) {
-    const normalised = normaliseMapping(mapping, this.parameters);
+    const normalised = normaliseMapping(mapping, this.parameterProvider);
     if (!normalised) return false;
     this.dispatchEvent(new CustomEvent('midi-mapping-request', {
       detail: mappingDetail(normalised),
@@ -160,13 +162,13 @@ export class MIDIMappings extends EventTarget {
 
   requestClear(parameterID) {
     const id = String(parameterID ?? '');
-    if (!this.parameters.definition(id)) return false;
+    if (!this.parameterProvider.definition(id)) return false;
     this.dispatchEvent(new CustomEvent('midi-unmapping-request', { detail: { parameterID: id } }));
     return true;
   }
 
   applyMapping(mapping) {
-    const normalised = normaliseMapping(mapping, this.parameters);
+    const normalised = normaliseMapping(mapping, this.parameterProvider);
     if (!normalised) return false;
 
     this.mappingState.set(normalised.parameterID, normalised);
@@ -177,7 +179,7 @@ export class MIDIMappings extends EventTarget {
 
   applyMappings(mappingList = []) {
     if (!Array.isArray(mappingList)) return false;
-    const normalised = mappingList.map((mapping) => normaliseMapping(mapping, this.parameters));
+    const normalised = mappingList.map((mapping) => normaliseMapping(mapping, this.parameterProvider));
     if (normalised.some((mapping) => !mapping)) return false;
     const parameterIDs = new Set(normalised.map((mapping) => mapping.parameterID));
     if (parameterIDs.size !== normalised.length) return false;

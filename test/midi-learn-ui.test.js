@@ -10,7 +10,7 @@ function setup() {
   const secondTarget = new FakeControl({ 'parameter-id': 'tone', label: 'Tone', min: 0, max: 1, value: 0.5 });
   const root = new FakeRoot([target, secondTarget]);
   const parameters = createParameterController({ root });
-  const mappings = createMIDIMappings({ parameters });
+  const mappings = createMIDIMappings({ parameterProvider: parameters });
   mappings.addEventListener('midi-unmapping-request', ({ detail }) => mappings.applyClear(detail.parameterID));
   const button = new FakeControl({ textContent: 'Map MIDI' }, 'button');
   const status = { textContent: '' };

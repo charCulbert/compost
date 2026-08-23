@@ -1103,7 +1103,7 @@ test('number box split-drag selects configurable left, middle, and right rates',
 test('MIDI mapping range editors use the full parameter bounds', () => {
   const editor = Object.create(MIDIMappingsEditor.prototype);
   editor._mappings = {
-    parameters: {
+    parameterProvider: {
       definition(parameterID) {
         return parameterID === 'frequency' ? { min: 20, max: 20000 } : null;
       },

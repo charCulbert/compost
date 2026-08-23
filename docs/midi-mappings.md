@@ -1,10 +1,12 @@
 # MIDI mappings
 
-`createMIDIMappings()` stores MIDI CC mappings for a `ParameterController`.
-Assign it to `compost-midi-mappings` to show the editor.
+`createMIDIMappings()` stores MIDI CC mappings for any parameter definition
+provider. The provider only needs `definition(parameterID)`; a
+`ParameterController` is one compatible provider. Assign the model to
+`compost-midi-mappings` to show the editor.
 
 ```js
-const mappings = createMIDIMappings({ parameters });
+const mappings = createMIDIMappings({ parameterProvider: parameters });
 document.querySelector('compost-midi-mappings').mappings = mappings;
 
 mappings.addEventListener('midi-mapping-request', ({ detail }) => {
