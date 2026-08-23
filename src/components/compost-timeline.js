@@ -11,7 +11,6 @@ const DEFAULT_PX_PER_BEAT = 24;
 const DEFAULT_BEATS_PER_BAR = 4;
 const DEFAULT_LOOP_END = 8;
 const DRAG_THRESHOLD = 3;
-const LANE_SEPARATOR = 1;
 const DEFAULT_LANE_HEIGHT_EM = 5.8;
 const DEFAULT_THIN_LANE_HEIGHT_EM = 2.9;
 const DEFAULT_AUTOMATION_ROW_HEIGHT_EM = 2.36;
@@ -23,6 +22,7 @@ const FIGURE_MAX_DB = 12;
  * progress?: number, notes?: {start: number, duration: number, note: number, velocity?: number}[], color?: string}} TimelineClip */
 /** @typedef {{id: string, name: string, color?: string, colorRGB?: string,
  * kind?: 'track'|'return'|'master', picked?: boolean, overridden?: boolean,
+ * muted?: boolean,
  * armed?: boolean, recording?: boolean,
  * controls?: {armed?: boolean, monitor?: 'off'|'auto'|'in', muted?: boolean, soloed?: boolean},
  * session?: {name: string, state: 'playing'|'queued'}|null,
@@ -30,6 +30,7 @@ const FIGURE_MAX_DB = 12;
  * wash?: number, meter?: [number, number], gainReduction?: number,
  * devices?: {id: string, name: string, on?: boolean, kind?: 'midi-effect'|'instrument'|'effect', hasGui?: boolean}[],
  * emptyDeviceLabel?: string,
+ * envelope?: {points: {beat: number, value: number}[], min: number, max: number, stepped?: boolean, scale?: 'linear'|'gain'}|null,
  * automation?: AutomationLaneView[],
  * clips: TimelineClip[]}} TimelineLane */
 /** @typedef {{id: string, label: string, color?: string, min: number, max: number,
@@ -79,17 +80,29 @@ export function previewTrimmedClip(clip, start, end) {
   return { ...clip, start, length: Math.max(MIN_CLIP_LENGTH, end - start), offset };
 }
 
-export function loopPassLines(clip) {
+export function loopPassLines(clip, pxPerBeat = Number.POSITIVE_INFINITY) {
   if (clip?.loop === false) return [];
   const length = Math.max(0, Number(clip?.length) || 0);
   const duration = Number(clip?.duration) || 0;
   if (!(length > 0) || !(duration > 0)) return [];
   const offset = ((Number(clip?.offset) || 0) % duration + duration) % duration;
+  const spacing = duration * (Number.isFinite(Number(pxPerBeat)) ? Math.max(0, Number(pxPerBeat)) : Number.POSITIVE_INFINITY);
+  const stride = spacing > 0 && spacing < 8 ? Math.max(1, Math.ceil(8 / spacing)) : 1;
   const lines = [];
   let line = duration - offset;
+  let index = 0;
   if (line <= MIN_CLIP_LENGTH) line = duration;
-  for (; line < length - MIN_CLIP_LENGTH; line += duration) lines.push(line);
+  for (; line < length - MIN_CLIP_LENGTH; line += duration, index += 1) {
+    if (index % stride === 0) lines.push(line);
+  }
   return lines;
+}
+
+/** Return the visible dash opacity for an optional MIDI velocity. */
+export function clipNoteOpacity(velocity) {
+  if (velocity === null || velocity === undefined || velocity === '') return .55;
+  const value = Number(velocity);
+  return Number.isFinite(value) ? .3 + .6 * finiteClamp(value, 0, 127) / 127 : .55;
 }
 
 /** How many bars fit comfortably between ruler labels at this zoom. */
@@ -214,7 +227,7 @@ function cloneControls(controls) {
   return next;
 }
 
-/** Split a device chain to leave room for a compact +N tail. Widths are CSS pixels. */
+/** Split a device chain to leave room for a compact +N tail and trailing add. Widths are CSS pixels. */
 export function splitDeviceChain(devices, availableWidth, measure = (device) => String(device?.name || '').length * 7 + 18) {
   const entries = Array.isArray(devices) ? devices : [];
   const available = Number.isFinite(Number(availableWidth)) ? Math.max(0, Number(availableWidth)) : Number.POSITIVE_INFINITY;
@@ -222,11 +235,15 @@ export function splitDeviceChain(devices, availableWidth, measure = (device) => 
   if (!entries.length) return { visible: [], hidden: [], overflow: 0 };
   if (!Number.isFinite(available)) return { visible: [...entries], hidden: [], overflow: 0 };
   const separator = 10;
+  const addControl = 18;
+  const addSpacing = 4;
   let visibleCount = entries.length;
   const widthFor = (count, hidden) => widths.slice(0, count).reduce((sum, width) => sum + width, 0)
     + Math.max(0, count - 1) * separator + (hidden ? String(hidden).length * 7 + 14 : 0);
-  while (visibleCount > 1 && widthFor(visibleCount, entries.length - visibleCount) > available) visibleCount -= 1;
-  if (widthFor(visibleCount, entries.length - visibleCount) > available) visibleCount = 0;
+  const widthWithAdd = (count, hidden) => widthFor(count, hidden)
+    + addControl + addSpacing;
+  while (visibleCount > 1 && widthWithAdd(visibleCount, entries.length - visibleCount) > available) visibleCount -= 1;
+  if (widthWithAdd(visibleCount, entries.length - visibleCount) > available) visibleCount = 0;
   const hidden = entries.slice(visibleCount);
   return { visible: entries.slice(0, visibleCount), hidden, overflow: hidden.length };
 }
@@ -350,7 +367,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-playhead::before { content: ""; position: absolute; top: .08em; left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--compost-timeline-playhead); }
         .header-wrap, .lanes-wrap { min-height: 0; overflow: hidden; }
         .header-wrap { overflow: hidden; }
-        .headers { position: relative; }
+        .headers { position: relative; width: var(--compost-timeline-header-width); }
         .lane-header { position: relative; box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, var(--compost-timeline-text)); font-size: var(--compost-timeline-lane-font-size); }
         .lane-header-main, .lane-header-devices { position: relative; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: .45em; padding: 0 .9em 0 1em; }
         .lane-header-main { height: var(--lane-main-row-height, var(--compost-timeline-row-height)); }
@@ -358,13 +375,14 @@ export class CompostTimeline extends HTMLElement {
         .lane-header[data-kind="return"] .lane-header-main, .lane-header[data-kind="master"] .lane-header-main { height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .lane-header[data-kind="return"] .lane-header-devices, .lane-header[data-kind="master"] .lane-header-devices { display: none; }
         .lane-header .lane-name, .lane-name-editor { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; cursor: default; }
+        .lane-header[data-overridden] .lane-name { opacity: .8; }
         .lane-name-editor { box-sizing: border-box; width: 100%; border: 0; outline: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-bg); color: var(--lane-color); font: inherit; padding: 1px 3px; }
         .lane-header .lane-name[data-picked]::before, .lane-header .lane-name[data-picked]::after { content: ""; position: absolute; inset: -2px -3px; pointer-events: none; background-repeat: no-repeat; background-size: 5px 1px, 1px 5px, 5px 1px, 1px 5px; }
         .lane-header .lane-name[data-picked]::before { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: left top, left top, right top, right top; }
         .lane-header .lane-name[data-picked]::after { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: left bottom, left bottom, right bottom, right bottom; }
         .lane-header .lane-name:focus-visible { outline: none; text-decoration: underline dotted var(--compost-timeline-select); text-underline-offset: 3px; }
-        .lane-header .lane-wash { position: absolute; inset: 0 auto 0 0; z-index: 0; width: 0; pointer-events: none; background: linear-gradient(90deg, color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 3%, transparent), color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 16%, transparent)); }
-        .lane-header .lane-wash-edge { position: absolute; inset: 0 -6px 0 auto; width: 13px; pointer-events: auto; cursor: ns-resize; }
+        .lane-header .lane-wash { position: absolute; inset: 0 auto auto 0; z-index: 0; width: 0; height: var(--lane-row-height); pointer-events: none; background: linear-gradient(90deg, color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 3%, transparent), color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 16%, transparent)); }
+        .lane-header .lane-wash-edge { position: absolute; inset: 0 -6px auto auto; width: 13px; height: var(--lane-row-height); pointer-events: auto; cursor: ns-resize; }
         .lane-header .lane-wash-edge::after { content: ""; position: absolute; inset: 0 6px 0 auto; width: 1px; background: color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 85%, transparent); box-shadow: 2px 0 6px color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 35%, transparent); }
         .lane-header[data-kind="return"] .lane-wash, .lane-header[data-kind="master"] .lane-wash { opacity: .9; }
         .lane-session { display: flex; align-items: center; min-width: 0; gap: .35em; color: var(--lane-color, var(--compost-timeline-text)); }
@@ -389,11 +407,12 @@ export class CompostTimeline extends HTMLElement {
         .device-separator { flex: none; color: var(--compost-timeline-faint); margin: 0 .28em; }
         .lane-device-overflow, .lane-device-add, .empty-device { color: var(--compost-timeline-muted); cursor: pointer; }
         .lane-device-overflow { font-family: var(--compost-timeline-numeral-font); }
-        .lane-meter, .lane-gain-reduction { position: absolute; z-index: 2; top: 6px; bottom: 6px; width: 2px; pointer-events: none; }
+        .lane-meter, .lane-gain-reduction { position: absolute; z-index: 2; top: 6px; bottom: auto; height: calc(var(--lane-row-height) - 12px); width: 2px; pointer-events: none; }
         .lane-meter { right: 0; display: flex; align-items: end; gap: 0; }
         .lane-meter-channel { position: relative; flex: 1 1 50%; min-height: 0; background: var(--compost-timeline-signal-hi); box-shadow: 0 0 4.2px color-mix(in srgb, var(--lane-color) 58%, transparent); }
         .lane-meter-channel[data-empty] { display: none; }
-        .lane-gain-reduction { right: 4px; background: var(--compost-timeline-over); box-shadow: 0 0 4px color-mix(in srgb, var(--compost-timeline-over) 60%, transparent); transform-origin: top; height: 0; }
+        .lane-gain-reduction { right: 4px; background: transparent; box-shadow: none; }
+        .lane-gain-reduction::after { content: ""; position: absolute; inset: 0 0 auto; width: 100%; height: var(--lane-gain-reduction-fill, 0%); background: var(--compost-timeline-over); box-shadow: 0 0 4px color-mix(in srgb, var(--compost-timeline-over) 60%, transparent); }
         .lane-drop-line { position: absolute; left: 0; right: 0; z-index: 8; display: none; height: 1px; background: var(--compost-timeline-select); pointer-events: none; }
         .lane-controls { display: flex; flex: none; align-items: center; gap: .18em; margin-left: auto; }
         .lane-control { appearance: none; border: 0; border-radius: 2px; min-width: 1.45em; height: 1.45em; padding: 0 .2em; background: none; color: var(--compost-timeline-muted); font: inherit; font-size: .78em; line-height: 1; cursor: pointer; }
@@ -414,7 +433,11 @@ export class CompostTimeline extends HTMLElement {
         .grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-line); opacity: .5; }
         .grid-line.bar { background: var(--compost-timeline-bar-line); opacity: 1; }
         .lane { position: relative; box-sizing: border-box; height: auto; border-bottom: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-lane); }
+        .lane[data-drop-target] { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
+        .lane[data-muted] .clip, .lane[data-overridden] .clip { opacity: .4; }
         .lane-base { position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
+        .lane-envelope-overlay { position: absolute; inset: 0 auto auto 0; z-index: 4; overflow: visible; pointer-events: none; }
+        .lane-envelope-line { fill: none; stroke: var(--lane-color, var(--compost-timeline-text)); stroke-width: 1; opacity: .3; vector-effect: non-scaling-stroke; }
         .automation-row { position: relative; box-sizing: border-box; height: var(--compost-timeline-automation-row-height); overflow: visible; border-top: 1px solid color-mix(in srgb, var(--compost-timeline-line) 50%, transparent); background: var(--compost-timeline-lane); touch-action: none; }
         .automation-row[data-state="overridden"] .automation-line { stroke: var(--compost-timeline-muted); stroke-dasharray: 3 3; }
         .automation-row[data-state="overridden"] .automation-point { fill: var(--compost-timeline-muted); }
@@ -428,7 +451,6 @@ export class CompostTimeline extends HTMLElement {
         .automation-point:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 2px; }
         .automation-readout { position: absolute; z-index: 5; transform: translate(-50%, -100%); padding: 1px 3px; background: var(--compost-timeline-bg); color: var(--compost-timeline-value); font: .78em/1 var(--compost-timeline-numeral-font); pointer-events: none; }
         .lane[data-overridden] { filter: none; }
-        .lane[data-overridden] .clip { opacity: .4; }
         .clip { position: absolute; top: 4px; bottom: 4px; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 0; background: transparent; color: var(--clip-color, var(--compost-timeline-clip-text)); cursor: grab; touch-action: none; }
         .clip::before, .clip::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; border: 1px solid transparent; }
         .clip[data-selected] { z-index: 3; }
@@ -443,11 +465,10 @@ export class CompostTimeline extends HTMLElement {
         .clip[data-state="playing"] .clip-name { color: var(--compost-timeline-signal-hi); }
         .clip[data-state="queued"] .clip-name { color: var(--compost-timeline-select); animation: compost-timeline-breath 1s ease-in-out infinite; }
         .clip[data-state="recording"] .clip-name { color: var(--compost-timeline-over); }
-        .clip[data-state="playing"] .clip-notes { opacity: .9; }
-        .clip[data-state="recording"] .clip-notes { color: var(--lane-color, var(--compost-timeline-clip-text)); opacity: .55; }
+        .clip[data-state="playing"] .clip-notes, .clip[data-state="recording"] .clip-notes { opacity: 1; }
         .clip[data-dragging] { opacity: .35 !important; }
         .clip-name { position: relative; z-index: 2; display: block; padding: 3px 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--compost-timeline-clip-font-size); color: var(--clip-color, var(--compost-timeline-clip-text)); }
-        .clip-notes { position: absolute; inset: 0; opacity: .55; pointer-events: none; }
+        .clip-notes { position: absolute; inset: 0; opacity: 1; pointer-events: none; }
         .clip-note { position: absolute; bottom: 4px; height: 2px; min-width: 2px; background: currentColor; }
         .clip-extent { position: absolute; inset: auto 0 0 0; height: 1px; background: currentColor; opacity: .35; pointer-events: none; }
         .clip-extent::before { content: ""; position: absolute; left: 0; bottom: 0; width: 1px; height: 1000%; background: currentColor; }
@@ -539,6 +560,7 @@ export class CompostTimeline extends HTMLElement {
   disconnectedCallback() {
     this.resizeObserver?.disconnect();
     clearTimeout(this.longPressTimer);
+    this.clearClipDragVisuals();
     this.endPointer({ pointerId: this.drag?.pointerId });
   }
 
@@ -637,12 +659,16 @@ export class CompostTimeline extends HTMLElement {
     if (!lane || !controls) return;
     lane.controls = { ...cloneControls(lane.controls), ...cloneControls(controls) };
     lane.armed = lane.controls.armed;
+    if (Object.prototype.hasOwnProperty.call(lane.controls, 'muted')) lane.muted = Boolean(lane.controls.muted);
     const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
     if (!(header instanceof HTMLElement)) return;
     const existing = header.querySelector('.lane-controls');
     const next = this.renderLaneControls(lane);
     if (existing) existing.replaceWith(next);
     else (header.querySelector('.lane-header-main') || header).append(next);
+    header.toggleAttribute('data-overridden', Boolean(lane.overridden));
+    const body = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(laneId)}"]`);
+    body?.toggleAttribute('data-muted', Boolean(lane.muted || lane.controls?.muted));
   }
 
   /** Update one lane's figures and wash without rebuilding its clips. */
@@ -843,7 +869,7 @@ export class CompostTimeline extends HTMLElement {
 
   /** @param {TimelineLane} lane */
   laneHeightFor(lane) {
-    return this.laneRowHeightFor(lane) + this.automationFor(lane).length * this.automationRowHeight + LANE_SEPARATOR;
+    return this.laneRowHeightFor(lane) + this.automationFor(lane).length * this.automationRowHeight;
   }
 
   totalLaneHeight() {
@@ -1006,7 +1032,8 @@ export class CompostTimeline extends HTMLElement {
       const clipEnd = lane.clips.reduce((clipMax, clip) => Math.max(clipMax, (Number(clip.start) || 0) + (Number(clip.length) || 0)), 0);
       const automationEnd = this.automationFor(lane).reduce((automationMax, automation) => automation.points?.reduce(
         (pointMax, point) => Math.max(pointMax, Number(point.beat) || 0), automationMax) || automationMax, 0);
-      return Math.max(end, clipEnd, automationEnd);
+      const envelopeEnd = lane.envelope?.points?.reduce((pointMax, point) => Math.max(pointMax, Number(point.beat) || 0), 0) || 0;
+      return Math.max(end, clipEnd, automationEnd, envelopeEnd);
     }, 0);
     const visible = this._scrollBeat + Math.max(16, (this.lanesWrap.clientWidth || 320) / this._pxPerBeat);
     return Math.max(16, last, this._loopEnd, visible);
@@ -1317,7 +1344,7 @@ export class CompostTimeline extends HTMLElement {
       channel.toggleAttribute('data-empty', fraction <= 0);
     });
     const reduction = header.querySelector('.lane-gain-reduction');
-    if (reduction instanceof HTMLElement) reduction.style.height = `${clamp(-(Number(lane.gainReduction) || 0) / 24, 0, 1) * 100}%`;
+    if (reduction instanceof HTMLElement) reduction.style.setProperty('--lane-gain-reduction-fill', `${clamp(-(Number(lane.gainReduction) || 0) / 24, 0, 1) * 100}%`);
   }
 
   paintLaneWash(header, lane) {
@@ -1375,6 +1402,7 @@ export class CompostTimeline extends HTMLElement {
     header.style.setProperty('--lane-devices-row-height', `${this.laneHeight / 2}px`);
     header.style.height = `${this.laneHeightFor(lane)}px`;
     header.toggleAttribute('data-session', Boolean(lane.session));
+    header.toggleAttribute('data-overridden', Boolean(lane.overridden));
 
     const wash = document.createElement('div');
     wash.className = 'lane-wash';
@@ -1454,20 +1482,23 @@ export class CompostTimeline extends HTMLElement {
   }
 
   /** @param {TimelineLane} lane */
-  renderLaneBase(lane) {
+  renderLaneBase(lane, end = this.worldEnd()) {
     const base = document.createElement('div');
     base.className = 'lane-base';
+    if (!this.automation) {
+      const overlay = this.renderEnvelopeOverlay(lane, end);
+      if (overlay) base.append(overlay);
+    }
     for (const clip of lane.clips) base.append(this.renderClip(clip, lane));
     return base;
   }
 
   /** @param {AutomationLaneView} automation @param {number} end */
-  automationPath(automation, end) {
+  automationPath(automation, end, height = this.automationRowHeight) {
     const points = (Array.isArray(automation.points) ? automation.points : [])
       .filter((point) => Number.isFinite(Number(point.beat)) && Number.isFinite(Number(point.value)))
       .sort((a, b) => Number(a.beat) - Number(b.beat));
     if (!points.length) return '';
-    const height = this.automationRowHeight;
     const y = (point) => automationValueToY(point.value, automation.min, automation.max, height, automation.scale);
     const x = (point) => Math.max(0, Number(point.beat) || 0) * this._pxPerBeat;
     let path = `M 0 ${y(points[0])} H ${x(points[0])}`;
@@ -1477,6 +1508,24 @@ export class CompostTimeline extends HTMLElement {
     }
     path += ` H ${Math.max(x(points[points.length - 1]), end * this._pxPerBeat)}`;
     return path;
+  }
+
+  /** @param {TimelineLane} lane @param {number} end */
+  renderEnvelopeOverlay(lane, end) {
+    const envelope = lane.envelope;
+    if (!envelope || !Array.isArray(envelope.points) || !envelope.points.length) return null;
+    const height = this.laneRowHeightFor(lane);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('lane-envelope-overlay');
+    svg.setAttribute('width', String(end * this._pxPerBeat));
+    svg.setAttribute('height', String(height));
+    svg.setAttribute('viewBox', `0 0 ${end * this._pxPerBeat} ${height}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.classList.add('lane-envelope-line');
+    line.setAttribute('d', this.automationPath(envelope, end, height));
+    svg.append(line);
+    return svg;
   }
 
   /** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {number} end */
@@ -1530,10 +1579,11 @@ export class CompostTimeline extends HTMLElement {
     row.setAttribute('role', 'listitem');
     row.setAttribute('aria-label', lane.name || lane.id);
     if (lane.overridden) row.dataset.overridden = '';
+    if (lane.muted || lane.controls?.muted) row.dataset.muted = '';
     row.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
     row.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
     row.style.height = `${this.laneHeightFor(lane)}px`;
-    row.append(this.renderLaneBase(lane));
+    row.append(this.renderLaneBase(lane, end));
     for (const automation of this.automationFor(lane)) row.append(this.renderAutomationRow(lane, automation, end));
     return row;
   }
@@ -1639,6 +1689,7 @@ export class CompostTimeline extends HTMLElement {
         if (start < 0 || start >= length) continue;
         const mark = document.createElement('span');
         mark.className = 'clip-note';
+        mark.style.opacity = String(clipNoteOpacity(note.velocity));
         mark.style.left = `${Math.max(0, Math.min(100, start / length * 100))}%`;
         mark.style.width = `${Math.max(2, Math.min(30, noteDuration / length * 100))}%`;
         mark.style.bottom = `${Math.max(2, Math.min(90, ((Number(note.note) || 0) / 127) * 90))}%`;
@@ -1649,7 +1700,7 @@ export class CompostTimeline extends HTMLElement {
     const extent = document.createElement('span');
     extent.className = 'clip-extent';
     place(extent);
-    for (const line of loopPassLines(clip)) {
+    for (const line of loopPassLines(clip, this._pxPerBeat)) {
       const mark = document.createElement('span');
       mark.className = 'clip-loop-line';
       mark.title = 'loop point';
@@ -1663,6 +1714,22 @@ export class CompostTimeline extends HTMLElement {
       if (this._selected.includes(element.dataset.id)) element.dataset.selected = '';
       else delete element.dataset.selected;
     }
+  }
+
+  /** Mark the lane under a clip drag without changing host state. */
+  paintClipDropTarget(laneId) {
+    for (const lane of this.lanesWorld.querySelectorAll('.lane[data-drop-target]')) lane.removeAttribute('data-drop-target');
+    if (!laneId) return;
+    const target = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(laneId)}"]`);
+    target?.setAttribute('data-drop-target', '');
+  }
+
+  clearClipDragVisuals() {
+    for (const clip of this.clipElements()) {
+      clip.style.transform = '';
+      clip.removeAttribute('data-dragging');
+    }
+    this.paintClipDropTarget(null);
   }
 
   paintScroll() {
@@ -1896,7 +1963,7 @@ export class CompostTimeline extends HTMLElement {
       this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (this.pointers.size >= 2) {
         clearTimeout(this.longPressTimer);
-        for (const element of this.clipElements()) element.style.transform = '';
+        this.clearClipDragVisuals();
         this.drag = null;
         this.startPinch();
         event.preventDefault();
@@ -2112,6 +2179,8 @@ export class CompostTimeline extends HTMLElement {
     }
     if (drag.type === 'move') {
       if (!drag.moved) return;
+      const targetLane = this.laneAtPoint(event.clientY);
+      this.paintClipDropTarget(targetLane);
       const raw = dx / this._pxPerBeat;
       const delta = event.altKey || drag.copy || this.snapMode === 'off'
         ? raw : Math.round(raw / gridStep(this.beatsPerBar, this.grid)) * gridStep(this.beatsPerBar, this.grid);
@@ -2145,9 +2214,13 @@ export class CompostTimeline extends HTMLElement {
       }
     }
     const drag = this.drag;
-    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (!drag || event.pointerId !== drag.pointerId) {
+      this.clearClipDragVisuals();
+      return;
+    }
     clearTimeout(this.longPressTimer);
     this.drag = null;
+    this.clearClipDragVisuals();
     if (drag.type === 'lane-wash') {
       const lane = this._lanes.find((entry) => entry.id === drag.laneId);
       if (lane) this.emitLaneFigure(lane, 'fader', lane.figures?.faderDb ?? this.washValueAtPoint(drag.header, event.clientX), 'end');
@@ -2214,7 +2287,7 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (drag.type === 'scroll-time') return;
-    for (const element of this.clipElements()) element.style.transform = '';
+    this.clearClipDragVisuals();
     if (drag.element) drag.element.style.cursor = 'grab';
     if (drag.type === 'trim-left' || drag.type === 'trim-right') {
       if (drag.preview) this.dispatchEvent(eventOf('clip-trim', { id: drag.clipId, ...drag.preview }));

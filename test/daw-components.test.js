@@ -13,7 +13,7 @@ const { panBar, panText } = await import('../src/components/compost-channel-card
 const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
 const {
-  snapBeat, clipBox, loopPassLines, previewTrimmedClip, rulerStep,
+  snapBeat, clipBox, loopPassLines, clipNoteOpacity, previewTrimmedClip, rulerStep,
   automationValueToY, automationValueFromY,
   addAutomationPoint, moveAutomationPoint, deleteAutomationPoint,
   splitDeviceChain,
@@ -82,6 +82,7 @@ test('timeline geometry snaps, scales and marks looping passes', () => {
   assert.deepEqual(clipBox({ start: 4, length: 0 }, 20, 1), { left: 60, width: 1 });
   assert.deepEqual(loopPassLines({ length: 10, duration: 4, offset: 1, loop: true }), [3, 7]);
   assert.deepEqual(loopPassLines({ length: 10, duration: 4, offset: 1, loop: false }), []);
+  assert.deepEqual(loopPassLines({ length: 10, duration: 1, offset: 0, loop: true }, 4), [1, 3, 5, 7, 9]);
   // a trim preview keeps the content in place: the left edge moves the offset, the right edge only the length
   const looped = { start: 4, length: 8, duration: 4, offset: 1, loop: true };
   assert.deepEqual(previewTrimmedClip(looped, 4, 6), { ...looped, length: 2 });
@@ -93,6 +94,17 @@ test('timeline geometry snaps, scales and marks looping passes', () => {
   assert.equal(rulerStep(12, 4), 2);
   assert.equal(rulerStep(6, 4), 4);
   assert.equal(rulerStep(3, 4), 8);
+});
+
+test('velocity dashes retain the specified opacity at rest', () => {
+  assert.ok(Math.abs(clipNoteOpacity(30) - .4417322834645669) < 1e-12);
+  assert.ok(Math.abs(clipNoteOpacity(80) - .6779527559055118) < 1e-12);
+  assert.ok(Math.abs(clipNoteOpacity(120) - .8669291338582677) < 1e-12);
+  assert.equal(clipNoteOpacity(undefined), .55);
+  assert.equal(clipNoteOpacity(null), .55);
+  assert.equal(clipNoteOpacity(''), .55);
+  assert.equal(clipNoteOpacity(-10), .3);
+  assert.ok(Math.abs(clipNoteOpacity(200) - .9) < 1e-12);
 });
 
 test('device chains keep the first fitting devices and expose a compact overflow tail', () => {
@@ -109,6 +121,7 @@ test('device chains keep the first fitting devices and expose a compact overflow
   assert.equal(compact.hidden.length, 2);
   assert.equal(compact.overflow, 2);
   assert.equal(compact.visible[0].id, 'a');
+  assert.equal(splitDeviceChain([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], 60, () => 20).visible.length, 0);
 });
 
 test('automation geometry follows linear and fader axes', () => {

@@ -716,13 +716,104 @@ test('timeline visual states match the clip grid without a second lane number', 
   expect(measured.hasNumber).toBe(false);
 });
 
+test('timeline paints velocity dashes, hidden envelopes and clip drop targets', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.removeAttribute('automation');
+    element.setLanes([
+      { id: 'source', name: 'Source', color: 'rgb(40, 120, 180)', envelope: {
+        min: 0, max: 1, stepped: false, points: [{ beat: 0, value: .4 }, { beat: 2, value: .8 }, { beat: 4, value: .5 }],
+      }, clips: [{ id: 'velocity', name: 'velocity', start: 0, length: 4, duration: 4, loop: false, notes: [
+        { start: 0, duration: .25, note: 60, velocity: 30 },
+        { start: 1, duration: .25, note: 64, velocity: 80 },
+        { start: 2, duration: .25, note: 67, velocity: 120 },
+        { start: 3, duration: .25, note: 72 },
+      ] }, { id: 'lit', name: 'lit', start: 5, length: 1, duration: 1, state: 'playing', notes: [{ start: 0, duration: .25, note: 60, velocity: 30 }] }] },
+      { id: 'target', name: 'Target', clips: [] },
+      { id: 'muted', name: 'Muted', muted: true, clips: [{ id: 'muted-clip', name: 'muted', start: 0, length: 1, duration: 1, notes: [] }] },
+    ]);
+  });
+  const painted = await timeline.evaluate((element) => {
+    const root = element.shadowRoot;
+    const notes = [...root.querySelectorAll('.clip[data-id="velocity"] .clip-note')];
+    const envelope = root.querySelector('.lane-envelope-line');
+    const overlay = root.querySelector('.lane-envelope-overlay');
+    const playingNotes = root.querySelector('.clip[data-id="lit"] .clip-notes');
+    const mutedLane = root.querySelector('.lane[data-lane-id="muted"]');
+    const mutedClip = root.querySelector('.clip[data-id="muted-clip"]');
+    const sourceBase = root.querySelector('.lane[data-lane-id="source"] .lane-base');
+    const lanesWorld = root.querySelector('.lanes-world');
+    return {
+      opacities: notes.map((node) => Number(getComputedStyle(node).opacity)),
+      envelopeOpacity: Number(getComputedStyle(envelope).opacity),
+      envelopePath: envelope.getAttribute('d'),
+      overlayPointerEvents: getComputedStyle(overlay).pointerEvents,
+      playingNotesOpacity: Number(getComputedStyle(playingNotes).opacity),
+      muted: mutedLane.hasAttribute('data-muted'),
+      mutedClipOpacity: Number(getComputedStyle(mutedClip).opacity),
+      mutedFilter: getComputedStyle(mutedLane).filter,
+      envelopeHeight: overlay.getBoundingClientRect().height,
+      baseHeight: sourceBase.getBoundingClientRect().height,
+      envelopeWidth: overlay.getBoundingClientRect().width,
+      worldWidth: lanesWorld.getBoundingClientRect().width,
+    };
+  });
+  expect(painted.opacities[0]).toBeCloseTo(.4417, 3);
+  expect(painted.opacities[1]).toBeCloseTo(.678, 3);
+  expect(painted.opacities[2]).toBeCloseTo(.867, 3);
+  expect(painted.opacities[3]).toBeCloseTo(.55, 3);
+  expect(painted.envelopeOpacity).toBeCloseTo(.3, 3);
+  expect(painted.envelopePath).toContain('L');
+  expect(painted.overlayPointerEvents).toBe('none');
+  expect(painted.playingNotesOpacity).toBeCloseTo(1, 3);
+  expect(painted.muted).toBe(true);
+  expect(painted.mutedClipOpacity).toBeCloseTo(.4, 3);
+  expect(painted.mutedFilter).toBe('none');
+  expect(Math.abs(painted.envelopeHeight - painted.baseHeight)).toBeLessThan(1);
+  expect(Math.abs(painted.envelopeWidth - painted.worldWidth)).toBeLessThan(1);
+
+  await timeline.evaluate((element) => element.setAttribute('automation', ''));
+  await expect(timeline.locator('.lane-envelope-overlay')).toHaveCount(0);
+  await timeline.evaluate((element) => element.removeAttribute('automation'));
+  await expect(timeline.locator('.lane-envelope-overlay')).toHaveCount(1);
+
+  const source = timeline.locator('.clip[data-id="velocity"]');
+  const target = timeline.locator('.lane[data-lane-id="target"]');
+  const sourceBox = await source.boundingBox();
+  const targetBox = await target.boundingBox();
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + 40, targetBox.y + targetBox.height / 2, { steps: 3 });
+  await expect(target).toHaveAttribute('data-drop-target', '');
+  await page.mouse.up();
+  await expect(target).not.toHaveAttribute('data-drop-target', '');
+  await expect(source).not.toHaveAttribute('data-dragging', '');
+  expect(await source.evaluate((node) => node.style.transform)).toBe('');
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + 40, targetBox.y + targetBox.height / 2, { steps: 3 });
+  await expect(source).toHaveAttribute('data-dragging', '');
+  const pointerId = await timeline.evaluate((element) => element.drag?.pointerId);
+  await timeline.evaluate((element, id) => element.dispatchEvent(new PointerEvent('pointercancel', {
+    bubbles: true, composed: true, pointerId: id, pointerType: 'mouse', button: 0,
+  })), pointerId);
+  await expect(source).not.toHaveAttribute('data-dragging', '');
+  expect(await source.evaluate((node) => node.style.transform)).toBe('');
+  await expect(target).not.toHaveAttribute('data-drop-target', '');
+  await page.mouse.up();
+});
+
 test('timeline lane headers expose arm, mute and solo controls', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.testEvents = [];
     element.addEventListener('lane-toggle', (event) => element.testEvents.push(event.detail));
-    element.setLanes([{ id: 'lane', name: '01 MIDI 1', controls: { armed: true, muted: false, soloed: true }, clips: [] }]);
+    element.setLanes([{ id: 'lane', name: '01 MIDI 1', controls: { armed: true, muted: false, soloed: true }, clips: [
+      { id: 'mute-check', name: 'mute-check', start: 0, length: 1, duration: 1, notes: [] },
+    ] }]);
   });
   const controls = timeline.locator('.lane-control');
   await expect(controls).toHaveCount(3);
@@ -743,12 +834,104 @@ test('timeline lane headers expose arm, mute and solo controls', async ({ page }
   await expect(controls.nth(0)).toHaveAttribute('aria-pressed', 'false');
   await expect(controls.nth(1)).toHaveAttribute('aria-pressed', 'true');
   await expect(controls.nth(2)).toHaveAttribute('aria-pressed', 'false');
+  expect(await timeline.evaluate((element) => ({
+    muted: element.shadowRoot.querySelector('.lane').hasAttribute('data-muted'),
+    opacity: getComputedStyle(element.shadowRoot.querySelector('.clip')).opacity,
+  }))).toEqual({ muted: true, opacity: '0.4' });
+  await timeline.evaluate((element) => element.setLaneControls('lane', { armed: false, muted: false, soloed: false }));
+  expect(await timeline.evaluate((element) => ({
+    muted: element.shadowRoot.querySelector('.lane').hasAttribute('data-muted'),
+    opacity: getComputedStyle(element.shadowRoot.querySelector('.clip')).opacity,
+  }))).toEqual({ muted: false, opacity: '1' });
+  await timeline.evaluate((element) => element.setLaneControls('lane', { armed: false, muted: true, soloed: false }));
+  expect(await timeline.evaluate((element) => getComputedStyle(element.shadowRoot.querySelector('.clip')).opacity)).toBe('0.4');
+});
+
+test('timeline dims overridden headers without a brightness filter', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => element.setLanes([{ id: 'lane', name: 'Track', color: 'rgb(40, 120, 180)', clips: [
+    { id: 'clip', name: 'clip', start: 0, length: 1, duration: 1, notes: [] },
+  ] }]));
+  const idle = await timeline.evaluate((element) => {
+    const header = element.shadowRoot.querySelector('.lane-header');
+    const name = header.querySelector('.lane-name');
+    return { overridden: header.hasAttribute('data-overridden'), color: getComputedStyle(name).color, opacity: getComputedStyle(name).opacity };
+  });
+  await timeline.evaluate((element) => element.setLanes([{ id: 'lane', name: 'Track', color: 'rgb(40, 120, 180)', overridden: true, clips: [
+    { id: 'clip', name: 'clip', start: 0, length: 1, duration: 1, notes: [] },
+  ] }]));
+  const overridden = await timeline.evaluate((element) => {
+    const header = element.shadowRoot.querySelector('.lane-header');
+    const lane = element.shadowRoot.querySelector('.lane');
+    const name = header.querySelector('.lane-name');
+    return {
+      overridden: header.hasAttribute('data-overridden'),
+      color: getComputedStyle(name).color,
+      nameOpacity: getComputedStyle(name).opacity,
+      filter: getComputedStyle(lane).filter,
+      clipOpacity: getComputedStyle(lane.querySelector('.clip')).opacity,
+    };
+  });
+  expect(idle.overridden).toBe(false);
+  expect(overridden.overridden).toBe(true);
+  expect(overridden.color).toBe(idle.color);
+  expect(overridden.nameOpacity).toBe('0.8');
+  expect(overridden.filter).toBe('none');
+  expect(overridden.clipOpacity).toBe('0.4');
+});
+
+test('timeline keeps low-zoom loop caps at least 8px apart', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'lane', name: 'Loop', clips: [{ id: 'loop', name: 'loop', start: 0, length: 12, duration: 1, loop: true, notes: [] }] }]);
+    element.pxPerBeat = 4;
+  });
+  const geometry = await timeline.evaluate((element) => {
+    const lines = [...element.shadowRoot.querySelectorAll('.clip-loop-line')].map((node) => node.getBoundingClientRect().left);
+    return { count: lines.length, gaps: lines.slice(1).map((left, index) => left - lines[index]) };
+  });
+  expect(geometry.count).toBe(6);
+  expect(Math.min(...geometry.gaps)).toBeGreaterThanOrEqual(8);
+});
+
+test('timeline keeps device overflow and the trailing add inside a 275px header', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.style.setProperty('--compost-timeline-header-width', '275px');
+    element.setLanes([{ id: 'lane', name: 'Devices', devices: [
+      { id: 'a', name: 'MNO', on: true }, { id: 'b', name: 'Delay', on: true },
+      { id: 'c', name: 'Reverb', on: true }, { id: 'd', name: 'Limiter', on: true },
+    ], clips: [] }]);
+  });
+  await page.waitForTimeout(50);
+  const fit = await timeline.evaluate((element) => {
+    const root = element.shadowRoot;
+    const devices = root.querySelector('.lane-devices');
+    const overflow = root.querySelector('.lane-device-overflow');
+    const add = root.querySelector('.lane-device-add');
+    const box = devices.getBoundingClientRect();
+    return {
+      overflow: devices.dataset.overflowCount,
+      overflowVisible: overflow?.getBoundingClientRect().width > 0 && overflow.getBoundingClientRect().right <= box.right + 1,
+      addVisible: add?.getBoundingClientRect().width > 0 && add.getBoundingClientRect().right <= box.right + 1,
+    };
+  });
+  expect(Number(fit.overflow)).toBeGreaterThan(0);
+  expect(fit.overflowVisible).toBe(true);
+  expect(fit.addVisible).toBe(true);
 });
 
 test('timeline header commit one keeps measured lane geometry and reports header intents', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
+    document.documentElement.style.fontSize = '11px';
+    element.style.removeProperty('--compost-timeline-automation-row-height');
+    element.style.removeProperty('--compost-timeline-row-height');
+    element.syncAttributes();
     element.testEvents = [];
     for (const type of ['lane-pick', 'lane-move', 'lanes-context', 'lanes-create', 'lane-figure-input', 'lane-figure-change', 'lane-toggle', 'device-toggle', 'device-open']) {
       element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
@@ -757,7 +940,7 @@ test('timeline header commit one keeps measured lane geometry and reports header
       { id: 'track', name: 'Track', kind: 'track', picked: true, color: 'rgb(100, 120, 180)', colorRGB: '100,120,180', wash: .5, meter: [0, -6], gainReduction: -12,
         controls: { armed: true, monitor: 'auto', muted: false, soloed: true }, figures: { faderDb: -3, pan: 0, sends: [{ id: 'a', letter: 'A', db: -12 }] },
         devices: [{ id: 'synth', name: 'Synth', on: true }, { id: 'delay', name: 'Delay', on: false }], clips: [], automation: [{ id: 'env', label: 'Env', min: 0, max: 1, stepped: false, points: [] }] },
-      { id: 'return', name: 'Return', kind: 'return', figures: { faderDb: -6, pan: .1, sends: [] }, controls: { muted: false, soloed: true }, clips: [] },
+      { id: 'return', name: 'Return', kind: 'return', wash: .3, meter: [-6, -12], gainReduction: -6, figures: { faderDb: -6, pan: .1, sends: [] }, controls: { muted: false, soloed: true }, clips: [] },
       { id: 'master', name: 'Master', kind: 'master', figures: { faderDb: 0, pan: 0, sends: [] }, clips: [] },
     ]);
   });
@@ -769,14 +952,41 @@ test('timeline header commit one keeps measured lane geometry and reports header
     });
     const track = get('track');
     const thin = get('return');
+    const trackHeaderElement = root.querySelector('.lane-header[data-lane-id="track"]');
+    const trackBody = root.querySelector('.lane[data-lane-id="track"]');
+    const thinHeaderElement = root.querySelector('.lane-header[data-lane-id="return"]');
+    const thinBody = root.querySelector('.lane[data-lane-id="return"]');
+    const trackBase = trackBody.querySelector('.lane-base');
+    const automationHeader = trackHeaderElement.querySelector('.automation-header');
+    const automationRow = trackBody.querySelector('.automation-row');
+    const washEdge = trackHeaderElement.querySelector('.lane-wash-edge');
+    const meterElement = trackHeaderElement.querySelector('.lane-meter');
+    const grElement = trackHeaderElement.querySelector('.lane-gain-reduction');
+    const thinWashEdge = thinHeaderElement.querySelector('.lane-wash-edge');
+    const thinMeter = thinHeaderElement.querySelector('.lane-meter');
+    const thinGr = thinHeaderElement.querySelector('.lane-gain-reduction');
     const meter = [...root.querySelectorAll('.lane-meter-channel')].map((node) => node.getBoundingClientRect().height);
-    const gr = root.querySelector('.lane-gain-reduction').getBoundingClientRect().height;
+    const gr = grElement.getBoundingClientRect().height;
     const wash = root.querySelector('.lane-wash').getBoundingClientRect();
+    const edgeRect = washEdge.getBoundingClientRect();
     const header = root.querySelector('.lane-header[data-lane-id="track"]').getBoundingClientRect();
     return {
       trackHeader: track.header.height, trackLane: track.lane.height,
       thinHeader: thin.header.height, thinLane: thin.lane.height,
-      headerWidth: header.width, washWidth: wash.width, meter, gr,
+      trackBase: trackBase.getBoundingClientRect().height,
+      thinBase: thinBody.querySelector('.lane-base').getBoundingClientRect().height,
+      automationHeader: automationHeader.getBoundingClientRect().height,
+      automationRow: automationRow.getBoundingClientRect().height,
+      washHeight: wash.height, washEdgeHeight: washEdge.getBoundingClientRect().height,
+      meterHeight: meterElement.getBoundingClientRect().height, grHeight: gr,
+      thinWashHeight: thinWashEdge.getBoundingClientRect().height,
+      thinMeterHeight: thinMeter.getBoundingClientRect().height,
+      thinGrHeight: thinGr.getBoundingClientRect().height,
+      grFillHeight: Number.parseFloat(getComputedStyle(grElement, '::after').height),
+      thinGrFillHeight: Number.parseFloat(getComputedStyle(thinGr, '::after').height),
+      edgeLineX: edgeRect.left + 6,
+      washRight: wash.right,
+      headerWidth: header.width, headerColumn: Number.parseFloat(getComputedStyle(root.querySelector('.frame')).gridTemplateColumns), washWidth: wash.width, meter, gr,
       trackDevices: root.querySelectorAll('.lane-header[data-lane-id="track"] .lane-device').length,
       thinDevices: root.querySelectorAll('.lane-header[data-lane-id="return"] .lane-header-devices').length,
       controls: root.querySelectorAll('.lane-header[data-lane-id="track"] .lane-control').length,
@@ -785,8 +995,29 @@ test('timeline header commit one keeps measured lane geometry and reports header
   });
   expect(Math.abs(measured.trackHeader - measured.trackLane)).toBeLessThan(1);
   expect(Math.abs(measured.thinHeader - measured.thinLane)).toBeLessThan(1);
-  expect(measured.trackHeader).toBeGreaterThan(measured.thinHeader);
-  expect(measured.headerWidth).toBeGreaterThan(300);
+  expect(Math.abs(measured.trackHeader - 90)).toBeLessThan(1);
+  expect(Math.abs(measured.trackLane - 90)).toBeLessThan(1);
+  expect(Math.abs(measured.thinHeader - 32)).toBeLessThan(1);
+  expect(Math.abs(measured.thinLane - 32)).toBeLessThan(1);
+  expect(Math.abs(measured.trackBase - 64)).toBeLessThan(1);
+  expect(Math.abs(measured.thinBase - 32)).toBeLessThan(1);
+  expect(Math.abs(measured.automationHeader - 26)).toBeLessThan(1);
+  expect(Math.abs(measured.automationRow - 26)).toBeLessThan(1);
+  expect(Math.abs(measured.washHeight - 64)).toBeLessThan(1);
+  expect(Math.abs(measured.washEdgeHeight - 64)).toBeLessThan(1);
+  expect(Math.abs(measured.meterHeight - 52)).toBeLessThan(1);
+  expect(Math.abs(measured.grHeight - 52)).toBeLessThan(1);
+  expect(Math.abs(measured.thinWashHeight - 32)).toBeLessThan(1);
+  expect(Math.abs(measured.thinMeterHeight - 20)).toBeLessThan(1);
+  expect(Math.abs(measured.thinGrHeight - 20)).toBeLessThan(1);
+  expect(measured.meter[0]).toBeCloseTo(52, 0);
+  expect(measured.meter[1]).toBeCloseTo(45.5, 0);
+  expect(measured.grFillHeight).toBeCloseTo(26, 0);
+  expect(measured.thinGrFillHeight).toBeCloseTo(5, 0);
+  expect(Math.abs(measured.headerWidth - 275)).toBeLessThanOrEqual(1);
+  expect(Math.abs(measured.headerColumn - 275)).toBeLessThan(1);
+  expect(Math.abs(measured.washWidth - 137.5)).toBeLessThan(1);
+  expect(Math.abs(measured.edgeLineX - measured.washRight)).toBeLessThan(1);
   expect(measured.washWidth).toBeGreaterThan(measured.headerWidth * .45);
   expect(measured.meter[0]).toBeGreaterThan(0);
   expect(measured.meter[1]).toBeGreaterThan(0);
@@ -795,6 +1026,19 @@ test('timeline header commit one keeps measured lane geometry and reports header
   expect(measured.thinDevices).toBe(0);
   expect(measured.controls).toBe(4);
   expect(measured.pickedTicks).toContain('linear-gradient');
+
+  const gainReduction = await timeline.evaluate((element) => {
+    const read = () => getComputedStyle(element.shadowRoot.querySelector('.lane-header[data-lane-id="track"] .lane-gain-reduction'), '::after').height;
+    element.setLaneMeters(new Map([['track', { meter: [-90, -90], gainReduction: 0 }]]));
+    const none = read();
+    element.setLaneMeters(new Map([['track', { meter: [-90, -90], gainReduction: -12 }]]));
+    const half = read();
+    element.setLaneMeters(new Map([['track', { meter: [-90, -90], gainReduction: -30 }]]));
+    return { none, half, full: read() };
+  });
+  expect(Number.parseFloat(gainReduction.none)).toBeCloseTo(0, 0);
+  expect(Number.parseFloat(gainReduction.half)).toBeCloseTo(26, 0);
+  expect(Number.parseFloat(gainReduction.full)).toBeCloseTo(52, 0);
 
   await timeline.locator('.lane-header[data-lane-id="track"] .lane-name').click();
   await timeline.locator('.lane-header[data-lane-id="track"] .device-power').first().click();

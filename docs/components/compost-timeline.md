@@ -5,10 +5,14 @@ musical model or audio state: clips, loop values and the playhead are pushed in
 through the API, while pointer and keyboard gestures bubble as intent events.
 Lanes use the same sparse, signal-first language as `compost-clip-grid`: a clip
 at rest is a lit name and note dashes on the lane, while a playing clip carries
-a wash and optional progress. A looping clip marks every loop point with a thin
-line and a cap in the clip's colour. A trim drag previews the geometry without
-moving the content in time: notes and loop points keep their place while the
-edge moves.
+a wash and optional progress. Note velocities set dash opacity (`.3 + .6 ×
+velocity / 127`, or `.55` when absent); playing notes use the full lit pass.
+A looping clip marks every loop point with a thin line and cap in the clip's
+colour, thinning caps when their on-screen spacing would be under 8px. When
+automation rows are hidden, a host-supplied envelope is drawn faintly over the
+clip row. A trim or cross-lane drag previews geometry without changing host
+state; the lane under a clip drag gets an inset selection highlight until
+release.
 
 ```html
 <compost-timeline id="timeline" label="Timeline" beats-per-bar="4"
@@ -51,13 +55,14 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | `lane-header-context` | `{laneId, clientX, clientY}` | Lane-header context menu |
 | `lane-pick` | `{laneId, shiftKey}` | Click a lane header |
 | `lane-move` | `{laneId, toIndex}` | Drag or arrow-key a lane header |
+| `lane-rename` | `{laneId, name}` | Double-click or F2 on a lane name |
 | `lane-toggle` | `{laneId, name: "arm"|"monitor"|"mute"|"solo"}` | Header control press |
 | `lane-figure-input` / `lane-figure-change` | `{laneId, kind: "fader"|"pan"|"send", sendId?, value, phase}` | Number-box or wash-edge gesture |
 | `device-toggle` | `{laneId, deviceId}` | Device power dot |
 | `device-open` | `{laneId, deviceId, altKey, clientX, clientY}` | Device name click/double-click |
 | `device-context` | `{laneId, deviceId, clientX, clientY}` | Device context menu |
 | `device-overflow` / `device-add` | `{laneId, clientX, clientY}` | `+N`, trailing `+`, or empty-device label |
-| `device-move` | `{laneId, deviceId, toLaneId, at, copy}` | Device drag |
+| `device-move` | `{laneId, deviceId, toLaneId, at, copy}` | Device drag; `at` is the target device id or `null` for the end |
 | `automation-change` | `{laneId, automationId, points}` | Add, move, delete or segment edit commit |
 | `automation-context` | `{laneId, automationId, clientX, clientY}` | Automation sub-row context menu or Shift-F10 |
 | `automation-header-context` | `{laneId, clientX, clientY}` | Reserved for a lane-header automation menu |
@@ -137,7 +142,16 @@ A lane may carry `kind: "track"|"return"|"master"`, `picked`, `colorRGB`,
 headers have one thin row. `wash` is a 0..1 fader position, `meter` is an
 optional stereo dB pair and `gainReduction` is a negative dB value. Meter and
 gain-reduction paints are partial updates, so `setLaneMeters` does not rebuild
-clips or automation.
+clips or automation. A muted or overridden lane dims its clips to `.4` without
+adding a brightness filter; overridden headers dim the lane name as well.
+
+Clip notes may include `velocity: 0..127`; the value controls each dash's rest
+opacity while the playing state uses the full lit note pass. A lane may also
+carry `envelope: {points, min, max, stepped, scale}`. The envelope is a
+noninteractive, `.3`-opacity path over the base clip row only when the
+`automation` attribute is absent. During a clip move the target `.lane` gets a
+1px inset `--compost-timeline-select` highlight; it is cleared when the gesture
+ends or is cancelled.
 
 A lane may carry `controls: {armed, monitor: "off"|"auto"|"in", muted, soloed}`.
 The header renders the `●`, monitor glyph, `M` and `S` controls with
