@@ -5,7 +5,10 @@ musical model or audio state: clips, loop values and the playhead are pushed in
 through the API, while pointer and keyboard gestures bubble as intent events.
 Lanes use the same sparse, signal-first language as `compost-clip-grid`: a clip
 at rest is a lit name and note dashes on the lane, while a playing clip carries
-a wash and optional progress.
+a wash and optional progress. A looping clip marks every loop point with a thin
+line and a cap in the clip's colour. A trim drag previews the geometry without
+moving the content in time: notes and loop points keep their place while the
+edge moves.
 
 ```html
 <compost-timeline id="timeline" label="Timeline" beats-per-bar="4"

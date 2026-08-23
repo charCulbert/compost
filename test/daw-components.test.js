@@ -13,7 +13,7 @@ const { panBar, panText } = await import('../src/components/compost-channel-card
 const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
 const {
-  snapBeat, clipBox, loopPassLines, rulerStep,
+  snapBeat, clipBox, loopPassLines, previewTrimmedClip, rulerStep,
   automationValueToY, automationValueFromY,
   addAutomationPoint, moveAutomationPoint, deleteAutomationPoint,
 } = await import('../src/components/compost-timeline.js');
@@ -81,6 +81,13 @@ test('timeline geometry snaps, scales and marks looping passes', () => {
   assert.deepEqual(clipBox({ start: 4, length: 0 }, 20, 1), { left: 60, width: 1 });
   assert.deepEqual(loopPassLines({ length: 10, duration: 4, offset: 1, loop: true }), [3, 7]);
   assert.deepEqual(loopPassLines({ length: 10, duration: 4, offset: 1, loop: false }), []);
+  // a trim preview keeps the content in place: the left edge moves the offset, the right edge only the length
+  const looped = { start: 4, length: 8, duration: 4, offset: 1, loop: true };
+  assert.deepEqual(previewTrimmedClip(looped, 4, 6), { ...looped, length: 2 });
+  assert.deepEqual(previewTrimmedClip(looped, 6, 12), { ...looped, start: 6, length: 6, offset: 3 });
+  assert.deepEqual(previewTrimmedClip(looped, 9, 12), { ...looped, start: 9, length: 3, offset: 2 });
+  const oneShot = { start: 4, length: 3, duration: 3, offset: 0, loop: false };
+  assert.deepEqual(previewTrimmedClip(oneShot, 5, 7), { ...oneShot, start: 5, length: 2, offset: 1 });
   assert.equal(rulerStep(24, 4), 1);
   assert.equal(rulerStep(12, 4), 2);
   assert.equal(rulerStep(6, 4), 4);

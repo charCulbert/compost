@@ -53,6 +53,18 @@ export function clipBox(clip, pxPerBeat, scrollBeat) {
 
 /** Return the content-wrap positions of a looping clip, in beats from its start. */
 /** @param {{length: number, duration: number, offset?: number, loop?: boolean}} clip */
+/** The clip as a trim to [start, end) would leave it: the content keeps its place in
+ * time, so a left trim moves the offset (wrapping for a loop, clamping otherwise).
+ * @param {TimelineClip} clip @param {number} start @param {number} end */
+export function previewTrimmedClip(clip, start, end) {
+  const duration = Math.max(MIN_CLIP_LENGTH, Number(clip?.duration) || Number(clip?.length) || 1);
+  const delta = start - (Number(clip?.start) || 0);
+  let offset = (Number(clip?.offset) || 0) + delta;
+  if (clip?.loop === false) offset = Math.max(0, Math.min(duration - MIN_CLIP_LENGTH, offset));
+  else offset = ((offset % duration) + duration) % duration;
+  return { ...clip, start, length: Math.max(MIN_CLIP_LENGTH, end - start), offset };
+}
+
 export function loopPassLines(clip) {
   if (clip?.loop === false) return [];
   const length = Math.max(0, Number(clip?.length) || 0);
@@ -328,7 +340,9 @@ export class CompostTimeline extends HTMLElement {
         .clip-extent { position: absolute; inset: auto 0 0 0; height: 1px; background: currentColor; opacity: .35; pointer-events: none; }
         .clip-extent::before { content: ""; position: absolute; left: 0; bottom: 0; width: 1px; height: 1000%; background: currentColor; }
         .clip-progress { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--compost-timeline-wash); filter: brightness(1.5); pointer-events: none; }
-        .clip-loop-line { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; opacity: .35; pointer-events: none; }
+        /* a loop point: a thin line the height of the clip and a small cap at the top, in the clip's colour */
+        .clip-loop-line { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; opacity: .6; pointer-events: none; }
+        .clip-loop-line::before { content: ""; position: absolute; top: 0; left: -3px; border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 4px solid currentColor; }
         .clip-editor { position: relative; z-index: 4; width: calc(100% - 5px); margin: 2px; border: 0; outline: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-bg); color: var(--compost-timeline-text); font: inherit; font-size: .78em; }
         .marquee { position: absolute; z-index: 7; border: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-marquee); pointer-events: none; display: none; }
         .announce { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -448,6 +462,9 @@ export class CompostTimeline extends HTMLElement {
     this._loopEnabled = this.hasAttribute('loop-enabled');
     this.setAttribute('aria-label', this.label);
     this.style.setProperty('--compost-timeline-row-height', `${this.laneHeight}px`);
+    // the header column and the lane body resolve the row token against different
+    // font sizes; pinning it in px keeps an automation header level with its row
+    this.style.setProperty('--compost-timeline-automation-row-height', `${this.automationRowHeight}px`);
   }
 
   get lanes() {
@@ -506,21 +523,34 @@ export class CompostTimeline extends HTMLElement {
     const lane = this._lanes.find((entry) => entry.id === laneId);
     if (!lane) return;
     lane.automation = cloneAutomation(automation);
+    const previousWidth = Number.parseFloat(this.lanesWorld.style.width);
+    const previousEnd = Number.isFinite(previousWidth) && this._pxPerBeat > 0 ? previousWidth / this._pxPerBeat : null;
     const end = this.worldEnd();
     const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
     const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(laneId)}"]`);
-    if (header instanceof HTMLElement) header.replaceWith(this.renderLaneHeader(lane));
-    if (row instanceof HTMLElement) row.replaceWith(this.renderLaneBody(lane, end));
-    this.rulerWorld.style.width = `${end * this._pxPerBeat}px`;
-    this.lanesWorld.style.width = `${end * this._pxPerBeat}px`;
-    this.rulerWorld.replaceChildren(this.rulerGrid(end));
-    this.renderRulerLabels(end);
+    // only the automation sub-rows are rebuilt: the clip row (possibly mid-drag) and the
+    // header's name row stay in place, so a write painting at 10 Hz does not disturb them
+    if (header instanceof HTMLElement) {
+      for (const old of header.querySelectorAll('.automation-header')) old.remove();
+      for (const entry of this.automationFor(lane)) header.append(this.renderAutomationHeader(lane, entry));
+    }
+    if (row instanceof HTMLElement) {
+      for (const old of row.querySelectorAll('.automation-row')) old.remove();
+      for (const entry of this.automationFor(lane)) row.append(this.renderAutomationRow(lane, entry, end));
+    }
     this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
     const grid = this.lanesWorld.querySelector('.grid-world');
-    if (grid instanceof HTMLElement) {
-      grid.style.width = `${end * this._pxPerBeat}px`;
-      grid.style.height = `${this.totalLaneHeight()}px`;
-      grid.replaceChildren(this.rulerGrid(end, true));
+    if (grid instanceof HTMLElement) grid.style.height = `${this.totalLaneHeight()}px`;
+    // the world only widens when the lane content grew past it; then the ruler follows
+    if (previousEnd === null || Math.abs(previousEnd - end) > MIN_CLIP_LENGTH) {
+      this.rulerWorld.style.width = `${end * this._pxPerBeat}px`;
+      this.lanesWorld.style.width = `${end * this._pxPerBeat}px`;
+      this.rulerWorld.replaceChildren(this.rulerGrid(end));
+      this.renderRulerLabels(end);
+      if (grid instanceof HTMLElement) {
+        grid.style.width = `${end * this._pxPerBeat}px`;
+        grid.replaceChildren(this.rulerGrid(end, true));
+      }
     }
     this.paintSelection();
   }
@@ -967,41 +997,7 @@ export class CompostTimeline extends HTMLElement {
       progress.style.width = `${finiteClamp(Number(clip.progress), 0, 1) * 100}%`;
       element.append(progress);
     }
-    const notes = document.createElement('span');
-    notes.className = 'clip-notes';
-    const duration = Math.max(MIN_CLIP_LENGTH, Number(clip.duration) || Number(clip.length) || 1);
-    const length = Math.max(MIN_CLIP_LENGTH, Number(clip.length) || duration);
-    const offset = ((Number(clip.offset) || 0) % duration + duration) % duration;
-    for (const note of (clip.notes || []).slice(0, 200)) {
-      const noteStart = Number(note.start) || 0;
-      const noteDuration = Number(note.duration) || .1;
-      const starts = [];
-      if (clip.loop === false) starts.push(noteStart - offset);
-      else {
-        let start = noteStart - offset;
-        while (start < 0) start += duration;
-        for (; start < length; start += duration) starts.push(start);
-      }
-      for (const start of starts) {
-        if (start < 0 || start >= length) continue;
-        const mark = document.createElement('span');
-        mark.className = 'clip-note';
-        mark.style.left = `${Math.max(0, Math.min(100, start / length * 100))}%`;
-        mark.style.width = `${Math.max(2, Math.min(30, noteDuration / length * 100))}%`;
-        mark.style.bottom = `${Math.max(2, Math.min(90, ((Number(note.note) || 0) / 127) * 90))}%`;
-        notes.append(mark);
-      }
-    }
-    element.append(notes);
-    const extent = document.createElement('span');
-    extent.className = 'clip-extent';
-    element.append(extent);
-    for (const line of loopPassLines(clip)) {
-      const mark = document.createElement('span');
-      mark.className = 'clip-loop-line';
-      mark.style.left = `${(line / Math.max(MIN_CLIP_LENGTH, Number(clip.length) || 1)) * 100}%`;
-      element.append(mark);
-    }
+    this.paintClipContent(element, clip);
     if (this.renaming === clip.id) {
       const input = document.createElement('input');
       input.className = 'clip-editor';
@@ -1032,6 +1028,52 @@ export class CompostTimeline extends HTMLElement {
       element.append(name);
     }
     return element;
+  }
+
+  /** The clip's body: notes, extent and loop points, positioned in beats of the
+   * clip's own length. A trim preview repaints this with the previewed geometry so
+   * the notes stay where they are in time instead of stretching with the box.
+   * @param {HTMLElement} element @param {TimelineClip} clip */
+  paintClipContent(element, clip) {
+    for (const old of element.querySelectorAll('.clip-notes, .clip-extent, .clip-loop-line')) old.remove();
+    const anchor = element.querySelector('.clip-name, .clip-editor');
+    const place = (node) => anchor ? element.insertBefore(node, anchor) : element.append(node);
+    const notes = document.createElement('span');
+    notes.className = 'clip-notes';
+    const duration = Math.max(MIN_CLIP_LENGTH, Number(clip.duration) || Number(clip.length) || 1);
+    const length = Math.max(MIN_CLIP_LENGTH, Number(clip.length) || duration);
+    const offset = ((Number(clip.offset) || 0) % duration + duration) % duration;
+    for (const note of (clip.notes || []).slice(0, 200)) {
+      const noteStart = Number(note.start) || 0;
+      const noteDuration = Number(note.duration) || .1;
+      const starts = [];
+      if (clip.loop === false) starts.push(noteStart - offset);
+      else {
+        let start = noteStart - offset;
+        while (start < 0) start += duration;
+        for (; start < length; start += duration) starts.push(start);
+      }
+      for (const start of starts) {
+        if (start < 0 || start >= length) continue;
+        const mark = document.createElement('span');
+        mark.className = 'clip-note';
+        mark.style.left = `${Math.max(0, Math.min(100, start / length * 100))}%`;
+        mark.style.width = `${Math.max(2, Math.min(30, noteDuration / length * 100))}%`;
+        mark.style.bottom = `${Math.max(2, Math.min(90, ((Number(note.note) || 0) / 127) * 90))}%`;
+        notes.append(mark);
+      }
+    }
+    place(notes);
+    const extent = document.createElement('span');
+    extent.className = 'clip-extent';
+    place(extent);
+    for (const line of loopPassLines(clip)) {
+      const mark = document.createElement('span');
+      mark.className = 'clip-loop-line';
+      mark.title = 'loop point';
+      mark.style.left = `${(line / length) * 100}%`;
+      place(mark);
+    }
   }
 
   paintSelection() {
@@ -1293,6 +1335,11 @@ export class CompostTimeline extends HTMLElement {
     const automation = this.automationFromEvent(event);
     if (automation) {
       event.preventDefault();
+      // preventDefault stops the browser's own focus change: give the focus explicitly,
+      // so Delete and the arrows work on the point that was just clicked
+      const focusTarget = automation.point instanceof SVGElement || automation.point instanceof HTMLElement
+        ? automation.point : automation.row;
+      /** @type {any} */ (focusTarget).focus?.({ preventScroll: true });
       const beat = this.beatAtPoint(event.clientX);
       const points = Array.isArray(automation.automation.points)
         ? automation.automation.points.map((point) => ({ ...point })) : [];
@@ -1418,6 +1465,7 @@ export class CompostTimeline extends HTMLElement {
       drag.preview = { start, end };
       drag.element.style.left = `${(start - this._scrollBeat) * this._pxPerBeat}px`;
       drag.element.style.width = `${Math.max(1, (end - start) * this._pxPerBeat)}px`;
+      this.paintClipContent(drag.element, previewTrimmedClip(origin, start, end));
       this.dispatchEvent(eventOf('clip-trim-input', { id: drag.clipId, start, end }));
       return;
     }

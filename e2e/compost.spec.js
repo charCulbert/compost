@@ -1148,3 +1148,50 @@ test('popup anchors, keeps on screen, picks by keyboard and closes on an outside
   await page.mouse.click(20, 20);
   await expect(context).toBeHidden();
 });
+
+test('timeline automation headers stay level with their rows and a trim preview keeps notes in time', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const levels = await timeline.evaluate((element) => {
+    element.setAttribute('automation', '');
+    element.setLanes([
+      { id: 'a', name: 'A', clips: [], automation: [
+        { id: 'env', label: 'Env', min: 0, max: 1, stepped: false, points: [{ beat: 0, value: .5 }] },
+        { id: 'env2', label: 'Env 2', min: 0, max: 1, stepped: false, points: [] },
+      ] },
+      { id: 'b', name: 'B', clips: [] },
+    ]);
+    const root = element.shadowRoot;
+    const headerA = root.querySelector('.lane-header[data-lane-id="a"]').getBoundingClientRect();
+    const laneA = root.querySelector('.lane[data-lane-id="a"]').getBoundingClientRect();
+    const headerB = root.querySelector('.lane-header[data-lane-id="b"]').getBoundingClientRect();
+    const laneB = root.querySelector('.lane[data-lane-id="b"]').getBoundingClientRect();
+    return { headerA: headerA.height, laneA: laneA.height, drift: (headerB.top - headerA.top) - (laneB.top - laneA.top) };
+  });
+  expect(Math.abs(levels.headerA - levels.laneA)).toBeLessThan(1);
+  expect(Math.abs(levels.drift)).toBeLessThan(1);
+
+  // trim the right edge of a looped clip: the first note keeps its pixel position while dragging
+  await timeline.evaluate((element) => {
+    element.removeAttribute('automation');
+    element.pxPerBeat = 40; element.scrollBeat = 0;
+    element.setLanes([{ id: 'a', name: 'A', clips: [
+      { id: 'c', name: 'c', start: 2, length: 4, duration: 4, offset: 0, loop: true,
+        notes: [{ start: 1, duration: .5, note: 60 }] },
+    ] }]);
+  });
+  const clip = timeline.locator('.clip[data-id="c"]');
+  const noteLeft = () => clip.locator('.clip-note').first().evaluate((node) => node.getBoundingClientRect().left);
+  const box = await clip.boundingBox();
+  const before = await noteLeft();
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width + 120, box.y + box.height / 2, { steps: 6 });
+  const during = await noteLeft();
+  const width = (await clip.boundingBox()).width;
+  const loopLines = await clip.locator('.clip-loop-line').count();
+  await page.mouse.up();
+  expect(width).toBeGreaterThan(box.width + 100);
+  expect(Math.abs(during - before)).toBeLessThan(1);
+  expect(loopLines).toBeGreaterThanOrEqual(1);
+});
