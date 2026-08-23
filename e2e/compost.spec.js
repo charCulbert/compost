@@ -745,6 +745,196 @@ test('timeline lane headers expose arm, mute and solo controls', async ({ page }
   await expect(controls.nth(2)).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('timeline automation rows draw and commit sorted edits without clip selection', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('snap', 'grid');
+    element.style.setProperty('--compost-timeline-automation-row-height', '32px');
+    element.testEvents = [];
+    for (const type of ['automation-change', 'automation-context', 'clip-select']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.setLanes([{ id: 'lane', name: 'MIDI 1', color: 'rgb(40, 120, 180)', clips: [
+      { id: 'clip', name: 'clip', start: 0, length: 4, duration: 4, notes: [] },
+    ], automation: [{
+      id: 'volume', label: 'Volume', min: -90, max: 12, stepped: false, scale: 'gain', value: -3,
+      points: [{ beat: 0, value: -12 }, { beat: 4, value: 0 }],
+    }] }]);
+  });
+  const geometry = await timeline.evaluate((element) => {
+    const lane = element.shadowRoot.querySelector('.lane');
+    const base = element.shadowRoot.querySelector('.lane-base');
+    const row = element.shadowRoot.querySelector('.automation-row');
+    const on = { laneHeight: lane.getBoundingClientRect().height, baseHeight: base.getBoundingClientRect().height,
+      rows: element.shadowRoot.querySelectorAll('.automation-row').length,
+      baseLane: element.laneAtPoint(base.getBoundingClientRect().top + 4),
+      rowLane: element.laneAtPoint(row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2) };
+    element.removeAttribute('automation');
+    const offLane = element.shadowRoot.querySelector('.lane');
+    const off = { laneHeight: offLane.getBoundingClientRect().height,
+      rows: element.shadowRoot.querySelectorAll('.automation-row').length };
+    element.setAttribute('automation', '');
+    return { on, off };
+  });
+  expect(geometry.on.rows).toBe(1);
+  expect(geometry.on.laneHeight).toBeGreaterThan(geometry.on.baseHeight);
+  expect(geometry.on.baseLane).toBe('lane');
+  expect(geometry.on.rowLane).toBe('lane');
+  expect(geometry.off.rows).toBe(0);
+  expect(Math.abs(geometry.off.laneHeight - geometry.on.baseHeight)).toBeLessThanOrEqual(1);
+
+  const row = timeline.locator('.automation-row');
+  const rowBox = await row.boundingBox();
+  await row.dispatchEvent('dblclick', {
+    bubbles: true,
+    composed: true,
+    clientX: rowBox.x + 52,
+    clientY: rowBox.y + rowBox.height * .7,
+  });
+  let events = await timeline.evaluate((element) => element.testEvents);
+  const add = events.find((event) => event.type === 'automation-change');
+  expect(add.detail.laneId).toBe('lane');
+  expect(add.detail.automationId).toBe('volume');
+  expect(add.detail.points).toHaveLength(3);
+  expect(add.detail.points[1].beat).toBe(2);
+
+  const point = row.locator('.automation-point').nth(1);
+  const pointBox = await point.boundingBox();
+  await page.mouse.move(pointBox.x + pointBox.width / 2, pointBox.y + pointBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pointBox.x + 31, rowBox.y + rowBox.height + 40, { steps: 5 });
+  await page.mouse.up();
+  events = await timeline.evaluate((element) => element.testEvents);
+  const moves = events.filter((event) => event.type === 'automation-change');
+  expect(moves).toHaveLength(2);
+  expect(moves[1].detail.points).toHaveLength(3);
+  expect(moves[1].detail.points[1].beat).toBe(3);
+  await point.focus();
+  await page.keyboard.press('Shift+ArrowRight');
+  events = await timeline.evaluate((element) => element.testEvents);
+  const fineNudge = events.filter((event) => event.type === 'automation-change');
+  expect(fineNudge).toHaveLength(3);
+  expect(fineNudge[2].detail.points[1].beat).toBe(3.1);
+  expect(events.filter((event) => event.type === 'clip-select')).toHaveLength(0);
+
+  await row.click({ button: 'right' });
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.some((event) => event.type === 'automation-context' && event.detail.automationId === 'volume')).toBe(true);
+});
+
+test('timeline automation headers and empty rows open context from the keyboard', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.addEventListener('automation-context', (event) => element.testEvents.push(event.detail));
+    element.setLanes([{ id: 'lane', name: 'MIDI 1', clips: [], automation: [
+      { id: 'empty', label: 'Empty', min: 0, max: 1, stepped: false, points: [] },
+    ] }]);
+  });
+  const header = timeline.locator('.automation-header');
+  const row = timeline.locator('.automation-row');
+  await expect(header).toHaveAttribute('tabindex', '0');
+  await expect(row).toHaveAttribute('tabindex', '0');
+  await header.focus();
+  await page.keyboard.press('Shift+F10');
+  await row.focus();
+  await page.keyboard.press('Shift+F10');
+  expect(await timeline.evaluate((element) => element.testEvents)).toEqual([
+    { laneId: 'lane', automationId: 'empty', clientX: expect.any(Number), clientY: expect.any(Number) },
+    { laneId: 'lane', automationId: 'empty', clientX: expect.any(Number), clientY: expect.any(Number) },
+  ]);
+});
+
+test('timeline loop punch caps survive omitted updates and handle drags', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setLoop(0, 8, false, false, { punchIn: true, punchOut: true });
+    element.setLoop(1, 9, false);
+  });
+  const start = timeline.locator('.ruler-handle.start');
+  const end = timeline.locator('.ruler-handle.end');
+  await expect(start).toHaveAttribute('data-punch', '');
+  await expect(end).toHaveAttribute('data-punch', '');
+  const box = await start.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 24, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await expect(start).toHaveAttribute('data-punch', '');
+  await expect(end).toHaveAttribute('data-punch', '');
+});
+
+test('timeline lane geometry includes the separator at automation boundaries', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const geometry = await timeline.evaluate((element) => {
+    element.setLanes([
+      { id: 'with-automation', name: 'A', clips: [], automation: [{ id: 'env', label: 'Env', min: 0, max: 1, stepped: false, points: [] }] },
+      { id: 'without-automation', name: 'B', clips: [] },
+    ]);
+    const rows = [...element.shadowRoot.querySelectorAll('.lane')];
+    const first = rows[0].getBoundingClientRect();
+    const second = rows[1].getBoundingClientRect();
+    return {
+      firstHeight: first.height,
+      firstModelHeight: element.laneHeightFor(element.lanes[0]),
+      totalModelHeight: element.totalLaneHeight(),
+      totalRectHeight: element.shadowRoot.querySelector('.lanes-world').getBoundingClientRect().height,
+      beforeBoundary: element.laneAtPoint(first.bottom - .25),
+      afterBoundary: element.laneAtPoint(second.top + .25),
+      boundaryGap: second.top - first.bottom,
+    };
+  });
+  expect(Math.abs(geometry.firstHeight - geometry.firstModelHeight)).toBeLessThan(.1);
+  expect(Math.abs(geometry.totalRectHeight - geometry.totalModelHeight)).toBeLessThan(.1);
+  expect(geometry.beforeBoundary).toBe('with-automation');
+  expect(geometry.afterBoundary).toBe('without-automation');
+  expect(Math.abs(geometry.boundaryGap)).toBeLessThan(.1);
+});
+
+test('timeline reveals an automation row through the vertical lane viewport', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const geometry = await timeline.evaluate((element) => {
+    element.style.height = '128px';
+    element.setAttribute('automation', '');
+    element.setLanes(Array.from({ length: 8 }, (_, index) => ({
+      id: `lane-${index}`, name: `Lane ${index}`, clips: [], automation: [
+        { id: 'env', label: 'Envelope', min: 0, max: 1, stepped: false, points: [{ beat: 0, value: index / 8 }] },
+      ],
+    })));
+    const viewport = element.shadowRoot.querySelector('.lanes-wrap');
+    const target = element.shadowRoot.querySelector('.automation-row[data-lane-id="lane-7"]');
+    const before = target.getBoundingClientRect();
+    const visible = viewport.getBoundingClientRect();
+    const header = element.shadowRoot.querySelector('.lane-header[data-lane-id="lane-7"]');
+    const headerBefore = header.getBoundingClientRect().top;
+    const revealed = element.revealAutomation('lane-7', 'env');
+    const after = target.getBoundingClientRect();
+    return {
+      revealed,
+      missing: element.revealAutomation('lane-7', 'missing'),
+      scrolled: viewport.scrollTop,
+      beforeTop: before.top,
+      afterTop: after.top,
+      afterBottom: after.bottom,
+      viewportTop: visible.top,
+      viewportBottom: visible.bottom,
+      headerMove: header.getBoundingClientRect().top - headerBefore,
+    };
+  });
+  expect(geometry.revealed).toBe(true);
+  expect(geometry.missing).toBe(false);
+  expect(geometry.scrolled).toBeGreaterThan(0);
+  expect(geometry.beforeTop).toBeGreaterThan(geometry.viewportBottom);
+  expect(geometry.afterTop).toBeGreaterThanOrEqual(geometry.viewportTop - .1);
+  expect(geometry.afterBottom).toBeLessThanOrEqual(geometry.viewportBottom + .1);
+  expect(Math.abs(geometry.headerMove + geometry.scrolled)).toBeLessThanOrEqual(.1);
+});
+
 test('note editor moves, trims, velocity-drags and loops through real gestures', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');

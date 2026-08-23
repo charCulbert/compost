@@ -12,7 +12,11 @@ const { DEFAULT_TAPER, dragAxis, parseTaper, washLevel, washPosition } = await i
 const { panBar, panText } = await import('../src/components/compost-channel-card.js');
 const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
-const { snapBeat, clipBox, loopPassLines, rulerStep } = await import('../src/components/compost-timeline.js');
+const {
+  snapBeat, clipBox, loopPassLines, rulerStep,
+  automationValueToY, automationValueFromY,
+  addAutomationPoint, moveAutomationPoint, deleteAutomationPoint,
+} = await import('../src/components/compost-timeline.js');
 const { boundedPosition, constrainedSize } = await import('../src/components/compost-window.js');
 const { pointPlacement } = await import('../src/components/compost-popup.js');
 const { duplicatedNotes, selectionSpan, trimmedNotes, velocityShiftedNotes } = await import('../src/piano-roll-model.js');
@@ -81,6 +85,24 @@ test('timeline geometry snaps, scales and marks looping passes', () => {
   assert.equal(rulerStep(12, 4), 2);
   assert.equal(rulerStep(6, 4), 4);
   assert.equal(rulerStep(3, 4), 8);
+});
+
+test('automation geometry follows linear and fader axes', () => {
+  assert.equal(automationValueToY(1, 0, 1, 100), 0);
+  assert.equal(automationValueToY(0, 0, 1, 100), 100);
+  assert.equal(automationValueFromY(25, 0, 1, 100), .75);
+  assert.ok(Math.abs(automationValueToY(0, -90, 12, 100, 'gain') - 30) < 1e-9);
+  assert.ok(Math.abs(automationValueFromY(30, -90, 12, 100, 'gain')) < 1e-9);
+});
+
+test('automation point edits stay sorted, clamped and neighbour-safe', () => {
+  const range = { min: 0, max: 1 };
+  let points = [{ beat: 0, value: .25 }, { beat: 4, value: .75 }];
+  points = addAutomationPoint(points, { beat: 2, value: 2 }, range);
+  assert.deepEqual(points.map((point) => [point.beat, point.value]), [[0, .25], [2, 1], [4, .75]]);
+  points = moveAutomationPoint(points, 1, { beat: 8, value: -.5 }, range);
+  assert.deepEqual(points.map((point) => [point.beat, point.value]), [[0, .25], [4, 0], [4, .75]]);
+  assert.deepEqual(deleteAutomationPoint(points, 1).map((point) => [point.beat, point.value]), [[0, .25], [4, .75]]);
 });
 
 test('a window never leaves the viewport and resizes in ratio from the dominant edge', () => {
