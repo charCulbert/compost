@@ -267,11 +267,6 @@ export function automationValueAtBeat(points, beat, min = 0, max = 1, scale = 'l
     if (stepped) return at === next.beat ? next.value : previous.value;
     if (next.beat <= previous.beat) return previous.value;
     const amount = (at - previous.beat) / (next.beat - previous.beat);
-    if (scale === 'gain') {
-      const previousY = automationValueToY(previous.value, range, 1, 'gain');
-      const nextY = automationValueToY(next.value, range, 1, 'gain');
-      return automationValueFromY(previousY + (nextY - previousY) * amount, range, 1, 'gain');
-    }
     return finiteClamp(previous.value + (next.value - previous.value) * amount, range.min, range.max);
   }
   return last.value;
@@ -617,7 +612,7 @@ export class CompostTimeline extends HTMLElement {
         }
         :host(:focus-visible) { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
         :host([disabled]) { opacity: .55; pointer-events: none; }
-        .frame { display: grid; grid-template-columns: var(--compost-timeline-header-width) minmax(0, 1fr); grid-template-rows: 3.3em minmax(0, 1fr); height: 100%; min-height: 0; }
+        .frame { display: grid; grid-template-columns: min(var(--compost-timeline-header-width), 44%) minmax(0, 1fr); grid-template-rows: 3.3em minmax(0, 1fr); height: 100%; min-height: 0; }
         .corner, .header-wrap { background: var(--compost-timeline-header-bg); border-right: 1px solid var(--compost-timeline-line); }
         .corner { border-bottom: 1px solid var(--compost-timeline-line); }
         .ruler-wrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--compost-timeline-line); touch-action: none; scrollbar-width: none; }
@@ -645,7 +640,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-playhead::before { content: ""; position: absolute; top: .08em; left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--compost-timeline-playhead); }
         .header-wrap, .lanes-wrap { min-height: 0; overflow: hidden; }
         .header-wrap { overflow: hidden; }
-        .headers { position: relative; width: var(--compost-timeline-header-width); }
+        .headers { position: relative; width: 100%; }
         .lane-header { position: relative; box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, var(--compost-timeline-text)); font-size: var(--compost-timeline-lane-font-size); }
         .lane-header-main, .lane-header-devices { position: relative; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: .45em; padding: 0 .9em 0 1em; }
         .lane-header-main { height: var(--lane-main-row-height, var(--compost-timeline-row-height)); }
@@ -2027,7 +2022,21 @@ export class CompostTimeline extends HTMLElement {
     let path = `M 0 ${y(points[0])} H ${x(points[0])}`;
     for (let index = 1; index < points.length; index += 1) {
       if (automation.stepped) path += ` H ${x(points[index])} V ${y(points[index])}`;
-      else path += ` L ${x(points[index])} ${y(points[index])}`;
+      else {
+        const before = points[index - 1];
+        const after = points[index];
+        if (automation.scale === 'gain' && after.value !== before.value) {
+          const turns = DEFAULT_TAPER.map(([value]) => value)
+            .filter((value) => (value - before.value) * (value - after.value) < 0)
+            .map((value) => ({
+              beat: before.beat + (after.beat - before.beat) * (value - before.value) / (after.value - before.value),
+              value,
+            }))
+            .sort((a, b) => a.beat - b.beat);
+          for (const turn of turns) path += ` L ${x(turn)} ${y(turn)}`;
+        }
+        path += ` L ${x(after)} ${y(after)}`;
+      }
     }
     path += ` H ${Math.max(x(points[points.length - 1]), end * this._pxPerBeat)}`;
     return path;
@@ -2798,7 +2807,8 @@ export class CompostTimeline extends HTMLElement {
       this.drag = {
         pointerId: event.pointerId, type: 'time-selection', laneId: lane.dataset.laneId,
         startX: event.clientX, startY: event.clientY, startBeat: this.beatAtPoint(event.clientX),
-        startScrollBeat: this._scrollBeat, originSelection: this.timeSelection,
+        startScrollBeat: this._scrollBeat, startScrollTop: this.lanesWrap.scrollTop,
+        originSelection: this.timeSelection,
         originSelected: [...this._selected], moved: false,
       };
       if (event.isTrusted) lane.setPointerCapture?.(event.pointerId);
@@ -2847,6 +2857,13 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (drag.type === 'time-selection') {
+      if (event.pointerType === 'touch' && drag.moved && Math.abs(dy) > Math.abs(dx)) {
+        drag.type = 'scroll-lanes';
+        const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
+        this.lanesWrap.scrollTop = clamp(drag.startScrollTop - dy, 0, maximum);
+        this.paintLaneScroll();
+        return;
+      }
       if (event.pointerType === 'touch' && drag.moved && Math.abs(dx) > Math.abs(dy)) {
         drag.type = 'scroll-time';
         drag.startScrollBeat = this._scrollBeat;
@@ -2912,6 +2929,12 @@ export class CompostTimeline extends HTMLElement {
     }
     if (drag.type === 'scroll-time') {
       this.scrollBeat = Math.max(0, drag.startScrollBeat - dx / this._pxPerBeat);
+      return;
+    }
+    if (drag.type === 'scroll-lanes') {
+      const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
+      this.lanesWrap.scrollTop = clamp(drag.startScrollTop - dy, 0, maximum);
+      this.paintLaneScroll();
       return;
     }
     if (drag.type === 'marquee') {
@@ -3171,7 +3194,7 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('seek', { beat, source: 'ruler' }));
       return;
     }
-    if (drag.type === 'scroll-time') return;
+    if (drag.type === 'scroll-time' || drag.type === 'scroll-lanes') return;
     this.clearClipDragVisuals();
     if (drag.element) drag.element.style.cursor = 'grab';
     if (drag.type === 'trim-left' || drag.type === 'trim-right') {

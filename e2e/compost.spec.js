@@ -1021,6 +1021,20 @@ test('timeline keeps lane headers aligned and touch drags scroll time', async ({
   });
   expect(touchDrag).toBe(5);
 
+  const verticalTouchDrag = await timeline.evaluate((element) => {
+    const lanes = element.shadowRoot.querySelector('.lanes-wrap');
+    lanes.scrollTop = 0;
+    const lane = element.shadowRoot.querySelector('.lane[data-lane-id="lane-11"]');
+    const send = (type, clientX, clientY) => lane.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 19, pointerType: 'touch', button: 0, clientX, clientY,
+    }));
+    send('pointerdown', 320, 180);
+    send('pointermove', 320, 60);
+    send('pointerup', 320, 60);
+    return lanes.scrollTop;
+  });
+  expect(verticalTouchDrag).toBe(120);
+
   const touchTap = await timeline.evaluate((element) => {
     element.testEvents = [];
     const lane = element.shadowRoot.querySelector('.lane[data-lane-id="lane-11"]');
@@ -1284,6 +1298,23 @@ test('timeline keeps device overflow and the trailing add inside a 275px header'
   expect(Number(fit.overflow)).toBeGreaterThan(0);
   expect(fit.overflowVisible).toBe(true);
   expect(fit.addVisible).toBe(true);
+});
+
+test('timeline leaves most of a phone-width view for arrangement editing', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const widths = await timeline.evaluate((element) => {
+    element.style.width = '375px';
+    const root = element.shadowRoot;
+    return {
+      host: element.getBoundingClientRect().width,
+      header: root.querySelector('.header-wrap').getBoundingClientRect().width,
+      lanes: root.querySelector('.lanes-wrap').getBoundingClientRect().width,
+    };
+  });
+  expect(widths.host).toBe(375);
+  expect(widths.header).toBeLessThanOrEqual(widths.host * .44 + 1);
+  expect(widths.lanes).toBeGreaterThanOrEqual(widths.host * .56 - 1);
 });
 
 test('timeline header commit one keeps measured lane geometry and reports header intents', async ({ page }) => {
@@ -1586,6 +1617,31 @@ test('timeline automation rows draw and commit sorted edits without clip selecti
   await row.click({ button: 'right' });
   events = await timeline.evaluate((element) => element.testEvents);
   expect(events.some((event) => event.type === 'automation-context' && event.detail.automationId === 'volume')).toBe(true);
+});
+
+test('timeline gain curves show the same absolute-value interpolation as playback', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const midpoint = await timeline.evaluate((element) => {
+    element.style.setProperty('--compost-timeline-automation-row-height', '100px');
+    element.pxPerBeat = 24;
+    element.setLanes([{ id: 'lane', name: 'MIDI 1', clips: [], automation: [{
+      id: 'volume', label: 'Volume', min: -90, max: 12, stepped: false, scale: 'gain',
+      points: [{ beat: 0, value: -90 }, { beat: 4, value: 12 }],
+    }] }]);
+    const path = element.shadowRoot.querySelector('.automation-line');
+    const targetX = 2 * element.pxPerBeat;
+    let low = 0;
+    let high = path.getTotalLength();
+    for (let index = 0; index < 24; index += 1) {
+      const middle = (low + high) / 2;
+      if (path.getPointAtLength(middle).x < targetX) low = middle;
+      else high = middle;
+    }
+    return {y: path.getPointAtLength((low + high) / 2).y,
+      height: Number(path.ownerSVGElement.getAttribute('height'))};
+  });
+  expect(Math.abs(midpoint.y - midpoint.height * .77)).toBeLessThan(1);
 });
 
 test('timeline automation headers and empty rows open context from the keyboard', async ({ page }) => {

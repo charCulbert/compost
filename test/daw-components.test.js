@@ -213,8 +213,7 @@ test('automation chooser values interpolate, step and clamp', () => {
   assert.equal(automationValueAtBeat(points, 2, 0, 1, 'linear', true), 0);
   assert.equal(automationValueAtBeat([{ beat: 0, value: 0 }, { beat: 2, value: .5 }, { beat: 4, value: 1 }], 2, 0, 1, 'linear', true), .5);
   const gainMid = automationValueAtBeat([{ beat: 0, value: -90 }, { beat: 4, value: 12 }], 2, -90, 12, 'gain');
-  const gainExpected = automationValueFromY((automationValueToY(-90, -90, 12, 1, 'gain') + automationValueToY(12, -90, 12, 1, 'gain')) / 2, -90, 12, 1, 'gain');
-  assert.ok(Math.abs(gainMid - gainExpected) < 1e-9);
+  assert.equal(gainMid, -39);
   assert.equal(snapAutomationValue(1.2, 0, 1), 1);
   assert.equal(snapAutomationValue(.63, 0, 1, .25), .75);
   assert.deepEqual(flattenAutomationRange([
