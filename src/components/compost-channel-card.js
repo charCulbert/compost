@@ -20,7 +20,7 @@ const TIGHT_LANE_EM = 4;
 const NARROW_WIDTH_EM = 10.2;
 
 // Monitor reads as the arm's dot radiating: the same circle, now making sound.
-const MONITOR_SVG = '<svg viewBox="0 0 14 12" aria-hidden="true">'
+export const MONITOR_SVG = '<svg viewBox="0 0 14 12" aria-hidden="true">'
   + '<circle cx="4.6" cy="6" r="2.1"/>'
   + '<path d="M8.3 3.4a3.9 3.9 0 0 1 0 5.2" fill="none" stroke-width="1.1"/>'
   + '<path d="M10.7 1.9a6.6 6.6 0 0 1 0 8.2" fill="none" stroke-width="1.1" class="far"/></svg>';

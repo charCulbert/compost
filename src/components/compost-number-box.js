@@ -56,6 +56,7 @@ export class CompostNumberBox extends HTMLElement {
       'drag-step-left',
       'drag-step-middle',
       'drag-step-right',
+      'fine-drag-scale',
     ];
   }
 
@@ -410,7 +411,7 @@ export class CompostNumberBox extends HTMLElement {
     event?.preventDefault?.();
 
     const fineScale = this.drag.fine || event?.altKey || event?.shiftKey
-      ? FINE_DRAG_SCALE
+      ? (this.attributes == null ? FINE_DRAG_SCALE : readNumberAttribute(this, 'fine-drag-scale', FINE_DRAG_SCALE))
       : 1;
     const scale = (this.drag.zoneScale || 1) * fineScale;
     const delta = distance / 180 * scale;

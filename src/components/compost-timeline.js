@@ -1,6 +1,8 @@
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
 import { DEFAULT_TAPER, washLevel, washPosition } from './compost-channel-strip.js';
+import './compost-number-box.js';
+import { MONITOR_SVG, panText } from './compost-channel-card.js';
 
 const MIN_CLIP_LENGTH = 1e-6;
 const MIN_PX_PER_BEAT = 4;
@@ -10,12 +12,24 @@ const DEFAULT_BEATS_PER_BAR = 4;
 const DEFAULT_LOOP_END = 8;
 const DRAG_THRESHOLD = 3;
 const LANE_SEPARATOR = 1;
+const DEFAULT_LANE_HEIGHT_EM = 5.8;
+const DEFAULT_THIN_LANE_HEIGHT_EM = 2.9;
+const DEFAULT_AUTOMATION_ROW_HEIGHT_EM = 2.36;
+const FIGURE_MIN_DB = -90;
+const FIGURE_MAX_DB = 12;
 
 /** @typedef {{id: string, name: string, start: number, length: number,
  * offset?: number, duration: number, loop?: boolean, state?: string,
- * progress?: number, notes?: {start: number, duration: number, note: number}[], color?: string}} TimelineClip */
-/** @typedef {{id: string, name: string, color?: string, overridden?: boolean,
- * armed?: boolean, recording?: boolean, controls?: {armed: boolean, muted: boolean, soloed: boolean},
+ * progress?: number, notes?: {start: number, duration: number, note: number, velocity?: number}[], color?: string}} TimelineClip */
+/** @typedef {{id: string, name: string, color?: string, colorRGB?: string,
+ * kind?: 'track'|'return'|'master', picked?: boolean, overridden?: boolean,
+ * armed?: boolean, recording?: boolean,
+ * controls?: {armed?: boolean, monitor?: 'off'|'auto'|'in', muted?: boolean, soloed?: boolean},
+ * session?: {name: string, state: 'playing'|'queued'}|null,
+ * figures?: {faderDb?: number, pan?: number, sends?: {id: string, letter?: string, db?: number}[]},
+ * wash?: number, meter?: [number, number], gainReduction?: number,
+ * devices?: {id: string, name: string, on?: boolean, kind?: 'midi-effect'|'instrument'|'effect', hasGui?: boolean}[],
+ * emptyDeviceLabel?: string,
  * automation?: AutomationLaneView[],
  * clips: TimelineClip[]}} TimelineLane */
 /** @typedef {{id: string, label: string, color?: string, min: number, max: number,
@@ -165,6 +179,58 @@ function cloneAutomation(automation) {
   })) : undefined;
 }
 
+function cloneFigures(figures) {
+  if (!figures || typeof figures !== 'object') return undefined;
+  return {
+    faderDb: Number.isFinite(Number(figures.faderDb)) ? Number(figures.faderDb) : 0,
+    pan: Number.isFinite(Number(figures.pan)) ? Number(figures.pan) : 0,
+    sends: Array.isArray(figures.sends) ? figures.sends.map((send) => ({
+      ...send,
+      db: Number.isFinite(Number(send.db)) ? Number(send.db) : FIGURE_MIN_DB,
+    })) : [],
+  };
+}
+
+function cloneDevices(devices) {
+  return Array.isArray(devices) ? devices.map((device) => ({ ...device, on: Boolean(device.on) })) : [];
+}
+
+function cloneSession(session) {
+  return session && typeof session === 'object'
+    ? { name: String(session.name || ''), state: session.state === 'queued' ? 'queued' : 'playing' }
+    : null;
+}
+
+function cloneControls(controls) {
+  if (!controls || typeof controls !== 'object') return undefined;
+  const next = {
+    armed: Boolean(controls.armed),
+    muted: Boolean(controls.muted),
+    soloed: Boolean(controls.soloed),
+  };
+  if (Object.prototype.hasOwnProperty.call(controls, 'monitor')) {
+    next.monitor = ['off', 'auto', 'in'].includes(controls.monitor) ? controls.monitor : 'off';
+  }
+  return next;
+}
+
+/** Split a device chain to leave room for a compact +N tail. Widths are CSS pixels. */
+export function splitDeviceChain(devices, availableWidth, measure = (device) => String(device?.name || '').length * 7 + 18) {
+  const entries = Array.isArray(devices) ? devices : [];
+  const available = Number.isFinite(Number(availableWidth)) ? Math.max(0, Number(availableWidth)) : Number.POSITIVE_INFINITY;
+  const widths = entries.map((device) => Math.max(1, Number(measure(device)) || 1));
+  if (!entries.length) return { visible: [], hidden: [], overflow: 0 };
+  if (!Number.isFinite(available)) return { visible: [...entries], hidden: [], overflow: 0 };
+  const separator = 10;
+  let visibleCount = entries.length;
+  const widthFor = (count, hidden) => widths.slice(0, count).reduce((sum, width) => sum + width, 0)
+    + Math.max(0, count - 1) * separator + (hidden ? String(hidden).length * 7 + 14 : 0);
+  while (visibleCount > 1 && widthFor(visibleCount, entries.length - visibleCount) > available) visibleCount -= 1;
+  if (widthFor(visibleCount, entries.length - visibleCount) > available) visibleCount = 0;
+  const hidden = entries.slice(visibleCount);
+  return { visible: entries.slice(0, visibleCount), hidden, overflow: hidden.length };
+}
+
 /** @param {Event} event @param {string} className */
 function pathElement(event, className) {
   return event.composedPath().find((node) => node instanceof Element
@@ -189,7 +255,8 @@ export class CompostTimeline extends HTMLElement {
     this.grid = 4;
     this.snapMode = 'grid';
     this.follow = false;
-    this.laneHeight = 42;
+    this.laneHeight = 64;
+    this.thinLaneHeight = 32;
     this.automationRowHeight = 32;
     this.automation = false;
     this._pxPerBeat = DEFAULT_PX_PER_BEAT;
@@ -205,6 +272,7 @@ export class CompostTimeline extends HTMLElement {
     /** @type {string|null} */ this.focusedClip = null;
     /** @type {string|null} */ this.focusedLane = null;
     /** @type {string|null} */ this.renaming = null;
+    /** @type {string|null} */ this.renamingLane = null;
     /** @type {any} */ this.drag = null;
     /** @type {Map<number, {x: number, y: number}>} */ this.pointers = new Map();
     /** @type {any} */ this.pinch = null;
@@ -235,9 +303,11 @@ export class CompostTimeline extends HTMLElement {
           --compost-timeline-playhead: var(--compost-timeline-text);
           --compost-timeline-loop: var(--compost-theme-accent, #8ea9c7);
           --compost-timeline-loop-off: color-mix(in srgb, var(--compost-timeline-muted) 60%, transparent);
-          --compost-timeline-lane-height: var(--compost-clip-grid-row-height, 2.9em);
+          --compost-timeline-header-width: 25rem;
+          --compost-timeline-lane-height: 5.8em;
+          --compost-timeline-thin-lane-height: 2.9em;
           --compost-timeline-row-height: var(--compost-timeline-lane-height);
-          --compost-timeline-automation-row-height: 2.2em;
+          --compost-timeline-automation-row-height: 2.36em;
           --compost-timeline-value: var(--compost-timeline-signal-hi);
           --compost-timeline-automation-line: var(--lane-color, var(--compost-timeline-text));
           --compost-timeline-clip-font-size: var(--compost-clip-grid-font-size, .91em);
@@ -259,7 +329,7 @@ export class CompostTimeline extends HTMLElement {
         }
         :host(:focus-visible) { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
         :host([disabled]) { opacity: .55; pointer-events: none; }
-        .frame { display: grid; grid-template-columns: 10.5em minmax(0, 1fr); grid-template-rows: 2.45em minmax(0, 1fr); height: 100%; min-height: 0; }
+        .frame { display: grid; grid-template-columns: var(--compost-timeline-header-width) minmax(0, 1fr); grid-template-rows: 3.3em minmax(0, 1fr); height: 100%; min-height: 0; }
         .corner, .header-wrap { background: var(--compost-timeline-header-bg); border-right: 1px solid var(--compost-timeline-line); }
         .corner { border-bottom: 1px solid var(--compost-timeline-line); }
         .ruler-wrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--compost-timeline-line); touch-action: none; }
@@ -267,9 +337,9 @@ export class CompostTimeline extends HTMLElement {
         .ruler-world { height: 100%; }
         .ruler-label { position: absolute; top: .28em; border-left: 1px solid var(--compost-timeline-line); padding-left: 3px; color: var(--compost-timeline-muted); font: .72em/1 var(--compost-timeline-numeral-font); white-space: nowrap; }
         .ruler-label[data-bar] { border-left-color: var(--compost-timeline-bar-line); }
-        .ruler-band { position: absolute; top: 1.48em; height: .72em; background: color-mix(in srgb, var(--compost-timeline-loop) 24%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop); cursor: grab; }
+        .ruler-band { position: absolute; top: 2.35em; height: .75em; background: color-mix(in srgb, var(--compost-timeline-loop) 24%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop); cursor: grab; }
         .ruler-band[data-off] { background: color-mix(in srgb, var(--compost-timeline-loop-off) 14%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop-off); opacity: .7; }
-        .ruler-handle { position: absolute; top: 1.32em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
+        .ruler-handle { position: absolute; top: 2.22em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
         .ruler-handle::before { content: ""; position: absolute; inset-block: 0; width: 2px; background: var(--compost-timeline-loop); }
         .ruler-handle.start::before { left: 0; }
         .ruler-handle.end::before { right: 0; }
@@ -281,13 +351,54 @@ export class CompostTimeline extends HTMLElement {
         .header-wrap, .lanes-wrap { min-height: 0; overflow: hidden; }
         .header-wrap { overflow: hidden; }
         .headers { position: relative; }
-        .lane-header { box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, var(--compost-timeline-text)); font-size: var(--compost-timeline-lane-font-size); }
-        .lane-header-main { box-sizing: border-box; height: var(--compost-timeline-row-height); display: flex; align-items: center; gap: .45em; padding: 0 .6em; }
-        .lane-header .lane-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; cursor: default; }
-        .lane-header .lane-name:focus-visible { outline: 1px dotted var(--compost-timeline-select); outline-offset: 2px; }
+        .lane-header { position: relative; box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, var(--compost-timeline-text)); font-size: var(--compost-timeline-lane-font-size); }
+        .lane-header-main, .lane-header-devices { position: relative; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: .45em; padding: 0 .9em 0 1em; }
+        .lane-header-main { height: var(--lane-main-row-height, var(--compost-timeline-row-height)); }
+        .lane-header-devices { height: var(--lane-devices-row-height, var(--compost-timeline-row-height)); gap: .3em; }
+        .lane-header[data-kind="return"] .lane-header-main, .lane-header[data-kind="master"] .lane-header-main { height: var(--lane-row-height, var(--compost-timeline-row-height)); }
+        .lane-header[data-kind="return"] .lane-header-devices, .lane-header[data-kind="master"] .lane-header-devices { display: none; }
+        .lane-header .lane-name, .lane-name-editor { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; cursor: default; }
+        .lane-name-editor { box-sizing: border-box; width: 100%; border: 0; outline: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-bg); color: var(--lane-color); font: inherit; padding: 1px 3px; }
+        .lane-header .lane-name[data-picked]::before, .lane-header .lane-name[data-picked]::after { content: ""; position: absolute; inset: -2px -3px; pointer-events: none; background-repeat: no-repeat; background-size: 5px 1px, 1px 5px, 5px 1px, 1px 5px; }
+        .lane-header .lane-name[data-picked]::before { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: left top, left top, right top, right top; }
+        .lane-header .lane-name[data-picked]::after { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: left bottom, left bottom, right bottom, right bottom; }
+        .lane-header .lane-name:focus-visible { outline: none; text-decoration: underline dotted var(--compost-timeline-select); text-underline-offset: 3px; }
+        .lane-header .lane-wash { position: absolute; inset: 0 auto 0 0; z-index: 0; width: 0; pointer-events: none; background: linear-gradient(90deg, color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 3%, transparent), color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 16%, transparent)); }
+        .lane-header .lane-wash-edge { position: absolute; inset: 0 -6px 0 auto; width: 13px; pointer-events: auto; cursor: ns-resize; }
+        .lane-header .lane-wash-edge::after { content: ""; position: absolute; inset: 0 6px 0 auto; width: 1px; background: color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 85%, transparent); box-shadow: 2px 0 6px color-mix(in srgb, var(--lane-color-rgb, var(--lane-color)) 35%, transparent); }
+        .lane-header[data-kind="return"] .lane-wash, .lane-header[data-kind="master"] .lane-wash { opacity: .9; }
+        .lane-session { display: flex; align-items: center; min-width: 0; gap: .35em; color: var(--lane-color, var(--compost-timeline-text)); }
+        .lane-session .back-pip { background: var(--compost-timeline-over); box-shadow: 0 0 4px color-mix(in srgb, var(--compost-timeline-over) 60%, transparent); }
+        .lane-session-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lane-session[data-state="queued"] .lane-session-name { animation: compost-timeline-breath 1s ease-in-out infinite; }
+        .lane-figures-main { display: flex; align-items: center; flex: none; gap: .18em; margin-left: auto; color: var(--compost-timeline-value); font: .82em/1 var(--compost-timeline-numeral-font); }
+        .lane-header[data-session] .lane-figures-main { display: none; }
+        .lane-figure { --number-box-width: 3.55em; --number-box-height: 1.5em; --number-box-padding: 0 .1em; --number-box-bg: transparent; --number-box-border: transparent; --number-box-text: var(--compost-timeline-value); --number-box-active-bg: transparent; --number-box-active-text: var(--compost-timeline-text); --number-box-focus: var(--compost-timeline-select); --number-box-fill: transparent; --number-box-font-size: 1em; --number-box-font-weight: 400; --number-box-text-align: right; --number-box-cursor: ns-resize; display: inline-block; }
+        .lane-figure[data-kind="pan"] { --number-box-width: 2.6em; }
+        .lane-sends { display: flex; flex: none; align-items: center; gap: .3em; margin-left: auto; white-space: nowrap; color: var(--compost-timeline-value); font-size: .82em; }
+        .lane-send { display: inline-flex; align-items: center; gap: .08em; }
+        .lane-send-letter { color: var(--compost-timeline-muted); font: .85em/1 var(--compost-timeline-font); }
+        .lane-send .lane-figure { --number-box-width: 3.6em; }
+        .lane-devices { display: flex; align-items: center; min-width: 0; overflow: hidden; flex: 1 1 auto; color: var(--compost-timeline-text); }
+        .lane-device, .lane-device-overflow, .lane-device-add, .empty-device { display: inline-flex; align-items: center; flex: none; min-width: 0; border: 0; padding: 0; background: none; color: inherit; font: inherit; font-size: .82em; line-height: 1; }
+        .lane-device { gap: .24em; cursor: grab; }
+        .lane-device[data-drop] { border-left: 1px solid var(--compost-timeline-select); }
+        .lane-device-label { max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+        .device-power { width: .65em; height: .65em; padding: 0; border: 1px solid currentColor; border-radius: 50%; background: transparent; color: var(--compost-timeline-muted); cursor: pointer; }
+        .device-power[data-on] { background: currentColor; color: var(--compost-timeline-text); }
+        .device-separator { flex: none; color: var(--compost-timeline-faint); margin: 0 .28em; }
+        .lane-device-overflow, .lane-device-add, .empty-device { color: var(--compost-timeline-muted); cursor: pointer; }
+        .lane-device-overflow { font-family: var(--compost-timeline-numeral-font); }
+        .lane-meter, .lane-gain-reduction { position: absolute; z-index: 2; top: 6px; bottom: 6px; width: 2px; pointer-events: none; }
+        .lane-meter { right: 0; display: flex; align-items: end; gap: 0; }
+        .lane-meter-channel { position: relative; flex: 1 1 50%; min-height: 0; background: var(--compost-timeline-signal-hi); box-shadow: 0 0 4.2px color-mix(in srgb, var(--lane-color) 58%, transparent); }
+        .lane-meter-channel[data-empty] { display: none; }
+        .lane-gain-reduction { right: 4px; background: var(--compost-timeline-over); box-shadow: 0 0 4px color-mix(in srgb, var(--compost-timeline-over) 60%, transparent); transform-origin: top; height: 0; }
+        .lane-drop-line { position: absolute; left: 0; right: 0; z-index: 8; display: none; height: 1px; background: var(--compost-timeline-select); pointer-events: none; }
         .lane-controls { display: flex; flex: none; align-items: center; gap: .18em; margin-left: auto; }
         .lane-control { appearance: none; border: 0; border-radius: 2px; min-width: 1.45em; height: 1.45em; padding: 0 .2em; background: none; color: var(--compost-timeline-muted); font: inherit; font-size: .78em; line-height: 1; cursor: pointer; }
         .lane-control:hover, .lane-control:focus-visible { color: var(--compost-timeline-text); background: var(--compost-timeline-highlight); }
+        .lane-control svg { width: 1.1em; height: .95em; fill: currentColor; stroke: currentColor; vertical-align: middle; }
         .lane-control:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 1px; }
         .lane-control[data-name="arm"][aria-pressed="true"] { color: var(--compost-timeline-over); }
         .lane-control[data-name="mute"][aria-pressed="true"], .lane-control[data-name="solo"][aria-pressed="true"] { color: var(--compost-timeline-text); background: var(--compost-timeline-highlight); }
@@ -296,13 +407,14 @@ export class CompostTimeline extends HTMLElement {
         .automation-header { box-sizing: border-box; height: var(--compost-timeline-automation-row-height); display: flex; align-items: center; gap: .3em; padding: 0 .6em 0 1.5em; border-top: 1px solid color-mix(in srgb, var(--compost-timeline-line) 50%, transparent); color: var(--compost-timeline-muted); font-size: .82em; }
         .automation-header-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .automation-header-value { margin-left: auto; color: var(--compost-timeline-value); font: .86em/1 var(--compost-timeline-numeral-font); }
-        .lanes-wrap { position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; touch-action: none; }
+        .lanes-wrap { position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: none; }
+        .lanes-wrap::-webkit-scrollbar { display: none; }
         .lanes-world { position: relative; min-height: 100%; }
         .grid-world { position: absolute; inset: 0 auto auto 0; z-index: 1; pointer-events: none; }
         .grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-line); opacity: .5; }
         .grid-line.bar { background: var(--compost-timeline-bar-line); opacity: 1; }
         .lane { position: relative; box-sizing: border-box; height: auto; border-bottom: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-lane); }
-        .lane-base { position: relative; box-sizing: border-box; height: var(--compost-timeline-row-height); }
+        .lane-base { position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .automation-row { position: relative; box-sizing: border-box; height: var(--compost-timeline-automation-row-height); overflow: visible; border-top: 1px solid color-mix(in srgb, var(--compost-timeline-line) 50%, transparent); background: var(--compost-timeline-lane); touch-action: none; }
         .automation-row[data-state="overridden"] .automation-line { stroke: var(--compost-timeline-muted); stroke-dasharray: 3 3; }
         .automation-row[data-state="overridden"] .automation-point { fill: var(--compost-timeline-muted); }
@@ -315,7 +427,7 @@ export class CompostTimeline extends HTMLElement {
         .automation-point { fill: var(--lane-color, var(--compost-timeline-text)); stroke: var(--compost-timeline-bg); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: all; cursor: grab; }
         .automation-point:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 2px; }
         .automation-readout { position: absolute; z-index: 5; transform: translate(-50%, -100%); padding: 1px 3px; background: var(--compost-timeline-bg); color: var(--compost-timeline-value); font: .78em/1 var(--compost-timeline-numeral-font); pointer-events: none; }
-        .lane[data-overridden] { filter: brightness(1.18); }
+        .lane[data-overridden] { filter: none; }
         .lane[data-overridden] .clip { opacity: .4; }
         .clip { position: absolute; top: 4px; bottom: 4px; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 0; background: transparent; color: var(--clip-color, var(--compost-timeline-clip-text)); cursor: grab; touch-action: none; }
         .clip::before, .clip::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; border: 1px solid transparent; }
@@ -347,14 +459,14 @@ export class CompostTimeline extends HTMLElement {
         .marquee { position: absolute; z-index: 7; border: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-marquee); pointer-events: none; display: none; }
         .announce { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
         @keyframes compost-timeline-breath { 50% { opacity: .3; } }
-        @media (prefers-reduced-motion: reduce) { .clip { transition: none; } .clip[data-state="queued"] .clip-name { animation: none; } }
+        @media (prefers-reduced-motion: reduce) { .clip { transition: none; } .clip[data-state="queued"] .clip-name, .lane-session[data-state="queued"] .lane-session-name { animation: none; } }
       </style>
       <div class="frame">
         <div class="corner"></div>
         <div class="ruler-wrap" role="button" tabindex="0" aria-label="Timeline ruler">
           <div class="ruler"><div class="ruler-world"></div><div class="ruler-band"></div><div class="ruler-handle start"></div><div class="ruler-handle end"></div><div class="ruler-playhead"></div></div>
         </div>
-        <div class="header-wrap"><div class="headers" role="list"></div></div>
+        <div class="header-wrap"><div class="headers" role="list"></div><div class="lane-drop-line"></div></div>
         <div class="lanes-wrap"><div class="lanes-world" role="list"></div><div class="marquee"></div><div class="playhead"></div></div>
       </div>
       <div class="announce" aria-live="polite"></div>`;
@@ -371,6 +483,7 @@ export class CompostTimeline extends HTMLElement {
     this.rulerPlayhead = part('.ruler-playhead');
     this.headerWrap = part('.header-wrap');
     this.headers = part('.headers');
+    this.laneDropLine = part('.lane-drop-line');
     this.lanesWrap = part('.lanes-wrap');
     this.lanesWorld = part('.lanes-world');
     this.marquee = part('.marquee');
@@ -449,16 +562,23 @@ export class CompostTimeline extends HTMLElement {
     const cssLaneHeight = rawLaneHeight.endsWith('em') ? parsedLaneHeight * fontSize
       : rawLaneHeight.endsWith('rem') ? parsedLaneHeight * (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
         : parsedLaneHeight;
-    const defaultLaneHeight = fontSize * 2.9;
+    const defaultLaneHeight = fontSize * DEFAULT_LANE_HEIGHT_EM;
     this.laneHeight = Math.max(24, this.hasAttribute('lane-height')
       ? numberAttr(this, 'lane-height', this.laneHeight)
       : (Number.isFinite(cssLaneHeight) ? cssLaneHeight : defaultLaneHeight));
+    const rawThinHeight = style.getPropertyValue('--compost-timeline-thin-lane-height').trim();
+    const parsedThinHeight = Number.parseFloat(rawThinHeight);
+    const cssThinHeight = rawThinHeight.endsWith('em') ? parsedThinHeight * fontSize
+      : rawThinHeight.endsWith('rem') ? parsedThinHeight * (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
+        : parsedThinHeight;
+    this.thinLaneHeight = Math.max(24, Number.isFinite(cssThinHeight)
+      ? cssThinHeight : fontSize * DEFAULT_THIN_LANE_HEIGHT_EM);
     const rawAutomationHeight = style.getPropertyValue('--compost-timeline-automation-row-height').trim();
     const parsedAutomationHeight = Number.parseFloat(rawAutomationHeight);
     const cssAutomationHeight = rawAutomationHeight.endsWith('em') ? parsedAutomationHeight * fontSize
       : rawAutomationHeight.endsWith('rem') ? parsedAutomationHeight * (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
         : parsedAutomationHeight;
-    this.automationRowHeight = Math.max(20, Number.isFinite(cssAutomationHeight) ? cssAutomationHeight : fontSize * 2.2);
+    this.automationRowHeight = Math.max(20, Number.isFinite(cssAutomationHeight) ? cssAutomationHeight : fontSize * DEFAULT_AUTOMATION_ROW_HEIGHT_EM);
     this._loopEnabled = this.hasAttribute('loop-enabled');
     this.setAttribute('aria-label', this.label);
     this.style.setProperty('--compost-timeline-row-height', `${this.laneHeight}px`);
@@ -471,9 +591,12 @@ export class CompostTimeline extends HTMLElement {
     return this._lanes.map((lane) => ({
       ...lane,
       armed: lane.controls ? Boolean(lane.controls.armed) : lane.armed,
-      controls: lane.controls ? { ...lane.controls } : undefined,
+      controls: cloneControls(lane.controls),
+      session: cloneSession(lane.session),
+      figures: cloneFigures(lane.figures),
+      devices: cloneDevices(lane.devices),
       automation: cloneAutomation(lane.automation),
-      clips: lane.clips.map((clip) => ({ ...clip })),
+      clips: lane.clips.map((clip) => ({ ...clip, notes: clip.notes?.map((note) => ({ ...note })) })),
     }));
   }
 
@@ -483,7 +606,12 @@ export class CompostTimeline extends HTMLElement {
     this._lanes = Array.isArray(lanes) ? lanes.map((lane) => ({
       ...lane,
       armed: lane.controls ? Boolean(lane.controls.armed) : lane.armed,
-      controls: lane.controls ? { armed: Boolean(lane.controls.armed), muted: Boolean(lane.controls.muted), soloed: Boolean(lane.controls.soloed) } : undefined,
+      kind: ['return', 'master'].includes(lane.kind) ? lane.kind : 'track',
+      picked: Boolean(lane.picked),
+      controls: cloneControls(lane.controls),
+      session: cloneSession(lane.session),
+      figures: cloneFigures(lane.figures),
+      devices: cloneDevices(lane.devices),
       automation: cloneAutomation(lane.automation),
       clips: Array.isArray(lane.clips) ? lane.clips.map((clip) => ({ ...clip, notes: clip.notes?.map((note) => ({ ...note })) })) : [],
     })) : [];
@@ -507,14 +635,86 @@ export class CompostTimeline extends HTMLElement {
   setLaneControls(laneId, controls) {
     const lane = this._lanes.find((entry) => entry.id === laneId);
     if (!lane || !controls) return;
-    lane.controls = { armed: Boolean(controls.armed), muted: Boolean(controls.muted), soloed: Boolean(controls.soloed) };
+    lane.controls = { ...cloneControls(lane.controls), ...cloneControls(controls) };
     lane.armed = lane.controls.armed;
     const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
-    const existing = header?.querySelector('.lane-controls');
     if (!(header instanceof HTMLElement)) return;
+    const existing = header.querySelector('.lane-controls');
     const next = this.renderLaneControls(lane);
     if (existing) existing.replaceWith(next);
     else (header.querySelector('.lane-header-main') || header).append(next);
+  }
+
+  /** Update one lane's figures and wash without rebuilding its clips. */
+  /** @param {string} laneId @param {object} figures @param {number} [wash] */
+  setLaneFigures(laneId, figures, wash) {
+    const lane = this._lanes.find((entry) => entry.id === laneId);
+    if (!lane) return;
+    lane.figures = cloneFigures(figures) || lane.figures || { faderDb: 0, pan: 0, sends: [] };
+    if (wash !== undefined) lane.wash = Number.isFinite(Number(wash)) ? clamp(Number(wash), 0, 1) : undefined;
+    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
+    if (!(header instanceof HTMLElement)) return;
+    const existing = header.querySelector('.lane-figures-main');
+    if (existing) existing.replaceWith(this.renderMainFigures(lane));
+    else {
+      const main = header.querySelector('.lane-header-main');
+      if (main instanceof HTMLElement) main.insertBefore(this.renderMainFigures(lane), main.querySelector('.lane-controls') || null);
+    }
+    const sends = header.querySelector('.lane-sends');
+    if (sends) sends.replaceWith(this.renderLaneSends(lane));
+    this.paintLaneWash(header, lane);
+  }
+
+  /** Update just the meter and gain-reduction bars for several lanes. */
+  /** @param {Map<string, {meter?: [number, number], gainReduction?: number}>|object} updates */
+  setLaneMeters(updates) {
+    const entries = updates instanceof Map ? [...updates.entries()] : Object.entries(updates || {});
+    for (const [laneId, values] of entries) {
+      const lane = this._lanes.find((entry) => entry.id === laneId);
+      if (!lane || !values) continue;
+      if (Array.isArray(values.meter)) lane.meter = values.meter.slice(0, 2).map((value) => Number.isFinite(Number(value)) ? Number(value) : -90);
+      if (values.gainReduction !== undefined) lane.gainReduction = Number(values.gainReduction) || 0;
+      const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
+      if (header instanceof HTMLElement) this.paintLaneMeter(header, lane);
+    }
+  }
+
+  /** Update one lane's session indicator in place. */
+  /** @param {string} laneId @param {{name:string,state:'playing'|'queued'}|null} session */
+  setLaneSession(laneId, session) {
+    const lane = this._lanes.find((entry) => entry.id === laneId);
+    if (!lane) return;
+    lane.session = cloneSession(session);
+    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
+    const main = header?.querySelector('.lane-header-main');
+    if (!(header instanceof HTMLElement) || !(main instanceof HTMLElement)) return;
+    const existing = main.querySelector('.lane-session');
+    if (existing) existing.remove();
+    for (const child of [...main.children]) if (child.classList.contains('back-pip')) child.remove();
+    header.toggleAttribute('data-session', Boolean(lane.session));
+    if (lane.session) main.insertBefore(this.renderLaneSession(lane), main.querySelector('.lane-figures-main') || main.querySelector('.lane-controls') || null);
+    else if (lane.overridden) {
+      const back = document.createElement('button');
+      back.className = 'back-pip';
+      back.type = 'button';
+      back.dataset.laneId = lane.id;
+      back.title = 'back to timeline';
+      back.setAttribute('aria-label', `Back to timeline for ${lane.name || lane.id}`);
+      main.insertBefore(back, main.querySelector('.lane-figures-main') || main.querySelector('.lane-controls') || null);
+    }
+  }
+
+  /** Update one lane's device chain in place. */
+  /** @param {string} laneId @param {object[]} devices */
+  setLaneDevices(laneId, devices) {
+    const lane = this._lanes.find((entry) => entry.id === laneId);
+    if (!lane) return;
+    lane.devices = cloneDevices(devices);
+    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
+    const row = header?.querySelector('.lane-header-devices');
+    if (!(row instanceof HTMLElement)) return;
+    const existing = row.querySelector('.lane-devices');
+    if (existing) existing.replaceWith(this.renderLaneDevices(lane));
   }
 
   /** Update one lane's automation rows without changing the lane order. */
@@ -637,8 +837,13 @@ export class CompostTimeline extends HTMLElement {
   }
 
   /** @param {TimelineLane} lane */
+  laneRowHeightFor(lane) {
+    return ['return', 'master'].includes(lane?.kind) ? this.thinLaneHeight : this.laneHeight;
+  }
+
+  /** @param {TimelineLane} lane */
   laneHeightFor(lane) {
-    return this.laneHeight + this.automationFor(lane).length * this.automationRowHeight + LANE_SEPARATOR;
+    return this.laneRowHeightFor(lane) + this.automationFor(lane).length * this.automationRowHeight + LANE_SEPARATOR;
   }
 
   totalLaneHeight() {
@@ -665,6 +870,14 @@ export class CompostTimeline extends HTMLElement {
     this.render();
   }
 
+  beginLaneRename(laneId) {
+    const id = String(laneId);
+    if (this.hasAttribute('disabled') || !this._lanes.some((lane) => lane.id === id)) return;
+    this.renamingLane = id;
+    this.focusedLane = id;
+    this.render();
+  }
+
   focusClip(clipId) {
     const id = String(clipId);
     this.focusedClip = id;
@@ -686,7 +899,7 @@ export class CompostTimeline extends HTMLElement {
     const delta = bounds.top < viewport.top ? bounds.top - viewport.top
       : bounds.bottom > viewport.bottom ? bounds.bottom - viewport.bottom : 0;
     const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
-    this.lanesWrap.scrollTop = clamp(this.lanesWrap.scrollTop + delta, 0, maximum);
+    this.lanesWrap.scrollTop = clamp(Math.ceil(this.lanesWrap.scrollTop + delta), 0, maximum);
     this.paintLaneScroll();
     return true;
   }
@@ -718,6 +931,66 @@ export class CompostTimeline extends HTMLElement {
     if (!element) return { clientX: 0, clientY: 0 };
     const rect = element.getBoundingClientRect();
     return { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+  }
+
+  laneHeaderFromEvent(event) {
+    const header = pathElement(event, 'lane-header');
+    if (!(header instanceof HTMLElement)) return null;
+    const lane = this._lanes.find((entry) => entry.id === header.dataset.laneId);
+    return lane ? { header, lane } : null;
+  }
+
+  deviceFromEvent(event) {
+    const device = pathElement(event, 'lane-device');
+    if (!(device instanceof HTMLElement)) return null;
+    const lane = this._lanes.find((entry) => entry.id === device.dataset.laneId);
+    const value = lane?.devices?.find((entry) => entry.id === device.dataset.deviceId);
+    return lane && value ? { element: device, lane, device: value } : null;
+  }
+
+  laneIndexFromHeaderPoint(clientY) {
+    const headers = [...this.headers.querySelectorAll('.lane-header')];
+    const hit = headers.find((header) => {
+      const rect = header.getBoundingClientRect();
+      return clientY >= rect.top && clientY <= rect.bottom;
+    });
+    if (!hit) return clientY < (headers[0]?.getBoundingClientRect().top ?? 0) ? 0 : this._lanes.length;
+    const index = this._lanes.findIndex((lane) => lane.id === hit.dataset.laneId);
+    const rect = hit.getBoundingClientRect();
+    return index + (clientY > rect.top + rect.height / 2 ? 1 : 0);
+  }
+
+  paintLaneDropLine(toIndex) {
+    if (!(this.laneDropLine instanceof HTMLElement)) return;
+    const headers = [...this.headers.querySelectorAll('.lane-header')];
+    const target = headers[Math.max(0, Math.min(headers.length - 1, toIndex))];
+    const headersRect = this.headers.getBoundingClientRect();
+    let top = 0;
+    if (target instanceof HTMLElement) {
+      const rect = target.getBoundingClientRect();
+      top = (toIndex >= headers.length ? rect.bottom : rect.top) - headersRect.top;
+    } else if (headers.length) {
+      const rect = headers.at(-1).getBoundingClientRect();
+      top = rect.bottom - headersRect.top;
+    }
+    this.laneDropLine.style.top = `${top}px`;
+    this.laneDropLine.style.display = 'block';
+  }
+
+  clearLaneDropLine() {
+    if (this.laneDropLine instanceof HTMLElement) this.laneDropLine.style.display = 'none';
+    for (const device of this.headers.querySelectorAll('.lane-device[data-drop]')) device.removeAttribute('data-drop');
+  }
+
+  emitLaneFigure(lane, kind, value, phase, sendId) {
+    const detail = { laneId: lane.id, kind, value: Number(value), phase };
+    if (kind === 'send') detail.sendId = sendId;
+    this.dispatchEvent(eventOf(phase === 'end' ? 'lane-figure-change' : 'lane-figure-input', detail));
+  }
+
+  washValueAtPoint(header, clientX) {
+    const rect = header.getBoundingClientRect();
+    return washLevel(clamp((Number(clientX) - rect.left) / Math.max(1, rect.width), 0, 1), DEFAULT_TAPER);
   }
 
   /** @param {string} laneId @param {string} automationId @param {number} pointIndex */
@@ -799,15 +1072,24 @@ export class CompostTimeline extends HTMLElement {
     controls.className = 'lane-controls';
     controls.setAttribute('role', 'group');
     controls.setAttribute('aria-label', `${lane.name || lane.id} controls`);
-    for (const [name, glyph] of [['armed', '●'], ['muted', 'M'], ['soloed', 'S']]) {
+    const names = ['return', 'master'].includes(lane.kind)
+      ? [['muted', 'M'], ['soloed', 'S']]
+      : [['armed', '●'], ...(Object.prototype.hasOwnProperty.call(lane.controls || {}, 'monitor') ? [['monitor', MONITOR_SVG]] : []), ['muted', 'M'], ['soloed', 'S']];
+    for (const [name, glyph] of names) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'lane-control';
-      button.dataset.name = name === 'armed' ? 'arm' : name === 'muted' ? 'mute' : 'solo';
-      button.textContent = glyph;
+      button.dataset.name = name === 'armed' ? 'arm' : name === 'monitor' ? 'monitor' : name === 'muted' ? 'mute' : 'solo';
+      if (name === 'monitor') button.innerHTML = glyph;
+      else button.textContent = glyph;
       button.title = button.dataset.name;
       button.setAttribute('aria-label', `${button.dataset.name} ${lane.name || lane.id}`);
-      button.setAttribute('aria-pressed', String(Boolean(lane.controls?.[name])));
+      const pressed = name === 'monitor' ? lane.controls?.monitor !== 'off' : Boolean(lane.controls?.[name]);
+      button.setAttribute('aria-pressed', String(pressed));
+      if (name === 'monitor') {
+        button.dataset.mode = lane.controls?.monitor || 'off';
+        button.title = `monitor: ${lane.controls?.monitor || 'off'} · auto · in`;
+      }
       button.addEventListener('click', (event) => {
         event.stopPropagation();
         this.dispatchEvent(eventOf('lane-toggle', { laneId: lane.id, name: button.dataset.name }));
@@ -815,6 +1097,240 @@ export class CompostTimeline extends HTMLElement {
       controls.append(button);
     }
     return controls;
+  }
+
+  /** @param {TimelineLane} lane @param {'fader'|'pan'|'send'} kind @param {object} [send] */
+  renderFigureBox(lane, kind, send) {
+    const box = document.createElement('compost-number-box');
+    box.className = 'lane-figure';
+    box.dataset.kind = kind;
+    if (send?.id) box.dataset.sendId = send.id;
+    const value = kind === 'fader' ? lane.figures?.faderDb : kind === 'pan' ? lane.figures?.pan : send?.db;
+    const min = kind === 'pan' ? -1 : FIGURE_MIN_DB;
+    const max = kind === 'pan' ? 1 : FIGURE_MAX_DB;
+    const step = kind === 'pan' ? .01 : .1;
+    const dragScale = kind === 'pan' ? .9 : (.1 * 180 / (FIGURE_MAX_DB - FIGURE_MIN_DB));
+    box.setAttribute('value', String(Number.isFinite(Number(value)) ? Number(value) : kind === 'pan' ? 0 : FIGURE_MIN_DB));
+    box.setAttribute('min', String(min));
+    box.setAttribute('max', String(max));
+    box.setAttribute('step', String(step));
+    box.setAttribute('reset-value', '0');
+    box.setAttribute('fine-drag-scale', '.25');
+    box.setAttribute('drag-step-middle', String(dragScale));
+    box.setAttribute('display-fraction-digits', kind === 'pan' ? '2' : '1');
+    if (kind !== 'pan') box.setAttribute('min-label', '-inf');
+    box.setAttribute('aria-label', `${kind === 'fader' ? 'Fader' : kind === 'pan' ? 'Pan' : `${send?.letter || send?.id || 'Send'} send`} for ${lane.name || lane.id}`);
+    const emit = (event, phase, type) => {
+      event.stopPropagation();
+      const detail = {
+        laneId: lane.id,
+        kind,
+        value: Number(event.detail?.value),
+        phase,
+      };
+      if (kind === 'send') detail.sendId = send?.id;
+      this.dispatchEvent(eventOf(type, detail));
+      if (kind === 'pan') this.paintFigureText(box, kind);
+    };
+    box.addEventListener('parameter-begin', (event) => emit(event, 'begin', 'lane-figure-input'));
+    box.addEventListener('parameter-edit', (event) => emit(event, 'edit', 'lane-figure-input'));
+    box.addEventListener('parameter-end', (event) => emit(event, 'end', 'lane-figure-change'));
+    requestAnimationFrame(() => this.paintFigureText(box, kind));
+    return box;
+  }
+
+  paintFigureText(box, kind) {
+    if (kind !== 'pan' || !box?.valueElement) return;
+    box.valueElement.textContent = panText(Number(box.value) || 0);
+  }
+
+  /** @param {TimelineLane} lane */
+  renderMainFigures(lane) {
+    const figures = document.createElement('span');
+    figures.className = 'lane-figures-main';
+    if (!lane.figures) return figures;
+    figures.append(this.renderFigureBox(lane, 'fader'));
+    figures.append(this.renderFigureBox(lane, 'pan'));
+    return figures;
+  }
+
+  /** @param {TimelineLane} lane */
+  renderLaneSends(lane) {
+    const sends = document.createElement('span');
+    sends.className = 'lane-sends';
+    for (const send of lane.figures?.sends || []) {
+      const item = document.createElement('span');
+      item.className = 'lane-send';
+      const letter = document.createElement('span');
+      letter.className = 'lane-send-letter';
+      letter.textContent = send.letter || send.id;
+      item.append(letter, this.renderFigureBox(lane, 'send', send));
+      sends.append(item);
+    }
+    return sends;
+  }
+
+  /** @param {TimelineLane} lane */
+  renderLaneSession(lane) {
+    const session = document.createElement('span');
+    session.className = 'lane-session';
+    session.dataset.state = lane.session?.state || 'playing';
+    if (lane.session) {
+      const back = document.createElement('button');
+      back.className = 'back-pip';
+      back.type = 'button';
+      back.dataset.laneId = lane.id;
+      back.title = 'back to timeline';
+      back.setAttribute('aria-label', `Back to timeline for ${lane.name || lane.id}`);
+      session.append(back);
+      const name = document.createElement('span');
+      name.className = 'lane-session-name';
+      name.textContent = `▶ ${lane.session.name || lane.name || lane.id}`;
+      session.append(name);
+    }
+    return session;
+  }
+
+  /** @param {TimelineLane} lane */
+  renderLaneDevices(lane, measuredWidth = null) {
+    const devices = document.createElement('span');
+    devices.className = 'lane-devices';
+    const entries = cloneDevices(lane.devices);
+    if (!entries.length) {
+      if (lane.emptyDeviceLabel) {
+        const empty = document.createElement('button');
+        empty.type = 'button';
+        empty.className = 'empty-device';
+        empty.textContent = lane.emptyDeviceLabel;
+        empty.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this.dispatchEvent(eventOf('device-add', { laneId: lane.id, clientX: event.clientX, clientY: event.clientY }));
+        });
+        devices.append(empty);
+      } else {
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'lane-device-add';
+        add.textContent = '+';
+        add.title = 'Add device';
+        add.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this.dispatchEvent(eventOf('device-add', { laneId: lane.id, clientX: event.clientX, clientY: event.clientY }));
+        });
+        devices.append(add);
+      }
+      return devices;
+    }
+    const available = Number.isFinite(Number(measuredWidth)) ? Number(measuredWidth) : (devices.clientWidth || 240);
+    const split = splitDeviceChain(entries, available);
+    devices.dataset.overflowCount = String(split.overflow);
+    split.visible.forEach((device, index) => {
+      if (index) {
+        const separator = document.createElement('span');
+        separator.className = 'device-separator';
+        separator.textContent = '·';
+        devices.append(separator);
+      }
+      devices.append(this.renderDevice(lane, device));
+    });
+    if (split.overflow) {
+      const overflow = document.createElement('button');
+      overflow.type = 'button';
+      overflow.className = 'lane-device-overflow';
+      overflow.textContent = `+${split.overflow}`;
+      overflow.title = 'More devices';
+      overflow.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.dispatchEvent(eventOf('device-overflow', { laneId: lane.id, clientX: event.clientX, clientY: event.clientY }));
+      });
+      devices.append(document.createTextNode(' '), overflow);
+    }
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'lane-device-add';
+    add.textContent = '+';
+    add.title = 'Add device';
+    add.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.dispatchEvent(eventOf('device-add', { laneId: lane.id, clientX: event.clientX, clientY: event.clientY }));
+    });
+    devices.append(document.createTextNode(' '), add);
+    if (measuredWidth === null) requestAnimationFrame(() => this.layoutLaneDevices(lane.id));
+    return devices;
+  }
+
+  layoutLaneDevices(laneId) {
+    const lane = this._lanes.find((entry) => entry.id === laneId);
+    const devices = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"] .lane-devices`);
+    if (!lane || !(devices instanceof HTMLElement) || !devices.clientWidth) return;
+    const next = splitDeviceChain(lane.devices, devices.clientWidth).overflow;
+    if (String(next) === devices.dataset.overflowCount) return;
+    devices.replaceWith(this.renderLaneDevices(lane, devices.clientWidth));
+  }
+
+  /** @param {TimelineLane} lane @param {object} device */
+  renderDevice(lane, device) {
+    const item = document.createElement('span');
+    item.className = 'lane-device';
+    item.dataset.laneId = lane.id;
+    item.dataset.deviceId = device.id;
+    item.draggable = false;
+    const power = document.createElement('button');
+    power.type = 'button';
+    power.className = 'device-power';
+    power.toggleAttribute('data-on', Boolean(device.on));
+    power.title = `${device.on ? 'Disable' : 'Enable'} ${device.name || device.id}`;
+    power.setAttribute('aria-label', power.title);
+    power.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.dispatchEvent(eventOf('device-toggle', { laneId: lane.id, deviceId: device.id }));
+    });
+    const label = document.createElement('span');
+    label.className = 'lane-device-label';
+    label.textContent = device.name || device.id;
+    label.title = device.name || device.id;
+    label.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.dispatchEvent(eventOf('device-open', { laneId: lane.id, deviceId: device.id, altKey: Boolean(event.altKey), clientX: event.clientX, clientY: event.clientY }));
+    });
+    label.addEventListener('dblclick', (event) => {
+      event.stopPropagation();
+      this.dispatchEvent(eventOf('device-open', { laneId: lane.id, deviceId: device.id, altKey: true, clientX: event.clientX, clientY: event.clientY }));
+    });
+    item.append(power, label);
+    return item;
+  }
+
+  meterFraction(db) {
+    const value = Number(db);
+    if (!Number.isFinite(value) || value <= -89.999) return 0;
+    return clamp((value + 48) / 48, 0, 1);
+  }
+
+  paintLaneMeter(header, lane) {
+    const meter = header.querySelector('.lane-meter');
+    const channels = meter?.querySelectorAll('.lane-meter-channel');
+    const values = Array.isArray(lane.meter) ? lane.meter : [-90, -90];
+    channels?.forEach((channel, index) => {
+      const fraction = this.meterFraction(values[index]);
+      channel.style.height = `${fraction * 100}%`;
+      channel.toggleAttribute('data-empty', fraction <= 0);
+    });
+    const reduction = header.querySelector('.lane-gain-reduction');
+    if (reduction instanceof HTMLElement) reduction.style.height = `${clamp(-(Number(lane.gainReduction) || 0) / 24, 0, 1) * 100}%`;
+  }
+
+  paintLaneWash(header, lane) {
+    const wash = header.querySelector('.lane-wash');
+    const edge = header.querySelector('.lane-wash-edge');
+    if (!(wash instanceof HTMLElement)) return;
+    const fraction = Number.isFinite(Number(lane.wash)) ? clamp(Number(lane.wash), 0, 1) : 0;
+    wash.style.width = `${fraction * 100}%`;
+    if (edge instanceof HTMLElement) {
+      edge.style.display = Number.isFinite(Number(lane.wash)) ? '' : 'none';
+      edge.style.left = `calc(${fraction * 100}% - 6px)`;
+      edge.style.right = 'auto';
+    }
   }
 
   /** @param {TimelineLane} lane @param {AutomationLaneView} automation */
@@ -845,21 +1361,40 @@ export class CompostTimeline extends HTMLElement {
     const header = document.createElement('div');
     header.className = 'lane-header';
     header.dataset.laneId = lane.id;
+    header.dataset.kind = lane.kind || 'track';
     header.part.add('lane-header');
     header.setAttribute('role', 'listitem');
     header.tabIndex = -1;
     header.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
+    if (lane.colorRGB !== undefined) {
+      const rawRGB = Array.isArray(lane.colorRGB) ? lane.colorRGB.join(',') : String(lane.colorRGB);
+      if (/^(?:rgb|hsl|#|\d)/u.test(rawRGB)) header.style.setProperty('--lane-color-rgb', rawRGB.startsWith('#') || /^(?:rgb|hsl)/u.test(rawRGB) ? rawRGB : `rgb(${rawRGB})`);
+    }
+    header.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
+    header.style.setProperty('--lane-main-row-height', `${['return', 'master'].includes(lane.kind) ? this.thinLaneHeight : this.laneHeight / 2}px`);
+    header.style.setProperty('--lane-devices-row-height', `${this.laneHeight / 2}px`);
+    header.style.height = `${this.laneHeightFor(lane)}px`;
+    header.toggleAttribute('data-session', Boolean(lane.session));
+
+    const wash = document.createElement('div');
+    wash.className = 'lane-wash';
+    const washEdge = document.createElement('div');
+    washEdge.className = 'lane-wash-edge';
+    washEdge.dataset.laneId = lane.id;
+    const meter = document.createElement('div');
+    meter.className = 'lane-meter';
+    meter.append(document.createElement('span'), document.createElement('span'));
+    for (const channel of meter.children) channel.className = 'lane-meter-channel';
+    const gainReduction = document.createElement('div');
+    gainReduction.className = 'lane-gain-reduction';
+    header.append(wash, washEdge, meter, gainReduction);
+
     const main = document.createElement('div');
     main.className = 'lane-header-main';
-    const name = document.createElement('span');
-    name.className = 'lane-name';
-    name.textContent = lane.name || lane.id;
-    name.tabIndex = 0;
-    name.setAttribute('role', 'button');
-    name.setAttribute('aria-label', `${lane.name || lane.id} lane`);
-    name.addEventListener('focus', () => { this.focusedLane = lane.id; this.focusedClip = null; });
+    const name = this.renderLaneName(lane);
     main.append(name);
-    if (lane.overridden) {
+    if (lane.session) main.append(this.renderLaneSession(lane));
+    else if (lane.overridden) {
       const back = document.createElement('button');
       back.className = 'back-pip';
       back.type = 'button';
@@ -868,10 +1403,54 @@ export class CompostTimeline extends HTMLElement {
       back.setAttribute('aria-label', `Back to timeline for ${lane.name || lane.id}`);
       main.append(back);
     }
+    main.append(this.renderMainFigures(lane));
     if (lane.controls) main.append(this.renderLaneControls(lane));
     header.append(main);
+    if (!['return', 'master'].includes(lane.kind)) {
+      const devicesRow = document.createElement('div');
+      devicesRow.className = 'lane-header-devices';
+      devicesRow.append(this.renderLaneDevices(lane), this.renderLaneSends(lane));
+      header.append(devicesRow);
+    }
     for (const automation of this.automationFor(lane)) header.append(this.renderAutomationHeader(lane, automation));
+    this.paintLaneWash(header, lane);
+    this.paintLaneMeter(header, lane);
     return header;
+  }
+
+  /** @param {TimelineLane} lane */
+  renderLaneName(lane) {
+    if (this.renamingLane === lane.id) {
+      const input = document.createElement('input');
+      input.className = 'lane-name-editor';
+      input.value = lane.name || '';
+      input.setAttribute('aria-label', `Rename ${lane.name || lane.id}`);
+      const finish = (commit) => {
+        if (this.renamingLane !== lane.id) return;
+        this.renamingLane = null;
+        const name = input.value.trim();
+        this.render();
+        if (commit && name && name !== lane.name) this.dispatchEvent(eventOf('lane-rename', { laneId: lane.id, name }));
+      };
+      input.addEventListener('keydown', (event) => {
+        event.stopPropagation();
+        if (event.key === 'Enter') finish(true);
+        if (event.key === 'Escape') finish(false);
+      });
+      input.addEventListener('blur', () => finish(true));
+      input.addEventListener('pointerdown', (event) => event.stopPropagation());
+      requestAnimationFrame(() => { input.focus(); input.select(); });
+      return input;
+    }
+    const name = document.createElement('span');
+    name.className = 'lane-name';
+    name.textContent = lane.name || lane.id;
+    name.tabIndex = 0;
+    name.toggleAttribute('data-picked', Boolean(lane.picked));
+    name.setAttribute('role', 'button');
+    name.setAttribute('aria-label', `${lane.name || lane.id} lane`);
+    name.addEventListener('focus', () => { this.focusedLane = lane.id; this.focusedClip = null; });
+    return name;
   }
 
   /** @param {TimelineLane} lane */
@@ -947,10 +1526,13 @@ export class CompostTimeline extends HTMLElement {
     const row = document.createElement('div');
     row.className = 'lane';
     row.dataset.laneId = lane.id;
+    row.dataset.kind = lane.kind || 'track';
     row.setAttribute('role', 'listitem');
     row.setAttribute('aria-label', lane.name || lane.id);
     if (lane.overridden) row.dataset.overridden = '';
     row.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
+    row.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
+    row.style.height = `${this.laneHeightFor(lane)}px`;
     row.append(this.renderLaneBase(lane));
     for (const automation of this.automationFor(lane)) row.append(this.renderAutomationRow(lane, automation, end));
     return row;
@@ -1329,9 +1911,33 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('lane-control'))) return;
+    if (event.composedPath().some((node) => node instanceof HTMLElement && (node.classList.contains('lane-figure') || node.classList.contains('device-power') || node.classList.contains('lane-device-add') || node.classList.contains('lane-device-overflow') || node.classList.contains('empty-device')))) return;
     const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
       && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
     if (loopPart instanceof HTMLElement) return;
+    const washEdge = pathElement(event, 'lane-wash-edge');
+    if (washEdge instanceof HTMLElement) {
+      const lane = this._lanes.find((entry) => entry.id === washEdge.dataset.laneId);
+      const header = washEdge.closest('.lane-header');
+      if (lane && header instanceof HTMLElement) {
+        event.preventDefault();
+        const value = this.washValueAtPoint(header, event.clientX);
+        this.drag = { pointerId: event.pointerId, type: 'lane-wash', laneId: lane.id, header, startX: event.clientX, moved: false };
+        this.emitLaneFigure(lane, 'fader', value, 'begin');
+        if (event.isTrusted) washEdge.setPointerCapture?.(event.pointerId);
+        return;
+      }
+    }
+    const device = this.deviceFromEvent(event);
+    if (device) {
+      this.drag = { pointerId: event.pointerId, type: 'device', laneId: device.lane.id, deviceId: device.device.id, startX: event.clientX, startY: event.clientY, moved: false, copy: Boolean(event.altKey) };
+      this.longPressTimer = setTimeout(() => {
+        if (!this.drag || this.drag.type !== 'device' || this.drag.moved) return;
+        this.dispatchEvent(eventOf('device-context', { laneId: device.lane.id, deviceId: device.device.id, clientX: event.clientX, clientY: event.clientY }));
+        this.drag = null;
+      }, 550);
+      return;
+    }
     const automation = this.automationFromEvent(event);
     if (automation) {
       event.preventDefault();
@@ -1374,6 +1980,13 @@ export class CompostTimeline extends HTMLElement {
       header.focus({ preventScroll: true });
       this.focusedLane = header.dataset.laneId || null;
       this.focusedClip = null;
+      this.drag = { pointerId: event.pointerId, type: 'lane-header', laneId: header.dataset.laneId, startX: event.clientX, startY: event.clientY, moved: false, toIndex: this._lanes.findIndex((lane) => lane.id === header.dataset.laneId) };
+      if (event.isTrusted) header.setPointerCapture?.(event.pointerId);
+      this.longPressTimer = setTimeout(() => {
+        if (!this.drag || this.drag.type !== 'lane-header' || this.drag.moved) return;
+        this.dispatchEvent(eventOf('lane-header-context', { laneId: header.dataset.laneId, clientX: event.clientX, clientY: event.clientY }));
+        this.drag = null;
+      }, 550);
       return;
     }
     const found = this.clipFromEvent(event);
@@ -1434,6 +2047,34 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'automation-point' || drag.type === 'automation-segment') {
       if (!drag.moved) return;
       this.previewAutomationDrag(drag, event);
+      return;
+    }
+    if (drag.type === 'lane-wash') {
+      const lane = this._lanes.find((entry) => entry.id === drag.laneId);
+      if (!lane) return;
+      const value = this.washValueAtPoint(drag.header, event.clientX);
+      lane.wash = washPosition(value, DEFAULT_TAPER);
+      lane.figures = lane.figures || { faderDb: 0, pan: 0, sends: [] };
+      lane.figures.faderDb = value;
+      this.paintLaneWash(drag.header, lane);
+      drag.moved = drag.moved || Math.abs(dx) > DRAG_THRESHOLD;
+      this.emitLaneFigure(lane, 'fader', value, 'edit');
+      return;
+    }
+    if (drag.type === 'lane-header') {
+      if (!drag.moved) return;
+      drag.toIndex = this.laneIndexFromHeaderPoint(event.clientY);
+      this.paintLaneDropLine(drag.toIndex);
+      return;
+    }
+    if (drag.type === 'device') {
+      if (!drag.moved) return;
+      const targetLaneId = this.laneAtPoint(event.clientY) || this._lanes[this.laneIndexFromHeaderPoint(event.clientY)]?.id;
+      for (const node of this.headers.querySelectorAll('.lane-device[data-drop]')) node.removeAttribute('data-drop');
+      const target = targetLaneId ? this.headers.querySelector(`.lane-device[data-lane-id="${CSS.escape(targetLaneId)}"]`) : null;
+      target?.setAttribute('data-drop', '');
+      drag.toLaneId = targetLaneId || drag.laneId;
+      drag.at = target?.dataset.deviceId || null;
       return;
     }
     if (drag.type === 'marquee') {
@@ -1507,6 +2148,29 @@ export class CompostTimeline extends HTMLElement {
     if (!drag || event.pointerId !== drag.pointerId) return;
     clearTimeout(this.longPressTimer);
     this.drag = null;
+    if (drag.type === 'lane-wash') {
+      const lane = this._lanes.find((entry) => entry.id === drag.laneId);
+      if (lane) this.emitLaneFigure(lane, 'fader', lane.figures?.faderDb ?? this.washValueAtPoint(drag.header, event.clientX), 'end');
+      return;
+    }
+    if (drag.type === 'lane-header') {
+      this.clearLaneDropLine();
+      const index = this._lanes.findIndex((lane) => lane.id === drag.laneId);
+      if (drag.moved) this.dispatchEvent(eventOf('lane-move', { laneId: drag.laneId, toIndex: clamp(Number(drag.toIndex) || 0, 0, this._lanes.length - 1) }));
+      else if (index >= 0) this.dispatchEvent(eventOf('lane-pick', { laneId: drag.laneId, shiftKey: Boolean(event.shiftKey) }));
+      return;
+    }
+    if (drag.type === 'device') {
+      for (const node of this.headers.querySelectorAll('.lane-device[data-drop]')) node.removeAttribute('data-drop');
+      if (drag.moved) this.dispatchEvent(eventOf('device-move', {
+        laneId: drag.laneId,
+        deviceId: drag.deviceId,
+        toLaneId: drag.toLaneId || drag.laneId,
+        at: drag.at || null,
+        copy: Boolean(event.altKey || drag.copy),
+      }));
+      return;
+    }
     if (drag.type === 'automation-point' || drag.type === 'automation-segment') {
       this.lanesWorld.querySelector(`.automation-row[data-lane-id="${CSS.escape(drag.laneId)}"][data-automation-id="${CSS.escape(drag.automationId)}"] .automation-readout`)?.remove();
       if (drag.moved && Array.isArray(drag.previewPoints)) {
@@ -1611,6 +2275,31 @@ export class CompostTimeline extends HTMLElement {
 
   handleDoubleClick(event) {
     if (this.hasAttribute('disabled')) return;
+    const washEdge = pathElement(event, 'lane-wash-edge');
+    if (washEdge instanceof HTMLElement) {
+      const lane = this._lanes.find((entry) => entry.id === washEdge.dataset.laneId);
+      if (lane) {
+        event.preventDefault();
+        lane.figures = lane.figures || { faderDb: 0, pan: 0, sends: [] };
+        lane.figures.faderDb = 0;
+        lane.wash = washPosition(0, DEFAULT_TAPER);
+        const header = washEdge.closest('.lane-header');
+        if (header instanceof HTMLElement) this.paintLaneWash(header, lane);
+        this.emitLaneFigure(lane, 'fader', 0, 'begin');
+        this.emitLaneFigure(lane, 'fader', 0, 'edit');
+        this.emitLaneFigure(lane, 'fader', 0, 'end');
+      }
+      return;
+    }
+    const laneName = pathElement(event, 'lane-name');
+    if (laneName instanceof HTMLElement) {
+      const lane = this._lanes.find((entry) => entry.id === laneName.closest('.lane-header')?.dataset.laneId);
+      if (lane) {
+        event.preventDefault();
+        this.beginLaneRename(lane.id);
+      }
+      return;
+    }
     const automation = this.automationFromEvent(event);
     if (automation) {
       event.preventDefault();
@@ -1632,6 +2321,8 @@ export class CompostTimeline extends HTMLElement {
     const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
     if (lane instanceof HTMLElement) {
       this.dispatchEvent(eventOf('lane-create', { laneId: lane.dataset.laneId, beat: snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode) }));
+    } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('header-wrap'))) {
+      this.dispatchEvent(eventOf('lanes-create', { clientX: event.clientX, clientY: event.clientY }));
     } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('ruler-band'))) {
       this.setLoop(this._loopStart, this._loopEnd, !this._loopEnabled);
       this.dispatchEvent(eventOf('loop-toggle', { enabled: this._loopEnabled }));
@@ -1640,6 +2331,12 @@ export class CompostTimeline extends HTMLElement {
 
   handleContextMenu(event) {
     if (this.hasAttribute('disabled')) return;
+    const device = this.deviceFromEvent(event);
+    if (device) {
+      event.preventDefault();
+      this.dispatchEvent(eventOf('device-context', { laneId: device.lane.id, deviceId: device.device.id, clientX: event.clientX, clientY: event.clientY }));
+      return;
+    }
     const automation = this.automationFromEvent(event);
     if (automation) {
       event.preventDefault();
@@ -1677,6 +2374,9 @@ export class CompostTimeline extends HTMLElement {
     if (lane instanceof HTMLElement) {
       event.preventDefault();
       this.dispatchEvent(eventOf('lane-context', { laneId: lane.dataset.laneId, beat: this.beatAtPoint(event.clientX), clientX: event.clientX, clientY: event.clientY }));
+    } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('header-wrap'))) {
+      event.preventDefault();
+      this.dispatchEvent(eventOf('lanes-context', { clientX: event.clientX, clientY: event.clientY }));
     }
   }
 
@@ -1693,6 +2393,38 @@ export class CompostTimeline extends HTMLElement {
     if (this.hasAttribute('disabled')) return;
     const source = event.composedPath()[0];
     if (source instanceof HTMLInputElement || source instanceof HTMLTextAreaElement) return;
+    const headerTarget = this.laneHeaderFromEvent(event);
+    const onAutomationSurface = event.composedPath().some((node) => node instanceof HTMLElement && (node.classList.contains('automation-header') || node.classList.contains('automation-row')));
+    if (headerTarget && !onAutomationSurface && !event.composedPath().some((node) => node instanceof HTMLElement && (node.classList.contains('lane-control') || node.classList.contains('lane-figure') || node.classList.contains('lane-device')))) {
+      const index = this._lanes.indexOf(headerTarget.lane);
+      if (event.shiftKey && event.key === 'F10') {
+        event.preventDefault();
+        const point = this.pointForLaneHeader(headerTarget.lane.id);
+        this.dispatchEvent(eventOf('lane-header-context', { laneId: headerTarget.lane.id, ...point }));
+        return;
+      }
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        const toIndex = clamp(index + (event.key === 'ArrowUp' ? -1 : 1), 0, this._lanes.length - 1);
+        if (toIndex !== index) this.dispatchEvent(eventOf('lane-move', { laneId: headerTarget.lane.id, toIndex }));
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'F2') {
+        event.preventDefault();
+        this.beginLaneRename(headerTarget.lane.id);
+        return;
+      }
+      if (!event.altKey && !event.metaKey && !event.ctrlKey && event.key.toLowerCase() === 'm') {
+        event.preventDefault();
+        this.dispatchEvent(eventOf('lane-toggle', { laneId: headerTarget.lane.id, name: 'mute' }));
+        return;
+      }
+      if (!event.altKey && !event.metaKey && !event.ctrlKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        this.dispatchEvent(eventOf('lane-toggle', { laneId: headerTarget.lane.id, name: 'solo' }));
+        return;
+      }
+    }
     const pointElement = event.composedPath().find((node) => node instanceof Element && node.classList.contains('automation-point'));
     const automation = pointElement instanceof Element ? this.automationFromEvent(event) : null;
     const automationBody = this.automationFromEvent(event);

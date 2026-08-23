@@ -745,6 +745,124 @@ test('timeline lane headers expose arm, mute and solo controls', async ({ page }
   await expect(controls.nth(2)).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('timeline header commit one keeps measured lane geometry and reports header intents', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    for (const type of ['lane-pick', 'lane-move', 'lanes-context', 'lanes-create', 'lane-figure-input', 'lane-figure-change', 'lane-toggle', 'device-toggle', 'device-open']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.setLanes([
+      { id: 'track', name: 'Track', kind: 'track', picked: true, color: 'rgb(100, 120, 180)', colorRGB: '100,120,180', wash: .5, meter: [0, -6], gainReduction: -12,
+        controls: { armed: true, monitor: 'auto', muted: false, soloed: true }, figures: { faderDb: -3, pan: 0, sends: [{ id: 'a', letter: 'A', db: -12 }] },
+        devices: [{ id: 'synth', name: 'Synth', on: true }, { id: 'delay', name: 'Delay', on: false }], clips: [], automation: [{ id: 'env', label: 'Env', min: 0, max: 1, stepped: false, points: [] }] },
+      { id: 'return', name: 'Return', kind: 'return', figures: { faderDb: -6, pan: .1, sends: [] }, controls: { muted: false, soloed: true }, clips: [] },
+      { id: 'master', name: 'Master', kind: 'master', figures: { faderDb: 0, pan: 0, sends: [] }, clips: [] },
+    ]);
+  });
+  const measured = await timeline.evaluate((element) => {
+    const root = element.shadowRoot;
+    const get = (id) => ({
+      header: root.querySelector(`.lane-header[data-lane-id="${id}"]`).getBoundingClientRect(),
+      lane: root.querySelector(`.lane[data-lane-id="${id}"]`).getBoundingClientRect(),
+    });
+    const track = get('track');
+    const thin = get('return');
+    const meter = [...root.querySelectorAll('.lane-meter-channel')].map((node) => node.getBoundingClientRect().height);
+    const gr = root.querySelector('.lane-gain-reduction').getBoundingClientRect().height;
+    const wash = root.querySelector('.lane-wash').getBoundingClientRect();
+    const header = root.querySelector('.lane-header[data-lane-id="track"]').getBoundingClientRect();
+    return {
+      trackHeader: track.header.height, trackLane: track.lane.height,
+      thinHeader: thin.header.height, thinLane: thin.lane.height,
+      headerWidth: header.width, washWidth: wash.width, meter, gr,
+      trackDevices: root.querySelectorAll('.lane-header[data-lane-id="track"] .lane-device').length,
+      thinDevices: root.querySelectorAll('.lane-header[data-lane-id="return"] .lane-header-devices').length,
+      controls: root.querySelectorAll('.lane-header[data-lane-id="track"] .lane-control').length,
+      pickedTicks: getComputedStyle(root.querySelector('.lane-name[data-picked]'), '::before').backgroundImage,
+    };
+  });
+  expect(Math.abs(measured.trackHeader - measured.trackLane)).toBeLessThan(1);
+  expect(Math.abs(measured.thinHeader - measured.thinLane)).toBeLessThan(1);
+  expect(measured.trackHeader).toBeGreaterThan(measured.thinHeader);
+  expect(measured.headerWidth).toBeGreaterThan(300);
+  expect(measured.washWidth).toBeGreaterThan(measured.headerWidth * .45);
+  expect(measured.meter[0]).toBeGreaterThan(0);
+  expect(measured.meter[1]).toBeGreaterThan(0);
+  expect(measured.gr).toBeGreaterThan(0);
+  expect(measured.trackDevices).toBe(2);
+  expect(measured.thinDevices).toBe(0);
+  expect(measured.controls).toBe(4);
+  expect(measured.pickedTicks).toContain('linear-gradient');
+
+  await timeline.locator('.lane-header[data-lane-id="track"] .lane-name').click();
+  await timeline.locator('.lane-header[data-lane-id="track"] .device-power').first().click();
+  await timeline.locator('.lane-header[data-lane-id="track"] .lane-device-label').first().click();
+  const events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.some((event) => event.type === 'lane-pick' && event.detail.laneId === 'track')).toBe(true);
+  expect(events.some((event) => event.type === 'device-toggle' && event.detail.deviceId === 'synth')).toBe(true);
+  expect(events.some((event) => event.type === 'device-open' && event.detail.deviceId === 'synth')).toBe(true);
+
+  const figureEvents = await timeline.evaluate((element) => {
+    const box = element.shadowRoot.querySelector('.lane-header[data-lane-id="track"] .lane-figure[data-kind="fader"]');
+    box.setValue(-2, true);
+    box.dispatchEvent(new CustomEvent('parameter-end', { bubbles: true, composed: true, detail: { value: -2 } }));
+    return element.testEvents.filter((event) => event.type.startsWith('lane-figure'));
+  });
+  expect(figureEvents.map((event) => [event.type, event.detail.phase])).toEqual([
+    ['lane-figure-input', 'begin'], ['lane-figure-input', 'edit'], ['lane-figure-change', 'end'],
+  ]);
+
+  const empty = await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'empty', name: 'Empty', emptyDeviceLabel: '+ instrument', clips: [] }]);
+    const events = [];
+    element.addEventListener('device-add', (event) => events.push(event.detail), { once: true });
+    element.shadowRoot.querySelector('.empty-device').click();
+    return { label: element.shadowRoot.querySelector('.empty-device').textContent, events };
+  });
+  expect(empty.label).toBe('+ instrument');
+  expect(empty.events).toEqual([{ laneId: 'empty', clientX: 0, clientY: 0 }]);
+});
+
+test('timeline header wash edges, sessions and empty-header intents stay local', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const state = await timeline.evaluate((element) => {
+    element.testEvents = [];
+    for (const type of ['lane-figure-input', 'lane-figure-change', 'lanes-context', 'lanes-create', 'lane-move']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.setLanes([{ id: 'a', name: 'A', picked: true, wash: .4, overridden: true, figures: { faderDb: -6, pan: 0, sends: [] }, clips: [] }, { id: 'b', name: 'B', clips: [] }]);
+    const root = element.shadowRoot;
+    const header = root.querySelector('.lane-header[data-lane-id="a"]');
+    const edge = header.querySelector('.lane-wash-edge');
+    const headerRect = header.getBoundingClientRect();
+    const edgeRect = edge.getBoundingClientRect();
+    edge.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, clientX: edgeRect.left, clientY: edgeRect.top }));
+    element.setLaneSession('a', { name: 'Pad', state: 'queued' });
+    const queued = { session: root.querySelector('.lane-header[data-lane-id="a"]').hasAttribute('data-session'), backPips: root.querySelectorAll('.lane-header[data-lane-id="a"] .back-pip').length };
+    element.setLaneSession('a', null);
+    const restored = { session: root.querySelector('.lane-header[data-lane-id="a"]').hasAttribute('data-session'), backPips: root.querySelectorAll('.lane-header[data-lane-id="a"] .back-pip').length };
+    const wrap = root.querySelector('.header-wrap');
+    wrap.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, composed: true, clientX: 20, clientY: 30 }));
+    wrap.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, clientX: 20, clientY: 30 }));
+    const first = root.querySelector('.lane-header[data-lane-id="a"]');
+    const second = root.querySelector('.lane-header[data-lane-id="b"]');
+    const y = second.getBoundingClientRect().bottom - 1;
+    const pointer = (type, clientY) => first.dispatchEvent(new PointerEvent(type, { bubbles: true, composed: true, pointerId: 44, pointerType: 'mouse', button: 0, clientX: first.getBoundingClientRect().left + 20, clientY }));
+    pointer('pointerdown', first.getBoundingClientRect().top + 8); pointer('pointermove', y); pointer('pointerup', y);
+    return { edgeOffset: edgeRect.left - headerRect.left, expectedOffset: headerRect.width * .4 - 6, queued, restored, events: element.testEvents };
+  });
+  expect(Math.abs(state.edgeOffset - state.expectedOffset)).toBeLessThan(1);
+  expect(state.queued).toEqual({ session: true, backPips: 1 });
+  expect(state.restored).toEqual({ session: false, backPips: 1 });
+  expect(state.events.some((event) => event.type === 'lane-figure-change' && event.detail.phase === 'end')).toBe(true);
+  expect(state.events.some((event) => event.type === 'lanes-context')).toBe(true);
+  expect(state.events.some((event) => event.type === 'lanes-create')).toBe(true);
+  expect(state.events.some((event) => event.type === 'lane-move')).toBe(true);
+});
+
 test('timeline automation rows draw and commit sorted edits without clip selection', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
