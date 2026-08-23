@@ -67,10 +67,15 @@
         ] },
       ];
       timeline.setLanes(lanes);
+      timeline.setLocators([
+        { id: 'intro', beat: 0, name: 'Intro' },
+        { id: 'drop', beat: 8, name: 'Drop' },
+      ]);
+      timeline.setTimeSelection(null, null);
       timeline.setLoop(0, 8, false);
       timeline.setPlayhead(0);
       automation.addEventListener('change', () => timeline.toggleAttribute('automation', automation.checked));
-      for (const type of ['seek', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-back', 'lane-header-context', 'lane-pick', 'lane-move', 'lane-toggle', 'lane-figure-input', 'lane-figure-change', 'device-toggle', 'device-open', 'device-context', 'device-overflow', 'device-add', 'device-move', 'automation-change', 'automation-context', 'automation-header-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
+      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-back', 'lane-header-context', 'lane-pick', 'lane-move', 'lane-toggle', 'lane-figure-input', 'lane-figure-change', 'device-toggle', 'device-open', 'device-context', 'device-overflow', 'device-add', 'device-move', 'automation-change', 'automation-context', 'automation-header-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
         timeline.addEventListener(type, (event) => {
           const detail = { ...event.detail };
           delete detail.clientX;
@@ -78,6 +83,7 @@
           log.textContent = `${type} ${JSON.stringify(detail)}\n${log.textContent}`.slice(0, 5000);
           if (type === 'loop-change' || type === 'loop-toggle') loop.checked = detail.enabled;
           if (type === 'seek') timeline.setPlayhead(detail.beat);
+          if (type === 'fit-request') timeline.zoomToFit(16);
         });
       }
       let frame = 0;

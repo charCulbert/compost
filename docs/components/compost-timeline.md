@@ -13,6 +13,11 @@ automation rows are hidden, a host-supplied envelope is drawn faintly over the
 clip row. A trim or cross-lane drag previews geometry without changing host
 state; the lane under a clip drag gets an inset selection highlight until
 release.
+The three-row ruler exposes host-owned locators and supports row-two scrolling,
+pointer-anchored Cmd/Ctrl zoom, and a fit request. Empty lane space creates a
+cross-lane time selection; clips fully contained by a committed selection are
+reported through one `clip-select` intent, while `setTimeSelection` only
+restores the time-selection overlay. Ruler and lane scrollbars stay hidden.
 
 ```html
 <compost-timeline id="timeline" label="Timeline" beats-per-bar="4"
@@ -28,6 +33,11 @@ timeline.setLanes([
 ]);
 timeline.setLoop(0, 8, false, false, { punchIn: false, punchOut: false });
 timeline.setPlayhead(2.5);
+timeline.setLocators([
+  { id: 'intro', beat: 0, name: 'Intro' },
+  { id: 'drop', beat: 8, name: 'Drop' },
+]);
+timeline.setTimeSelection(null, null);
 timeline.addEventListener('clip-move', ({ detail }) => host.move(detail));
 timeline.setLaneAutomation('drums', [{
   id: 'volume', label: 'Volume', min: -90, max: 12, scale: 'gain', stepped: false,
@@ -43,6 +53,14 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | Event | Detail | When |
 | --- | --- | --- |
 | `seek` | `{beat, source}` | Ruler or empty-lane click |
+| `locator-jump` / `locator-prev` / `locator-next` | `{id}` | Locator click, Enter/Space, or `,`/`.` |
+| `locator-move` | `{id, beat}` | Drag a locator; Alt disables snapping |
+| `locator-create` | `{beat}` | Double-click empty row one in the ruler |
+| `locator-rename` | `{id, name}` | Double-click a locator name or F2 |
+| `locator-context` | `{id, clientX, clientY}` | Locator context menu |
+| `fit-request` | `{}` | Double-click row-two ruler; host calls `zoomToFit(songEnd())` |
+| `time-select-input` / `time-select` | `{start, end, laneIds}` | Cross-lane time-selection drag |
+| `time-delete` | `{start, end, laneIds, removeTime}` | Delete/Backspace with a time selection |
 | `loop-input` / `loop-change` | `{start, end, enabled}` | Loop brace drag |
 | `loop-toggle` | `{enabled}` | Double-click the brace |
 | `clip-select` | `{ids}` | Click, marquee or keyboard selection |
@@ -71,7 +89,7 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | `clip-rename` | `{id, name}` | F2 or `beginRename` commit |
 | `clip-delete` | `{ids}` | Delete or Backspace |
 | `clip-duplicate` | `{ids}` | Cmd/Ctrl-D |
-| `clip-split` | `{ids, beat}` | Cmd/Ctrl-E |
+| `clip-split` | `{ids, beat}` or `{ids, beats: [start, end]}` | Cmd/Ctrl-E with or without a time selection |
 | `clip-nudge` | `{ids, deltaBeats}` | Alt-Left/Right |
 | `view-change` | `{pxPerBeat, scrollBeat}` | Settled zoom or scroll |
 
@@ -95,6 +113,12 @@ in the tab order; focused clips use a roving tab index.
 | `[` / `]` | Zoom out / in around the playhead |
 | Shift-F10 | Open a context menu |
 | Escape | Clear selection |
+| Enter / Space on a locator | Jump to that locator |
+| F2 on a locator | Rename the locator |
+| `,` / `.` | Jump to the previous / next locator |
+| `l` with a time selection | Loop the selected time range |
+| Delete / Backspace with a time selection | Emit `time-delete` with `removeTime: false` |
+| Shift-Delete with a time selection | Emit `time-delete` with `removeTime: true` |
 | Double-click a sub-row | Add a point; double-click a point deletes it |
 | Drag a point | Move it, snapping its beat; Alt disables snapping |
 | Drag a segment | Move its two endpoints vertically; Shift makes the move fine |
@@ -107,10 +131,11 @@ Space is left to the host's transport shortcut.
 
 ## API and variables
 
-`setLanes(lanes)`, `setLaneClips(laneId, clips)`, `setLaneControls(laneId, controls)`, `setLaneMeters(updates)`, `setLaneFigures(laneId, figures, wash)`, `setLaneSession(laneId, session)`, `setLaneDevices(laneId, devices)`, `setLaneAutomation(laneId, automation)`, `setPlayhead(beat)`,
+`setLanes(lanes)`, `setLaneClips(laneId, clips)`, `setLaneControls(laneId, controls)`, `setLaneMeters(updates)`, `setLaneFigures(laneId, figures, wash)`, `setLaneSession(laneId, session)`, `setLaneDevices(laneId, devices)`, `setLaneAutomation(laneId, automation)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
 `setLoop(start, end, enabled, emit, {punchIn, punchOut})`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
 `beginRename(clipId)`, `focusClip(clipId)`, `revealAutomation(laneId, automationId)`, `beatAtPoint(clientX)` and
-`laneAtPoint(clientY)` are the host-facing methods. The `pxPerBeat`,
+`laneAtPoint(clientY)` are the host-facing methods. `locators` and
+`timeSelection` are readable host-state snapshots. The `pxPerBeat`,
 `scrollBeat`, `playhead`, `loopStart`, `loopEnd` and `selected` properties are
 readable; `pxPerBeat`, `scrollBeat` and `selected` are writable.
 

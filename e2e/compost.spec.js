@@ -585,6 +585,27 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   events = await timeline.evaluate((element) => element.testEvents);
   expect(events.some((event) => event.type === 'clip-trim')).toBe(true);
 
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] }]);
+  });
+  box = await clip.boundingBox();
+  const originalTrim = await clip.boundingBox();
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + box.height / 2, { steps: 4 });
+  const previewTrim = await clip.boundingBox();
+  const trimPointerId = await timeline.evaluate((element) => element.drag?.pointerId);
+  await timeline.evaluate((element, id) => element.dispatchEvent(new PointerEvent('pointercancel', {
+    bubbles: true, composed: true, pointerId: id, pointerType: 'mouse', button: 0,
+  })), trimPointerId);
+  const restoredTrim = await clip.boundingBox();
+  expect(previewTrim.width).not.toBeCloseTo(originalTrim.width, 0);
+  expect(Math.abs(restoredTrim.x - originalTrim.x)).toBeLessThan(1);
+  expect(Math.abs(restoredTrim.width - originalTrim.width)).toBeLessThan(1);
+  expect(await timeline.evaluate((element) => element.testEvents)).toEqual([]);
+  await page.mouse.up();
+
   await clip.press('Delete');
   events = await timeline.evaluate((element) => element.testEvents);
   expect(events.some((event) => event.type === 'clip-delete')).toBe(true);
@@ -593,6 +614,214 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   await page.mouse.click(rulerBox.x + 100, rulerBox.y + rulerBox.height / 2);
   events = await timeline.evaluate((element) => element.testEvents);
   expect(events.some((event) => event.type === 'seek' && event.detail.source === 'ruler')).toBe(true);
+});
+
+test('timeline rulers expose locators, time selections and measured row geometry', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    document.documentElement.style.fontSize = '11px';
+    element.style.removeProperty('--compost-timeline-automation-row-height');
+    element.style.removeProperty('--compost-timeline-row-height');
+    element.setAttribute('snap', 'grid');
+    element.syncAttributes();
+    element.testEvents = [];
+    for (const type of ['locator-jump', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'locator-prev', 'locator-next', 'time-select-input', 'time-select', 'time-delete', 'clip-select', 'clip-split', 'seek', 'fit-request', 'loop-change']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.setLanes([
+      { id: 'a', name: 'A', clips: [], automation: [{ id: 'volume', label: 'Volume', min: 0, max: 1, points: [] }] },
+      { id: 'b', name: 'B', clips: [{ id: 'inside', name: 'inside', start: 5, length: 1, duration: 1, notes: [] }] },
+      { id: 'c', name: 'C', kind: 'return', clips: [] },
+    ]);
+    element.setLocators([{ id: 'drop', beat: 8, name: 'drop' }, { id: 'intro', beat: 0, name: 'intro' }]);
+    element.setTimeSelection(null, null);
+    element.setLoop(0, 8, false);
+  });
+  const geometry = await timeline.evaluate((element) => {
+    const root = element.shadowRoot;
+    const frame = root.querySelector('.frame');
+    const ruler = root.querySelector('.ruler-wrap').getBoundingClientRect();
+    const header = root.querySelector('.lane-header[data-lane-id="a"]').getBoundingClientRect();
+    const body = root.querySelector('.lane[data-lane-id="a"]').getBoundingClientRect();
+    const thinHeader = root.querySelector('.lane-header[data-lane-id="c"]').getBoundingClientRect();
+    const thinBody = root.querySelector('.lane[data-lane-id="c"]').getBoundingClientRect();
+    return {
+      columns: Number.parseFloat(getComputedStyle(frame).gridTemplateColumns),
+      ruler: ruler.height,
+      header: header.height,
+      body: body.height,
+      base: root.querySelector('.lane[data-lane-id="a"] .lane-base').getBoundingClientRect().height,
+      automationHeader: root.querySelector('.lane-header[data-lane-id="a"] .automation-header').getBoundingClientRect().height,
+      automationRow: root.querySelector('.lane[data-lane-id="a"] .automation-row').getBoundingClientRect().height,
+      thinHeader: thinHeader.height,
+      thinBody: thinBody.height,
+      locators: [...root.querySelectorAll('.ruler-locator')].map((node) => ({ id: node.dataset.locatorId, left: node.getBoundingClientRect().left })),
+      rulerScrollbar: getComputedStyle(root.querySelector('.ruler-wrap')).scrollbarWidth,
+      lanesScrollbar: getComputedStyle(root.querySelector('.lanes-wrap')).scrollbarWidth,
+    };
+  });
+  expect(Math.abs(geometry.columns - 275)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.ruler - 36.3)).toBeLessThan(1);
+  expect(Math.abs(geometry.header - 90)).toBeLessThan(1);
+  expect(Math.abs(geometry.body - 90)).toBeLessThan(1);
+  expect(Math.abs(geometry.base - 64)).toBeLessThan(1);
+  expect(Math.abs(geometry.automationHeader - 26)).toBeLessThan(1);
+  expect(Math.abs(geometry.automationRow - 26)).toBeLessThan(1);
+  expect(Math.abs(geometry.thinHeader - 32)).toBeLessThan(1);
+  expect(Math.abs(geometry.thinBody - 32)).toBeLessThan(1);
+  expect(geometry.locators.map(({ id }) => id)).toEqual(['intro', 'drop']);
+  expect(geometry.rulerScrollbar).toBe('none');
+  expect(geometry.lanesScrollbar).toBe('none');
+  await expect(timeline.locator('.ruler-locator[data-locator-id="intro"]')).toHaveAttribute('tabindex', '0');
+
+  await timeline.locator('.ruler-locator[data-locator-id="drop"]').click();
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'locator-jump'))).toEqual({ type: 'locator-jump', detail: { id: 'drop' } });
+  await timeline.locator('.ruler-locator[data-locator-id="intro"]').focus();
+  await page.keyboard.press('Space');
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'locator-jump').at(-1))).toEqual({ type: 'locator-jump', detail: { id: 'intro' } });
+  await page.keyboard.press('F2');
+  await timeline.locator('.ruler-locator-editor').fill('opening');
+  await timeline.locator('.ruler-locator-editor').press('Enter');
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'locator-rename'))).toEqual({ type: 'locator-rename', detail: { id: 'intro', name: 'opening' } });
+  const locator = timeline.locator('.ruler-locator[data-locator-id="intro"]');
+  const locatorBox = await locator.boundingBox();
+  const rulerBox = await timeline.locator('.ruler-wrap').boundingBox();
+  await page.mouse.move(locatorBox.x + 2, locatorBox.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(rulerBox.x + 48, locatorBox.y + 4, { steps: 3 });
+  await page.mouse.up();
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'locator-move'))).toEqual({ type: 'locator-move', detail: { id: 'intro', beat: 2 } });
+  await locator.click({ button: 'right' });
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'locator-context'))).toMatchObject({ type: 'locator-context', detail: { id: 'intro' } });
+
+  await page.mouse.dblclick(rulerBox.x + 100, rulerBox.y + 5);
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'locator-create'))).toEqual({ type: 'locator-create', detail: { beat: 4 } });
+
+  await timeline.evaluate((element) => { element.testEvents = []; element.setTimeSelection(null, null); });
+  const lanesBox = await timeline.locator('.lanes-wrap').boundingBox();
+  const laneB = await timeline.locator('.lane[data-lane-id="b"]').boundingBox();
+  const laneC = await timeline.locator('.lane[data-lane-id="c"]').boundingBox();
+  const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
+  const startX = lanesBox.x + 4 * pxPerBeat;
+  const endX = lanesBox.x + 8 * pxPerBeat;
+  await page.mouse.move(startX, laneB.y + laneB.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(endX, laneC.y + laneC.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'time-select'))).toEqual({ type: 'time-select', detail: { start: 4, end: 8, laneIds: ['b', 'c'] } });
+  expect(await timeline.evaluate((element) => ({
+    selection: element.timeSelection,
+    selected: element.selected,
+    bands: [...element.shadowRoot.querySelectorAll('.time-selection')].map((node) => node.dataset.laneId),
+    rulerBand: element.shadowRoot.querySelector('.ruler-time-selection').getBoundingClientRect().width,
+  }))).toEqual({ selection: { start: 4, end: 8, laneIds: ['b', 'c'] }, selected: ['inside'], bands: ['b', 'c'], rulerBand: 96 });
+  expect(await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'clip-select'))).toEqual([
+    { type: 'clip-select', detail: { ids: ['inside'] } },
+  ]);
+  await timeline.evaluate((element) => element.setTimeSelection(null, null));
+  expect(await timeline.evaluate((element) => ({ selection: element.timeSelection, selected: element.selected }))).toEqual({ selection: null, selected: ['inside'] });
+
+  await timeline.evaluate((element) => { element.testEvents = []; element.setTimeSelection(null, null); });
+  const laneA = await timeline.locator('.lane[data-lane-id="a"]').boundingBox();
+  await page.mouse.move(lanesBox.x + 4 * pxPerBeat, laneA.y + laneA.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(lanesBox.x + 8 * pxPerBeat, laneC.y + laneC.height + 8, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'time-select'))).toEqual({ type: 'time-select', detail: { start: 4, end: 8, laneIds: ['a', 'b', 'c'] } });
+  await timeline.evaluate((element) => { element.testEvents = []; element.setTimeSelection(4, 8, ['b', 'c']); });
+
+  await timeline.focus();
+  await page.keyboard.press('l');
+  await expect.poll(() => timeline.evaluate((element) => element.loopEnd)).toBe(8);
+  await page.keyboard.press('Shift+Delete');
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'time-delete'))).toEqual({ type: 'time-delete', detail: { start: 4, end: 8, laneIds: ['b', 'c'], removeTime: true } });
+  await page.keyboard.press('Control+e');
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'clip-split'))).toEqual({ type: 'clip-split', detail: { ids: ['inside'], beats: [4, 8] } });
+
+  await timeline.evaluate((element) => { element.testEvents = []; element.setTimeSelection(2, 4, ['b']); element.scrollBeat = 0; element.pxPerBeat = 24; });
+  const beforeScroll = await timeline.evaluate((element) => element.shadowRoot.querySelector('.ruler-time-selection').getBoundingClientRect().width);
+  await timeline.evaluate((element) => { element.scrollBeat = 2; });
+  const afterScroll = await timeline.evaluate((element) => element.shadowRoot.querySelector('.ruler-time-selection').getBoundingClientRect().width);
+  expect(Math.abs(beforeScroll - afterScroll)).toBeLessThan(1);
+  const row2Y = rulerBox.y + 2.0 * 11;
+  await page.mouse.move(rulerBox.x + 180, row2Y);
+  await page.mouse.down();
+  await page.mouse.move(rulerBox.x + 120, row2Y, { steps: 4 });
+  await page.mouse.up();
+  expect(await timeline.evaluate((element) => element.scrollBeat)).toBeGreaterThan(2);
+
+  await timeline.evaluate((element) => { element.scrollBeat = 0; element.pxPerBeat = 24; });
+  await page.keyboard.down('Control');
+  await page.mouse.move(rulerBox.x + 120, row2Y);
+  await page.mouse.down();
+  await page.mouse.move(rulerBox.x + 160, row2Y, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Control');
+  expect(await timeline.evaluate((element) => element.pxPerBeat)).toBeGreaterThan(24);
+  await page.mouse.dblclick(rulerBox.x + 160, row2Y);
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'fit-request'))).toMatchObject({ type: 'fit-request', detail: {} });
+
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.setTimeSelection(2, 4, ['b']);
+    element.setLaneAutomation('a', []);
+  });
+  const beforeAutomationHeight = await timeline.evaluate((element) => {
+    const overlay = element.shadowRoot.querySelector('.time-selection[data-lane-id="b"]').getBoundingClientRect();
+    const lane = element.shadowRoot.querySelector('.lane[data-lane-id="b"]').getBoundingClientRect();
+    return {
+      selection: element.timeSelection,
+      bands: [...element.shadowRoot.querySelectorAll('.time-selection')].map((node) => node.dataset.laneId),
+      overlayTop: overlay.top,
+      overlayHeight: overlay.height,
+      laneTop: lane.top,
+      laneHeight: lane.height,
+    };
+  });
+  expect(beforeAutomationHeight.selection).toEqual({ start: 2, end: 4, laneIds: ['b'] });
+  expect(beforeAutomationHeight.bands).toEqual(['b']);
+  expect(Math.abs(beforeAutomationHeight.overlayTop - beforeAutomationHeight.laneTop)).toBeLessThan(1);
+  expect(Math.abs(beforeAutomationHeight.overlayHeight - beforeAutomationHeight.laneHeight)).toBeLessThan(1);
+  const cancelLane = await timeline.locator('.lane[data-lane-id="b"]').boundingBox();
+  const cancelStart = lanesBox.x + 2 * 24;
+  await page.mouse.move(cancelStart, cancelLane.y + cancelLane.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(lanesBox.x + 7 * 24, cancelLane.y + cancelLane.height / 2, { steps: 3 });
+  await timeline.evaluate((element) => { element.testEvents = []; });
+  const cancelPointerId = await timeline.evaluate((element) => element.drag?.pointerId);
+  await timeline.evaluate((element, id) => element.dispatchEvent(new PointerEvent('pointercancel', {
+    bubbles: true, composed: true, pointerId: id, pointerType: 'mouse', button: 0,
+  })), cancelPointerId);
+  expect(await timeline.evaluate((element) => ({
+    selection: element.timeSelection,
+    events: element.testEvents,
+    drag: element.drag,
+    pointers: element.pointers.size,
+  }))).toEqual({ selection: { start: 2, end: 4, laneIds: ['b'] }, events: [], drag: null, pointers: 0 });
+  await page.mouse.up();
+
+  await timeline.evaluate((element) => {
+    element.setTimeSelection(2, 4, ['b']);
+    element.setLaneAutomation('a', [{ id: 'volume', label: 'Volume', min: 0, max: 1, points: [] }]);
+  });
+  const afterAutomationHeight = await timeline.evaluate((element) => {
+    const overlay = element.shadowRoot.querySelector('.time-selection[data-lane-id="b"]').getBoundingClientRect();
+    const lane = element.shadowRoot.querySelector('.lane[data-lane-id="b"]').getBoundingClientRect();
+    return { overlayTop: overlay.top, overlayHeight: overlay.height, laneTop: lane.top, laneHeight: lane.height };
+  });
+  expect(Math.abs(afterAutomationHeight.overlayTop - afterAutomationHeight.laneTop)).toBeLessThan(1);
+  expect(Math.abs(afterAutomationHeight.overlayHeight - afterAutomationHeight.laneHeight)).toBeLessThan(1);
+  expect(afterAutomationHeight.laneTop).toBeGreaterThan(beforeAutomationHeight.laneTop);
+
+  await timeline.evaluate((element) => { element.testEvents = []; element.setPlayhead(4); });
+  await timeline.locator('.ruler-locator[data-locator-id="intro"]').focus();
+  await page.keyboard.press(',');
+  await page.keyboard.press('.');
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'locator-prev' || event.type === 'locator-next'))).toEqual([
+    { type: 'locator-prev', detail: { id: 'intro' } },
+    { type: 'locator-next', detail: { id: 'drop' } },
+  ]);
 });
 
 test('timeline enters from the keyboard and nudges before arrow navigation', async ({ page }) => {

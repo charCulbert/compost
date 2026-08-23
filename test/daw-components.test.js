@@ -13,7 +13,7 @@ const { panBar, panText } = await import('../src/components/compost-channel-card
 const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
 const {
-  snapBeat, clipBox, loopPassLines, clipNoteOpacity, previewTrimmedClip, rulerStep,
+  snapBeat, sortLocators, normalizeTimeSelection, clipBox, loopPassLines, clipNoteOpacity, previewTrimmedClip, rulerStep,
   automationValueToY, automationValueFromY,
   addAutomationPoint, moveAutomationPoint, deleteAutomationPoint,
   splitDeviceChain,
@@ -105,6 +105,25 @@ test('velocity dashes retain the specified opacity at rest', () => {
   assert.equal(clipNoteOpacity(''), .55);
   assert.equal(clipNoteOpacity(-10), .3);
   assert.ok(Math.abs(clipNoteOpacity(200) - .9) < 1e-12);
+});
+
+test('locators stay stable and time selections snap and clamp', () => {
+  assert.deepEqual(sortLocators([
+    { id: 'drop', beat: 8, name: 'drop' },
+    { id: 'intro', beat: 0, name: 'intro' },
+    { id: 'late', beat: 4, name: 'late' },
+    { id: 'duplicate', beat: 4, name: 'first' },
+    { id: 'duplicate', beat: 2, name: 'second' },
+    { id: 'bad', beat: Number.NaN, name: 'bad' },
+  ]), [
+    { id: 'intro', beat: 0, name: 'intro' },
+    { id: 'late', beat: 4, name: 'late' },
+    { id: 'duplicate', beat: 4, name: 'first' },
+    { id: 'drop', beat: 8, name: 'drop' },
+  ]);
+  assert.deepEqual(normalizeTimeSelection(9, 1, ['b', 'a', 'b'], 8), { start: 1, end: 8, laneIds: ['b', 'a'] });
+  assert.equal(normalizeTimeSelection(2, 2, ['a'], 8), null);
+  assert.equal(normalizeTimeSelection(null, 4, ['a'], 8), null);
 });
 
 test('device chains keep the first fitting devices and expose a compact overflow tail', () => {
