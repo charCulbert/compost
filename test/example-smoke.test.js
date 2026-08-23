@@ -33,7 +33,7 @@ test('the public theme stylesheet owns the bundled component palettes', () => {
   assert.match(themes, /compost-midi-mappings \{/u);
   assert.match(themes, /compost-select \{/u);
   assert.match(themes, /compost-device-selector \{/u);
-  assert.match(themes, /compost-piano-roll \{/u);
+  assert.match(themes, /compost-note-editor \{/u);
   // The keyboard still takes its colours from constructor options, not the theme.
   assert.doesNotMatch(themes, /compost-piano \{/u);
   assert.doesNotMatch(sharedStyles, /--compost-select-bg|--compost-midi-mappings-row-bg/u);

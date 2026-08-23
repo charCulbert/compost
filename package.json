@@ -32,7 +32,6 @@
     "./components/compost-note-editor": "./src/components/compost-note-editor.js",
     "./components/compost-number-box": "./src/components/compost-number-box.js",
     "./components/compost-piano": "./src/components/compost-piano.js",
-    "./components/compost-piano-roll": "./src/components/compost-piano-roll.js",
     "./components/compost-popup": "./src/components/compost-popup.js",
     "./components/compost-scope": "./src/components/compost-scope.js",
     "./components/compost-select": "./src/components/compost-select.js",

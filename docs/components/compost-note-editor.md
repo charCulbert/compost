@@ -18,12 +18,11 @@ editor.addEventListener('loop-change', ({ detail }) => setClipLoop(detail.start,
 editor.setAttribute('playhead', String(beat));   // from the host's clock
 ```
 
-Notes are `{id, note, start, duration, velocity, channel}` in **beats**, as
-for `compost-piano-roll`; the two share `piano-roll-model.js`. The caller owns
-stable identity: every supplied note needs an `id`, and editing actions that
-create or copy notes call `noteIdFactory`. Beat values remain ordinary
-full-precision numbers. The selected grid affects visible snapping, not stored
-time resolution; `snap="off"` keeps the pointer-derived beat.
+Notes are `{id, note, start, duration, velocity, channel}` in **beats**. The
+caller owns stable identity: every supplied note needs an `id`, and editing
+actions that create or copy notes call `noteIdFactory`. Beat values remain
+ordinary full-precision numbers. The selected grid affects visible snapping,
+not stored time resolution; `snap="off"` keeps the pointer-derived beat.
 
 ## Editing
 

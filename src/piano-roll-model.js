@@ -1,5 +1,5 @@
-// Pure note-list maths for compost-piano-roll, kept DOM-free so the editing
-// rules can be unit-tested directly.
+// Pure note-list maths for note editors, kept DOM-free so the editing rules can
+// be unit-tested directly.
 
 import { clamp } from './utils.js';
 

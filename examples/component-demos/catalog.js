@@ -1,7 +1,7 @@
 const ids = [
   'compost-audio', 'compost-midi', 'compost-device-selector', 'compost-drawer',
   'compost-knob', 'compost-slider', 'compost-gain', 'compost-number-box', 'compost-button',
-  'compost-select', 'compost-piano', 'compost-piano-roll', 'compost-scope', 'compost-midi-monitor',
+  'compost-select', 'compost-piano', 'compost-scope', 'compost-midi-monitor',
   'compost-midi-mappings', 'compost-channel-strip', 'compost-channel-card', 'compost-clip-grid',
   'compost-note-editor', 'compost-timeline', 'compost-window', 'compost-popup',
 ];
@@ -22,7 +22,6 @@ export const demos = ids.map((id) => ({
     'compost-select': 'A styled popup select with native-like keyboard and typeahead behavior.',
     'compost-scope': 'Lock a waveform to a phase-aligned sync channel and inspect analyser modes.',
     'compost-piano': 'Play notes with pointer or computer keyboard and inspect events.',
-    'compost-piano-roll': 'Draw, move, resize, select, and quantize MIDI notes on a grid.',
     'compost-midi-monitor': 'Log incoming messages from a selected real MIDI input.',
     'compost-midi-mappings': 'Learn, edit, and clear compact MIDI mappings.',
     'compost-channel-strip': 'A track column that is the channel: wash fader, meters and 0 dB notch on one dB axis.',
