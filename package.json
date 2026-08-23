@@ -47,6 +47,7 @@
     "./parameter-controller": "./src/parameter-controller.js",
     "./piano-roll-model": "./src/piano-roll-model.js",
     "./parameter-scale": "./src/parameter-scale.js",
+    "./gain-scale": "./src/gain-scale.js",
     "./utils": "./src/utils.js"
   },
   "files": [

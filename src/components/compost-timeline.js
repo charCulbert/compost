@@ -1,6 +1,6 @@
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
-import { DEFAULT_TAPER, washLevel, washPosition } from './compost-channel-strip.js';
+import { DEFAULT_TAPER, washLevel, washPosition } from '../gain-scale.js';
 import './compost-number-box.js';
 import { MONITOR_SVG, panText } from './compost-channel-card.js';
 

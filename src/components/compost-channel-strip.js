@@ -8,6 +8,8 @@ import {
   numberAttr,
   snap,
 } from '../utils.js';
+import { DEFAULT_TAPER, parseTaper, washLevel, washPosition } from '../gain-scale.js';
+export { DEFAULT_TAPER, parseTaper, washLevel, washPosition } from '../gain-scale.js';
 
 let nextStripID = 1;
 const MAX_CHANNELS = 16;
@@ -18,61 +20,6 @@ const FINE_DRAG = 0.25;
 const PAN_PER_PIXEL = 0.014;
 const PAN_PER_PIXEL_FINE = 0.004;
 const SECOND_PRESS_MS = 320;
-
-// The fader's taper, as (dB, fraction of the column) pairs from the top down:
-// 0 dB lands at 70% of the height, with the quiet end compressed. The wash,
-// the 0 dB notch, the scale marks and the meters all read off this one table,
-// which is what keeps a meter level and the wash edge on the same axis.
-export const DEFAULT_TAPER = Object.freeze([
-  [12, 1], [6, 0.85], [0, 0.7], [-6, 0.6], [-12, 0.5], [-24, 0.35],
-  [-36, 0.25], [-48, 0.17], [-60, 0.1], [-90, 0],
-]);
-
-/** Reads a taper attribute like "12:1 6:.85 0:.7 -90:0". */
-/** @param {string|null|undefined} text @returns {readonly (readonly [number, number])[]} */
-export function parseTaper(text) {
-  if (!text) return DEFAULT_TAPER;
-  const points = String(text).trim().split(/[\s,]+/u).map((pair) => {
-    const [db, fraction] = pair.split(':').map(Number);
-    return Number.isFinite(db) && Number.isFinite(fraction) ? [db, clamp(fraction, 0, 1)] : null;
-  }).filter((point) => point !== null).sort((a, b) => b[0] - a[0]);
-  return points.length >= 2 ? /** @type {[number, number][]} */ (points) : DEFAULT_TAPER;
-}
-
-/** Height of the wash for a level, as a 0..1 fraction of the column. */
-/** @param {number} db @param {readonly (readonly [number, number])[]} [taper] */
-export function washPosition(db, taper = DEFAULT_TAPER) {
-  const value = Number(db);
-  if (!Number.isFinite(value)) return 0;
-  const top = taper[0];
-  const bottom = taper[taper.length - 1];
-  if (value >= top[0]) return top[1];
-  if (value <= bottom[0]) return bottom[1];
-  for (let index = 0; index < taper.length - 1; index += 1) {
-    const [a, fa] = taper[index];
-    const [b, fb] = taper[index + 1];
-    if (value <= a && value >= b) return fb + (fa - fb) * (value - b) / (a - b);
-  }
-  return 0;
-}
-
-/** The level at a height of the column, as a 0..1 fraction: washPosition run backwards,
- * so a drag can keep the wash edge under the pointer whatever the taper does. */
-/** @param {number} fraction @param {readonly (readonly [number, number])[]} [taper] */
-export function washLevel(fraction, taper = DEFAULT_TAPER) {
-  const value = Number(fraction);
-  if (!Number.isFinite(value)) return taper[taper.length - 1][0];
-  const top = taper[0];
-  const bottom = taper[taper.length - 1];
-  if (value >= top[1]) return top[0];
-  if (value <= bottom[1]) return bottom[0];
-  for (let index = 0; index < taper.length - 1; index += 1) {
-    const [a, fa] = taper[index];
-    const [b, fb] = taper[index + 1];
-    if (value <= fa && value >= fb) return fa === fb ? b : b + (a - b) * (value - fb) / (fa - fb);
-  }
-  return bottom[0];
-}
 
 /** Gain-reduction fill, falling from the top at -24 dB and empty at 0 dB. */
 /** @param {unknown} db @returns {number} */
