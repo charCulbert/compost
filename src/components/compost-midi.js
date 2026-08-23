@@ -16,8 +16,12 @@ export class WebMIDI extends HTMLElement {
     this.midiAccess = null;
     this.inputs = [];
     this.outputs = [];
-    this.selectedInputID = ALL_INPUTS;
+    this.selectedInputID = NO_INPUT;
     this.selectedOutputID = '';
+    this.currentInputs = [];
+    this.inputListeners = new Map();
+    this.connectVersion = 0;
+    this.attachVersion = 0;
     this.status = 'Connecting';
     this.inputSelectID = `compost-midi-input-${Math.random().toString(36).slice(2)}`;
     this.outputSelectID = `compost-midi-output-${Math.random().toString(36).slice(2)}`;
@@ -128,16 +132,17 @@ export class WebMIDI extends HTMLElement {
     this.inputSelect.setAttribute('aria-description', 'Choose a MIDI input device.');
     this.outputSelect.setAttribute('aria-description', 'Choose a MIDI output device.');
 
-    this.inputSelect.addEventListener('change', () => this.selectInput(this.inputSelect.value));
-    this.outputSelect.addEventListener('change', () => this.selectOutput(this.outputSelect.value));
+    this.handleInputSelection = () => this.requestInput(this.inputSelect.value);
+    this.handleOutputSelection = () => this.requestOutput(this.outputSelect.value);
+    this.handleAccessStateChange = () => void this.refreshDevices();
+    this.inputSelect.addEventListener('change', this.handleInputSelection);
+    this.outputSelect.addEventListener('change', this.handleOutputSelection);
   }
 
   connectedCallback() {
-    if (this.hasAttribute('input-id')) {
-      this.selectedInputID = this.getAttribute('input-id') || NO_INPUT;
-    }
+    this.selectedInputID = this.getAttribute('input-id') || NO_INPUT;
     this.selectedOutputID = this.getAttribute('output-id') || this.selectedOutputID;
-    this.connect();
+    void this.connect();
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
@@ -152,9 +157,9 @@ export class WebMIDI extends HTMLElement {
     }
 
     if (name === 'input-id') {
-      this.selectedInputID = newValue === null ? ALL_INPUTS : newValue || NO_INPUT;
+      this.selectedInputID = newValue || NO_INPUT;
       if (this.midiAccess) {
-        this.selectInput(this.selectedInputID);
+        void this.attachInput().then(() => this.refresh());
         return;
       }
     }
@@ -162,7 +167,7 @@ export class WebMIDI extends HTMLElement {
     if (name === 'output-id') {
       this.selectedOutputID = newValue || '';
       if (this.midiAccess) {
-        this.selectOutput(this.selectedOutputID);
+        this.refresh();
         return;
       }
     }
@@ -171,17 +176,20 @@ export class WebMIDI extends HTMLElement {
     if (this.shouldHideInput()) {
       this.detachInput();
     } else if (this.midiAccess) {
-      this.attachInput();
+      void this.attachInput().then(() => this.refresh());
+      return;
     }
     this.refresh();
   }
 
   disconnectedCallback() {
+    this.connectVersion += 1;
     this.detachInput();
 
     if (this.midiAccess) {
-      this.midiAccess.onstatechange = null;
+      this.midiAccess.removeEventListener('statechange', this.handleAccessStateChange);
     }
+    this.midiAccess = null;
   }
 
   async connect() {
@@ -191,40 +199,58 @@ export class WebMIDI extends HTMLElement {
       return;
     }
 
+    const version = ++this.connectVersion;
     try {
-      this.midiAccess = await navigator.requestMIDIAccess({
+      const access = await navigator.requestMIDIAccess({
         sysex: this.hasAttribute('sysex'),
         software: true,
       });
+      if (!this.isConnected || version !== this.connectVersion) return;
 
-      this.midiAccess.onstatechange = () => this.refreshDevices();
-      this.refreshDevices();
-      this.dispatchEvent(new CustomEvent('midi-ready', { bubbles: true, composed: true }));
+      this.midiAccess?.removeEventListener('statechange', this.handleAccessStateChange);
+      this.midiAccess = access;
+      this.midiAccess.addEventListener('statechange', this.handleAccessStateChange);
+      await this.refreshDevices();
+      if (!this.isConnected || version !== this.connectVersion) return;
+      this.dispatchEvent(new CustomEvent('midi-ready', {
+        bubbles: true,
+        composed: true,
+        detail: this.deviceState(),
+      }));
     } catch (error) {
-      this.status = `Could not open MIDI: ${error.message}`;
+      this.status = `Could not open MIDI: ${error instanceof Error ? error.message : String(error)}`;
       this.refresh();
     }
   }
 
-  refreshDevices() {
+  async refreshDevices() {
+    if (!this.midiAccess) return;
     this.inputs = [...this.midiAccess.inputs.values()].filter((device) => device.state === 'connected');
     this.outputs = [...this.midiAccess.outputs.values()].filter((device) => device.state === 'connected');
-    this.selectedInputID = this.keepInput(this.selectedInputID, this.inputs);
-    this.selectedOutputID = this.keepDevice(this.selectedOutputID, this.outputs);
     this.applyVisibility();
-    this.attachInput();
+    await this.attachInput();
     this.refresh();
 
     this.dispatchEvent(new CustomEvent('midi-devices-changed', {
       bubbles: true,
       composed: true,
-      detail: {
-        inputs: this.inputs,
-        outputs: this.outputs,
-        input: this.getSelectedInput(),
-        output: this.getSelectedOutput(),
-      },
+      detail: this.deviceState(),
     }));
+  }
+
+  deviceState() {
+    return {
+      inputs: [...this.inputs],
+      outputs: [...this.outputs],
+      inputID: this.selectedInputID === NO_INPUT ? '' : this.selectedInputID,
+      outputID: this.selectedOutputID,
+      input: this.getSelectedInput(),
+      output: this.getSelectedOutput(),
+      inputConnected: this.selectedInputID === ALL_INPUTS
+        ? this.inputs.length > 0
+        : this.selectedInputID === NO_INPUT || Boolean(this.getSelectedInput()),
+      outputConnected: !this.selectedOutputID || Boolean(this.getSelectedOutput()),
+    };
   }
 
   restoreSelection({ inputID = '', outputID = '', inputName = '', outputName = '' } = {}) {
@@ -236,11 +262,13 @@ export class WebMIDI extends HTMLElement {
     } else if (inputName || inputID) {
       this.selectInput(inputID || NO_INPUT);
     } else {
-      this.selectInput(ALL_INPUTS);
+      this.selectInput(NO_INPUT);
     }
 
     if (output) {
       this.selectOutput(output.id);
+    } else if (outputName || outputID) {
+      this.selectOutput(outputID);
     }
 
     return {
@@ -255,33 +283,33 @@ export class WebMIDI extends HTMLElement {
       || null;
   }
 
-  keepInput(id, devices) {
-    if (id === ALL_INPUTS || id === NO_INPUT) return id;
-    return devices.some((device) => device.id === id) ? id : ALL_INPUTS;
-  }
-
-  keepDevice(id, devices) {
-    return devices.some((device) => device.id === id) ? id : '';
-  }
-
   selectInput(id) {
-    this.selectedInputID = id || NO_INPUT;
-    this.attachInput();
-    this.refresh();
-    this.dispatchSelectionEvent('midi-input-selected', this.getSelectedInput());
+    if (id && id !== NO_INPUT) this.setAttribute('input-id', id);
+    else this.removeAttribute('input-id');
   }
 
   selectOutput(id) {
-    this.selectedOutputID = id;
-    this.refresh();
-    this.dispatchSelectionEvent('midi-output-selected', this.getSelectedOutput());
+    if (id) this.setAttribute('output-id', id);
+    else this.removeAttribute('output-id');
   }
 
-  dispatchSelectionEvent(type, device) {
+  requestInput(id) {
+    this.dispatchSelectionEvent('midi-input-selected', id === NO_INPUT ? '' : id,
+      this.inputs.find((input) => input.id === id) || null);
+    this.refresh();
+  }
+
+  requestOutput(id) {
+    this.dispatchSelectionEvent('midi-output-selected', id || '',
+      this.outputs.find((output) => output.id === id) || null);
+    this.refresh();
+  }
+
+  dispatchSelectionEvent(type, id, device) {
     this.dispatchEvent(new CustomEvent(type, {
       bubbles: true,
       composed: true,
-      detail: { device },
+      detail: { id, device },
     }));
   }
 
@@ -294,8 +322,9 @@ export class WebMIDI extends HTMLElement {
     return this.outputs.find((output) => output.id === this.selectedOutputID) || null;
   }
 
-  attachInput() {
+  async attachInput() {
     this.detachInput();
+    const version = this.attachVersion;
 
     if (this.shouldHideInput()) {
       return;
@@ -306,14 +335,37 @@ export class WebMIDI extends HTMLElement {
       : this.selectedInputID === NO_INPUT
         ? []
         : [this.getSelectedInput()].filter(Boolean);
+    const opened = [];
+    const errors = [];
     for (const input of inputs) {
-      input.onmidimessage = event => this.handleMIDIMessage(event, input);
+      try {
+        await input.open?.();
+        if (input.connection && input.connection !== 'open') {
+          throw new Error(`Could not open MIDI input: ${input.name || input.id}`);
+        }
+        opened.push(input);
+      } catch (error) {
+        errors.push(error);
+      }
     }
-    this.currentInputs = inputs;
+    if (version !== this.attachVersion) return;
+    for (const input of opened) {
+      const listener = event => this.handleMIDIMessage(event, input);
+      input.addEventListener('midimessage', listener);
+      this.inputListeners.set(input, listener);
+    }
+    this.currentInputs = opened;
+    this.status = errors.length
+      ? `Could not open MIDI: ${errors[0] instanceof Error ? errors[0].message : String(errors[0])}`
+      : '';
   }
 
   detachInput() {
-    for (const input of this.currentInputs || []) input.onmidimessage = null;
+    this.attachVersion += 1;
+    for (const [input, listener] of this.inputListeners) {
+      input.removeEventListener('midimessage', listener);
+    }
+    this.inputListeners.clear();
     this.currentInputs = [];
   }
 
@@ -363,8 +415,14 @@ export class WebMIDI extends HTMLElement {
       return;
     }
 
-    this.statusElement.textContent = '';
-    this.statusElement.hidden = true;
+    const waitingInput = this.selectedInputID !== ALL_INPUTS && this.selectedInputID !== NO_INPUT
+      && !this.getSelectedInput();
+    const waitingOutput = this.selectedOutputID && !this.getSelectedOutput();
+    const status = this.status
+      || (waitingInput ? `Waiting for MIDI input ${this.selectedInputID}`
+        : waitingOutput ? `Waiting for MIDI output ${this.selectedOutputID}` : '');
+    this.statusElement.textContent = status;
+    this.statusElement.hidden = !status;
   }
 
   fillSelect(select, devices, selectedID, emptyLabel, allLabel = null) {
@@ -375,18 +433,17 @@ export class WebMIDI extends HTMLElement {
     }
     else select.append(new Option(emptyLabel, ''));
 
-    if (devices.length === 0) {
-      select.disabled = true;
-      return;
-    }
-
-    select.disabled = false;
-
     for (const device of devices) {
       select.append(new Option(device.name || device.id, device.id));
     }
 
+    if (selectedID && selectedID !== ALL_INPUTS && selectedID !== NO_INPUT
+        && !devices.some((device) => device.id === selectedID)) {
+      select.append(new Option(`Unavailable: ${selectedID}`, selectedID));
+    }
+
     select.value = selectedID || '';
+    select.disabled = devices.length === 0 && allLabel === null && !selectedID;
   }
 
   shouldHideInput() {

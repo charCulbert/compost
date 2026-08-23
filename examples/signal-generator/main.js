@@ -81,6 +81,8 @@ let scopeFrameStartedAt = performance.now();
 let mobileDrawerLayout = false;
 let midiActivityTimeout = 0;
 
+webMIDI.addEventListener('midi-input-selected', ({ detail }) => webMIDI.selectInput(detail.id));
+
 scope.addEventListener('scope-frame', ({ detail }) => {
   if (audio) recordScopeFrameRate(detail.time);
 });

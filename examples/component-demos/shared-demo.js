@@ -17,7 +17,10 @@ const parameters = createParameterController({ root: document });
 const mappings = createMIDIMappings({ parameters });
 const mappingsEditor = document.querySelector('compost-midi-mappings');
 if (mappingsEditor) mappingsEditor.mappings = mappings;
-document.querySelector('compost-midi')?.addEventListener('midi-message', (event) => {
+const webMIDI = document.querySelector('compost-midi');
+webMIDI?.addEventListener('midi-input-selected', ({ detail }) => webMIDI.selectInput(detail.id));
+webMIDI?.addEventListener('midi-output-selected', ({ detail }) => webMIDI.selectOutput(detail.id));
+webMIDI?.addEventListener('midi-message', (event) => {
   mappings.handleMIDIMessage(event);
 });
 

@@ -7,6 +7,7 @@ const midi = document.querySelector('compost-midi');
 const keyboard = document.querySelector('compost-piano');
 const logElement = document.querySelector('[data-log]');
 const DEFAULT_VELOCITY = 100;
+midi.addEventListener('midi-output-selected', ({ detail }) => midi.selectOutput(detail.id));
 const ccKnobs = [...document.querySelectorAll('[data-cc-knob]')].map((knob, index) => {
   const name = knob.getAttribute('name');
   const assignment = document.querySelector(`[data-cc-assignment="${name}"]`);
