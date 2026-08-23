@@ -61,10 +61,20 @@ so a screen reader walking a row of columns can tell them apart.
 
 `setClips(list)`, `setProgress(index, fraction)` for cheap per-frame updates,
 `highlightRow(index, on)` for a scene launcher's hover, `beginRename(index)`,
-`focusSlot(index)`, `slotIndexAtPoint(clientY)`.
+`focusSlot(index)`, `slotIndexAtPoint(clientY)`, and `setFrom(from)`.
+
+`setFrom({ kind: 'timeline', name, progress } | { kind: 'overridden' } | null)`
+paints the host-owned provenance row immediately below the stop slot. A timeline
+source reads `timeline ▶ name` with a `rgba(signal, .15)` progress wash; an
+overridden source reads `timeline ◂ overridden` in the dim colour. The row is
+non-interactive (`pointer-events: none`) and is an exposed `role="status"`, not
+a slot or control, so it never changes slot indexes or drag targets. Passing
+`null` hides it. The component only paints this hint; the host owns the
+timeline/session state.
 
 ## Styling
 
 `--compost-clip-grid-*` custom properties cover text, signal, select and over
-colours, the progress wash, the row height (`em`) and font size. Parts: `row`,
-`stopped`/`playing`/`queued`/`recording`, `progress`, `name`, `stop`.
+colours, the progress washes, the row height (`em`) and font size. Parts: `row`,
+`stopped`/`playing`/`queued`/`recording`, `progress`, `name`, `stop`, `from`,
+`from-progress`, `from-label`, and `from-name`.

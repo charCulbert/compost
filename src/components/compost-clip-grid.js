@@ -7,6 +7,28 @@ const ELLIPSIS_MIN_CHARS = 7;
 
 /** @typedef {'stopped'|'playing'|'queued'|'recording'} ClipState */
 /** @typedef {{name: string, state?: ClipState, loop?: boolean, progress?: number}} ClipSpec */
+/** @typedef {{kind: 'timeline', name: string, progress: number}|{kind: 'overridden'}|null} FromSpec */
+
+/** Normalize the host-owned timeline provenance row without touching slots. */
+/** @param {unknown} value @returns {FromSpec} */
+export function normalizeFrom(value) {
+  if (!value || typeof value !== 'object') return null;
+  if (value.kind === 'overridden') return { kind: 'overridden' };
+  if (value.kind !== 'timeline') return null;
+  const name = typeof value.name === 'string' ? value.name : '';
+  const progress = Number(value.progress);
+  return {
+    kind: 'timeline', name,
+    progress: Number.isFinite(progress) ? clamp(progress, 0, 1) : 0,
+  };
+}
+
+/** The visible identity only changes when the row kind or name changes. */
+/** @param {FromSpec} a @param {FromSpec} b */
+const sameFromIdentity = (a, b) => {
+  if (a?.kind !== b?.kind) return false;
+  return !a || a.kind === 'overridden' || a.name === b.name;
+};
 
 /** @param {string} fill */
 const triangle = (fill) => `<svg viewBox="0 0 7 8" aria-hidden="true"><path d="M1 .5 6 4 1 7.5Z" fill="${fill}"/></svg>`;
@@ -54,6 +76,11 @@ export class CompostClipGrid extends HTMLElement {
     this.slotCount = 5;
     this.label = 'Clips';
     /** @type {(ClipSpec|null)[]} */ this._clips = [];
+    /** @type {FromSpec} */ this._from = null;
+    this._fromElement = null;
+    this._fromProgress = null;
+    this._fromLabel = null;
+    this._fromName = null;
     /** @type {{pointerId: number, index: number, x: number, y: number, moved: boolean,
      * copy: boolean, target: CompostClipGrid|null, targetIndex: number, row: HTMLElement}|null} */
     this.drag = null;
@@ -73,6 +100,7 @@ export class CompostClipGrid extends HTMLElement {
           --compost-clip-grid-signal-hi: #c45a2c;
           --compost-clip-grid-select: #2f6da8;
           --compost-clip-grid-over: #d98a4a;
+          --compost-clip-grid-dim: #aaaaaa;
           --compost-clip-grid-rail: rgba(17, 17, 17, 0.12);
           --compost-clip-grid-wash: rgba(196, 90, 44, 0.22);
           --compost-clip-grid-highlight: rgba(17, 17, 17, 0.07);
@@ -192,6 +220,37 @@ export class CompostClipGrid extends HTMLElement {
         .stop { opacity: 0.55; transition: opacity 120ms; }
         .stop:hover, .stop[data-queued] { opacity: 1; }
         .stop[hidden] { display: none !important; }
+        .from {
+          position: relative;
+          flex: none;
+          display: flex;
+          align-items: center;
+          gap: 0.6em;
+          box-sizing: border-box;
+          height: 2.2em;
+          padding: 0 0.9em;
+          overflow: hidden;
+          color: var(--compost-clip-grid-signal);
+          font-size: 1em;
+          white-space: nowrap;
+          pointer-events: none;
+        }
+        .from[hidden] { display: none !important; }
+        .from-progress {
+          position: absolute;
+          inset: 0 auto 0 0;
+          width: 0;
+          background: color-mix(in srgb, var(--compost-clip-grid-signal) 15%, transparent);
+          pointer-events: none;
+        }
+        .from-label, .from-name { position: relative; z-index: 1; }
+        .from-label {
+          color: var(--compost-clip-grid-faint);
+          font-size: 0.85em;
+        }
+        .from[data-kind="overridden"] { color: var(--compost-clip-grid-dim); }
+        .from[data-kind="overridden"] .from-label,
+        .from[data-kind="overridden"] .from-name { color: var(--compost-clip-grid-dim); }
         @media (prefers-reduced-motion: reduce) {
           .stop { transition: none; }
           .row[data-state="queued"] .name, .row[data-state="queued"] .tri svg, .stop[data-queued] .tri svg { animation: none; }
@@ -288,6 +347,36 @@ export class CompostClipGrid extends HTMLElement {
     clip.progress = clamp(Number(progress) || 0, 0, 1);
     const bar = this.rowElements()[index]?.querySelector('.progress');
     if (bar instanceof HTMLElement) bar.style.width = `${(clip.progress * 100).toFixed(1)}%`;
+  }
+
+  /** The current timeline provenance hint, copied so callers cannot mutate it. */
+  get from() {
+    return this._from ? { ...this._from } : null;
+  }
+
+  /** Paints the host-owned timeline provenance row without rebuilding slots. */
+  /** @param {unknown} value */
+  setFrom(value) {
+    const current = this._from;
+    // The DAW can update clip progress at the meter rate. Keep the visible
+    // nodes and the normalized object in place for that hot path.
+    if (current?.kind === 'timeline' && value && typeof value === 'object'
+      && value.kind === 'timeline' && value.name === current.name) {
+      const progress = Number(value.progress);
+      current.progress = Number.isFinite(progress) ? clamp(progress, 0, 1) : 0;
+      this.paintFromProgress();
+      return;
+    }
+    if (current?.kind === 'overridden' && value && typeof value === 'object'
+      && value.kind === 'overridden') return;
+    const next = normalizeFrom(value);
+    if (sameFromIdentity(current, next)) {
+      this._from = next;
+      if (next?.kind === 'timeline') this.paintFromProgress();
+      return;
+    }
+    this._from = next;
+    this.paintFrom();
   }
 
   /** Lights a row across the grid, as the scene launcher does when hovered. */
@@ -417,9 +506,16 @@ export class CompostClipGrid extends HTMLElement {
     tri.setAttribute('aria-label', `Stop ${this.label}`);
     stop.append(tri);
     rows.push(stop);
+    const from = document.createElement('div');
+    from.className = 'from';
+    from.part.add('from');
+    from.hidden = true;
+    from.setAttribute('role', 'status');
+    rows.push(from);
     const style = this.root.querySelector('style');
     this.root.replaceChildren(...(style ? [style] : []), ...rows);
     this.paintStop();
+    this.paintFrom();
     // a host re-rendering mid-drag must not lose the slot the drag is over
     if (this.dropMark) this.markDrop(this.dropMark.index, this.dropMark.copy);
     this.fitNames();
@@ -451,6 +547,72 @@ export class CompostClipGrid extends HTMLElement {
     tri.innerHTML = square(stopState === 'queued' ? 'var(--compost-clip-grid-select)'
       : stopState === 'active' ? 'var(--compost-clip-grid-text)' : 'var(--compost-clip-grid-faint)');
     tri.title = stopState === 'queued' ? 'stop queued · click: cancel' : 'stop track';
+  }
+
+  paintFrom() {
+    const from = this.root.querySelector('.from');
+    if (!(from instanceof HTMLElement)) return;
+    if (from !== this._fromElement) {
+      this._fromElement = from;
+      this._fromProgress = null;
+      this._fromLabel = null;
+      this._fromName = null;
+    }
+    from.hidden = !this._from;
+    if (!this._from) {
+      from.removeAttribute('data-kind');
+      from.replaceChildren();
+      return;
+    }
+    const sameNodes = from.dataset.kind === this._from.kind
+      && (this._from.kind === 'overridden'
+        || this._fromName?.textContent === this._from.name);
+    if (sameNodes) {
+      if (this._from.kind === 'timeline') this.paintFromProgress();
+      return;
+    }
+    from.replaceChildren();
+    from.dataset.kind = this._from.kind;
+    if (this._from.kind === 'timeline') {
+      const progress = document.createElement('span');
+      progress.className = 'from-progress';
+      progress.part.add('from-progress');
+      progress.style.width = `${(this._from.progress * 100).toFixed(1)}%`;
+      const label = document.createElement('span');
+      label.className = 'from-label';
+      label.part.add('from-label');
+      label.textContent = 'timeline ▶';
+      const name = document.createElement('span');
+      name.className = 'from-name';
+      name.part.add('from-name');
+      name.textContent = this._from.name;
+      from.append(progress, label, name);
+      this._fromProgress = progress;
+      this._fromLabel = label;
+      this._fromName = name;
+    } else {
+      const label = document.createElement('span');
+      label.className = 'from-label';
+      label.part.add('from-label');
+      label.textContent = 'timeline ◂';
+      const name = document.createElement('span');
+      name.className = 'from-name';
+      name.part.add('from-name');
+      name.textContent = 'overridden';
+      from.append(label, name);
+      this._fromProgress = null;
+      this._fromLabel = label;
+      this._fromName = name;
+    }
+  }
+
+  paintFromProgress() {
+    if (this._from?.kind !== 'timeline') return;
+    if (!(this._fromProgress instanceof HTMLElement)) {
+      this.paintFrom();
+      return;
+    }
+    this._fromProgress.style.width = `${(this._from.progress * 100).toFixed(1)}%`;
   }
 
   /** The preview mark is decoration; the clip's name is not. Give the mark up on

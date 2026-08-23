@@ -18,6 +18,7 @@ level that meets the wash edge means signal at unity. Whatever the column holds
 ```js
 const strip = document.querySelector('compost-channel-strip');
 strip.setLevels([-12.4, -13.1]);   // peak per channel, dBFS
+strip.setGainReduction(-12);       // displayed GR, dB; 0 is empty, -24 is full
 strip.addEventListener('parameter-edit', ({ detail }) => {
   if (detail.parameterID === 'track-1-gain') engine.setGain(detail.value);
   if (detail.parameterID === 'track-1-pan') engine.setPan(detail.value);
@@ -51,6 +52,11 @@ with `parameter-id`; pan reports through the same events with
 `pan-parameter-id`. `setValue(value, false, source)` and
 `setPan(value, false, source)` update silently, the same signature the parameter
 controller uses.
+
+`setGainReduction(db)` is another host-owned, silent display update. The value
+is finite-clamped to −24..0 dB and paints a dedicated 2px orange bar from the
+top of the meter rail; 0 dB draws nothing. The bar sits beside the centred or
+right-positioned meter and preserves the meter's normal over-threshold bars.
 
 | Attribute | Default | Meaning |
 | --- | --- | --- |
@@ -88,10 +94,11 @@ gain and the pan. Keyboard covers both.
 ## Styling
 
 `--compost-channel-strip-*` custom properties cover the signal colour, the wash
-and meter opacities, the rail, the over colour, the notch, the scale text and
-the editor; sizes are in `em` against the host (`-meter-width`, `-meter-top`,
-`-meter-bottom`, `-meter-right`). Parts: `surface`, `wash`, `meter`, `bar`,
-`fill`, `over`, `zero`, `scale`, `content`.
+and meter opacities, the rail, the over colour, the GR glow, the notch, the
+scale text and the editor; sizes are in `em` against the host (`-meter-width`,
+`-meter-top`, `-meter-bottom`, `-meter-right`). Parts: `surface`, `wash`,
+`meter`, `bar`, `fill`, `over`, `gain-reduction`, `gain-reduction-fill`, `zero`,
+`scale`, `content`.
 
 ## UI only
 

@@ -74,6 +74,14 @@ export function washLevel(fraction, taper = DEFAULT_TAPER) {
   return bottom[0];
 }
 
+/** Gain-reduction fill, falling from the top at -24 dB and empty at 0 dB. */
+/** @param {unknown} db @returns {number} */
+export function gainReductionFraction(db) {
+  const value = Number(db);
+  if (!Number.isFinite(value)) return 0;
+  return value >= 0 ? 0 : -clamp(value, -24, 0) / 24;
+}
+
 /** Chooses the drag axis from the first movement: sideways means pan. */
 /** @param {number} dx @param {number} dy */
 export function dragAxis(dx, dy) {
@@ -125,6 +133,7 @@ export class CompostChannelStrip extends HTMLElement {
     this.taper = DEFAULT_TAPER;
     this.scaleMarks = [0, -12, -24, -48];
     /** @type {number[]} */ this._levels = [];
+    this._gainReduction = 0;
     this.inputID = `compost-channel-strip-${nextStripID++}`;
     this.lastUpdateSource = 'control';
     this.lastPressTime = 0;
@@ -147,6 +156,7 @@ export class CompostChannelStrip extends HTMLElement {
           --compost-channel-strip-wash-opacity: 0.15;
           --compost-channel-strip-meter-opacity: 0.72;
           --compost-channel-strip-over: #d98a4a;
+          --compost-channel-strip-gain-reduction-glow: rgba(217, 138, 74, 0.58);
           --compost-channel-strip-rail: rgba(17, 17, 17, 0.12);
           --compost-channel-strip-zero: rgba(17, 17, 17, 0.42);
           --compost-channel-strip-scale-text: #6a6a6a;
@@ -214,6 +224,27 @@ export class CompostChannelStrip extends HTMLElement {
           left: auto;
           right: var(--compost-channel-strip-meter-right);
           transform: none;
+        }
+        /* Gain reduction sits immediately beside the meter and fills down from
+           the top of the same visible rail. */
+        .gain-reduction {
+          position: absolute;
+          top: var(--compost-channel-strip-meter-top);
+          bottom: var(--compost-channel-strip-meter-bottom);
+          left: calc(50% - (var(--compost-channel-strip-meter-width) / 2) - 6px);
+          width: 2px;
+          pointer-events: none;
+        }
+        :host([meter-position="right"]) .gain-reduction {
+          left: auto;
+          right: calc(var(--compost-channel-strip-meter-right) + var(--compost-channel-strip-meter-width) + 2px);
+        }
+        .gain-reduction-fill {
+          position: absolute;
+          inset: 0 0 auto;
+          height: 0;
+          background: var(--compost-channel-strip-over);
+          box-shadow: 0 0 4.2px var(--compost-channel-strip-gain-reduction-glow);
         }
         .bar { position: relative; flex: 1 1 0; min-width: 1px; }
         .bar .rail {
@@ -304,6 +335,7 @@ export class CompostChannelStrip extends HTMLElement {
       <div class="surface" part="surface" aria-hidden="true">
         <div class="wash" part="wash"></div>
         <div class="meter" part="meter"></div>
+        <div class="gain-reduction" part="gain-reduction"><div class="gain-reduction-fill" part="gain-reduction-fill"></div></div>
         <div class="zero" part="zero"></div>
         <div class="scale" part="scale"></div>
       </div>
@@ -312,6 +344,8 @@ export class CompostChannelStrip extends HTMLElement {
     this.surface = /** @type {HTMLElement} */ (this.root.querySelector('.surface'));
     this.wash = /** @type {HTMLElement} */ (this.root.querySelector('.wash'));
     this.meter = /** @type {HTMLElement} */ (this.root.querySelector('.meter'));
+    this.gainReduction = /** @type {HTMLElement} */ (this.root.querySelector('.gain-reduction'));
+    this.gainReductionFill = /** @type {HTMLElement} */ (this.root.querySelector('.gain-reduction-fill'));
     this.zero = /** @type {HTMLElement} */ (this.root.querySelector('.zero'));
     this.scale = /** @type {HTMLElement} */ (this.root.querySelector('.scale'));
     this.content = /** @type {HTMLElement} */ (this.root.querySelector('.content'));
@@ -392,6 +426,10 @@ export class CompostChannelStrip extends HTMLElement {
     return this._levels.slice();
   }
 
+  get gainReductionDb() {
+    return this._gainReduction;
+  }
+
   /** @param {unknown} value @param {boolean} [shouldEmit] @param {string} [source] */
   setValue(value, shouldEmit = true, source = 'control') {
     const number = Number(value);
@@ -432,6 +470,14 @@ export class CompostChannelStrip extends HTMLElement {
     }
     this._levels = next;
     this.renderMeter();
+  }
+
+  /** The host hands over displayed gain reduction in dB; nothing is emitted. */
+  /** @param {unknown} db */
+  setGainReduction(db) {
+    const value = Number(db);
+    this._gainReduction = Number.isFinite(value) && value < 0 ? clamp(value, -24, 0) : 0;
+    this.renderGainReduction();
   }
 
   getParameterValue() {
@@ -665,6 +711,11 @@ export class CompostChannelStrip extends HTMLElement {
     }
   }
 
+  renderGainReduction() {
+    if (!(this.gainReductionFill instanceof HTMLElement)) return;
+    this.gainReductionFill.style.height = `${(gainReductionFraction(this._gainReduction) * 100).toFixed(2)}%`;
+  }
+
   renderScale() {
     this.scale.innerHTML = this.scaleMarks
       .filter((db) => db <= this.max && db >= this.min)
@@ -685,6 +736,7 @@ export class CompostChannelStrip extends HTMLElement {
     this.zero.style.top = `${((1 - this.position(0)) * 100).toFixed(2)}%`;
     this.renderScale();
     this.renderMeter();
+    this.renderGainReduction();
     this.tabIndex = this.disabled ? -1 : 0;
     this.setAttribute('role', 'slider');
     this.setAttribute('aria-label', this.label);

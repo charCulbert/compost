@@ -555,6 +555,137 @@ test('clip grid reports launches, stops and drops between grids', async ({ page 
   await expect(log).toContainText('clip-open break.a');
 });
 
+test('clip grid paints a noninteractive timeline provenance row below stop', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-clip-grid/');
+  const timelineGrid = page.locator('compost-clip-grid[data-grid="0"]');
+  const overriddenGrid = page.locator('compost-clip-grid[data-grid="1"]');
+  const metrics = await timelineGrid.evaluate((element) => {
+    const root = element.shadowRoot;
+    const rows = root.querySelectorAll('.row:not(.stop)');
+    const stop = root.querySelector('.row.stop').getBoundingClientRect();
+    const from = root.querySelector('.from').getBoundingClientRect();
+    const style = getComputedStyle(root.querySelector('.from'));
+    return {
+      rows: rows.length,
+      stopBottom: stop.bottom,
+      fromTop: from.top,
+      fromHeight: from.height,
+      expectedHeight: parseFloat(style.fontSize) * 2.2,
+    };
+  });
+  expect(metrics.rows).toBe(5);
+  expect(Math.abs(metrics.fromTop - metrics.stopBottom)).toBeLessThan(1);
+  expect(Math.abs(metrics.fromHeight - metrics.expectedHeight)).toBeLessThan(1);
+
+  const from = timelineGrid.locator('.from');
+  await expect(from).toContainText('timeline ▶');
+  await expect(from).toContainText('verse');
+  await expect(from).toHaveAttribute('role', 'status');
+  await expect(from).not.toHaveAttribute('aria-hidden');
+  await expect(timelineGrid.getByRole('status')).toContainText('timeline ▶');
+  const nodeIdentity = await timelineGrid.evaluate((element) => {
+    const root = element.shadowRoot;
+    const before = {
+      progress: root.querySelector('.from-progress'),
+      label: root.querySelector('.from-label'),
+      name: root.querySelector('.from-name'),
+    };
+    element.setFrom({ kind: 'timeline', name: 'verse', progress: 0.2 });
+    const after = {
+      progress: root.querySelector('.from-progress'),
+      label: root.querySelector('.from-label'),
+      name: root.querySelector('.from-name'),
+    };
+    return {
+      sameProgress: before.progress === after.progress,
+      sameLabel: before.label === after.label,
+      sameName: before.name === after.name,
+      width: after.progress.style.width,
+      pointerEvents: getComputedStyle(root.querySelector('.from')).pointerEvents,
+    };
+  });
+  expect(nodeIdentity).toEqual({
+    sameProgress: true, sameLabel: true, sameName: true, width: '20%', pointerEvents: 'none',
+  });
+  await timelineGrid.evaluate((element) => {
+    element.setFrom({ kind: 'timeline', name: 'verse', progress: 0.62 });
+  });
+  const progress = await from.locator('.from-progress').evaluate((element) => ({
+    width: element.getBoundingClientRect().width,
+    parent: element.parentElement.getBoundingClientRect().width,
+  }));
+  expect(progress.width / progress.parent).toBeCloseTo(0.62, 2);
+  const defaultWash = await from.locator('.from-progress')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  await timelineGrid.evaluate((element) => {
+    element.style.setProperty('--compost-clip-grid-signal', 'rgb(20, 120, 240)');
+  });
+  const customWash = await from.locator('.from-progress')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  expect(customWash).not.toBe(defaultWash);
+  expect(customWash).toContain('0.15');
+
+  await timelineGrid.evaluate((element) => {
+    element.testEvents = [];
+    for (const type of ['clip-launch', 'clip-stop', 'clip-select', 'clip-drop']) {
+      element.addEventListener(type, () => element.testEvents.push(type));
+    }
+    element.shadowRoot.querySelector('.from').dispatchEvent(new MouseEvent('click', {
+      bubbles: true, composed: true,
+    }));
+  });
+  expect(await timelineGrid.evaluate((element) => element.testEvents)).toEqual([]);
+
+  await expect(overriddenGrid.locator('.from .from-label')).toHaveText('timeline ◂');
+  await expect(overriddenGrid.locator('.from .from-name')).toHaveText('overridden');
+  const overriddenColours = await overriddenGrid.locator('.from').evaluate((element) => ({
+    label: getComputedStyle(element.querySelector('.from-label')).color,
+    name: getComputedStyle(element.querySelector('.from-name')).color,
+  }));
+  expect(overriddenColours.label).toBe(overriddenColours.name);
+  await overriddenGrid.evaluate((element) => element.setFrom(null));
+  await expect(overriddenGrid.locator('.from')).toHaveAttribute('hidden', '');
+  expect(await overriddenGrid.locator('.row:not(.stop)').count()).toBe(5);
+});
+
+test('channel strip paints bounded gain reduction beside both meter geometries', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-channel-strip/');
+  await page.locator('[data-option="strip-running"]').uncheck();
+  const centre = page.locator('compost-channel-strip[data-strip-meter]').nth(0);
+  const right = page.locator('compost-channel-strip[data-strip-meter]').nth(2);
+  const measure = async (strip, db) => strip.evaluate((element, value) => {
+    element.setLevels([3, 3]);
+    element.setGainReduction(value);
+    const root = element.shadowRoot;
+    const rect = (selector) => {
+      const box = root.querySelector(selector).getBoundingClientRect();
+      return { width: box.width, height: box.height, left: box.left, right: box.right };
+    };
+    const gainReduction = rect('.gain-reduction');
+    const fill = rect('.gain-reduction-fill');
+    const meter = rect('.meter');
+    const over = rect('.over');
+    return {
+      gainReduction, fill, meter, over,
+      fillStyle: getComputedStyle(root.querySelector('.gain-reduction-fill')).height,
+    };
+  }, db);
+  const centreHalf = await measure(centre, -12);
+  expect(centreHalf.gainReduction.width).toBe(2);
+  expect(centreHalf.gainReduction.right).toBeLessThanOrEqual(centreHalf.meter.left);
+  expect(Math.abs(centreHalf.fill.height / centreHalf.gainReduction.height - 0.5)).toBeLessThan(0.02);
+  expect(centreHalf.over.height).toBeGreaterThan(0);
+  const rightFull = await measure(right, -24);
+  expect(rightFull.gainReduction.width).toBe(2);
+  expect(rightFull.gainReduction.right).toBeLessThanOrEqual(rightFull.meter.left + 0.1);
+  expect(Math.abs(rightFull.fill.height / rightFull.gainReduction.height - 1)).toBeLessThan(0.02);
+
+  await centre.evaluate((element) => element.setGainReduction(0));
+  expect(await centre.locator('.gain-reduction-fill').evaluate((element) => element.getBoundingClientRect().height)).toBe(0);
+  await centre.evaluate((element) => element.setGainReduction(Number.POSITIVE_INFINITY));
+  expect(await centre.locator('.gain-reduction-fill').evaluate((element) => element.getBoundingClientRect().height)).toBe(0);
+});
+
 test('timeline reports move, trim, delete and ruler seek intents', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');

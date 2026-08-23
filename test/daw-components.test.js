@@ -8,9 +8,11 @@ globalThis.customElements ??= {
   define(name, constructor) { this.elements.set(name, constructor); },
 };
 
-const { DEFAULT_TAPER, dragAxis, parseTaper, washLevel, washPosition } = await import('../src/components/compost-channel-strip.js');
+const {
+  DEFAULT_TAPER, dragAxis, gainReductionFraction, parseTaper, washLevel, washPosition,
+} = await import('../src/components/compost-channel-strip.js');
 const { panBar, panText } = await import('../src/components/compost-channel-card.js');
-const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
+const { normalizeFrom, slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
 const {
   snapBeat, sortLocators, normalizeTimeSelection, clipBox, loopPassLines, clipNoteOpacity, previewTrimmedClip, rulerStep,
@@ -50,6 +52,23 @@ test('the drag axis waits for a movement and favours vertical', () => {
   assert.equal(dragAxis(0, 10), 'gain');
   assert.equal(dragAxis(10, 8), 'gain');
   assert.equal(dragAxis(15, 10), 'pan');
+});
+
+test('cross-view provenance and gain reduction stay host-owned and bounded', () => {
+  assert.deepEqual(normalizeFrom({ kind: 'timeline', name: 'verse', progress: 1.4 }), {
+    kind: 'timeline', name: 'verse', progress: 1,
+  });
+  assert.deepEqual(normalizeFrom({ kind: 'timeline', name: 'verse', progress: -0.2 }), {
+    kind: 'timeline', name: 'verse', progress: 0,
+  });
+  assert.deepEqual(normalizeFrom({ kind: 'overridden' }), { kind: 'overridden' });
+  assert.equal(normalizeFrom({ kind: 'other' }), null);
+  assert.equal(gainReductionFraction(0), 0);
+  assert.equal(gainReductionFraction(-12), 0.5);
+  assert.equal(gainReductionFraction(-24), 1);
+  assert.equal(gainReductionFraction(-30), 1);
+  assert.equal(gainReductionFraction(3), 0);
+  assert.equal(gainReductionFraction(Number.NaN), 0);
 });
 
 test('pan reads as C, L and R with the bar growing from the middle', () => {

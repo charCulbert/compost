@@ -579,6 +579,8 @@ function setupChannelStripDemo() {
   const channels = option('strip-channels');
   let animate = true;
   let phase = 0;
+  // Gain reduction is a host-owned display stream, separate from peak levels.
+  strips.forEach((strip, index) => strip.setGainReduction(index === 0 ? -12 : index === 1 ? -6 : -18));
   // a host would hand over real peak levels; here they wander near the gain
   const tick = () => {
     phase += 1 / 40;
@@ -690,6 +692,9 @@ function setupClipGridDemo() {
       state: live.index === index ? 'playing' : live.queued === index ? 'queued' : 'stopped',
       progress: live.index === index ? (((beat - live.start) / (clip.bars * 4)) % 1 + 1) % 1 : 0,
     }));
+    grid.setFrom(track === 0
+      ? { kind: 'timeline', name: 'verse', progress: 0.62 }
+      : { kind: 'overridden' });
     grid.setAttribute('stop', live.stopQueued ? 'queued' : live.index >= 0 || live.queued >= 0 ? 'active' : '');
   };
   const renderAll = () => {
