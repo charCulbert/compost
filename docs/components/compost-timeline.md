@@ -35,6 +35,9 @@ timeline.setLanes([
       state: 'playing', progress: 0.3 },
   ] },
 ]);
+const header = document.createElement('div');
+header.textContent = 'Drums';
+timeline.setLaneHeader('drums', header);
 timeline.setLoop(0, 8, false, false, { punchIn: false, punchOut: false });
 timeline.setPlayhead(2.5);
 timeline.setLocators([
@@ -144,7 +147,7 @@ Space is left to the host's transport shortcut.
 
 ## API and variables
 
-`setLanes(lanes)`, `setLaneClips(laneId, clips)`, `setLaneControls(laneId, controls)`, `setLaneMeters(updates)`, `setLaneFigures(laneId, figures, wash)`, `setLaneSession(laneId, session)`, `setLaneDevices(laneId, devices)`, `setLaneAutomation(laneId, automation)`, `setAutomationChooserOpen(laneId, automationId, open)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
+`setLanes(lanes)`, `setLaneHeaders(headers)`, `setLaneHeader(laneId, element)`, `setLaneClips(laneId, clips)`, `setLaneControls(laneId, controls)`, `setLaneMeters(updates)`, `setLaneFigures(laneId, figures, wash)`, `setLaneSession(laneId, session)`, `setLaneDevices(laneId, devices)`, `setLaneAutomation(laneId, automation)`, `setAutomationChooserOpen(laneId, automationId, open)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
 `setLoop(start, end, enabled, emit, {punchIn, punchOut})`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
 `beginRename(clipId)`, `focusClip(clipId)`, `revealAutomation(laneId, automationId)`, `beatAtPoint(clientX)` and
 `laneAtPoint(clientY)` are the host-facing methods. `locators` and
@@ -156,6 +159,13 @@ readable; `pxPerBeat`, `scrollBeat` and `selected` are writable.
 scrolls the actual vertical lane viewport until that row is visible; it returns
 `false` when the lane or automation entry is not present. Header scrolling stays
 in sync through the timeline's normal lane-scroll handling.
+
+`setLaneHeaders` accepts a `Map` or plain object of lane IDs to caller-owned
+elements. Those elements stay in the timeline's light DOM, so the caller styles
+and wires them with ordinary CSS and event listeners. Compost only slots each
+element into its aligned lane wrapper and keeps generic lane selection, moving,
+context, and automation-row geometry around it. Missing entries use the
+built-in header.
 
 | Variable | Purpose |
 | --- | --- |

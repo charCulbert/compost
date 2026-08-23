@@ -1243,6 +1243,25 @@ test('timeline lane headers expose arm, mute and solo controls', async ({ page }
   expect(await timeline.evaluate((element) => getComputedStyle(element.shadowRoot.querySelector('.clip')).opacity)).toBe('0.4');
 });
 
+test('timeline slots caller-owned lane headers without taking over their controls', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'caller', name: 'Fallback', clips: [] }]);
+    const header = document.createElement('div');
+    header.className = 'caller-header';
+    header.innerHTML = '<span>Caller header</span><button type="button">route</button>';
+    header.querySelector('button').addEventListener('click', () => { header.dataset.clicked = ''; });
+    element.setLaneHeader('caller', header);
+  });
+  const header = timeline.locator(':scope > .caller-header');
+  await expect(header).toHaveAttribute('slot', 'lane-header-caller');
+  await expect(header).toBeVisible();
+  await expect(header).toContainText('Caller header');
+  await header.locator('button').click();
+  await expect(header).toHaveAttribute('data-clicked', '');
+});
+
 test('timeline dims overridden headers without a brightness filter', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');

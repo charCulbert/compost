@@ -548,6 +548,7 @@ export class CompostTimeline extends HTMLElement {
     this._punchIn = false;
     this._punchOut = false;
     /** @type {TimelineLane[]} */ this._lanes = [];
+    /** @type {Map<string, HTMLElement>} */ this._laneHeaders = new Map();
     /** @type {string[]} */ this._selected = [];
     /** @type {string|null} */ this.focusedClip = null;
     /** @type {string|null} */ this.focusedLane = null;
@@ -643,6 +644,7 @@ export class CompostTimeline extends HTMLElement {
         .header-wrap { overflow: hidden; }
         .headers { position: relative; width: 100%; }
         .lane-header { position: relative; box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, var(--compost-timeline-text)); font-size: var(--compost-timeline-lane-font-size); }
+        .lane-header-content { display: block; width: 100%; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .lane-header-main, .lane-header-devices { position: relative; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: .45em; padding: 0 .9em 0 1em; }
         .lane-header-main { height: var(--lane-main-row-height, var(--compost-timeline-row-height)); }
         .lane-header-devices { height: var(--lane-devices-row-height, var(--compost-timeline-row-height)); gap: .3em; }
@@ -939,6 +941,41 @@ export class CompostTimeline extends HTMLElement {
     }
     if (this.focusedClip && !ids.has(this.focusedClip)) this.focusedClip = null;
     this.render();
+  }
+
+  /** Attach caller-owned lane headers through native slots. Compost owns the
+   * aligned wrapper; the caller owns every control and policy inside it.
+   * @param {Map<string, HTMLElement>|Record<string, HTMLElement>} headers */
+  setLaneHeaders(headers) {
+    const entries = headers instanceof Map ? [...headers.entries()] : Object.entries(headers || {});
+    const next = new Map(entries.filter(([laneId, element]) => String(laneId) && element instanceof HTMLElement)
+      .map(([laneId, element]) => [String(laneId), element]));
+    for (const [laneId, element] of this._laneHeaders) {
+      if (next.get(laneId) !== element && element.parentElement === this) element.remove();
+    }
+    this._laneHeaders = next;
+    for (const [laneId, element] of next) this.attachLaneHeader(laneId, element);
+    this.render();
+  }
+
+  /** Replace one caller-owned lane header. Passing null restores the generic fallback.
+   * @param {string} laneId @param {HTMLElement|null} element */
+  setLaneHeader(laneId, element) {
+    const id = String(laneId);
+    const previous = this._laneHeaders.get(id);
+    if (previous?.parentElement === this) previous.remove();
+    if (element instanceof HTMLElement) {
+      this._laneHeaders.set(id, element);
+      this.attachLaneHeader(id, element);
+    } else this._laneHeaders.delete(id);
+    this.render();
+  }
+
+  /** @param {string} laneId @param {HTMLElement} element */
+  attachLaneHeader(laneId, element) {
+    element.slot = `lane-header-${encodeURIComponent(laneId)}`;
+    element.dataset.timelineLaneId = laneId;
+    if (element.parentElement !== this) this.append(element);
   }
 
   get locators() {
@@ -1923,6 +1960,15 @@ export class CompostTimeline extends HTMLElement {
     header.toggleAttribute('data-session', Boolean(lane.session));
     header.toggleAttribute('data-overridden', Boolean(lane.overridden));
 
+    if (this._laneHeaders.has(lane.id)) {
+      const slot = document.createElement('slot');
+      slot.className = 'lane-header-content';
+      slot.name = `lane-header-${encodeURIComponent(lane.id)}`;
+      header.append(slot);
+      for (const automation of this.automationFor(lane)) header.append(this.renderAutomationHeader(lane, automation));
+      return header;
+    }
+
     const wash = document.createElement('div');
     wash.className = 'lane-wash';
     const washEdge = document.createElement('div');
@@ -2620,6 +2666,8 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('lane-back', { laneId: pip.dataset.laneId }));
       return;
     }
+    if (event.composedPath().some((node) => node instanceof HTMLElement
+      && node.matches('button, input, select, textarea, [data-timeline-interactive]'))) return;
     if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('lane-control'))) return;
     if (event.composedPath().some((node) => node instanceof HTMLElement
       && (node.classList.contains('automation-header-button') || node.classList.contains('automation-chooser')))) return;
