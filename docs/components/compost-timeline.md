@@ -96,7 +96,7 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | `clip-rename` | `{id, name}` | F2 or `beginRename` commit |
 | `clip-delete` | `{ids}` | Delete or Backspace |
 | `clip-duplicate` | `{ids}` | Cmd/Ctrl-D |
-| `clip-split` | `{ids, beat}` or `{ids, beats: [start, end]}` | Cmd/Ctrl-E with or without a time selection |
+| `clip-split` | `{ids, beat}` or `{ids, beats: [start, end], laneIds}` | Cmd/Ctrl-E with or without a time selection; the time-selection form carries the selected lanes even when `ids` is empty |
 | `clip-nudge` | `{ids, deltaBeats}` | Alt-Left/Right |
 | `view-change` | `{pxPerBeat, scrollBeat}` | Settled zoom or scroll |
 

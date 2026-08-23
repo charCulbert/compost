@@ -762,7 +762,7 @@ test('timeline rulers expose locators, time selections and measured row geometry
     element.setLanes([
       { id: 'a', name: 'A', clips: [], automation: [{ id: 'volume', label: 'Volume', min: 0, max: 1, points: [] }] },
       { id: 'b', name: 'B', clips: [{ id: 'inside', name: 'inside', start: 5, length: 1, duration: 1, notes: [] }] },
-      { id: 'c', name: 'C', kind: 'return', clips: [] },
+      { id: 'c', name: 'C', kind: 'return', clips: [{ id: 'crossing', name: 'crossing', start: 3, length: 6, duration: 6, notes: [] }] },
     ]);
     element.setLocators([{ id: 'drop', beat: 8, name: 'drop' }, { id: 'intro', beat: 0, name: 'intro' }]);
     element.setTimeSelection(null, null);
@@ -867,7 +867,10 @@ test('timeline rulers expose locators, time selections and measured row geometry
   await page.keyboard.press('Shift+Delete');
   await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'time-delete'))).toEqual({ type: 'time-delete', detail: { start: 4, end: 8, laneIds: ['b', 'c'], removeTime: true } });
   await page.keyboard.press('Control+e');
-  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'clip-split'))).toEqual({ type: 'clip-split', detail: { ids: ['inside'], beats: [4, 8] } });
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'clip-split'))).toEqual({ type: 'clip-split', detail: { ids: ['inside'], beats: [4, 8], laneIds: ['b', 'c'] } });
+  await timeline.evaluate((element) => { element.testEvents = []; element.setTimeSelection(4, 8, ['c']); });
+  await page.keyboard.press('Control+e');
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'clip-split'))).toEqual({ type: 'clip-split', detail: { ids: [], beats: [4, 8], laneIds: ['c'] } });
 
   await timeline.evaluate((element) => { element.testEvents = []; element.setTimeSelection(2, 4, ['b']); element.scrollBeat = 0; element.pxPerBeat = 24; });
   const beforeScroll = await timeline.evaluate((element) => element.shadowRoot.querySelector('.ruler-time-selection').getBoundingClientRect().width);
@@ -1386,6 +1389,34 @@ test('timeline header commit one keeps measured lane geometry and reports header
   expect(measured.controls).toBe(4);
   expect(measured.pickedTicks).toContain('linear-gradient');
 
+  const figureValues = await timeline.evaluate((element) => {
+    const root = element.shadowRoot;
+    const read = (selector) => {
+      const box = root.querySelector(selector);
+      const spin = box.shadowRoot.querySelector('[role="spinbutton"]');
+      return {
+        value: box.value,
+        ariaValue: spin.getAttribute('aria-valuenow'),
+        text: box.shadowRoot.querySelector('.value').textContent,
+      };
+    };
+    const pan = root.querySelector('.lane-header[data-lane-id="track"] .lane-figure[data-kind="pan"]');
+    pan.setValue(-.25, false);
+    return {
+      fader: read('.lane-header[data-lane-id="track"] .lane-figure[data-kind="fader"]'),
+      send: read('.lane-header[data-lane-id="track"] .lane-figure[data-send-id="a"]'),
+      pan: { value: pan.value, ariaValue: pan.shadowRoot.querySelector('[role="spinbutton"]').getAttribute('aria-valuenow') },
+    };
+  });
+  expect(figureValues.fader.value).toBe(-3);
+  expect(figureValues.fader.ariaValue).toBe('-3');
+  expect(figureValues.fader.text).toBe('-3.0');
+  expect(figureValues.send.value).toBe(-12);
+  expect(figureValues.send.ariaValue).toBe('-12');
+  expect(figureValues.send.text).toBe('-12.0');
+  expect(figureValues.pan.value).toBe(-.25);
+  expect(figureValues.pan.ariaValue).toBe('-0.25');
+
   const gainReduction = await timeline.evaluate((element) => {
     const read = () => getComputedStyle(element.shadowRoot.querySelector('.lane-header[data-lane-id="track"] .lane-gain-reduction'), '::after').height;
     element.setLaneMeters(new Map([['track', { meter: [-90, -90], gainReduction: 0 }]]));
@@ -1464,6 +1495,23 @@ test('timeline header wash edges, sessions and empty-header intents stay local',
   expect(state.events.some((event) => event.type === 'lanes-context')).toBe(true);
   expect(state.events.some((event) => event.type === 'lanes-create')).toBe(true);
   expect(state.events.some((event) => event.type === 'lane-move')).toBe(true);
+});
+
+test('a real double-click on an empty MIDI lane emits one lane-create', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'midi', name: 'MIDI 1', kind: 'track', clips: [] }]);
+    element.testEvents = [];
+    element.addEventListener('lane-create', (event) => element.testEvents.push({ type: 'lane-create', detail: event.detail }));
+  });
+  const lane = timeline.locator('.lane[data-lane-id="midi"]');
+  const box = await lane.boundingBox();
+  await page.mouse.dblclick(box.x + 44, box.y + box.height / 2);
+  await expect.poll(() => timeline.evaluate((element) => element.testEvents)).toHaveLength(1);
+  expect(await timeline.evaluate((element) => element.testEvents[0])).toMatchObject({
+    type: 'lane-create', detail: { laneId: 'midi' },
+  });
 });
 
 test('timeline automation rows draw and commit sorted edits without clip selection', async ({ page }) => {

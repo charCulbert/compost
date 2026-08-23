@@ -1616,10 +1616,10 @@ export class CompostTimeline extends HTMLElement {
     const max = kind === 'pan' ? 1 : FIGURE_MAX_DB;
     const step = kind === 'pan' ? .01 : .1;
     const dragScale = kind === 'pan' ? .9 : (.1 * 180 / (FIGURE_MAX_DB - FIGURE_MIN_DB));
-    box.setAttribute('value', String(Number.isFinite(Number(value)) ? Number(value) : kind === 'pan' ? 0 : FIGURE_MIN_DB));
     box.setAttribute('min', String(min));
     box.setAttribute('max', String(max));
     box.setAttribute('step', String(step));
+    box.setAttribute('value', String(Number.isFinite(Number(value)) ? Number(value) : kind === 'pan' ? 0 : FIGURE_MIN_DB));
     box.setAttribute('reset-value', '0');
     box.setAttribute('fine-drag-scale', '.25');
     box.setAttribute('drag-step-middle', String(dragScale));
@@ -3509,6 +3509,7 @@ export class CompostTimeline extends HTMLElement {
         this.dispatchEvent(eventOf('clip-split', {
           ids: this.clipsInsideTimeSelection(selection),
           beats: [selection.start, selection.end],
+          laneIds: [...selection.laneIds],
         }));
         return;
       }
