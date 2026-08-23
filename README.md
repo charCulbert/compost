@@ -3,6 +3,12 @@
 Compost is a collection of Web Components and utilities I find useful for making
 UIs for audio apps, either ones that run in the browser or in a WebView.
 
+Its elements render caller-supplied state and emit semantic intent. They may
+own transient interaction and local view state, but application models,
+persistence, routing, undo, and product policy stay with the caller. Compost
+is a generic audio-interface toolkit with first-class CLAP-shaped parameter
+gestures; it is not a DAW model or audio runtime.
+
 [Examples and documentation](https://charculbert.github.io/compost/)
 
 ## Use from source
