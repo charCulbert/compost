@@ -624,7 +624,6 @@ test('timeline rulers expose locators, time selections and measured row geometry
     element.style.removeProperty('--compost-timeline-automation-row-height');
     element.style.removeProperty('--compost-timeline-row-height');
     element.setAttribute('snap', 'grid');
-    element.syncAttributes();
     element.testEvents = [];
     for (const type of ['locator-jump', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'locator-prev', 'locator-next', 'time-select-input', 'time-select', 'time-delete', 'clip-select', 'clip-split', 'seek', 'fit-request', 'loop-change']) {
       element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
@@ -1402,7 +1401,7 @@ test('timeline automation rows draw and commit sorted edits without clip selecti
   events = await timeline.evaluate((element) => element.testEvents);
   const fineNudge = events.filter((event) => event.type === 'automation-change');
   expect(fineNudge).toHaveLength(3);
-  expect(fineNudge[2].detail.points[1].beat).toBe(3.1);
+  expect(fineNudge[2].detail.points[1].beat).toBe(3.25);
   expect(events.filter((event) => event.type === 'clip-select')).toHaveLength(0);
 
   await row.click({ button: 'right' });
@@ -1432,6 +1431,488 @@ test('timeline automation headers and empty rows open context from the keyboard'
     { laneId: 'lane', automationId: 'empty', clientX: expect.any(Number), clientY: expect.any(Number) },
     { laneId: 'lane', automationId: 'empty', clientX: expect.any(Number), clientY: expect.any(Number) },
   ]);
+});
+
+test('timeline automation chooser and draw gestures stay host-owned', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    document.documentElement.style.fontSize = '11px';
+    element.style.fontSize = '11px';
+    element.style.removeProperty('--compost-timeline-automation-row-height');
+    element.style.removeProperty('--compost-timeline-row-height');
+    element.setAttribute('automation', '');
+    element.setAttribute('snap', 'grid');
+    element.syncAttributes();
+    element.testEvents = [];
+    for (const type of ['automation-choose', 'automation-add', 'automation-remove', 'automation-change', 'draw-toggle', 'seek', 'time-select']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.setLanes([{ id: 'lane', name: 'Synth', clips: [], automation: [{
+      id: 'cutoff', label: 'Cutoff', min: 0, max: 1, stepped: false, step: .1,
+      points: [{ beat: 0, value: .1 }, { beat: 4, value: .9 }],
+    }] }]);
+  });
+  const geometry = await timeline.evaluate((element) => {
+    const header = element.shadowRoot.querySelector('.automation-header').getBoundingClientRect();
+    const row = element.shadowRoot.querySelector('.automation-row').getBoundingClientRect();
+    const lane = element.shadowRoot.querySelector('.lane').getBoundingClientRect();
+    return { header: header.height, row: row.height, lane: lane.height, root: getComputedStyle(document.documentElement).fontSize };
+  });
+  expect(Math.abs(geometry.header - 26)).toBeLessThan(1);
+  expect(Math.abs(geometry.row - 26)).toBeLessThan(1);
+  expect(Math.abs(geometry.lane - 90)).toBeLessThan(1);
+  expect(geometry.root).toBe('11px');
+
+  const chooser = timeline.locator('.automation-chooser');
+  await expect(chooser).toHaveAttribute('aria-haspopup', 'menu');
+  await expect(chooser).toHaveAttribute('aria-expanded', 'false');
+  await chooser.click();
+  let events = await timeline.evaluate((element) => element.testEvents);
+  expect(events).toHaveLength(1);
+  expect(events[0].type).toBe('automation-choose');
+  expect(events[0].detail.automationId).toBe('cutoff');
+  await timeline.evaluate((element) => element.setAutomationChooserOpen('lane', 'cutoff', true));
+  await expect(chooser).toHaveAttribute('aria-expanded', 'true');
+  await timeline.locator('.automation-add').click();
+  await timeline.locator('.automation-remove').click();
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.filter((event) => event.type === 'automation-add')).toHaveLength(1);
+  expect(events.filter((event) => event.type === 'automation-remove')).toHaveLength(1);
+  expect(events.some((event) => event.type === 'seek' || event.type === 'time-select')).toBe(false);
+
+  const row = timeline.locator('.automation-row');
+  await timeline.locator('.automation-line').hover();
+  await expect(row.locator('.automation-readout[data-hover]')).toContainText('·');
+  await timeline.evaluate((element) => {
+    const line = element.shadowRoot.querySelector('.automation-line');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    line.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, clientX: ruler.left + 2 * element._pxPerBeat, clientY: line.getBoundingClientRect().top }));
+  });
+  events = await timeline.evaluate((element) => element.testEvents);
+  let changes = events.filter((event) => event.type === 'automation-change');
+  expect(changes).toHaveLength(1);
+  expect(changes[0].detail.points).toHaveLength(3);
+  expect(changes[0].detail.points[1].beat).toBe(2);
+  const point = timeline.locator('.automation-point').nth(1);
+  await point.evaluate((node) => node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, clientX: node.getBoundingClientRect().left, clientY: node.getBoundingClientRect().top })));
+  events = await timeline.evaluate((element) => element.testEvents);
+  changes = events.filter((event) => event.type === 'automation-change');
+  expect(changes).toHaveLength(2);
+  expect(changes[1].detail.points).toHaveLength(2);
+
+  const segmentGesture = await timeline.evaluate((element) => {
+    const line = element.shadowRoot.querySelector('.automation-line');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const box = line.getBoundingClientRect();
+    const event = (type, y, extra = {}) => line.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 31, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + 2 * element._pxPerBeat, clientY: y, shiftKey: true, ...extra,
+    }));
+    event('pointerdown', box.top + box.height / 2);
+    const down = element.drag?.type || null;
+    event('pointermove', box.top + box.height / 2 + 8);
+    const moved = Boolean(element.drag?.moved);
+    event('pointerup', box.top + box.height / 2 + 8);
+    return { down, moved, ended: element.drag === null };
+  });
+  expect(segmentGesture).toEqual({ down: 'automation-segment', moved: true, ended: true });
+  events = await timeline.evaluate((element) => element.testEvents);
+  changes = events.filter((event) => event.type === 'automation-change');
+  expect(changes).toHaveLength(3);
+  expect(changes[2].detail.points).toHaveLength(2);
+  expect(changes[2].detail.points[0].value).not.toBe(.1);
+
+  const beforeCancel = changes[2].detail.points;
+  await timeline.evaluate((element) => {
+    const line = element.shadowRoot.querySelector('.automation-line');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const box = line.getBoundingClientRect();
+    const event = (type, y) => line.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 32, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + element._pxPerBeat, clientY: y,
+    }));
+    event('pointerdown', box.top + box.height / 2);
+    event('pointermove', box.top + box.height / 2 - 12);
+    event('pointercancel', box.top + box.height / 2 - 12);
+  });
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.filter((event) => event.type === 'automation-change')).toHaveLength(3);
+  expect(await timeline.evaluate((element) => element.lanes[0].automation[0].points)).toEqual(beforeCancel);
+
+  await timeline.evaluate((element) => element.setAttribute('draw', ''));
+  await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const box = row.getBoundingClientRect();
+    const event = (type, beat, y) => row.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 33, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + beat * element._pxPerBeat, clientY: y,
+    }));
+    event('pointerdown', 1, box.top + 6);
+    event('pointermove', 3, box.top + box.height - 6);
+    event('pointerup', 3, box.top + box.height - 6);
+  });
+  events = await timeline.evaluate((element) => element.testEvents);
+  changes = events.filter((event) => event.type === 'automation-change');
+  expect(changes).toHaveLength(4);
+  const drawn = changes[3].detail.points;
+  expect(drawn.length).toBeGreaterThanOrEqual(4);
+  const drawnSpan = drawn.filter((point) => point.beat >= 1 && point.beat <= 4);
+  for (let index = 0; index + 1 < drawnSpan.length; index += 2) expect(drawnSpan[index + 1].beat - drawnSpan[index].beat).toBeCloseTo(1 - 1e-6, 6);
+  expect(drawnSpan.some((point, index) => index > 0
+    && point.beat > drawnSpan[index - 1].beat
+    && point.beat - drawnSpan[index - 1].beat < 1e-4)).toBe(true);
+
+  const drawBeforeCancel = drawn;
+  await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const box = row.getBoundingClientRect();
+    row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + element._pxPerBeat, clientY: box.top + 10 }));
+    row.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + 3 * element._pxPerBeat, clientY: box.top + 20 }));
+    row.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + 3 * element._pxPerBeat, clientY: box.top + 20 }));
+  });
+  expect(await timeline.evaluate((element) => element.lanes[0].automation[0].points)).toEqual(drawBeforeCancel);
+  expect(await timeline.locator('.automation-row[data-draw-preview]').count()).toBe(0);
+  const rowBeforeToggle = timeline.locator('.automation-row');
+  await rowBeforeToggle.focus();
+  await page.keyboard.press('b');
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.at(-1).type).toBe('draw-toggle');
+  expect(events.at(-1).detail.enabled).toBe(false);
+});
+
+test('timeline automation edits use display space, lane-scoped ranges and draw arbitration', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    document.documentElement.style.fontSize = '11px';
+    element.style.fontSize = '11px';
+    element.style.removeProperty('--compost-timeline-automation-row-height');
+    element.style.removeProperty('--compost-timeline-row-height');
+    element.setAttribute('automation', '');
+    element.setAttribute('snap', 'grid');
+    element.syncAttributes();
+    element.testEvents = [];
+    for (const type of ['automation-change', 'automation-context', 'clip-select', 'time-delete', 'time-select', 'time-select-input']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.setLanes([
+      { id: 'gain', name: 'Gain', clips: [], automation: [{ id: 'env', label: 'Gain', min: -90, max: 12, scale: 'gain', stepped: false,
+        points: [{ beat: 0, value: -12 }, { beat: 4, value: 0 }] }] },
+      { id: 'linear', name: 'Linear', clips: [], automation: [{ id: 'env', label: 'Linear', min: 0, max: 1, stepped: false,
+        points: [{ beat: 0, value: .1 }, { beat: 4, value: .9 }] }] },
+    ]);
+  });
+
+  const chooserStates = await timeline.evaluate((element) => {
+    const choosers = [...element.shadowRoot.querySelectorAll('.automation-chooser')];
+    element.setAutomationChooserOpen('gain', 'env', true);
+    const first = choosers.map((node) => node.getAttribute('aria-expanded'));
+    element.setAutomationChooserOpen('linear', 'env', true);
+    const second = choosers.map((node) => node.getAttribute('aria-expanded'));
+    element.setAutomationChooserOpen('linear', 'env', false);
+    const closed = choosers.map((node) => node.getAttribute('aria-expanded'));
+    return { first, second, closed };
+  });
+  expect(chooserStates).toEqual({ first: ['true', 'false'], second: ['false', 'true'], closed: ['false', 'false'] });
+
+  const gainMove = await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const point = row.querySelector('.automation-point');
+    const rowRect = row.getBoundingClientRect();
+    const pointRect = point.getBoundingClientRect();
+    const startY = pointRect.top + pointRect.height / 2;
+    const pointY = Number(point.getAttribute('y')) + Number(point.getAttribute('height')) / 2;
+    const expected = element.automationValueAtPointer(element.lanes[0].automation[0], row, { clientY: rowRect.top + pointY + 8 });
+    const event = (type, y) => point.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 71, pointerType: 'mouse', button: 0,
+      clientX: pointRect.left + pointRect.width / 2, clientY: y,
+    }));
+    event('pointerdown', startY);
+    event('pointermove', startY + 8);
+    const readout = row.querySelector('.automation-readout')?.textContent || '';
+    event('pointerup', startY + 8);
+    return { rowHeight: rowRect.height, expected, readout };
+  });
+  expect(Math.abs(gainMove.rowHeight - 26)).toBeLessThan(1);
+  expect(gainMove.readout).toContain('·');
+  const gainChange = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').at(-1));
+  expect(gainChange.detail.points[0].value).toBeCloseTo(gainMove.expected, 8);
+  expect(gainChange.detail.points[0].value).not.toBeCloseTo(-12 + 8 * (102 / 26), 2);
+
+  await timeline.evaluate((element) => element.setTimeSelection(1, 3, ['linear']));
+  const beforeIsolation = await timeline.evaluate((element) => element.lanes[0].automation[0].points);
+  await timeline.locator('.lane[data-lane-id="gain"] .automation-row').focus();
+  await page.keyboard.press('Delete');
+  const afterIsolation = await timeline.evaluate((element) => ({
+    points: element.lanes[0].automation[0].points,
+    changes: element.testEvents.filter((event) => event.type === 'automation-change').length,
+  }));
+  expect(afterIsolation.points).toEqual(beforeIsolation);
+  expect(afterIsolation.changes).toBe(1);
+
+  await timeline.evaluate((element) => element.setTimeSelection(1, 3, ['gain']));
+  await timeline.locator('.lane[data-lane-id="gain"] .automation-row').focus();
+  await page.keyboard.press('Delete');
+  const cleared = await timeline.evaluate((element) => ({
+    points: element.lanes[0].automation[0].points,
+    changes: element.testEvents.filter((event) => event.type === 'automation-change').length,
+  }));
+  expect(cleared.changes).toBe(2);
+  const left = cleared.points.find((point) => point.beat === 1);
+  const right = cleared.points.find((point) => point.beat === 3);
+  expect(left).toBeTruthy();
+  expect(right).toBeTruthy();
+  expect(left.value).not.toBe(right.value);
+
+  await timeline.evaluate((element) => {
+    element.setTimeSelection(1, 3, ['gain']);
+    element.setAttribute('draw', '');
+    element.setLaneClips('gain', [{ id: 'clip', name: 'clip', start: 0, length: 1 }]);
+  });
+  const beforeDrawDeletes = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'time-delete').length);
+  const beforeDrawClipSelects = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'clip-select').length);
+  const beforeDrawKey = await timeline.evaluate((element) => element.lanes[0].automation[0].points);
+  await timeline.locator('.lane[data-lane-id="gain"] .automation-point').first().focus();
+  await page.keyboard.press('Delete');
+  await page.keyboard.press('ArrowUp');
+  await timeline.locator('.lane[data-lane-id="gain"] .automation-row').focus();
+  await page.keyboard.press('ArrowRight');
+  const afterDrawKey = await timeline.evaluate((element) => ({
+    points: element.lanes[0].automation[0].points,
+    changes: element.testEvents.filter((event) => event.type === 'automation-change').length,
+    deletes: element.testEvents.filter((event) => event.type === 'time-delete').length,
+    clipSelects: element.testEvents.filter((event) => event.type === 'clip-select').length,
+  }));
+  expect(afterDrawKey.points).toEqual(beforeDrawKey);
+  expect(afterDrawKey.changes).toBe(2);
+  expect(afterDrawKey.deletes).toBe(beforeDrawDeletes + 1);
+  expect(afterDrawKey.clipSelects).toBe(beforeDrawClipSelects);
+
+  const drawRow = timeline.locator('.lane[data-lane-id="gain"] .automation-row');
+  await drawRow.hover();
+  await expect(drawRow.locator('.automation-draw-hint')).toHaveCSS('display', 'block');
+  const hintGeometry = await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const hint = row.querySelector('.automation-draw-hint');
+    const rowRect = row.getBoundingClientRect();
+    const hintRect = hint.getBoundingClientRect();
+    const style = getComputedStyle(hint);
+    return {
+      rightGap: rowRect.right - hintRect.right,
+      right: Number.parseFloat(style.right),
+      centerOffset: Math.abs((hintRect.top + hintRect.height / 2) - (rowRect.top + rowRect.height / 2)),
+      pointerEvents: style.pointerEvents,
+    };
+  });
+  expect(Math.abs(hintGeometry.rightGap - hintGeometry.right)).toBeLessThan(1);
+  expect(hintGeometry.centerOffset).toBeLessThan(1);
+  expect(hintGeometry.pointerEvents).toBe('none');
+  await timeline.locator('.lane[data-lane-id="gain"] .lane-base').hover();
+  await expect(drawRow.locator('.automation-draw-hint')).toHaveCSS('display', 'none');
+
+  await timeline.evaluate((element) => element.removeAttribute('draw'));
+  const unsnappedRange = await timeline.evaluate((element) => {
+    element.setTimeSelection(1.1, 1.4, ['gain']);
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const line = row.querySelector('.automation-line');
+    const box = row.getBoundingClientRect();
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const event = (type) => line.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 79, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + 1.35 * element._pxPerBeat, clientY: box.top + box.height / 2,
+    }));
+    event('pointerdown');
+    const type = element.drag?.type;
+    event('pointercancel');
+    return type;
+  });
+  expect(unsnappedRange).toBe('automation-range');
+  const line = timeline.locator('.lane[data-lane-id="gain"] .automation-line');
+  await line.hover();
+  await expect(line).toHaveCSS('stroke-width', '1.5px');
+  await expect(timeline.locator('.lane[data-lane-id="gain"] .automation-row')).toHaveAttribute('data-line-hover', '');
+  await expect(timeline.locator('.lane[data-lane-id="gain"] .automation-readout[data-hover]')).toContainText('·');
+  await timeline.locator('.lane[data-lane-id="gain"] .lane-base').hover();
+  await expect(line).toHaveCSS('stroke-width', '1px');
+  await expect(timeline.locator('.lane[data-lane-id="gain"] .automation-row')).not.toHaveAttribute('data-line-hover', '');
+
+  await timeline.evaluate((element) => {
+    element.setAttribute('draw', '');
+    element.setLaneAutomation('gain', [{ id: 'env', label: 'Gain', min: 0, max: 1, stepped: false, points: [] }]);
+  });
+  const singleBefore = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').length);
+  await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const box = row.getBoundingClientRect();
+    const event = (type, extra = {}) => row.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 72, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + element._pxPerBeat, clientY: box.top + box.height / 2, ...extra,
+    }));
+    event('pointerdown');
+    event('pointerup');
+  });
+  const single = await timeline.evaluate((element) => ({
+    points: element.lanes[0].automation[0].points,
+    changes: element.testEvents.filter((event) => event.type === 'automation-change').length,
+  }));
+  expect(single.changes).toBe(singleBefore + 1);
+  expect(single.points).toHaveLength(2);
+  expect(single.points[1].beat - single.points[0].beat).toBeCloseTo(1 - 1e-6, 6);
+
+  await timeline.evaluate((element) => element.setLaneAutomation('gain', [{ id: 'env', label: 'Gain', min: 0, max: 1, stepped: false, points: [] }]));
+  const freehandBefore = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').length);
+  await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const box = row.getBoundingClientRect();
+    const event = (type, beat, y) => row.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 73, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + beat * element._pxPerBeat, clientY: box.top + y, altKey: true,
+    }));
+    event('pointerdown', 0, 4);
+    event('pointermove', .3, 9);
+    event('pointermove', .6, 16);
+    event('pointerup', .6, 16);
+  });
+  const freehand = await timeline.evaluate((element) => ({
+    points: element.lanes[0].automation[0].points,
+    changes: element.testEvents.filter((event) => event.type === 'automation-change').length,
+  }));
+  expect(freehand.changes).toBe(freehandBefore + 1);
+  expect(freehand.points.length).toBeGreaterThanOrEqual(2);
+  expect(freehand.points.length).toBeLessThanOrEqual(3);
+
+  await timeline.evaluate((element) => element.setLaneAutomation('gain', [{ id: 'env', label: 'Gain', min: 0, max: 1, stepped: false, points: [] }]));
+  const cancelBefore = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').length);
+  await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const box = row.getBoundingClientRect();
+    const event = (type, beat, y) => row.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 74, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + beat * element._pxPerBeat, clientY: box.top + y,
+    }));
+    event('pointerdown', 0, 4);
+    event('pointermove', 2, 20);
+    event('pointercancel', 2, 20);
+  });
+  expect(await timeline.evaluate((element) => ({
+    points: element.lanes[0].automation[0].points,
+    changes: element.testEvents.filter((event) => event.type === 'automation-change').length,
+  }))).toEqual({ points: [], changes: cancelBefore });
+
+  const beforeFallback = await timeline.evaluate((element) => ({
+    select: element.testEvents.filter((event) => event.type === 'time-select').length,
+    input: element.testEvents.filter((event) => event.type === 'time-select-input').length,
+  }));
+  await timeline.evaluate((element) => {
+    const base = element.shadowRoot.querySelector('.lane[data-lane-id="gain"] .lane-base');
+    const box = base.getBoundingClientRect();
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const event = (type, beat) => base.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 75, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + beat * element._pxPerBeat, clientY: box.top + box.height / 2,
+    }));
+    event('pointerdown', 0);
+    event('pointermove', 2);
+    event('pointerup', 2);
+  });
+  expect(await timeline.evaluate((element) => ({
+    select: element.testEvents.filter((event) => event.type === 'time-select').length,
+    input: element.testEvents.filter((event) => event.type === 'time-select-input').length,
+    drag: element.drag,
+  }))).toEqual({ ...beforeFallback, drag: null });
+
+  await timeline.evaluate((element) => element.setLaneAutomation('gain', [{ id: 'env', label: 'Gain', min: 0, max: 1, stepped: false, points: [] }]));
+  const beforeContext = await timeline.evaluate((element) => ({
+    contexts: element.testEvents.filter((event) => event.type === 'automation-context').length,
+    changes: element.testEvents.filter((event) => event.type === 'automation-change').length,
+  }));
+  await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const box = row.getBoundingClientRect();
+    row.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, composed: true, pointerId: 76, pointerType: 'mouse', button: 0,
+      clientX: ruler.left, clientY: box.top + box.height / 2,
+    }));
+  });
+  await page.waitForTimeout(650);
+  expect(await timeline.evaluate((element) => ({
+    points: element.lanes[0].automation[0].points,
+    contexts: element.testEvents.filter((event) => event.type === 'automation-context').length,
+    changes: element.testEvents.filter((event) => event.type === 'automation-change').length,
+    drag: element.drag,
+  }))).toEqual({ points: [], contexts: beforeContext.contexts + 1, changes: beforeContext.changes, drag: null });
+
+  await timeline.evaluate((element) => {
+    element.setTimeSelection(null, null);
+    element.removeAttribute('draw');
+    element.setLaneAutomation('gain', [{ id: 'env', label: 'Gain', min: 0, max: 1, stepped: false,
+      points: [{ beat: 0, value: .2 }, { beat: 4, value: .8 }] }]);
+  });
+  const firstEdge = await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const point = row.querySelector('.automation-point');
+    const pointRect = point.getBoundingClientRect();
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const startY = pointRect.top + pointRect.height / 2;
+    const event = (type, x, y) => point.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 77, pointerType: 'mouse', button: 0,
+      clientX: x, clientY: y,
+    }));
+    event('pointerdown', pointRect.left + pointRect.width / 2, startY);
+    event('pointermove', ruler.left + 2 * element._pxPerBeat, startY);
+    const readout = row.querySelector('.automation-readout')?.textContent || '';
+    event('pointerup', ruler.left + 2 * element._pxPerBeat, startY);
+    return { readout, points: element.lanes[0].automation[0].points };
+  });
+  expect(firstEdge.readout).toMatch(/^2\.00 · /u);
+  expect(firstEdge.points.map((point) => point.beat)).toEqual([0, 2, 4]);
+  expect(firstEdge.points.find((point) => point.beat === 0).value).toBeCloseTo(.2, 8);
+
+  const lastEdge = await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const point = row.querySelectorAll('.automation-point')[2];
+    const pointRect = point.getBoundingClientRect();
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const startY = pointRect.top + pointRect.height / 2;
+    const event = (type, x, y) => point.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 78, pointerType: 'mouse', button: 0,
+      clientX: x, clientY: y,
+    }));
+    event('pointerdown', pointRect.left + pointRect.width / 2, startY);
+    event('pointermove', ruler.left + 3 * element._pxPerBeat, startY);
+    event('pointerup', ruler.left + 3 * element._pxPerBeat, startY);
+    return element.lanes[0].automation[0].points;
+  });
+  expect(lastEdge.map((point) => point.beat)).toEqual([0, 2, 3, 4]);
+  expect(lastEdge.find((point) => point.beat === 4).value).toBeCloseTo(.8, 8);
+
+  await timeline.evaluate((element) => element.setLaneAutomation('gain', [{ id: 'env', label: 'Gain', min: 0, max: 1, stepped: false,
+    points: [{ beat: 0, value: .2 }, { beat: 2, value: .5 }, { beat: 4, value: .8 }] }]));
+  const clampedPoint = await timeline.evaluate((element) => {
+    const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const point = row.querySelectorAll('.automation-point')[1];
+    const pointRect = point.getBoundingClientRect();
+    const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const y = pointRect.top + pointRect.height / 2;
+    const event = (type, beat) => point.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 80, pointerType: 'mouse', button: 0,
+      clientX: ruler.left + beat * element._pxPerBeat, clientY: y,
+    }));
+    event('pointerdown', 2);
+    event('pointermove', 6);
+    const readout = row.querySelector('.automation-readout')?.textContent || '';
+    event('pointerup', 6);
+    return { readout, points: element.lanes[0].automation[0].points };
+  });
+  expect(clampedPoint.readout).toMatch(/^4\.00 · /u);
+  expect(clampedPoint.points[1].beat).toBe(4);
 });
 
 test('timeline loop punch caps survive omitted updates and handle drags', async ({ page }) => {

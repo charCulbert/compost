@@ -37,7 +37,7 @@ const FIGURE_MAX_DB = 12;
  * automation?: AutomationLaneView[],
  * clips: TimelineClip[]}} TimelineLane */
 /** @typedef {{id: string, label: string, color?: string, min: number, max: number,
- * stepped: boolean, scale?: 'linear'|'gain', points: {beat: number, value: number}[],
+ * stepped: boolean, step?: number, scale?: 'linear'|'gain', points: {beat: number, value: number}[],
  * state?: 'idle'|'recording'|'overridden'|'playing', value?: number}} AutomationLaneView */
 
 /** @param {number} value @param {number} min @param {number} max */
@@ -209,11 +209,245 @@ export function moveAutomationPoint(points, index, point, min = 0, max = 1) {
   return next;
 }
 
+/** Keep a synthetic original edge point when an endpoint moves inward. */
+/** @param {{beat:number,value:number}[]} originPoints @param {{beat:number,value:number}[]} movedPoints @param {number} index */
+export function preserveAutomationEdgePoints(originPoints, movedPoints, index) {
+  const source = Array.isArray(originPoints) ? originPoints : [];
+  const next = (Array.isArray(movedPoints) ? movedPoints : []).map((point) => ({ ...point }));
+  const pointIndex = Number(index);
+  const origin = source[pointIndex];
+  const moved = next[pointIndex];
+  if (!origin || !moved) return next;
+  if (pointIndex === 0 && Number(moved.beat) > Number(origin.beat) + MIN_CLIP_LENGTH) next.push({ ...origin });
+  if (pointIndex === source.length - 1 && Number(moved.beat) < Number(origin.beat) - MIN_CLIP_LENGTH) next.push({ ...origin });
+  return next.sort((a, b) => Number(a.beat) - Number(b.beat));
+}
+
 /** Delete one point and return a new array. */
 /** @param {{beat:number,value:number}[]} points @param {number} index */
 export function deleteAutomationPoint(points, index) {
   return (Array.isArray(points) ? points : []).filter((_, entryIndex) => entryIndex !== Number(index))
     .map((entry) => ({ ...entry }));
+}
+
+/** Snap an automation value when a lane supplies a discrete step. */
+/** @param {number} value @param {number|{min:number,max:number}} min @param {number} [max] @param {number} [step] */
+export function snapAutomationValue(value, min = 0, max = 1, step = 0) {
+  const range = automationRange(min, max);
+  const increment = Number(step);
+  const bounded = finiteClamp(Number(value), range.min, range.max);
+  if (!(increment > 0) || !Number.isFinite(increment)) return bounded;
+  return finiteClamp(Math.round((bounded - range.min) / increment) * increment + range.min, range.min, range.max);
+}
+
+/** Return the effective value step, including the integer default for stepped lanes. */
+/** @param {boolean} stepped @param {number|string|null|undefined} step */
+export function effectiveAutomationStep(stepped = false, step) {
+  if (step === undefined || step === null || step === '') return stepped ? 1 : 0;
+  const increment = Number(step);
+  return increment > 0 && Number.isFinite(increment) ? increment : 0;
+}
+
+/** Return the value on an envelope at a beat, including flat stepped segments. */
+/** @param {{beat:number,value:number}[]} points @param {number} beat @param {number|{min:number,max:number}} min @param {number} [max] @param {'linear'|'gain'} [scale] @param {boolean} [stepped] */
+export function automationValueAtBeat(points, beat, min = 0, max = 1, scale = 'linear', stepped = false) {
+  const range = automationRange(min, max);
+  const sorted = (Array.isArray(points) ? points : []).filter((point) => Number.isFinite(Number(point?.beat)) && Number.isFinite(Number(point?.value)))
+    .map((point) => ({ beat: Math.max(0, Number(point.beat)), value: finiteClamp(Number(point.value), range.min, range.max) }))
+    .sort((a, b) => a.beat - b.beat);
+  if (!sorted.length) return range.min;
+  const at = Math.max(0, Number(beat) || 0);
+  if (at <= sorted[0].beat) return sorted[0].value;
+  const last = sorted.at(-1);
+  if (at >= last.beat) return last.value;
+  for (let index = 1; index < sorted.length; index += 1) {
+    const next = sorted[index];
+    const previous = sorted[index - 1];
+    if (at > next.beat) continue;
+    if (stepped) return at === next.beat ? next.value : previous.value;
+    if (next.beat <= previous.beat) return previous.value;
+    const amount = (at - previous.beat) / (next.beat - previous.beat);
+    if (scale === 'gain') {
+      const previousY = automationValueToY(previous.value, range, 1, 'gain');
+      const nextY = automationValueToY(next.value, range, 1, 'gain');
+      return automationValueFromY(previousY + (nextY - previousY) * amount, range, 1, 'gain');
+    }
+    return finiteClamp(previous.value + (next.value - previous.value) * amount, range.min, range.max);
+  }
+  return last.value;
+}
+
+function automationEditOptions(options = {}) {
+  const range = automationRange(options.min ?? options.range ?? 0, options.max);
+  return {
+    range,
+    height: Math.max(1, Number(options.height) || 1),
+    scale: options.scale === 'gain' ? 'gain' : 'linear',
+    stepped: Boolean(options.stepped),
+    step: effectiveAutomationStep(Boolean(options.stepped), options.step ?? options.valueStep),
+  };
+}
+
+/** Sample both sides of a range using the lane's actual interpolation semantics. */
+/** @param {{beat:number,value:number}[]} points @param {number} start @param {number} end @param {object} options */
+export function automationRangeEdgeValues(points, start, end, options = {}) {
+  const { range, scale, stepped } = automationEditOptions(options);
+  const low = Math.min(Number(start) || 0, Number(end) || 0);
+  const high = Math.max(Number(start) || 0, Number(end) || 0);
+  return {
+    start: automationValueAtBeat(points, low, range, undefined, scale, stepped),
+    end: automationValueAtBeat(points, high, range, undefined, scale, stepped),
+  };
+}
+
+function automationValueMovedByY(value, deltaY, options = {}) {
+  const { range, height, scale, stepped, step } = automationEditOptions(options);
+  const y = automationValueToY(value, range, height, scale) + (Number(deltaY) || 0);
+  return snapAutomationValue(automationValueFromY(y, range, height, scale), range, undefined, step || 0);
+}
+
+/** Move selected automation values in display space, preserving their beats. */
+/** @param {{beat:number,value:number}[]} points @param {number[]} indexes @param {number} deltaY @param {object} options */
+export function moveAutomationPointsByY(points, indexes, deltaY, options = {}) {
+  const selected = new Set((Array.isArray(indexes) ? indexes : []).map(Number));
+  return (Array.isArray(points) ? points : []).map((point, index) => selected.has(index)
+    ? { ...point, value: automationValueMovedByY(point.value, deltaY, options) }
+    : { ...point });
+}
+
+/** Move a selected range in display space while preserving independently sampled edges. */
+/** @param {{beat:number,value:number}[]} points @param {number} start @param {number} end @param {number} deltaY @param {object} options */
+export function moveAutomationRangeByY(points, start, end, deltaY, options = {}) {
+  const { range, height, scale, stepped, step } = automationEditOptions(options);
+  const low = Math.min(Number(start) || 0, Number(end) || 0);
+  const high = Math.max(Number(start) || 0, Number(end) || 0);
+  const source = (Array.isArray(points) ? points : []).map((point) => ({ ...point }));
+  if (!(high > low + MIN_CLIP_LENGTH)) return source;
+  const edgeValues = automationRangeEdgeValues(source, low, high, { range, height, scale, stepped, step });
+  const selected = source
+    .filter((point) => Number(point.beat) >= low - MIN_CLIP_LENGTH && Number(point.beat) <= high + MIN_CLIP_LENGTH)
+    .map((point) => ({ ...point, value: automationValueMovedByY(point.value, deltaY, { range, height, scale, stepped, step }) }));
+  const edges = [
+    { beat: low, value: automationValueMovedByY(edgeValues.start, deltaY, { range, height, scale, stepped, step }) },
+    { beat: high, value: automationValueMovedByY(edgeValues.end, deltaY, { range, height, scale, stepped, step }) },
+  ];
+  const outside = source.filter((point) => Number(point.beat) < low - MIN_CLIP_LENGTH || Number(point.beat) > high + MIN_CLIP_LENGTH);
+  const unique = new Map();
+  for (const point of [...outside, ...selected, ...edges]) unique.set(Number(point.beat).toFixed(9), point);
+  return [...unique.values()].sort((a, b) => Number(a.beat) - Number(b.beat));
+}
+
+/** Thin freehand automation samples once, preserving endpoints and corners. */
+/** @param {{beat:number,value:number}[]} points @param {number} tolerance */
+export function thinAutomationPoints(points, tolerance = 0) {
+  const source = (Array.isArray(points) ? points : []).filter((point) => Number.isFinite(Number(point?.beat)) && Number.isFinite(Number(point?.value)))
+    .map((point) => ({ beat: Math.max(0, Number(point.beat)), value: Number(point.value) }))
+    .sort((a, b) => a.beat - b.beat);
+  if (source.length < 3) return source;
+  const limit = Math.max(0, Number(tolerance) || 0);
+  const result = [source[0]];
+  for (let index = 1; index < source.length - 1; index += 1) {
+    const previous = result.at(-1);
+    const current = source[index];
+    const next = source[index + 1];
+    const span = next.beat - previous.beat;
+    const expected = span > MIN_CLIP_LENGTH
+      ? previous.value + (next.value - previous.value) * (current.beat - previous.beat) / span
+      : previous.value;
+    if (span <= MIN_CLIP_LENGTH || Math.abs(current.value - expected) > limit) result.push(current);
+  }
+  result.push(source.at(-1));
+  return result;
+}
+
+/** Build one complete automation write from grid cells or freehand samples. */
+/** @param {{beat:number,value:number}[]} originPoints @param {{beat:number,value:number}[]} samples @param {object} options */
+export function drawAutomationPoints(originPoints, samples, options = {}) {
+  const min = options.min ?? 0;
+  const max = options.max ?? 1;
+  const valueStep = effectiveAutomationStep(Boolean(options.stepped), options.step ?? options.valueStep);
+  const range = automationRange(min, max);
+  const raw = (Array.isArray(samples) ? samples : []).map((point) => ({
+    beat: Math.max(0, Number(point?.beat) || 0),
+    value: snapAutomationValue(Number(point?.value), range, undefined, valueStep),
+  }));
+  if (!raw.length) return (Array.isArray(originPoints) ? originPoints : []).map((point) => ({ ...point }));
+  const freehand = options.freehand || options.snap === 'off';
+  const tolerance = options.tolerance === undefined
+    ? (range.max - range.min) * .004
+    : Math.max(0, Number(options.tolerance) || 0);
+  let replacementStart = null;
+  let replacementEnd = null;
+  const generated = freehand
+    ? tolerance > 0 ? thinAutomationPoints(raw, tolerance) : raw
+    : (() => {
+      const width = Math.max(MIN_CLIP_LENGTH, Number(options.gridStep) || 1);
+      const cells = new Map();
+      for (const point of raw) cells.set(Math.floor(point.beat / width), point.value);
+      const first = Math.min(...cells.keys());
+      const last = Math.max(...cells.keys());
+      replacementStart = first * width;
+      replacementEnd = (last + 1) * width;
+      const result = [];
+      let previous = cells.get(first);
+      for (let cell = first; cell <= last; cell += 1) {
+        if (cells.has(cell)) previous = cells.get(cell);
+        const start = cell * width;
+        const end = (cell + 1) * width;
+        result.push({ beat: start, value: previous }, { beat: Math.max(start, end - MIN_CLIP_LENGTH), value: previous });
+      }
+      return result;
+    })();
+  const start = generated[0].beat;
+  const end = generated.at(-1).beat;
+  const outside = (Array.isArray(originPoints) ? originPoints : [])
+    .filter((point) => freehand
+      ? Number(point.beat) < start - MIN_CLIP_LENGTH || Number(point.beat) > end + MIN_CLIP_LENGTH
+      : Number(point.beat) <= replacementStart - MIN_CLIP_LENGTH || Number(point.beat) >= replacementEnd)
+    .map((point) => ({ ...point }));
+  return [...outside, ...generated].sort((a, b) => a.beat - b.beat);
+}
+
+/** Flatten an automation range while retaining points outside the selection. */
+/** @param {{beat:number,value:number}[]} points @param {number} start @param {number} end @param {number} value @param {number|{min:number,max:number}} min @param {number} [max] @param {number} [step] */
+export function flattenAutomationRange(points, start, end, value, min = 0, max = 1, step = 0) {
+  const range = automationRange(min, max);
+  const low = Math.min(Number(start) || 0, Number(end) || 0);
+  const high = Math.max(Number(start) || 0, Number(end) || 0);
+  if (!(high > low + MIN_CLIP_LENGTH)) return (Array.isArray(points) ? points : []).map((point) => ({ ...point }));
+  const leftValue = value && typeof value === 'object' ? value.start : value;
+  const rightValue = value && typeof value === 'object' ? (value.end ?? leftValue) : value;
+  const source = (Array.isArray(points) ? points : []).map((point) => ({ ...point }));
+  const outside = source.filter((point) => Number(point.beat) < low - MIN_CLIP_LENGTH || Number(point.beat) > high + MIN_CLIP_LENGTH);
+  const edges = [
+    { beat: low, value: snapAutomationValue(leftValue, range, undefined, step) },
+    { beat: high, value: snapAutomationValue(rightValue, range, undefined, step) },
+  ];
+  return [...outside, ...edges].sort((a, b) => Number(a.beat) - Number(b.beat));
+}
+
+/** Move only the points and edge values inside a selected automation range. */
+/** @param {{beat:number,value:number}[]} points @param {number} start @param {number} end @param {number} delta @param {number|{min:number,max:number}} min @param {number} [max] @param {number} [step] */
+export function moveAutomationRange(points, start, end, delta, min = 0, max = 1, step = 0) {
+  const range = automationRange(min, max);
+  const low = Math.min(Number(start) || 0, Number(end) || 0);
+  const high = Math.max(Number(start) || 0, Number(end) || 0);
+  if (!(high > low + MIN_CLIP_LENGTH)) return (Array.isArray(points) ? points : []).map((point) => ({ ...point }));
+  const source = (Array.isArray(points) ? points : []).map((point) => ({ ...point }));
+  const selected = source.filter((point) => Number(point.beat) >= low - MIN_CLIP_LENGTH && Number(point.beat) <= high + MIN_CLIP_LENGTH);
+  const edgeValue = (beat) => automationValueAtBeat(source, beat, range);
+  const edgePoints = [
+    { beat: low, value: edgeValue(low) },
+    { beat: high, value: edgeValue(high) },
+  ];
+  const moved = [...selected, ...edgePoints].map((point) => ({
+    ...point,
+    value: snapAutomationValue(Number(point.value) + Number(delta || 0), range, undefined, step),
+  }));
+  const outside = source.filter((point) => Number(point.beat) < low - MIN_CLIP_LENGTH || Number(point.beat) > high + MIN_CLIP_LENGTH);
+  const unique = new Map();
+  for (const point of [...outside, ...moved]) unique.set(Number(point.beat).toFixed(9), point);
+  return [...unique.values()].sort((a, b) => Number(a.beat) - Number(b.beat));
 }
 
 function cloneAutomation(automation) {
@@ -292,7 +526,7 @@ function eventOf(type, detail) {
 
 export class CompostTimeline extends HTMLElement {
   static get observedAttributes() {
-    return ['label', 'beats-per-bar', 'grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'lane-height', 'automation'];
+    return ['label', 'beats-per-bar', 'grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'lane-height', 'automation', 'draw'];
   }
 
   constructor() {
@@ -307,6 +541,8 @@ export class CompostTimeline extends HTMLElement {
     this.thinLaneHeight = 32;
     this.automationRowHeight = 32;
     this.automation = false;
+    this.draw = false;
+    /** @type {string|null} */ this.automationChooserKey = null;
     this._pxPerBeat = DEFAULT_PX_PER_BEAT;
     this._scrollBeat = 0;
     this._playhead = 0;
@@ -466,8 +702,16 @@ export class CompostTimeline extends HTMLElement {
         .back-pip { flex: none; width: .58em; height: .58em; border: 0; border-radius: 50%; padding: 0; background: var(--compost-timeline-loop); cursor: pointer; }
         .back-pip:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 2px; }
         .automation-header { box-sizing: border-box; height: var(--compost-timeline-automation-row-height); display: flex; align-items: center; gap: .3em; padding: 0 .6em 0 1.5em; border-top: 1px solid color-mix(in srgb, var(--compost-timeline-line) 50%, transparent); color: var(--compost-timeline-muted); font-size: .82em; }
-        .automation-header-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .automation-chooser { appearance: none; min-width: 0; max-width: 16em; display: inline-flex; align-items: center; gap: .35em; overflow: hidden; border: 0; padding: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+        .automation-chooser-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .automation-chooser::after { content: ""; flex: none; width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 4px solid currentColor; transform: translateY(1px); }
+        .automation-chooser:hover, .automation-chooser:focus-visible, .automation-chooser[aria-expanded="true"] { color: var(--compost-timeline-select); }
+        .automation-chooser:focus-visible, .automation-header button:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 2px; }
+        .automation-header-buttons { display: inline-flex; align-items: center; gap: .08em; }
+        .automation-header-button { appearance: none; width: 1.25em; height: 1.25em; border: 0; padding: 0; background: none; color: inherit; font: inherit; line-height: 1; cursor: pointer; }
+        .automation-header-button:hover, .automation-header-button:focus-visible { color: var(--compost-timeline-select); }
         .automation-header-value { margin-left: auto; color: var(--compost-timeline-value); font: .86em/1 var(--compost-timeline-numeral-font); }
+        .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); margin: 0; color: var(--compost-timeline-muted); font: .78em/1 var(--compost-timeline-numeral-font); opacity: .8; pointer-events: none; }
         .lanes-wrap { position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: none; }
         .lanes-wrap::-webkit-scrollbar { display: none; }
         .lanes-world { position: relative; min-height: 100%; }
@@ -490,8 +734,12 @@ export class CompostTimeline extends HTMLElement {
         .automation-row[data-state="playing"] .automation-line { stroke: var(--compost-timeline-signal-hi); }
         .automation-row[data-state="playing"] .automation-point { fill: var(--compost-timeline-signal-hi); }
         .automation-svg { position: absolute; inset: 0 auto auto 0; overflow: visible; pointer-events: none; }
-        .automation-line { fill: none; stroke: var(--lane-color, var(--compost-timeline-text)); stroke-width: 1; vector-effect: non-scaling-stroke; }
+        .automation-line { fill: none; stroke: var(--lane-color, var(--compost-timeline-text)); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: all; }
+        .automation-row[data-line-hover] .automation-line { stroke-width: 1.5; }
+        .automation-row[data-draw][data-hover] .automation-draw-hint { display: block; }
+        .automation-row[data-draw-preview] .automation-line, .automation-row[data-draw-preview] .automation-point { stroke: var(--compost-timeline-over); fill: var(--compost-timeline-over); }
         .automation-point { fill: var(--lane-color, var(--compost-timeline-text)); stroke: var(--compost-timeline-bg); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: all; cursor: grab; }
+        .automation-point[data-hover] { stroke-width: 1.5; transform: scale(1.45); transform-box: fill-box; transform-origin: center; }
         .automation-point:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 2px; }
         .automation-readout { position: absolute; z-index: 5; transform: translate(-50%, -100%); padding: 1px 3px; background: var(--compost-timeline-bg); color: var(--compost-timeline-value); font: .78em/1 var(--compost-timeline-numeral-font); pointer-events: none; }
         .lane[data-overridden] { filter: none; }
@@ -624,6 +872,7 @@ export class CompostTimeline extends HTMLElement {
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     this.follow = this.hasAttribute('follow');
     this.automation = this.hasAttribute('automation');
+    this.draw = this.hasAttribute('draw');
     const style = getComputedStyle(this);
     const fontSize = Number.parseFloat(style.fontSize) || 16;
     const rawLaneHeight = style.getPropertyValue('--compost-timeline-lane-height').trim();
@@ -718,6 +967,19 @@ export class CompostTimeline extends HTMLElement {
     const ids = laneIds === undefined ? this._lanes.map((lane) => lane.id) : laneIds;
     this._timeSelection = normalizeTimeSelection(start, end, ids, this.worldEnd());
     this.paintTimeSelection();
+  }
+
+  /** Synchronise a host-owned automation chooser menu's expanded state. */
+  /** @param {string} laneId @param {string} automationId @param {boolean} open */
+  setAutomationChooserOpen(laneId, automationId, open) {
+    const key = `${String(laneId)}\u0000${String(automationId)}`;
+    this.automationChooserKey = open ? key : null;
+    for (const chooser of this.headers.querySelectorAll('.automation-chooser')) {
+      const isOpen = Boolean(open
+        && chooser.dataset.laneId === String(laneId)
+        && chooser.dataset.automationId === String(automationId));
+      chooser.setAttribute('aria-expanded', String(isOpen));
+    }
   }
 
   /** Replace one lane's clips without changing the lane order. */
@@ -1587,10 +1849,54 @@ export class CompostTimeline extends HTMLElement {
     header.tabIndex = 0;
     header.setAttribute('aria-label', `${automation.label || automation.id} automation for ${lane.name || lane.id}`);
     header.addEventListener('focus', () => { this.focusedLane = lane.id; this.focusedClip = null; });
+    const chooser = document.createElement('button');
+    chooser.type = 'button';
+    chooser.className = 'automation-chooser';
+    chooser.dataset.laneId = lane.id;
+    chooser.dataset.automationId = automation.id;
+    chooser.setAttribute('aria-haspopup', 'menu');
+    chooser.setAttribute('aria-expanded', String(this.automationChooserKey === `${String(lane.id)}\u0000${String(automation.id)}`));
+    chooser.setAttribute('aria-label', `Choose automation for ${lane.name || lane.id}`);
     const label = document.createElement('span');
-    label.className = 'automation-header-label';
+    label.className = 'automation-chooser-label automation-header-label';
     label.textContent = automation.label || automation.id;
-    header.append(label);
+    chooser.append(label);
+    chooser.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.dispatchEvent(eventOf('automation-choose', {
+        laneId: lane.id,
+        automationId: automation.id,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      }));
+    });
+    chooser.addEventListener('pointerdown', (event) => event.stopPropagation());
+    const buttons = document.createElement('span');
+    buttons.className = 'automation-header-buttons';
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'automation-header-button automation-add';
+    add.textContent = '+';
+    add.title = 'Add automation';
+    add.setAttribute('aria-label', `Add automation to ${lane.name || lane.id}`);
+    add.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.dispatchEvent(eventOf('automation-add', { laneId: lane.id, clientX: event.clientX, clientY: event.clientY }));
+    });
+    add.addEventListener('pointerdown', (event) => event.stopPropagation());
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'automation-header-button automation-remove';
+    remove.textContent = '−';
+    remove.title = 'Remove automation';
+    remove.setAttribute('aria-label', `Remove ${automation.label || automation.id} automation from ${lane.name || lane.id}`);
+    remove.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.dispatchEvent(eventOf('automation-remove', { laneId: lane.id, automationId: automation.id }));
+    });
+    remove.addEventListener('pointerdown', (event) => event.stopPropagation());
+    buttons.append(add, remove);
+    header.append(chooser, buttons);
     if (Number.isFinite(Number(automation.value))) {
       const value = document.createElement('span');
       value.className = 'automation-header-value';
@@ -1752,6 +2058,7 @@ export class CompostTimeline extends HTMLElement {
     row.dataset.laneId = lane.id;
     row.dataset.automationId = automation.id;
     row.dataset.state = automation.state || 'idle';
+    row.toggleAttribute('data-draw', this.draw);
     row.setAttribute('role', 'listitem');
     row.tabIndex = 0;
     row.setAttribute('aria-label', `${automation.label || automation.id} automation for ${lane.name || lane.id}`);
@@ -1783,7 +2090,11 @@ export class CompostTimeline extends HTMLElement {
       marker.setAttribute('aria-label', `${automation.label || automation.id} point ${Number(point.beat).toFixed(2)} ${Number(point.value).toFixed(2)}`);
       svg.append(marker);
     });
+    const hint = document.createElement('span');
+    hint.className = 'automation-draw-hint';
+    hint.textContent = `✎ draw · grid 1/${Math.max(1, Number(this.grid) || 1)}`;
     row.append(svg);
+    row.append(hint);
     return row;
   }
 
@@ -2058,6 +2369,7 @@ export class CompostTimeline extends HTMLElement {
   updatePointerCursor(event) {
     if (event.pointerType === 'touch') return;
     const automation = this.automationFromEvent(event);
+    this.updateAutomationHover(event);
     if (automation?.point) automation.point.style.cursor = 'grab';
     const found = this.clipFromEvent(event);
     if (!found) return;
@@ -2106,6 +2418,21 @@ export class CompostTimeline extends HTMLElement {
     return beat < Number(points[0].beat) ? 0 : points.length - 2;
   }
 
+  automationValueStep(automation) {
+    return effectiveAutomationStep(Boolean(automation?.stepped), automation?.step ?? automation?.valueStep);
+  }
+
+  automationValueAtPointer(automation, row, event) {
+    const rect = row.getBoundingClientRect();
+    const value = automationValueFromY(event.clientY - rect.top, automation.min, automation.max, this.automationRowHeight, automation.scale);
+    return snapAutomationValue(value, { min: automation.min, max: automation.max }, undefined, this.automationValueStep(automation));
+  }
+
+  automationSelectionFor(laneId) {
+    const selection = this._timeSelection;
+    return selection && selection.laneIds.includes(String(laneId)) ? selection : null;
+  }
+
   /** @param {any} drag @param {TimelineLane} lane @param {AutomationLaneView} automation @param {{beat:number,value:number}[]} points */
   paintAutomationPreview(drag, lane, automation, points) {
     const row = this.lanesWorld.querySelector(`.automation-row[data-lane-id="${CSS.escape(drag.laneId)}"][data-automation-id="${CSS.escape(drag.automationId)}"]`);
@@ -2118,7 +2445,18 @@ export class CompostTimeline extends HTMLElement {
     svg.setAttribute('width', String(width));
     svg.setAttribute('viewBox', `0 0 ${width} ${this.automationRowHeight}`);
     line.setAttribute('d', this.automationPath(automation, end));
-    const markers = [...row.querySelectorAll('.automation-point')];
+    let markers = [...row.querySelectorAll('.automation-point')];
+    while (markers.length < points.length) {
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      marker.classList.add('automation-point');
+      marker.setAttribute('width', '5');
+      marker.setAttribute('height', '5');
+      marker.setAttribute('role', 'button');
+      marker.setAttribute('tabindex', '0');
+      svg.append(marker);
+      markers.push(marker);
+    }
+    while (markers.length > points.length) markers.pop()?.remove();
     points.forEach((point, index) => {
       const marker = markers[index];
       if (!(marker instanceof SVGElement)) return;
@@ -2129,12 +2467,14 @@ export class CompostTimeline extends HTMLElement {
     });
     row.querySelector('.automation-readout')?.remove();
     const point = points[drag.pointIndex];
-    const beat = drag.type === 'automation-point' ? point?.beat : this.beatAtPoint(drag.lastClientX ?? drag.startX);
-    const value = drag.type === 'automation-point' ? point?.value : drag.lastValue;
+    const activePoint = drag.type === 'automation-point' ? drag.previewPoint || point : null;
+    const beat = drag.type === 'automation-point' ? activePoint?.beat : drag.lastBeat ?? this.beatAtPoint(drag.lastClientX ?? drag.startX);
+    const value = drag.type === 'automation-point' ? activePoint?.value : drag.lastValue;
+    row.toggleAttribute('data-draw-preview', drag.type === 'automation-draw');
     if (!Number.isFinite(Number(beat)) || !Number.isFinite(Number(value))) return;
     const readout = document.createElement('span');
     readout.className = 'automation-readout';
-    readout.textContent = Number(value).toFixed(2);
+    readout.textContent = `${Number(beat).toFixed(2)} · ${Number(value).toFixed(2)}`;
     readout.style.left = `${Number(beat) * this._pxPerBeat}px`;
     readout.style.top = `${automationValueToY(Number(value), automation.min, automation.max, this.automationRowHeight, automation.scale)}px`;
     row.append(readout);
@@ -2153,26 +2493,101 @@ export class CompostTimeline extends HTMLElement {
     const localY = event.clientY - rect.top;
     const value = automationValueFromY(localY, automation.min, automation.max, this.automationRowHeight, automation.scale);
     const range = { min: automation.min, max: automation.max };
+    const startLocalY = Number.isFinite(Number(drag.startLocalY)) ? Number(drag.startLocalY) : drag.startY - rect.top;
+    const factor = event.shiftKey ? .25 : 1;
+    const deltaY = (localY - startLocalY) * factor;
+    const editOptions = {
+      min: range.min,
+      max: range.max,
+      height: this.automationRowHeight,
+      scale: automation.scale,
+      stepped: automation.stepped,
+      step: this.automationValueStep(automation),
+    };
     let points = drag.originPoints;
     if (drag.type === 'automation-point') {
       const origin = drag.originPoints[drag.pointIndex];
-      const nextValue = origin.value + (value - origin.value) * (event.shiftKey ? .1 : 1);
-      points = moveAutomationPoint(drag.originPoints, drag.pointIndex, { beat, value: nextValue }, range);
+      const nextValue = automationValueMovedByY(origin.value, deltaY, editOptions);
+      const nextBeat = origin.beat + (beat - origin.beat) * factor;
+      points = moveAutomationPoint(drag.originPoints, drag.pointIndex, {
+        beat: nextBeat,
+        value: nextValue,
+      }, range);
+      drag.previewPoint = { ...points[drag.pointIndex] };
+      points = preserveAutomationEdgePoints(drag.originPoints, points, drag.pointIndex);
     } else if (drag.type === 'automation-segment') {
-      const valueAtStart = automationValueFromY(drag.startY - rect.top, automation.min, automation.max, this.automationRowHeight, automation.scale);
-      const delta = (valueAtStart - value) * (event.shiftKey ? .1 : 1);
       const segment = drag.segmentIndex;
-      points = drag.originPoints.map((point, index) => {
-        if (index !== segment && index !== segment + 1) return { ...point };
-        return { ...point, value: finiteClamp(Number(point.value) - delta, Number(automation.min), Number(automation.max)) };
-      });
+      points = moveAutomationPointsByY(drag.originPoints, [segment, segment + 1], deltaY, editOptions);
+    } else if (drag.type === 'automation-range') {
+      points = moveAutomationRangeByY(drag.originPoints, drag.selection.start, drag.selection.end, deltaY, editOptions);
     }
     drag.previewPoints = points;
     drag.lastClientX = event.clientX;
+    drag.lastBeat = beat;
     drag.lastValue = value;
     drag.moved = true;
     automation.points = points.map((point) => ({ ...point }));
     this.paintAutomationPreview(drag, lane, automation, points);
+  }
+
+  /** @param {any} drag @param {PointerEvent} event */
+  previewAutomationDraw(drag, event) {
+    const lane = this._lanes.find((entry) => entry.id === drag.laneId);
+    const automation = lane && this.automationFor(lane)[drag.automationIndex];
+    if (!lane || !automation) return;
+    const row = this.lanesWorld.querySelector(`.automation-row[data-lane-id="${CSS.escape(drag.laneId)}"][data-automation-id="${CSS.escape(drag.automationId)}"]`);
+    if (!(row instanceof HTMLElement)) return;
+    const value = this.automationValueAtPointer(automation, row, event);
+    drag.freehand = drag.freehand || event.altKey;
+    const rawBeat = this.beatAtPoint(event.clientX);
+    const beat = drag.freehand || event.altKey
+      ? rawBeat
+      : snapBeat(rawBeat, this.beatsPerBar, this.grid, this.snapMode);
+    if (!drag.samples.length || Math.abs(beat - drag.samples.at(-1).beat) > MIN_CLIP_LENGTH || Math.abs(value - drag.samples.at(-1).value) > MIN_CLIP_LENGTH) {
+      drag.samples.push({ beat, value });
+    }
+    const points = drawAutomationPoints(drag.originPoints, drag.samples, {
+      min: automation.min,
+      max: automation.max,
+      scale: automation.scale,
+      stepped: automation.stepped,
+      step: this.automationValueStep(automation),
+      gridStep: gridStep(this.beatsPerBar, this.grid),
+      snap: drag.freehand || event.altKey ? 'off' : this.snapMode,
+      freehand: drag.freehand || event.altKey,
+      // Freehand is simplified once, at release. The preview remains sample-faithful.
+      tolerance: 0,
+    });
+    drag.previewPoints = points;
+    drag.lastClientX = event.clientX;
+    drag.lastBeat = beat;
+    drag.lastValue = value;
+    drag.moved = drag.moved || Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > DRAG_THRESHOLD;
+    automation.points = points.map((point) => ({ ...point }));
+    this.paintAutomationPreview(drag, lane, automation, points);
+  }
+
+  updateAutomationHover(event) {
+    const automation = this.automationFromEvent(event);
+    for (const row of this.lanesWorld.querySelectorAll('.automation-row[data-hover]')) row.removeAttribute('data-hover');
+    for (const row of this.lanesWorld.querySelectorAll('.automation-row[data-line-hover]')) row.removeAttribute('data-line-hover');
+    for (const readout of this.lanesWorld.querySelectorAll('.automation-readout[data-hover]')) readout.remove();
+    for (const point of this.lanesWorld.querySelectorAll('.automation-point[data-hover]')) point.removeAttribute('data-hover');
+    if (!automation || this.drag) return;
+    const lineHovered = pathElement(event, 'automation-line') instanceof SVGElement;
+    automation.row.setAttribute('data-hover', '');
+    if (lineHovered) automation.row.setAttribute('data-line-hover', '');
+    if (this.draw) return;
+    const beat = this.beatAtPoint(event.clientX);
+    const value = automationValueAtBeat(automation.automation.points, beat, automation.automation.min, automation.automation.max, automation.automation.scale, automation.automation.stepped);
+    if (automation.point) automation.point.setAttribute('data-hover', '');
+    const readout = document.createElement('span');
+    readout.className = 'automation-readout';
+    readout.dataset.hover = '';
+    readout.textContent = `${Number(beat).toFixed(2)} · ${Number(value).toFixed(2)}`;
+    readout.style.left = `${beat * this._pxPerBeat}px`;
+    readout.style.top = `${automationValueToY(value, automation.automation.min, automation.automation.max, this.automationRowHeight, automation.automation.scale)}px`;
+    automation.row.append(readout);
   }
 
   startPointer(event) {
@@ -2196,6 +2611,8 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('lane-control'))) return;
+    if (event.composedPath().some((node) => node instanceof HTMLElement
+      && (node.classList.contains('automation-header-button') || node.classList.contains('automation-chooser')))) return;
     if (event.composedPath().some((node) => node instanceof HTMLElement && (node.classList.contains('lane-figure') || node.classList.contains('device-power') || node.classList.contains('lane-device-add') || node.classList.contains('lane-device-overflow') || node.classList.contains('empty-device')))) return;
     const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
       && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
@@ -2263,27 +2680,60 @@ export class CompostTimeline extends HTMLElement {
     const automation = this.automationFromEvent(event);
     if (automation) {
       event.preventDefault();
+      automation.row.querySelector('.automation-readout[data-hover]')?.remove();
+      automation.row.removeAttribute('data-hover');
       // preventDefault stops the browser's own focus change: give the focus explicitly,
       // so Delete and the arrows work on the point that was just clicked
       const focusTarget = automation.point instanceof SVGElement || automation.point instanceof HTMLElement
         ? automation.point : automation.row;
       /** @type {any} */ (focusTarget).focus?.({ preventScroll: true });
-      const beat = this.beatAtPoint(event.clientX);
+      const rawBeat = this.beatAtPoint(event.clientX);
       const points = Array.isArray(automation.automation.points)
         ? automation.automation.points.map((point) => ({ ...point })) : [];
-      this.drag = automation.pointIndex >= 0
+      if (this.draw) {
+        const value = this.automationValueAtPointer(automation.automation, automation.row, event);
+        const freehand = event.altKey || this.snapMode === 'off';
+        const initialBeat = freehand ? rawBeat : snapBeat(rawBeat, this.beatsPerBar, this.grid, this.snapMode);
+        this.drag = {
+          pointerId: event.pointerId, type: 'automation-draw', laneId: automation.lane.id,
+          automationId: automation.automation.id, automationIndex: automation.automationIndex,
+          startX: event.clientX, startY: event.clientY, originPoints: points,
+          samples: [{ beat: initialBeat, value }], freehand, moved: false,
+        };
+        automation.automation.points = drawAutomationPoints(points, this.drag.samples, {
+          min: automation.automation.min, max: automation.automation.max,
+          scale: automation.automation.scale, stepped: automation.automation.stepped,
+          step: this.automationValueStep(automation.automation),
+          gridStep: gridStep(this.beatsPerBar, this.grid), snap: freehand ? 'off' : this.snapMode,
+          freehand, tolerance: 0,
+        });
+        this.paintAutomationPreview(this.drag, automation.lane, automation.automation, automation.automation.points);
+      } else {
+        if (automation.pointIndex < 0 && !(pathElement(event, 'automation-line') instanceof SVGElement)) return;
+        const selection = this.automationSelectionFor(automation.lane.id);
+        const inSelection = selection && rawBeat >= selection.start - MIN_CLIP_LENGTH && rawBeat <= selection.end + MIN_CLIP_LENGTH;
+        this.drag = automation.pointIndex >= 0
         ? {
           pointerId: event.pointerId, type: 'automation-point', laneId: automation.lane.id,
           automationId: automation.automation.id, automationIndex: automation.automationIndex,
           pointIndex: automation.pointIndex, startX: event.clientX, startY: event.clientY,
+          startLocalY: event.clientY - automation.row.getBoundingClientRect().top,
           originPoints: points, moved: false,
         }
-        : {
+        : inSelection ? {
+          pointerId: event.pointerId, type: 'automation-range', laneId: automation.lane.id,
+          automationId: automation.automation.id, automationIndex: automation.automationIndex,
+          selection: { ...selection, laneIds: [...selection.laneIds] }, startX: event.clientX,
+          startY: event.clientY, startLocalY: event.clientY - automation.row.getBoundingClientRect().top,
+          originPoints: points, moved: false,
+        } : {
           pointerId: event.pointerId, type: 'automation-segment', laneId: automation.lane.id,
           automationId: automation.automation.id, automationIndex: automation.automationIndex,
-          segmentIndex: this.automationSegmentIndex(automation.automation, beat), startX: event.clientX,
-          startY: event.clientY, originPoints: points, moved: false,
-      };
+          segmentIndex: this.automationSegmentIndex(automation.automation, rawBeat), startX: event.clientX,
+          startY: event.clientY, startLocalY: event.clientY - automation.row.getBoundingClientRect().top,
+          originPoints: points, moved: false,
+        };
+      }
       if (event.isTrusted) automation.row.setPointerCapture?.(event.pointerId);
       this.longPressTimer = setTimeout(() => {
         if (!this.drag || this.drag.pointerId !== event.pointerId || this.drag.moved) return;
@@ -2293,7 +2743,8 @@ export class CompostTimeline extends HTMLElement {
           clientX: event.clientX,
           clientY: event.clientY,
         }));
-        this.endPointer({ pointerId: event.pointerId });
+        if (this.drag.type === 'automation-draw') this.cancelActiveDrag();
+        else this.endPointer({ pointerId: event.pointerId });
       }, 550);
       return;
     }
@@ -2343,6 +2794,7 @@ export class CompostTimeline extends HTMLElement {
     }
     const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
     if (lane instanceof HTMLElement) {
+      if (this.draw) return;
       this.drag = {
         pointerId: event.pointerId, type: 'time-selection', laneId: lane.dataset.laneId,
         startX: event.clientX, startY: event.clientY, startBeat: this.beatAtPoint(event.clientX),
@@ -2372,7 +2824,8 @@ export class CompostTimeline extends HTMLElement {
     if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) drag.moved = true;
     if (drag.type === 'locator') {
       if (!drag.moved) return;
-      const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+      const rawBeat = this.beatAtPoint(event.clientX);
+      const beat = snapBeat(rawBeat, this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
       drag.previewBeat = Math.min(beat, this.worldEnd());
       drag.element.style.left = `${drag.previewBeat * this._pxPerBeat}px`;
       return;
@@ -2414,7 +2867,11 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (drag.type === 'seek-ruler') return;
-    if (drag.type === 'automation-point' || drag.type === 'automation-segment') {
+    if (drag.type === 'automation-draw') {
+      this.previewAutomationDraw(drag, event);
+      return;
+    }
+    if (drag.type === 'automation-point' || drag.type === 'automation-segment' || drag.type === 'automation-range') {
       if (!drag.moved) return;
       this.previewAutomationDrag(drag, event);
       return;
@@ -2529,7 +2986,7 @@ export class CompostTimeline extends HTMLElement {
         this.paintSelection();
         this.scrollBeat = drag.startScrollBeat ?? this._scrollBeat;
       }
-      if (drag.type === 'automation-point' || drag.type === 'automation-segment') {
+      if (drag.type === 'automation-draw' || drag.type === 'automation-point' || drag.type === 'automation-segment' || drag.type === 'automation-range') {
         const lane = this._lanes.find((entry) => entry.id === drag.laneId);
         const automation = lane && this.automationFor(lane).find((entry) => entry.id === drag.automationId);
         if (automation && Array.isArray(drag.originPoints)) {
@@ -2648,8 +3105,32 @@ export class CompostTimeline extends HTMLElement {
       }
       return;
     }
-    if (drag.type === 'automation-point' || drag.type === 'automation-segment') {
+    if (drag.type === 'automation-draw') {
+      const lane = this._lanes.find((entry) => entry.id === drag.laneId);
+      const automation = lane && this.automationFor(lane).find((entry) => entry.id === drag.automationId);
+      const row = this.lanesWorld.querySelector(`.automation-row[data-lane-id="${CSS.escape(drag.laneId)}"][data-automation-id="${CSS.escape(drag.automationId)}"]`);
+      row?.removeAttribute('data-draw-preview');
+      row?.querySelector('.automation-readout')?.remove();
+      if (lane && automation) {
+        const range = automationRange(automation.min, automation.max);
+        const points = drawAutomationPoints(drag.originPoints, drag.samples, {
+          min: range.min,
+          max: range.max,
+          scale: automation.scale,
+          stepped: automation.stepped,
+          step: this.automationValueStep(automation),
+          gridStep: gridStep(this.beatsPerBar, this.grid),
+          snap: drag.freehand ? 'off' : this.snapMode,
+          freehand: drag.freehand,
+          tolerance: (range.max - range.min) * .004,
+        });
+        this.commitAutomationChange(lane, automation, points);
+      }
+      return;
+    }
+    if (drag.type === 'automation-point' || drag.type === 'automation-segment' || drag.type === 'automation-range') {
       this.lanesWorld.querySelector(`.automation-row[data-lane-id="${CSS.escape(drag.laneId)}"][data-automation-id="${CSS.escape(drag.automationId)}"] .automation-readout`)?.remove();
+      this.lanesWorld.querySelector(`.automation-row[data-lane-id="${CSS.escape(drag.laneId)}"][data-automation-id="${CSS.escape(drag.automationId)}"]`)?.removeAttribute('data-draw-preview');
       if (drag.moved && Array.isArray(drag.previewPoints)) {
         this.dispatchEvent(eventOf('automation-change', {
           laneId: drag.laneId,
@@ -2761,6 +3242,8 @@ export class CompostTimeline extends HTMLElement {
 
   handleDoubleClick(event) {
     if (this.hasAttribute('disabled')) return;
+    if (event.composedPath().some((node) => node instanceof HTMLElement
+      && (node.classList.contains('automation-header-button') || node.classList.contains('automation-chooser')))) return;
     const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
       && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
     if (loopPart instanceof HTMLElement) {
@@ -2820,11 +3303,24 @@ export class CompostTimeline extends HTMLElement {
     if (automation) {
       event.preventDefault();
       const rect = automation.row.getBoundingClientRect();
-      const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
-      const value = automationValueFromY(event.clientY - rect.top, automation.automation.min, automation.automation.max, this.automationRowHeight, automation.automation.scale);
+      const rawBeat = this.beatAtPoint(event.clientX);
+      const beat = snapBeat(rawBeat, this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+      if (this.draw) return;
+      const pointerValue = this.automationValueAtPointer(automation.automation, automation.row, event);
+      const selection = this.automationSelectionFor(automation.lane.id);
+      const inSelection = selection && rawBeat >= selection.start - MIN_CLIP_LENGTH && rawBeat <= selection.end + MIN_CLIP_LENGTH;
+      const line = pathElement(event, 'automation-line');
+      const value = inSelection
+        ? pointerValue
+        : line instanceof SVGElement
+          ? snapAutomationValue(automationValueAtBeat(automation.automation.points, beat, automation.automation.min, automation.automation.max, automation.automation.scale, automation.automation.stepped), { min: automation.automation.min, max: automation.automation.max }, undefined, this.automationValueStep(automation.automation))
+          : pointerValue;
       const points = automation.pointIndex >= 0
         ? deleteAutomationPoint(automation.automation.points, automation.pointIndex)
-        : addAutomationPoint(automation.automation.points, { beat, value }, { min: automation.automation.min, max: automation.automation.max });
+        : inSelection
+          ? flattenAutomationRange(automation.automation.points, selection.start, selection.end, value,
+            { min: automation.automation.min, max: automation.automation.max }, undefined, this.automationValueStep(automation.automation))
+          : addAutomationPoint(automation.automation.points, { beat, value }, { min: automation.automation.min, max: automation.automation.max });
       this.commitAutomationChange(automation.lane, automation.automation, points);
       return;
     }
@@ -2913,6 +3409,15 @@ export class CompostTimeline extends HTMLElement {
     const source = event.composedPath()[0];
     if (source instanceof HTMLInputElement || source instanceof HTMLTextAreaElement) return;
     const key = event.key.toLowerCase();
+    const pointElement = event.composedPath().find((node) => node instanceof Element && node.classList.contains('automation-point'));
+    const automation = pointElement instanceof Element ? this.automationFromEvent(event) : null;
+    const automationBody = this.automationFromEvent(event);
+    const automationHeader = this.automationHeaderFromEvent(event);
+    if (!event.altKey && !event.metaKey && !event.ctrlKey && key === 'b') {
+      event.preventDefault();
+      this.dispatchEvent(eventOf('draw-toggle', { enabled: !this.draw }));
+      return;
+    }
     const locatorTarget = this.locatorFromEvent(event);
     if (locatorTarget) {
       if (event.key === 'F2') {
@@ -2926,7 +3431,63 @@ export class CompostTimeline extends HTMLElement {
         return;
       }
     }
+    if (automationHeader && event.key === 'Escape') {
+      event.preventDefault();
+      automationHeader.header.blur();
+      return;
+    }
+    if (this.draw && automationBody && event.key.startsWith('Arrow')) {
+      event.preventDefault();
+      return;
+    }
+    if (!this.draw && automation && automation.pointIndex >= 0) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        automation.point?.blur?.();
+        automation.row.focus({ preventScroll: true });
+        return;
+      }
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        this.commitAutomationChange(automation.lane, automation.automation,
+          deleteAutomationPoint(automation.automation.points, automation.pointIndex));
+        return;
+      }
+      const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[event.key];
+      if (direction) {
+        event.preventDefault();
+        const beatDelta = direction[0] * gridStep(this.beatsPerBar, this.grid) * (event.shiftKey ? .25 : 1);
+        const valueDelta = direction[1] * (Number(automation.automation.max) - Number(automation.automation.min)) * .01;
+        const point = automation.automation.points[automation.pointIndex];
+        this.commitAutomationChange(automation.lane, automation.automation,
+          moveAutomationPoint(automation.automation.points, automation.pointIndex, {
+            beat: Number(point.beat) + beatDelta,
+            value: snapAutomationValue(Number(point.value) + valueDelta * (event.shiftKey ? .25 : 1),
+              { min: automation.automation.min, max: automation.automation.max }, undefined,
+              this.automationValueStep(automation.automation)),
+          }, { min: automation.automation.min, max: automation.automation.max }));
+        return;
+      }
+    }
     const selection = this._timeSelection;
+    const automationSelection = !this.draw && automationBody
+      ? this.automationSelectionFor(automationBody.lane.id) : null;
+    if (automationSelection && automationBody.pointIndex < 0 && (event.key === 'Delete' || event.key === 'Backspace')) {
+      event.preventDefault();
+      const values = automationRangeEdgeValues(automationBody.automation.points,
+        automationSelection.start, automationSelection.end, {
+          min: automationBody.automation.min,
+          max: automationBody.automation.max,
+          scale: automationBody.automation.scale,
+          stepped: automationBody.automation.stepped,
+          step: this.automationValueStep(automationBody.automation),
+        });
+      this.commitAutomationChange(automationBody.lane, automationBody.automation,
+        flattenAutomationRange(automationBody.automation.points, automationSelection.start, automationSelection.end, values,
+          { min: automationBody.automation.min, max: automationBody.automation.max }, undefined,
+          this.automationValueStep(automationBody.automation)));
+      return;
+    }
     if (selection) {
       if (key === 'l' && !event.altKey && !event.shiftKey) {
         event.preventDefault();
@@ -2994,10 +3555,6 @@ export class CompostTimeline extends HTMLElement {
         return;
       }
     }
-    const pointElement = event.composedPath().find((node) => node instanceof Element && node.classList.contains('automation-point'));
-    const automation = pointElement instanceof Element ? this.automationFromEvent(event) : null;
-    const automationBody = this.automationFromEvent(event);
-    const automationHeader = this.automationHeaderFromEvent(event);
     if (event.shiftKey && event.key === 'F10' && (automationBody || automationHeader)) {
       event.preventDefault();
       const target = automationBody?.row || automationHeader?.header;
@@ -3009,27 +3566,6 @@ export class CompostTimeline extends HTMLElement {
         clientY: rect.top + rect.height / 2,
       }));
       return;
-    }
-    if (automation && automation.pointIndex >= 0) {
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        event.preventDefault();
-        this.commitAutomationChange(automation.lane, automation.automation,
-          deleteAutomationPoint(automation.automation.points, automation.pointIndex));
-        return;
-      }
-      const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[event.key];
-      if (direction) {
-        event.preventDefault();
-        const beatDelta = direction[0] * gridStep(this.beatsPerBar, this.grid) * (event.shiftKey ? .1 : 1);
-        const valueDelta = direction[1] * (Number(automation.automation.max) - Number(automation.automation.min)) * .01;
-        const point = automation.automation.points[automation.pointIndex];
-        this.commitAutomationChange(automation.lane, automation.automation,
-          moveAutomationPoint(automation.automation.points, automation.pointIndex, {
-            beat: Number(point.beat) + beatDelta,
-            value: Number(point.value) + valueDelta * (event.shiftKey ? .1 : 1),
-          }, { min: automation.automation.min, max: automation.automation.max }));
-        return;
-      }
     }
     const current = this.focusedClip || this._selected[0];
     const found = current ? this.findClip(current) : null;

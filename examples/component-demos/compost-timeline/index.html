@@ -27,6 +27,7 @@
             <label class="check"><input type="checkbox" data-play> Play head</label>
             <label class="check"><input type="checkbox" data-loop> Loop</label>
             <label class="check"><input type="checkbox" data-automation checked> Automation rows</label>
+            <label class="check"><input type="checkbox" data-draw> Draw automation</label>
             <button type="button" data-reset>Reset view</button>
             <output data-state>stopped · beat 0</output>
             <p class="muted">The host supplies three lanes and receives every timeline intent in the log. Drag a clip, trim an edge, or use the keyboard while the play head runs.</p>
@@ -48,6 +49,7 @@
       const play = document.querySelector('[data-play]');
       const loop = document.querySelector('[data-loop]');
       const automation = document.querySelector('[data-automation]');
+      const draw = document.querySelector('[data-draw]');
       const lanes = [
         { id: 'drums', name: 'Drums', color: '#c45a2c', colorRGB: '196,90,44', picked: true, wash: .72, meter: [-8, -11], gainReduction: -4, controls: { armed: true, monitor: 'auto', muted: false, soloed: false }, figures: { faderDb: -3, pan: 0, sends: [{ id: 'a', letter: 'A', db: -12 }, { id: 'b', letter: 'B', db: -90 }] }, devices: [{ id: 'mno', name: 'MNO', on: true, kind: 'instrument' }, { id: 'delay', name: 'Delay', on: false, kind: 'effect' }, { id: 'verb', name: 'Reverb', on: true, kind: 'effect' }], automation: [
           { id: 'volume', label: 'Volume', color: '#c45a2c', min: -90, max: 12, scale: 'gain', stepped: false, state: 'playing', value: -3, points: [{ beat: 0, value: -12 }, { beat: 4, value: 0 }, { beat: 8, value: -6 }] },
@@ -75,7 +77,8 @@
       timeline.setLoop(0, 8, false);
       timeline.setPlayhead(0);
       automation.addEventListener('change', () => timeline.toggleAttribute('automation', automation.checked));
-      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-back', 'lane-header-context', 'lane-pick', 'lane-move', 'lane-toggle', 'lane-figure-input', 'lane-figure-change', 'device-toggle', 'device-open', 'device-context', 'device-overflow', 'device-add', 'device-move', 'automation-change', 'automation-context', 'automation-header-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
+      draw.addEventListener('change', () => timeline.toggleAttribute('draw', draw.checked));
+      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-back', 'lane-header-context', 'lane-pick', 'lane-move', 'lane-toggle', 'lane-figure-input', 'lane-figure-change', 'device-toggle', 'device-open', 'device-context', 'device-overflow', 'device-add', 'device-move', 'automation-change', 'automation-choose', 'automation-add', 'automation-remove', 'draw-toggle', 'automation-context', 'automation-header-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
         timeline.addEventListener(type, (event) => {
           const detail = { ...event.detail };
           delete detail.clientX;
@@ -84,6 +87,10 @@
           if (type === 'loop-change' || type === 'loop-toggle') loop.checked = detail.enabled;
           if (type === 'seek') timeline.setPlayhead(detail.beat);
           if (type === 'fit-request') timeline.zoomToFit(16);
+          if (type === 'draw-toggle') {
+            draw.checked = Boolean(detail.enabled);
+            timeline.toggleAttribute('draw', draw.checked);
+          }
         });
       }
       let frame = 0;

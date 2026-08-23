@@ -43,6 +43,9 @@ timeline.setLaneAutomation('drums', [{
   id: 'volume', label: 'Volume', min: -90, max: 12, scale: 'gain', stepped: false,
   points: [{ beat: 0, value: -12 }, { beat: 4, value: 0 }], value: -3,
 }]);
+timeline.setAutomationChooserOpen('drums', 'volume', false);
+timeline.addEventListener('automation-choose', ({ detail }) => host.openAutomationMenu(detail));
+timeline.addEventListener('draw-toggle', ({ detail }) => timeline.toggleAttribute('draw', detail.enabled));
 ```
 
 ## Intents
@@ -82,6 +85,10 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | `device-overflow` / `device-add` | `{laneId, clientX, clientY}` | `+N`, trailing `+`, or empty-device label |
 | `device-move` | `{laneId, deviceId, toLaneId, at, copy}` | Device drag; `at` is the target device id or `null` for the end |
 | `automation-change` | `{laneId, automationId, points}` | Add, move, delete or segment edit commit |
+| `automation-choose` | `{laneId, automationId, clientX, clientY}` | Open the host-owned automation chooser |
+| `automation-add` | `{laneId, clientX, clientY}` | Press `+` in an automation header |
+| `automation-remove` | `{laneId, automationId}` | Press `−` in an automation header |
+| `draw-toggle` | `{enabled}` | Press `b`; the host owns the `draw` attribute |
 | `automation-context` | `{laneId, automationId, clientX, clientY}` | Automation sub-row context menu or Shift-F10 |
 | `automation-header-context` | `{laneId, clientX, clientY}` | Reserved for a lane-header automation menu |
 | `clip-move` | `{ids, laneId, deltaBeats, copy}` | Clip body drag ends |
@@ -119,19 +126,21 @@ in the tab order; focused clips use a roving tab index.
 | `l` with a time selection | Loop the selected time range |
 | Delete / Backspace with a time selection | Emit `time-delete` with `removeTime: false` |
 | Shift-Delete with a time selection | Emit `time-delete` with `removeTime: true` |
-| Double-click a sub-row | Add a point; double-click a point deletes it |
-| Drag a point | Move it, snapping its beat; Alt disables snapping |
-| Drag a segment | Move its two endpoints vertically; Shift makes the move fine |
+| Double-click a sub-row | Add an interpolated point on the line, or a pointer-valued point off-line; double-click a point deletes it |
+| Drag a point | Move it, snapping its beat and optional discrete value step; Alt disables snapping |
+| Drag a segment | Move its two endpoints vertically; Shift makes the move one-quarter speed |
+| `b` | Emit `draw-toggle`; the host toggles the `draw` attribute |
+| `Delete` with an automation time selection | Flatten the selected range, retaining edge points |
 | Delete / Backspace | Delete the focused automation point |
 | Arrow keys | Nudge the focused point by one grid step or 1% of its range |
-| Shift-Left/Right | Nudge a point by one tenth of a grid step |
-| Shift-Up/Down | Nudge a point by one tenth of 1% of its range |
+| Shift-Left/Right | Nudge a point by one-quarter of a grid step |
+| Shift-Up/Down | Nudge a point by one-quarter of 1% of its range |
 
 Space is left to the host's transport shortcut.
 
 ## API and variables
 
-`setLanes(lanes)`, `setLaneClips(laneId, clips)`, `setLaneControls(laneId, controls)`, `setLaneMeters(updates)`, `setLaneFigures(laneId, figures, wash)`, `setLaneSession(laneId, session)`, `setLaneDevices(laneId, devices)`, `setLaneAutomation(laneId, automation)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
+`setLanes(lanes)`, `setLaneClips(laneId, clips)`, `setLaneControls(laneId, controls)`, `setLaneMeters(updates)`, `setLaneFigures(laneId, figures, wash)`, `setLaneSession(laneId, session)`, `setLaneDevices(laneId, devices)`, `setLaneAutomation(laneId, automation)`, `setAutomationChooserOpen(laneId, automationId, open)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
 `setLoop(start, end, enabled, emit, {punchIn, punchOut})`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
 `beginRename(clipId)`, `focusClip(clipId)`, `revealAutomation(laneId, automationId)`, `beatAtPoint(clientX)` and
 `laneAtPoint(clientY)` are the host-facing methods. `locators` and
@@ -194,12 +203,34 @@ does not fit it collapses to `+N`, and the trailing plus/empty label emits
 `device-add`.
 
 When the `automation` attribute is present, each lane may carry
-`automation: [{id, label, color, min, max, stepped, scale, points, state, value}]`.
+`automation: [{id, label, color, min, max, stepped, step, scale, points, state, value}]`.
 Every entry gets a header sub-row and an editable body sub-row. `points` are
 complete `{beat, value}` objects in song beats; values are clamped to `min` and
 `max`, and `scale: "gain"` uses the same taper as `compost-channel-strip`.
+`stepped` changes interpolation to a previous-value hold; when no `step` is
+supplied it uses an integer value step of 1, otherwise an optional positive
+`step` snaps values during point and range edits. Continuous point, segment and
+range gestures move in the rendered display/Y space, including gain-scaled
+lanes, so the same pixel travel has the same visible meaning. Moving an outer
+breakpoint inward retains a synthetic original edge breakpoint so the flat
+pre/post run remains visible, and its drag readout follows the moved point.
+The chooser is a real button with `aria-haspopup="menu"` and host-synchronised
+`aria-expanded`; opening one clears the other chooser states. Compost emits the
+chooser/add/remove intents but never renders the menu.
 `value`, when supplied, is printed as a two-decimal live readout in the header.
 The body draws a flat continuation before the first and after the last point,
 steps when `stepped` is true, and uses the lane colour except for recording or
 overridden states. `setLaneAutomation` accepts an authoritative replacement;
-the host commits the one `automation-change` event emitted after an edit.
+the host commits the one `automation-change` event emitted after an edit. Add
+the `draw` attribute when the host receives `draw-toggle`; draw mode writes
+flat grid-cell pairs (the last sample chronologically wins in each cell, cell
+ends use a small epsilon before the next cell boundary, and points at the
+preceding epsilon or following boundary are retained) or sampled
+Alt/snap-off points, previews in `--compost-timeline-over`, thins freehand once
+on release at `.004 × range`, and emits one complete `automation-change`.
+Pointer cancellation restores the original points without an intent. The draw
+hint appears only while its row is hovered; drag readouts show `beat · value`,
+is vertically centered at the sub-row's right edge, and the envelope line is
+emphasized only when the line itself is hovered. Draw-mode long-press context
+restores the preview without committing it; lane-background drags do not start
+time selections while drawing.
