@@ -41,6 +41,7 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | `lane-create` | `{laneId, beat}` | Double-click empty lane space |
 | `lane-back` | `{laneId}` | Overridden-lane pip |
 | `lane-header-context` | `{laneId, clientX, clientY}` | Lane-header context menu |
+| `lane-toggle` | `{laneId, name: "arm"|"mute"|"solo"}` | Header control press |
 | `clip-move` | `{ids, laneId, deltaBeats, copy}` | Clip body drag ends |
 | `clip-trim-input` / `clip-trim` | `{id, start, end}` | Clip edge drag |
 | `clip-rename` | `{id, name}` | F2 or `beginRename` commit |
@@ -72,7 +73,7 @@ Space is left to the host's transport shortcut.
 
 ## API and variables
 
-`setLanes(lanes)`, `setLaneClips(laneId, clips)`, `setPlayhead(beat)`,
+`setLanes(lanes)`, `setLaneClips(laneId, clips)`, `setLaneControls(laneId, controls)`, `setPlayhead(beat)`,
 `setLoop(start, end, enabled, emit, {punchIn, punchOut})`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
 `beginRename(clipId)`, `focusClip(clipId)`, `beatAtPoint(clientX)` and
 `laneAtPoint(clientY)` are the host-facing methods. The `pxPerBeat`,
@@ -92,3 +93,9 @@ readable; `pxPerBeat`, `scrollBeat` and `selected` are writable.
 The host may pass `progress` from `0` to `1` on a playing clip. The loop
 handles accept `punchIn` and `punchOut` in the optional fifth argument; the
 corresponding caps use `--compost-timeline-over`.
+
+A lane may carry `controls: {armed, muted, soloed}`. The header renders the
+`●`, `M` and `S` controls with `aria-pressed`, short titles and keyboard focus;
+the host applies each `lane-toggle` intent and may repaint only that header
+with `setLaneControls`. Lanes without `controls` continue to use the older
+`armed` field without adding controls.

@@ -716,6 +716,35 @@ test('timeline visual states match the clip grid without a second lane number', 
   expect(measured.hasNumber).toBe(false);
 });
 
+test('timeline lane headers expose arm, mute and solo controls', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.addEventListener('lane-toggle', (event) => element.testEvents.push(event.detail));
+    element.setLanes([{ id: 'lane', name: '01 MIDI 1', controls: { armed: true, muted: false, soloed: true }, clips: [] }]);
+  });
+  const controls = timeline.locator('.lane-control');
+  await expect(controls).toHaveCount(3);
+  await expect(controls.nth(0)).toHaveAttribute('title', 'arm');
+  await expect(controls.nth(1)).toHaveAttribute('title', 'mute');
+  await expect(controls.nth(2)).toHaveAttribute('title', 'solo');
+  await expect(controls.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  await expect(controls.nth(1)).toHaveAttribute('aria-pressed', 'false');
+  await expect(controls.nth(2)).toHaveAttribute('aria-pressed', 'true');
+  const tabOrder = await timeline.evaluate((element) => [...element.shadowRoot.querySelectorAll('.lane-name, .lane-control')]
+    .map((node) => ({ className: node.className, tabIndex: node.tabIndex })));
+  expect(tabOrder.map(({ className }) => className)).toEqual(['lane-name', 'lane-control', 'lane-control', 'lane-control']);
+  expect(tabOrder.every(({ tabIndex }) => tabIndex === 0)).toBe(true);
+
+  await controls.nth(1).click();
+  expect(await timeline.evaluate((element) => element.testEvents)).toEqual([{ laneId: 'lane', name: 'mute' }]);
+  await timeline.evaluate((element) => element.setLaneControls('lane', { armed: false, muted: true, soloed: false }));
+  await expect(controls.nth(0)).toHaveAttribute('aria-pressed', 'false');
+  await expect(controls.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(controls.nth(2)).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('note editor moves, trims, velocity-drags and loops through real gestures', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');

@@ -13,7 +13,8 @@ const DRAG_THRESHOLD = 3;
  * offset?: number, duration: number, loop?: boolean, state?: string,
  * progress?: number, notes?: {start: number, duration: number, note: number}[], color?: string}} TimelineClip */
 /** @typedef {{id: string, name: string, color?: string, overridden?: boolean,
- * armed?: boolean, recording?: boolean, clips: TimelineClip[]}} TimelineLane */
+ * armed?: boolean, recording?: boolean, controls?: {armed: boolean, muted: boolean, soloed: boolean},
+ * clips: TimelineClip[]}} TimelineLane */
 
 /** @param {number} value @param {number} min @param {number} max */
 const finiteClamp = (value, min, max) => clamp(Number.isFinite(value) ? value : min, min, max);
@@ -181,7 +182,14 @@ export class CompostTimeline extends HTMLElement {
         .header-wrap { overflow: hidden; }
         .headers { position: relative; }
         .lane-header { box-sizing: border-box; height: var(--compost-timeline-row-height); display: flex; align-items: center; gap: .45em; padding: 0 .6em; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, var(--compost-timeline-text)); font-size: var(--compost-timeline-lane-font-size); }
-        .lane-header .lane-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+        .lane-header .lane-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; cursor: default; }
+        .lane-header .lane-name:focus-visible { outline: 1px dotted var(--compost-timeline-select); outline-offset: 2px; }
+        .lane-controls { display: flex; flex: none; align-items: center; gap: .18em; margin-left: auto; }
+        .lane-control { appearance: none; border: 0; border-radius: 2px; min-width: 1.45em; height: 1.45em; padding: 0 .2em; background: none; color: var(--compost-timeline-muted); font: inherit; font-size: .78em; line-height: 1; cursor: pointer; }
+        .lane-control:hover, .lane-control:focus-visible { color: var(--compost-timeline-text); background: var(--compost-timeline-highlight); }
+        .lane-control:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 1px; }
+        .lane-control[data-name="arm"][aria-pressed="true"] { color: var(--compost-timeline-over); }
+        .lane-control[data-name="mute"][aria-pressed="true"], .lane-control[data-name="solo"][aria-pressed="true"] { color: var(--compost-timeline-text); background: var(--compost-timeline-highlight); }
         .back-pip { flex: none; width: .58em; height: .58em; border: 0; border-radius: 50%; padding: 0; background: var(--compost-timeline-loop); cursor: pointer; }
         .back-pip:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 2px; }
         .lanes-wrap { position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; touch-action: none; }
@@ -312,13 +320,14 @@ export class CompostTimeline extends HTMLElement {
     this.style.setProperty('--compost-timeline-row-height', `${this.laneHeight}px`);
   }
 
-  get lanes() { return this._lanes.map((lane) => ({ ...lane, clips: lane.clips.map((clip) => ({ ...clip })) })); }
+  get lanes() { return this._lanes.map((lane) => ({ ...lane, controls: lane.controls ? { ...lane.controls } : undefined, clips: lane.clips.map((clip) => ({ ...clip })) })); }
 
   /** Replace all lanes and clips; this never emits a model intent. */
   /** @param {TimelineLane[]} lanes */
   setLanes(lanes) {
     this._lanes = Array.isArray(lanes) ? lanes.map((lane) => ({
       ...lane,
+      controls: lane.controls ? { armed: Boolean(lane.controls.armed), muted: Boolean(lane.controls.muted), soloed: Boolean(lane.controls.soloed) } : undefined,
       clips: Array.isArray(lane.clips) ? lane.clips.map((clip) => ({ ...clip, notes: clip.notes?.map((note) => ({ ...note })) })) : [],
     })) : [];
     const ids = new Set(this._lanes.flatMap((lane) => lane.clips.map((clip) => clip.id)));
@@ -334,6 +343,20 @@ export class CompostTimeline extends HTMLElement {
     if (!lane) return;
     lane.clips = Array.isArray(clips) ? clips.map((clip) => ({ ...clip })) : [];
     this.render();
+  }
+
+  /** Update one lane's header controls without rebuilding its clips. */
+  /** @param {string} laneId @param {{armed: boolean, muted: boolean, soloed: boolean}} controls */
+  setLaneControls(laneId, controls) {
+    const lane = this._lanes.find((entry) => entry.id === laneId);
+    if (!lane || !controls) return;
+    lane.controls = { armed: Boolean(controls.armed), muted: Boolean(controls.muted), soloed: Boolean(controls.soloed) };
+    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
+    const existing = header?.querySelector('.lane-controls');
+    if (!(header instanceof HTMLElement)) return;
+    const next = this.renderLaneControls(lane);
+    if (existing) existing.replaceWith(next);
+    else header.append(next);
   }
 
   get playhead() { return this._playhead; }
@@ -528,31 +551,65 @@ export class CompostTimeline extends HTMLElement {
     this.rulerWorld.append(fragment);
   }
 
+  /** @param {TimelineLane} lane */
+  renderLaneControls(lane) {
+    const controls = document.createElement('span');
+    controls.className = 'lane-controls';
+    controls.setAttribute('role', 'group');
+    controls.setAttribute('aria-label', `${lane.name || lane.id} controls`);
+    for (const [name, glyph] of [['armed', '●'], ['muted', 'M'], ['soloed', 'S']]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'lane-control';
+      button.dataset.name = name === 'armed' ? 'arm' : name === 'muted' ? 'mute' : 'solo';
+      button.textContent = glyph;
+      button.title = button.dataset.name;
+      button.setAttribute('aria-label', `${button.dataset.name} ${lane.name || lane.id}`);
+      button.setAttribute('aria-pressed', String(Boolean(lane.controls?.[name])));
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.dispatchEvent(eventOf('lane-toggle', { laneId: lane.id, name: button.dataset.name }));
+      });
+      controls.append(button);
+    }
+    return controls;
+  }
+
+  /** @param {TimelineLane} lane */
+  renderLaneHeader(lane) {
+    const header = document.createElement('div');
+    header.className = 'lane-header';
+    header.dataset.laneId = lane.id;
+    header.part.add('lane-header');
+    header.setAttribute('role', 'listitem');
+    header.tabIndex = -1;
+    header.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
+    const name = document.createElement('span');
+    name.className = 'lane-name';
+    name.textContent = lane.name || lane.id;
+    name.tabIndex = 0;
+    name.setAttribute('role', 'button');
+    name.setAttribute('aria-label', `${lane.name || lane.id} lane`);
+    name.addEventListener('focus', () => { this.focusedLane = lane.id; this.focusedClip = null; });
+    header.append(name);
+    if (lane.overridden) {
+      const back = document.createElement('button');
+      back.className = 'back-pip';
+      back.type = 'button';
+      back.dataset.laneId = lane.id;
+      back.title = 'back to timeline';
+      back.setAttribute('aria-label', `Back to timeline for ${lane.name || lane.id}`);
+      header.append(back);
+    }
+    if (lane.controls) header.append(this.renderLaneControls(lane));
+    return header;
+  }
+
   renderLanes() {
     const headerFragment = document.createDocumentFragment();
     const laneFragment = document.createDocumentFragment();
     this._lanes.forEach((lane) => {
-      const header = document.createElement('div');
-      header.className = 'lane-header';
-      header.dataset.laneId = lane.id;
-      header.part.add('lane-header');
-      header.setAttribute('role', 'listitem');
-      header.tabIndex = -1;
-      header.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
-      const name = document.createElement('span');
-      name.className = 'lane-name';
-      name.textContent = lane.name || lane.id;
-      header.append(name);
-      if (lane.overridden) {
-        const back = document.createElement('button');
-        back.className = 'back-pip';
-        back.type = 'button';
-        back.dataset.laneId = lane.id;
-        back.title = 'back to timeline';
-        back.setAttribute('aria-label', `Back to timeline for ${lane.name || lane.id}`);
-        header.append(back);
-      }
-      headerFragment.append(header);
+      headerFragment.append(this.renderLaneHeader(lane));
 
       const row = document.createElement('div');
       row.className = 'lane';
@@ -811,6 +868,7 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('lane-back', { laneId: pip.dataset.laneId }));
       return;
     }
+    if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('lane-control'))) return;
     const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
       && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
     if (loopPart instanceof HTMLElement) return;
