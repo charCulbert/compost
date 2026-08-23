@@ -1731,6 +1731,19 @@ export class CompostTimeline extends HTMLElement {
     const current = this.focusedClip || this._selected[0];
     const found = current ? this.findClip(current) : null;
     const meta = event.metaKey || event.ctrlKey;
+    // loop the selection: Cmd/Ctrl-L as in Ableton, and plain `l` because the browser
+    // keeps Cmd-L for its address bar
+    if (event.key.toLowerCase() === 'l' && !event.altKey && !event.shiftKey) {
+      const ids = this._selected.length ? this._selected : found ? [found.clip.id] : [];
+      const clips = ids.map((id) => this.findClip(id)?.clip).filter(Boolean);
+      if (clips.length) {
+        event.preventDefault();
+        const start = Math.min(...clips.map((clip) => Number(clip.start) || 0));
+        const end = Math.max(...clips.map((clip) => (Number(clip.start) || 0) + (Number(clip.length) || 0)));
+        if (end > start + MIN_CLIP_LENGTH) this.setLoop(start, end, true, true);
+      }
+      return;
+    }
     if (event.shiftKey && event.key === 'F10') {
       if (found) {
         event.preventDefault();

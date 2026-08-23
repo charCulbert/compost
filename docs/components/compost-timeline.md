@@ -76,6 +76,7 @@ in the tab order; focused clips use a roving tab index.
 | Delete / Backspace | Delete selected clips |
 | Cmd/Ctrl-D | Duplicate |
 | Cmd/Ctrl-E | Split at the supplied playhead |
+| Cmd/Ctrl-L, or `l` | Loop brace around the selected clips (`loop-change`, enabled) |
 | Alt-Left/Right | Nudge by one grid step |
 | `[` / `]` | Zoom out / in around the playhead |
 | Shift-F10 | Open a context menu |

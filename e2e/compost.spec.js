@@ -1195,3 +1195,22 @@ test('timeline automation headers stay level with their rows and a trim preview 
   expect(Math.abs(during - before)).toBeLessThan(1);
   expect(loopLines).toBeGreaterThanOrEqual(1);
 });
+
+test('timeline loops the selected clips on l and Cmd/Ctrl-L', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.addEventListener('loop-change', (event) => element.testEvents.push(event.detail));
+    element.setLanes([{ id: 'a', name: 'A', clips: [
+      { id: 'c1', name: 'one', start: 2, length: 2, duration: 2, offset: 0, loop: false, notes: [] },
+      { id: 'c2', name: 'two', start: 6, length: 3, duration: 3, offset: 0, loop: false, notes: [] },
+    ] }]);
+    element.selected = ['c1', 'c2'];
+    element.focusClip('c1');
+  });
+  await timeline.locator('.clip[data-id="c1"]').press('l');
+  const events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.at(-1)).toEqual({ start: 2, end: 9, enabled: true });
+  expect(await timeline.evaluate((element) => [element.loopStart, element.loopEnd])).toEqual([2, 9]);
+});
