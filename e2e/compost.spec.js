@@ -786,12 +786,8 @@ test('timeline automation rows draw and commit sorted edits without clip selecti
 
   const row = timeline.locator('.automation-row');
   const rowBox = await row.boundingBox();
-  await row.dispatchEvent('dblclick', {
-    bubbles: true,
-    composed: true,
-    clientX: rowBox.x + 52,
-    clientY: rowBox.y + rowBox.height * .7,
-  });
+  // a real double-click: the first click must not rebuild the row under the pointer
+  await page.mouse.dblclick(rowBox.x + 52, rowBox.y + rowBox.height * .7);
   let events = await timeline.evaluate((element) => element.testEvents);
   const add = events.find((event) => event.type === 'automation-change');
   expect(add.detail.laneId).toBe('lane');

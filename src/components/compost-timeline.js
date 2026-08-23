@@ -1515,7 +1515,9 @@ export class CompostTimeline extends HTMLElement {
           automationId: drag.automationId,
           points: drag.previewPoints.map((point) => ({ ...point })),
         }));
-      } else this.render();
+      }
+      // a plain click changes nothing and must not rebuild the row under the pointer:
+      // a rebuilt row is a new target and the browser then never fires dblclick
       return;
     }
     if (drag.type === 'marquee') {
