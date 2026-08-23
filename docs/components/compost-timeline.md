@@ -3,6 +3,9 @@
 `compost-timeline` draws timeline lanes supplied by its host. It owns no
 musical model or audio state: clips, loop values and the playhead are pushed in
 through the API, while pointer and keyboard gestures bubble as intent events.
+Lanes use the same sparse, signal-first language as `compost-clip-grid`: a clip
+at rest is a lit name and note dashes on the lane, while a playing clip carries
+a wash and optional progress.
 
 ```html
 <compost-timeline id="timeline" label="Timeline" beats-per-bar="4"
@@ -12,10 +15,11 @@ through the API, while pointer and keyboard gestures bubble as intent events.
 ```js
 timeline.setLanes([
   { id: 'drums', name: '01 Drums', color: '#c45a2c', clips: [
-    { id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true },
+    { id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true,
+      state: 'playing', progress: 0.3 },
   ] },
 ]);
-timeline.setLoop(0, 8, false);
+timeline.setLoop(0, 8, false, false, { punchIn: false, punchOut: false });
 timeline.setPlayhead(2.5);
 timeline.addEventListener('clip-move', ({ detail }) => host.move(detail));
 ```
@@ -69,7 +73,7 @@ Space is left to the host's transport shortcut.
 ## API and variables
 
 `setLanes(lanes)`, `setLaneClips(laneId, clips)`, `setPlayhead(beat)`,
-`setLoop(start, end, enabled, emit)`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
+`setLoop(start, end, enabled, emit, {punchIn, punchOut})`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
 `beginRename(clipId)`, `focusClip(clipId)`, `beatAtPoint(clientX)` and
 `laneAtPoint(clientY)` are the host-facing methods. The `pxPerBeat`,
 `scrollBeat`, `playhead`, `loopStart`, `loopEnd` and `selected` properties are
@@ -79,7 +83,12 @@ readable; `pxPerBeat`, `scrollBeat` and `selected` are writable.
 | --- | --- |
 | `--compost-timeline-bg`, `-text`, `-muted`, `-faint` | Surface and type |
 | `--compost-timeline-line`, `-bar-line`, `-lane`, `-lane-alt`, `-header-bg` | Rules and lane surfaces |
-| `--compost-timeline-clip-wash-alpha`, `-select`, `-marquee` | Clip fill and selection |
+| `--compost-timeline-signal-hi`, `-wash`, `-over`, `-highlight` | Playing, wash and recording states |
+| `--compost-timeline-clip-font-size`, `-lane-font-size`, `-select`, `-marquee` | Clip typography and selection |
 | `--compost-timeline-playhead`, `-loop`, `-loop-off` | Ruler and transport marks |
 | `--compost-timeline-row-height`, `-font`, `-numeral-font` | Geometry and typography |
 | `--compost-timeline-color-scheme` | Native control colour scheme |
+
+The host may pass `progress` from `0` to `1` on a playing clip. The loop
+handles accept `punchIn` and `punchOut` in the optional fifth argument; the
+corresponding caps use `--compost-timeline-over`.

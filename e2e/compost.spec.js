@@ -672,6 +672,50 @@ test('timeline keeps lane headers aligned and touch drags scroll time', async ({
   expect(touchTap.detail.source).toBe('lane');
 });
 
+test('timeline visual states match the clip grid without a second lane number', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.style.setProperty('--compost-timeline-bg', 'rgb(0, 0, 0)');
+    element.style.setProperty('--compost-timeline-lane', 'rgb(0, 0, 0)');
+    element.style.setProperty('--compost-timeline-lane-alt', 'rgb(0, 0, 0)');
+    element.style.setProperty('--compost-timeline-wash', 'rgb(4, 5, 6)');
+    element.style.setProperty('--compost-timeline-signal-hi', 'rgb(7, 8, 9)');
+    element.style.setProperty('--compost-timeline-clip-font-size', '13px');
+    element.style.setProperty('--compost-timeline-lane-font-size', '14px');
+    element.setLanes([{ id: 'lane', name: '01 MIDI 1', color: 'rgb(10, 11, 12)', clips: [
+      { id: 'playing', name: 'playing', start: 0, length: 4, duration: 4, state: 'playing', progress: .5 },
+    ] }]);
+    element.selected = ['playing'];
+  });
+  const measured = await timeline.evaluate((element) => {
+    const lane = element.shadowRoot.querySelector('.lane');
+    const header = element.shadowRoot.querySelector('.lane-header');
+    const clip = element.shadowRoot.querySelector('.clip');
+    const hostBackground = getComputedStyle(element).backgroundColor;
+    const clipProgress = clip.querySelector('.clip-progress');
+    return {
+      hostBackground,
+      laneBackground: getComputedStyle(lane).backgroundColor,
+      clipBackground: getComputedStyle(clip).backgroundColor,
+      selectedOutline: getComputedStyle(clip).outlineStyle,
+      cornerBorder: getComputedStyle(clip, '::before').borderTopWidth,
+      headerFontSize: getComputedStyle(header).fontSize,
+      clipFontSize: getComputedStyle(clip.querySelector('.clip-name')).fontSize,
+      progressWidth: clipProgress?.getBoundingClientRect().width ?? 0,
+      hasNumber: Boolean(header.querySelector('.number')),
+    };
+  });
+  expect(measured.laneBackground).toBe(measured.hostBackground);
+  expect(measured.clipBackground).toBe('rgb(4, 5, 6)');
+  expect(measured.selectedOutline).toBe('none');
+  expect(measured.cornerBorder).toBe('1px');
+  expect(measured.headerFontSize).toBe('14px');
+  expect(measured.clipFontSize).toBe('13px');
+  expect(measured.progressWidth).toBeGreaterThan(0);
+  expect(measured.hasNumber).toBe(false);
+});
+
 test('note editor moves, trims, velocity-drags and loops through real gestures', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
