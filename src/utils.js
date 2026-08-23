@@ -122,6 +122,7 @@ export function parameterEventDetail(control, value, extra = {}) {
 export function beginParameterGesture(control, value = control.value, extra = {}) {
   if (control._parameterGestureActive) return;
   control._parameterGestureActive = true;
+  control._parameterGestureStartValue = value;
   control.dispatchEvent(new CustomEvent('parameter-begin', {
     bubbles: true,
     composed: true,
@@ -141,9 +142,16 @@ export function editParameterGesture(control, value = control.value, extra = {})
 export function endParameterGesture(control, value = control.value, extra = {}) {
   if (!control._parameterGestureActive) return;
   control._parameterGestureActive = false;
+  const cancelled = Boolean(extra.cancelled);
+  const finalValue = cancelled ? control._parameterGestureStartValue : value;
+  delete control._parameterGestureStartValue;
+  if (cancelled) {
+    if (typeof control.setValue === 'function') control.setValue(finalValue, false, 'cancel');
+    else if ('value' in Object(control)) control.value = finalValue;
+  }
   control.dispatchEvent(new CustomEvent('parameter-end', {
     bubbles: true,
     composed: true,
-    detail: parameterEventDetail(control, value, extra),
+    detail: parameterEventDetail(control, finalValue, extra),
   }));
 }

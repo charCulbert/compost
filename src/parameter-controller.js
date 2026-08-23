@@ -361,7 +361,8 @@ export class ParameterController extends EventTarget {
       cancelled: Boolean(event.detail?.cancelled),
     };
 
-    if (event.type === 'parameter-edit') {
+    if (event.type === 'parameter-edit'
+        || event.type === 'parameter-end' && detail.cancelled) {
       this.values.set(id, parsed);
       for (const control of this.controls.get(id) || []) {
         if (control !== event.target) setControlValue(control, parsed, 'sibling');

@@ -52,6 +52,22 @@ test('controller re-emits lifecycle and synchronizes sibling user edits', () => 
   assert.equal(second.value, 0.7);
 });
 
+test('controller restores accepted state when a gesture is cancelled', () => {
+  const first = new FakeControl({ 'parameter-id': 'gain', min: 0, max: 1, value: 0.2 });
+  const second = new FakeControl({ 'parameter-id': 'gain', min: 0, max: 1, value: 0.2 });
+  const parameters = createParameterController({ root: new FakeRoot([first, second]) });
+
+  parameters.handleEvent({ type: 'parameter-begin', target: first,
+    detail: { parameterID: 'gain', value: 0.2 } });
+  parameters.handleEvent({ type: 'parameter-edit', target: first,
+    detail: { parameterID: 'gain', value: 0.7 } });
+  parameters.handleEvent({ type: 'parameter-end', target: first,
+    detail: { parameterID: 'gain', value: 0.2, cancelled: true } });
+
+  assert.equal(parameters.value('gain'), 0.2);
+  assert.equal(second.value, 0.2);
+});
+
 test('local DOM mode derives a definition from the first control', () => {
   const control = new FakeControl({
     'parameter-id': 'mode',

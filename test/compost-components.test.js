@@ -584,6 +584,15 @@ test('parameter lifecycle details always state whether the gesture was cancelled
   endParameterGesture(control, 0.75);
 
   assert.deepEqual(events.map((event) => event.detail.cancelled), [false, false, false]);
+
+  control.value = 0.75;
+  beginParameterGesture(control);
+  control.value = 1;
+  editParameterGesture(control, 1);
+  endParameterGesture(control, 1, { cancelled: true });
+  assert.equal(control.value, 0.75);
+  assert.equal(events.at(-1).detail.value, 0.75);
+  assert.equal(events.at(-1).detail.cancelled, true);
 });
 
 test('number box MIDI labels replace the inline value', () => {
