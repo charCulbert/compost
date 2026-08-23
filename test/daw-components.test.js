@@ -22,7 +22,6 @@ const {
   snapAutomationValue, effectiveAutomationStep, automationValueAtBeat, automationRangeEdgeValues,
   moveAutomationPointsByY, moveAutomationRangeByY, thinAutomationPoints, drawAutomationPoints,
   flattenAutomationRange, moveAutomationRange,
-  splitDeviceChain,
 } = await import('../src/components/compost-timeline.js');
 const { boundedPosition, constrainedSize } = await import('../src/components/compost-window.js');
 const { pointPlacement } = await import('../src/components/compost-popup.js');
@@ -147,23 +146,6 @@ test('locators stay stable and time selections snap and clamp', () => {
   assert.deepEqual(normalizeTimeSelection(9, 1, ['b', 'a', 'b'], 8), { start: 1, end: 8, laneIds: ['b', 'a'] });
   assert.equal(normalizeTimeSelection(2, 2, ['a'], 8), null);
   assert.equal(normalizeTimeSelection(null, 4, ['a'], 8), null);
-});
-
-test('device chains keep the first fitting devices and expose a compact overflow tail', () => {
-  const devices = [
-    { id: 'a', name: 'MNO' },
-    { id: 'b', name: 'Delay' },
-    { id: 'c', name: 'Reverb' },
-  ];
-  assert.deepEqual(splitDeviceChain(devices, Number.POSITIVE_INFINITY), {
-    visible: devices, hidden: [], overflow: 0,
-  });
-  const compact = splitDeviceChain(devices, 90);
-  assert.equal(compact.visible.length, 1);
-  assert.equal(compact.hidden.length, 2);
-  assert.equal(compact.overflow, 2);
-  assert.equal(compact.visible[0].id, 'a');
-  assert.equal(splitDeviceChain([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], 60, () => 20).visible.length, 0);
 });
 
 test('automation geometry follows linear and fader axes', () => {

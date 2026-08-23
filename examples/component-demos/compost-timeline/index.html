@@ -51,18 +51,18 @@
       const automation = document.querySelector('[data-automation]');
       const draw = document.querySelector('[data-draw]');
       const lanes = [
-        { id: 'drums', name: 'Drums', color: '#c45a2c', colorRGB: '196,90,44', picked: true, wash: .72, meter: [-8, -11], gainReduction: -4, controls: { armed: true, monitor: 'auto', muted: false, soloed: false }, figures: { faderDb: -3, pan: 0, sends: [{ id: 'a', letter: 'A', db: -12 }, { id: 'b', letter: 'B', db: -90 }] }, devices: [{ id: 'mno', name: 'MNO', on: true, kind: 'instrument' }, { id: 'delay', name: 'Delay', on: false, kind: 'effect' }, { id: 'verb', name: 'Reverb', on: true, kind: 'effect' }], automation: [
+        { id: 'drums', name: 'Drums', color: '#c45a2c', picked: true, automation: [
           { id: 'volume', label: 'Volume', color: '#c45a2c', min: -90, max: 12, scale: 'gain', stepped: false, state: 'playing', value: -3, points: [{ beat: 0, value: -12 }, { beat: 4, value: 0 }, { beat: 8, value: -6 }] },
         ], clips: [
           { id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, offset: 0, loop: true, state: 'stopped', notes: [{ start: 0, duration: .25, note: 36, velocity: 30 }, { start: .5, duration: .25, note: 42, velocity: 80 }, { start: 1, duration: .25, note: 38, velocity: 120 }] },
           { id: 'fill', name: 'fill', start: 10, length: 4, duration: 4, offset: 0, loop: false, state: 'stopped', notes: [{ start: 0, duration: .5, note: 45 }, { start: 1, duration: .25, note: 48 }] },
         ], envelope: { min: -90, max: 12, scale: 'gain', stepped: false, points: [{ beat: 0, value: -12 }, { beat: 4, value: 0 }, { beat: 8, value: -6 }] } },
-        { id: 'bass', name: 'Bass', color: '#6689ad', wash: .48, meter: [-18, -20], gainReduction: 0, controls: { armed: false, monitor: 'off', muted: false, soloed: true }, figures: { faderDb: -6, pan: -.12, sends: [{ id: 'a', letter: 'A', db: -18 }] }, devices: [{ id: 'synth', name: 'Synth', on: true, kind: 'instrument' }, { id: 'chorus', name: 'Chorus', on: true, kind: 'effect' }], automation: [
+        { id: 'bass', name: 'Bass', color: '#6689ad', automation: [
           { id: 'pan', label: 'Pan', color: '#6689ad', min: -1, max: 1, stepped: true, state: 'idle', value: 0, points: [{ beat: 0, value: -.5 }, { beat: 6, value: .5 }] },
         ], clips: [
           { id: 'bass-line', name: 'bass line', start: 4, length: 12, duration: 4, offset: 0, loop: true, state: 'playing', notes: [{ start: 0, duration: 1, note: 40 }, { start: 1.5, duration: .5, note: 43 }] },
         ] },
-        { id: 'keys', name: 'Keys', color: '#a58bbd', controls: { armed: false, muted: true, soloed: false }, automation: [
+        { id: 'keys', name: 'Keys', color: '#a58bbd', dimmed: true, automation: [
           { id: 'filter', label: 'Filter', color: '#a58bbd', min: 0, max: 1, stepped: false, state: 'idle', value: .7, points: [{ beat: 2, value: .2 }, { beat: 8, value: .7 }] },
         ], clips: [
           { id: 'pad', name: 'pad', start: 2, length: 6, duration: 6, offset: 0, loop: false, state: 'open', notes: [{ start: 0, duration: 2, note: 60 }, { start: 2, duration: 2, note: 64 }] },
@@ -78,7 +78,7 @@
       timeline.setPlayhead(0);
       automation.addEventListener('change', () => timeline.toggleAttribute('automation', automation.checked));
       draw.addEventListener('change', () => timeline.toggleAttribute('draw', draw.checked));
-      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-back', 'lane-header-context', 'lane-pick', 'lane-move', 'lane-toggle', 'lane-figure-input', 'lane-figure-change', 'device-toggle', 'device-open', 'device-context', 'device-overflow', 'device-add', 'device-move', 'automation-change', 'automation-choose', 'automation-add', 'automation-remove', 'draw-toggle', 'automation-context', 'automation-header-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
+      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-header-context', 'lane-pick', 'lane-move', 'automation-change', 'automation-choose', 'automation-add', 'automation-remove', 'draw-toggle', 'automation-context', 'automation-header-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
         timeline.addEventListener(type, (event) => {
           const detail = { ...event.detail };
           delete detail.clientX;

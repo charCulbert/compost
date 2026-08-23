@@ -782,7 +782,7 @@ test('timeline rulers expose locators, time selections and measured row geometry
     element.setLanes([
       { id: 'a', name: 'A', clips: [], automation: [{ id: 'volume', label: 'Volume', min: 0, max: 1, points: [] }] },
       { id: 'b', name: 'B', clips: [{ id: 'inside', name: 'inside', start: 5, length: 1, duration: 1, notes: [] }] },
-      { id: 'c', name: 'C', kind: 'return', clips: [{ id: 'crossing', name: 'crossing', start: 3, length: 6, duration: 6, notes: [] }] },
+      { id: 'c', name: 'C', compact: true, clips: [{ id: 'crossing', name: 'crossing', start: 3, length: 6, duration: 6, notes: [] }] },
     ]);
     element.setLocators([{ id: 'drop', beat: 8, name: 'drop' }, { id: 'intro', beat: 0, name: 'intro' }]);
     element.setTimeSelection(null, null);
@@ -1127,7 +1127,7 @@ test('timeline paints velocity dashes, hidden envelopes and clip drop targets', 
         { start: 3, duration: .25, note: 72 },
       ] }, { id: 'lit', name: 'lit', start: 5, length: 1, duration: 1, state: 'playing', notes: [{ start: 0, duration: .25, note: 60, velocity: 30 }] }] },
       { id: 'target', name: 'Target', clips: [] },
-      { id: 'muted', name: 'Muted', muted: true, clips: [{ id: 'muted-clip', name: 'muted', start: 0, length: 1, duration: 1, notes: [] }] },
+      { id: 'dimmed', name: 'Dimmed', dimmed: true, clips: [{ id: 'dimmed-clip', name: 'dimmed', start: 0, length: 1, duration: 1, notes: [] }] },
     ]);
   });
   const painted = await timeline.evaluate((element) => {
@@ -1136,8 +1136,8 @@ test('timeline paints velocity dashes, hidden envelopes and clip drop targets', 
     const envelope = root.querySelector('.lane-envelope-line');
     const overlay = root.querySelector('.lane-envelope-overlay');
     const playingNotes = root.querySelector('.clip[data-id="lit"] .clip-notes');
-    const mutedLane = root.querySelector('.lane[data-lane-id="muted"]');
-    const mutedClip = root.querySelector('.clip[data-id="muted-clip"]');
+    const dimmedLane = root.querySelector('.lane[data-lane-id="dimmed"]');
+    const dimmedClip = root.querySelector('.clip[data-id="dimmed-clip"]');
     const sourceBase = root.querySelector('.lane[data-lane-id="source"] .lane-base');
     const lanesWorld = root.querySelector('.lanes-world');
     return {
@@ -1146,9 +1146,9 @@ test('timeline paints velocity dashes, hidden envelopes and clip drop targets', 
       envelopePath: envelope.getAttribute('d'),
       overlayPointerEvents: getComputedStyle(overlay).pointerEvents,
       playingNotesOpacity: Number(getComputedStyle(playingNotes).opacity),
-      muted: mutedLane.hasAttribute('data-muted'),
-      mutedClipOpacity: Number(getComputedStyle(mutedClip).opacity),
-      mutedFilter: getComputedStyle(mutedLane).filter,
+      dimmed: dimmedLane.hasAttribute('data-dimmed'),
+      dimmedClipOpacity: Number(getComputedStyle(dimmedClip).opacity),
+      dimmedFilter: getComputedStyle(dimmedLane).filter,
       envelopeHeight: overlay.getBoundingClientRect().height,
       baseHeight: sourceBase.getBoundingClientRect().height,
       envelopeWidth: overlay.getBoundingClientRect().width,
@@ -1163,9 +1163,9 @@ test('timeline paints velocity dashes, hidden envelopes and clip drop targets', 
   expect(painted.envelopePath).toContain('L');
   expect(painted.overlayPointerEvents).toBe('none');
   expect(painted.playingNotesOpacity).toBeCloseTo(1, 3);
-  expect(painted.muted).toBe(true);
-  expect(painted.mutedClipOpacity).toBeCloseTo(.4, 3);
-  expect(painted.mutedFilter).toBe('none');
+  expect(painted.dimmed).toBe(true);
+  expect(painted.dimmedClipOpacity).toBeCloseTo(.4, 3);
+  expect(painted.dimmedFilter).toBe('none');
   expect(Math.abs(painted.envelopeHeight - painted.baseHeight)).toBeLessThan(1);
   expect(Math.abs(painted.envelopeWidth - painted.worldWidth)).toBeLessThan(1);
 
@@ -1201,48 +1201,6 @@ test('timeline paints velocity dashes, hidden envelopes and clip drop targets', 
   await page.mouse.up();
 });
 
-test('timeline lane headers expose arm, mute and solo controls', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
-  const timeline = page.locator('compost-timeline');
-  await timeline.evaluate((element) => {
-    element.testEvents = [];
-    element.addEventListener('lane-toggle', (event) => element.testEvents.push(event.detail));
-    element.setLanes([{ id: 'lane', name: '01 MIDI 1', controls: { armed: true, muted: false, soloed: true }, clips: [
-      { id: 'mute-check', name: 'mute-check', start: 0, length: 1, duration: 1, notes: [] },
-    ] }]);
-  });
-  const controls = timeline.locator('.lane-control');
-  await expect(controls).toHaveCount(3);
-  await expect(controls.nth(0)).toHaveAttribute('title', 'arm');
-  await expect(controls.nth(1)).toHaveAttribute('title', 'mute');
-  await expect(controls.nth(2)).toHaveAttribute('title', 'solo');
-  await expect(controls.nth(0)).toHaveAttribute('aria-pressed', 'true');
-  await expect(controls.nth(1)).toHaveAttribute('aria-pressed', 'false');
-  await expect(controls.nth(2)).toHaveAttribute('aria-pressed', 'true');
-  const tabOrder = await timeline.evaluate((element) => [...element.shadowRoot.querySelectorAll('.lane-name, .lane-control')]
-    .map((node) => ({ className: node.className, tabIndex: node.tabIndex })));
-  expect(tabOrder.map(({ className }) => className)).toEqual(['lane-name', 'lane-control', 'lane-control', 'lane-control']);
-  expect(tabOrder.every(({ tabIndex }) => tabIndex === 0)).toBe(true);
-
-  await controls.nth(1).click();
-  expect(await timeline.evaluate((element) => element.testEvents)).toEqual([{ laneId: 'lane', name: 'mute' }]);
-  await timeline.evaluate((element) => element.setLaneControls('lane', { armed: false, muted: true, soloed: false }));
-  await expect(controls.nth(0)).toHaveAttribute('aria-pressed', 'false');
-  await expect(controls.nth(1)).toHaveAttribute('aria-pressed', 'true');
-  await expect(controls.nth(2)).toHaveAttribute('aria-pressed', 'false');
-  expect(await timeline.evaluate((element) => ({
-    muted: element.shadowRoot.querySelector('.lane').hasAttribute('data-muted'),
-    opacity: getComputedStyle(element.shadowRoot.querySelector('.clip')).opacity,
-  }))).toEqual({ muted: true, opacity: '0.4' });
-  await timeline.evaluate((element) => element.setLaneControls('lane', { armed: false, muted: false, soloed: false }));
-  expect(await timeline.evaluate((element) => ({
-    muted: element.shadowRoot.querySelector('.lane').hasAttribute('data-muted'),
-    opacity: getComputedStyle(element.shadowRoot.querySelector('.clip')).opacity,
-  }))).toEqual({ muted: false, opacity: '1' });
-  await timeline.evaluate((element) => element.setLaneControls('lane', { armed: false, muted: true, soloed: false }));
-  expect(await timeline.evaluate((element) => getComputedStyle(element.shadowRoot.querySelector('.clip')).opacity)).toBe('0.4');
-});
-
 test('timeline slots caller-owned lane headers without taking over their controls', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
@@ -1262,38 +1220,26 @@ test('timeline slots caller-owned lane headers without taking over their control
   await expect(header).toHaveAttribute('data-clicked', '');
 });
 
-test('timeline dims overridden headers without a brightness filter', async ({ page }) => {
+test('timeline dimming is a generic presentation flag', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => element.setLanes([{ id: 'lane', name: 'Track', color: 'rgb(40, 120, 180)', clips: [
     { id: 'clip', name: 'clip', start: 0, length: 1, duration: 1, notes: [] },
   ] }]));
-  const idle = await timeline.evaluate((element) => {
-    const header = element.shadowRoot.querySelector('.lane-header');
-    const name = header.querySelector('.lane-name');
-    return { overridden: header.hasAttribute('data-overridden'), color: getComputedStyle(name).color, opacity: getComputedStyle(name).opacity };
-  });
-  await timeline.evaluate((element) => element.setLanes([{ id: 'lane', name: 'Track', color: 'rgb(40, 120, 180)', overridden: true, clips: [
+  await timeline.evaluate((element) => element.setLanes([{ id: 'lane', name: 'Track', color: 'rgb(40, 120, 180)', dimmed: true, clips: [
     { id: 'clip', name: 'clip', start: 0, length: 1, duration: 1, notes: [] },
   ] }]));
-  const overridden = await timeline.evaluate((element) => {
-    const header = element.shadowRoot.querySelector('.lane-header');
+  const dimmed = await timeline.evaluate((element) => {
     const lane = element.shadowRoot.querySelector('.lane');
-    const name = header.querySelector('.lane-name');
     return {
-      overridden: header.hasAttribute('data-overridden'),
-      color: getComputedStyle(name).color,
-      nameOpacity: getComputedStyle(name).opacity,
+      dimmed: lane.hasAttribute('data-dimmed'),
       filter: getComputedStyle(lane).filter,
       clipOpacity: getComputedStyle(lane.querySelector('.clip')).opacity,
     };
   });
-  expect(idle.overridden).toBe(false);
-  expect(overridden.overridden).toBe(true);
-  expect(overridden.color).toBe(idle.color);
-  expect(overridden.nameOpacity).toBe('0.8');
-  expect(overridden.filter).toBe('none');
-  expect(overridden.clipOpacity).toBe('0.4');
+  expect(dimmed.dimmed).toBe(true);
+  expect(dimmed.filter).toBe('none');
+  expect(dimmed.clipOpacity).toBe('0.4');
 });
 
 test('timeline keeps low-zoom loop caps at least 8px apart', async ({ page }) => {
@@ -1309,34 +1255,6 @@ test('timeline keeps low-zoom loop caps at least 8px apart', async ({ page }) =>
   });
   expect(geometry.count).toBe(6);
   expect(Math.min(...geometry.gaps)).toBeGreaterThanOrEqual(8);
-});
-
-test('timeline keeps device overflow and the trailing add inside a 275px header', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
-  const timeline = page.locator('compost-timeline');
-  await timeline.evaluate((element) => {
-    element.style.setProperty('--compost-timeline-header-width', '275px');
-    element.setLanes([{ id: 'lane', name: 'Devices', devices: [
-      { id: 'a', name: 'MNO', on: true }, { id: 'b', name: 'Delay', on: true },
-      { id: 'c', name: 'Reverb', on: true }, { id: 'd', name: 'Limiter', on: true },
-    ], clips: [] }]);
-  });
-  await page.waitForTimeout(50);
-  const fit = await timeline.evaluate((element) => {
-    const root = element.shadowRoot;
-    const devices = root.querySelector('.lane-devices');
-    const overflow = root.querySelector('.lane-device-overflow');
-    const add = root.querySelector('.lane-device-add');
-    const box = devices.getBoundingClientRect();
-    return {
-      overflow: devices.dataset.overflowCount,
-      overflowVisible: overflow?.getBoundingClientRect().width > 0 && overflow.getBoundingClientRect().right <= box.right + 1,
-      addVisible: add?.getBoundingClientRect().width > 0 && add.getBoundingClientRect().right <= box.right + 1,
-    };
-  });
-  expect(Number(fit.overflow)).toBeGreaterThan(0);
-  expect(fit.overflowVisible).toBe(true);
-  expect(fit.addVisible).toBe(true);
 });
 
 test('timeline leaves most of a phone-width view for arrangement editing', async ({ page }) => {
@@ -1356,7 +1274,7 @@ test('timeline leaves most of a phone-width view for arrangement editing', async
   expect(widths.lanes).toBeGreaterThanOrEqual(widths.host * .56 - 1);
 });
 
-test('timeline header commit one keeps measured lane geometry and reports header intents', async ({ page }) => {
+test('timeline aligns regular and compact lanes with automation rows', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
@@ -1364,214 +1282,77 @@ test('timeline header commit one keeps measured lane geometry and reports header
     element.style.removeProperty('--compost-timeline-automation-row-height');
     element.style.removeProperty('--compost-timeline-row-height');
     element.syncAttributes();
-    element.testEvents = [];
-    for (const type of ['lane-pick', 'lane-move', 'lanes-context', 'lanes-create', 'lane-figure-input', 'lane-figure-change', 'lane-toggle', 'device-toggle', 'device-open']) {
-      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
-    }
     element.setLanes([
-      { id: 'track', name: 'Track', kind: 'track', picked: true, color: 'rgb(100, 120, 180)', colorRGB: '100,120,180', wash: .5, meter: [0, -6], gainReduction: -12,
-        controls: { armed: true, monitor: 'auto', muted: false, soloed: true }, figures: { faderDb: -3, pan: 0, sends: [{ id: 'a', letter: 'A', db: -12 }] },
-        devices: [{ id: 'synth', name: 'Synth', on: true }, { id: 'delay', name: 'Delay', on: false }], clips: [], automation: [{ id: 'env', label: 'Env', min: 0, max: 1, stepped: false, points: [] }] },
-      { id: 'return', name: 'Return', kind: 'return', wash: .3, meter: [-6, -12], gainReduction: -6, figures: { faderDb: -6, pan: .1, sends: [] }, controls: { muted: false, soloed: true }, clips: [] },
-      { id: 'master', name: 'Master', kind: 'master', figures: { faderDb: 0, pan: 0, sends: [] }, clips: [] },
+      { id: 'regular', name: 'Regular', picked: true, clips: [], automation: [
+        { id: 'env', label: 'Env', min: 0, max: 1, stepped: false, points: [] },
+      ] },
+      { id: 'compact', name: 'Compact', compact: true, clips: [] },
     ]);
   });
   const measured = await timeline.evaluate((element) => {
     const root = element.shadowRoot;
-    const get = (id) => ({
-      header: root.querySelector(`.lane-header[data-lane-id="${id}"]`).getBoundingClientRect(),
-      lane: root.querySelector(`.lane[data-lane-id="${id}"]`).getBoundingClientRect(),
-    });
-    const track = get('track');
-    const thin = get('return');
-    const trackHeaderElement = root.querySelector('.lane-header[data-lane-id="track"]');
-    const trackBody = root.querySelector('.lane[data-lane-id="track"]');
-    const thinHeaderElement = root.querySelector('.lane-header[data-lane-id="return"]');
-    const thinBody = root.querySelector('.lane[data-lane-id="return"]');
-    const trackBase = trackBody.querySelector('.lane-base');
-    const automationHeader = trackHeaderElement.querySelector('.automation-header');
-    const automationRow = trackBody.querySelector('.automation-row');
-    const washEdge = trackHeaderElement.querySelector('.lane-wash-edge');
-    const meterElement = trackHeaderElement.querySelector('.lane-meter');
-    const grElement = trackHeaderElement.querySelector('.lane-gain-reduction');
-    const thinWashEdge = thinHeaderElement.querySelector('.lane-wash-edge');
-    const thinMeter = thinHeaderElement.querySelector('.lane-meter');
-    const thinGr = thinHeaderElement.querySelector('.lane-gain-reduction');
-    const meter = [...root.querySelectorAll('.lane-meter-channel')].map((node) => node.getBoundingClientRect().height);
-    const gr = grElement.getBoundingClientRect().height;
-    const wash = root.querySelector('.lane-wash').getBoundingClientRect();
-    const edgeRect = washEdge.getBoundingClientRect();
-    const header = root.querySelector('.lane-header[data-lane-id="track"]').getBoundingClientRect();
+    const bounds = (selector) => root.querySelector(selector).getBoundingClientRect();
     return {
-      trackHeader: track.header.height, trackLane: track.lane.height,
-      thinHeader: thin.header.height, thinLane: thin.lane.height,
-      trackBase: trackBase.getBoundingClientRect().height,
-      thinBase: thinBody.querySelector('.lane-base').getBoundingClientRect().height,
-      automationHeader: automationHeader.getBoundingClientRect().height,
-      automationRow: automationRow.getBoundingClientRect().height,
-      washHeight: wash.height, washEdgeHeight: washEdge.getBoundingClientRect().height,
-      meterHeight: meterElement.getBoundingClientRect().height, grHeight: gr,
-      thinWashHeight: thinWashEdge.getBoundingClientRect().height,
-      thinMeterHeight: thinMeter.getBoundingClientRect().height,
-      thinGrHeight: thinGr.getBoundingClientRect().height,
-      grFillHeight: Number.parseFloat(getComputedStyle(grElement, '::after').height),
-      thinGrFillHeight: Number.parseFloat(getComputedStyle(thinGr, '::after').height),
-      edgeLineX: edgeRect.left + 6,
-      washRight: wash.right,
-      headerWidth: header.width, headerColumn: Number.parseFloat(getComputedStyle(root.querySelector('.frame')).gridTemplateColumns), washWidth: wash.width, meter, gr,
-      trackDevices: root.querySelectorAll('.lane-header[data-lane-id="track"] .lane-device').length,
-      thinDevices: root.querySelectorAll('.lane-header[data-lane-id="return"] .lane-header-devices').length,
-      controls: root.querySelectorAll('.lane-header[data-lane-id="track"] .lane-control').length,
+      regularHeader: bounds('.lane-header[data-lane-id="regular"]').height,
+      regularLane: bounds('.lane[data-lane-id="regular"]').height,
+      regularBase: bounds('.lane[data-lane-id="regular"] .lane-base').height,
+      compactHeader: bounds('.lane-header[data-lane-id="compact"]').height,
+      compactLane: bounds('.lane[data-lane-id="compact"]').height,
+      compactBase: bounds('.lane[data-lane-id="compact"] .lane-base').height,
+      automationHeader: bounds('.lane-header[data-lane-id="regular"] .automation-header').height,
+      automationRow: bounds('.lane[data-lane-id="regular"] .automation-row').height,
       pickedTicks: getComputedStyle(root.querySelector('.lane-name[data-picked]'), '::before').backgroundImage,
     };
   });
-  expect(Math.abs(measured.trackHeader - measured.trackLane)).toBeLessThan(1);
-  expect(Math.abs(measured.thinHeader - measured.thinLane)).toBeLessThan(1);
-  expect(Math.abs(measured.trackHeader - 90)).toBeLessThan(1);
-  expect(Math.abs(measured.trackLane - 90)).toBeLessThan(1);
-  expect(Math.abs(measured.thinHeader - 32)).toBeLessThan(1);
-  expect(Math.abs(measured.thinLane - 32)).toBeLessThan(1);
-  expect(Math.abs(measured.trackBase - 64)).toBeLessThan(1);
-  expect(Math.abs(measured.thinBase - 32)).toBeLessThan(1);
+  expect(Math.abs(measured.regularHeader - measured.regularLane)).toBeLessThan(1);
+  expect(Math.abs(measured.compactHeader - measured.compactLane)).toBeLessThan(1);
+  expect(Math.abs(measured.regularHeader - 90)).toBeLessThan(1);
+  expect(Math.abs(measured.regularBase - 64)).toBeLessThan(1);
+  expect(Math.abs(measured.compactHeader - 32)).toBeLessThan(1);
+  expect(Math.abs(measured.compactBase - 32)).toBeLessThan(1);
   expect(Math.abs(measured.automationHeader - 26)).toBeLessThan(1);
   expect(Math.abs(measured.automationRow - 26)).toBeLessThan(1);
-  expect(Math.abs(measured.washHeight - 64)).toBeLessThan(1);
-  expect(Math.abs(measured.washEdgeHeight - 64)).toBeLessThan(1);
-  expect(Math.abs(measured.meterHeight - 52)).toBeLessThan(1);
-  expect(Math.abs(measured.grHeight - 52)).toBeLessThan(1);
-  expect(Math.abs(measured.thinWashHeight - 32)).toBeLessThan(1);
-  expect(Math.abs(measured.thinMeterHeight - 20)).toBeLessThan(1);
-  expect(Math.abs(measured.thinGrHeight - 20)).toBeLessThan(1);
-  expect(measured.meter[0]).toBeCloseTo(52, 0);
-  expect(measured.meter[1]).toBeCloseTo(45.5, 0);
-  expect(measured.grFillHeight).toBeCloseTo(26, 0);
-  expect(measured.thinGrFillHeight).toBeCloseTo(5, 0);
-  expect(Math.abs(measured.headerWidth - 275)).toBeLessThanOrEqual(1);
-  expect(Math.abs(measured.headerColumn - 275)).toBeLessThan(1);
-  expect(Math.abs(measured.washWidth - 137.5)).toBeLessThan(1);
-  expect(Math.abs(measured.edgeLineX - measured.washRight)).toBeLessThan(1);
-  expect(measured.washWidth).toBeGreaterThan(measured.headerWidth * .45);
-  expect(measured.meter[0]).toBeGreaterThan(0);
-  expect(measured.meter[1]).toBeGreaterThan(0);
-  expect(measured.gr).toBeGreaterThan(0);
-  expect(measured.trackDevices).toBe(2);
-  expect(measured.thinDevices).toBe(0);
-  expect(measured.controls).toBe(4);
   expect(measured.pickedTicks).toContain('linear-gradient');
-
-  const figureValues = await timeline.evaluate((element) => {
-    const root = element.shadowRoot;
-    const read = (selector) => {
-      const box = root.querySelector(selector);
-      const spin = box.shadowRoot.querySelector('[role="spinbutton"]');
-      return {
-        value: box.value,
-        ariaValue: spin.getAttribute('aria-valuenow'),
-        text: box.shadowRoot.querySelector('.value').textContent,
-      };
-    };
-    const pan = root.querySelector('.lane-header[data-lane-id="track"] .lane-figure[data-kind="pan"]');
-    pan.setValue(-.25, false);
-    return {
-      fader: read('.lane-header[data-lane-id="track"] .lane-figure[data-kind="fader"]'),
-      send: read('.lane-header[data-lane-id="track"] .lane-figure[data-send-id="a"]'),
-      pan: { value: pan.value, ariaValue: pan.shadowRoot.querySelector('[role="spinbutton"]').getAttribute('aria-valuenow') },
-    };
-  });
-  expect(figureValues.fader.value).toBe(-3);
-  expect(figureValues.fader.ariaValue).toBe('-3');
-  expect(figureValues.fader.text).toBe('-3.0');
-  expect(figureValues.send.value).toBe(-12);
-  expect(figureValues.send.ariaValue).toBe('-12');
-  expect(figureValues.send.text).toBe('-12.0');
-  expect(figureValues.pan.value).toBe(-.25);
-  expect(figureValues.pan.ariaValue).toBe('-0.25');
-
-  const gainReduction = await timeline.evaluate((element) => {
-    const read = () => getComputedStyle(element.shadowRoot.querySelector('.lane-header[data-lane-id="track"] .lane-gain-reduction'), '::after').height;
-    element.setLaneMeters(new Map([['track', { meter: [-90, -90], gainReduction: 0 }]]));
-    const none = read();
-    element.setLaneMeters(new Map([['track', { meter: [-90, -90], gainReduction: -12 }]]));
-    const half = read();
-    element.setLaneMeters(new Map([['track', { meter: [-90, -90], gainReduction: -30 }]]));
-    return { none, half, full: read() };
-  });
-  expect(Number.parseFloat(gainReduction.none)).toBeCloseTo(0, 0);
-  expect(Number.parseFloat(gainReduction.half)).toBeCloseTo(26, 0);
-  expect(Number.parseFloat(gainReduction.full)).toBeCloseTo(52, 0);
-
-  await timeline.locator('.lane-header[data-lane-id="track"] .lane-name').click();
-  await timeline.locator('.lane-header[data-lane-id="track"] .device-power').first().click();
-  await timeline.locator('.lane-header[data-lane-id="track"] .lane-device-label').first().click();
-  const events = await timeline.evaluate((element) => element.testEvents);
-  expect(events.some((event) => event.type === 'lane-pick' && event.detail.laneId === 'track')).toBe(true);
-  expect(events.some((event) => event.type === 'device-toggle' && event.detail.deviceId === 'synth')).toBe(true);
-  expect(events.some((event) => event.type === 'device-open' && event.detail.deviceId === 'synth')).toBe(true);
-
-  const figureEvents = await timeline.evaluate((element) => {
-    const box = element.shadowRoot.querySelector('.lane-header[data-lane-id="track"] .lane-figure[data-kind="fader"]');
-    box.setValue(-2, true);
-    box.dispatchEvent(new CustomEvent('parameter-end', { bubbles: true, composed: true, detail: { value: -2 } }));
-    return element.testEvents.filter((event) => event.type.startsWith('lane-figure'));
-  });
-  expect(figureEvents.map((event) => [event.type, event.detail.phase])).toEqual([
-    ['lane-figure-input', 'begin'], ['lane-figure-input', 'edit'], ['lane-figure-change', 'end'],
-  ]);
-
-  const empty = await timeline.evaluate((element) => {
-    element.setLanes([{ id: 'empty', name: 'Empty', emptyDeviceLabel: '+ instrument', clips: [] }]);
-    const events = [];
-    element.addEventListener('device-add', (event) => events.push(event.detail), { once: true });
-    element.shadowRoot.querySelector('.empty-device').click();
-    return { label: element.shadowRoot.querySelector('.empty-device').textContent, events };
-  });
-  expect(empty.label).toBe('+ instrument');
-  expect(empty.events).toEqual([{ laneId: 'empty', clientX: 0, clientY: 0 }]);
 });
 
-test('timeline header wash edges, sessions and empty-header intents stay local', async ({ page }) => {
+test('timeline generic header intents stay local', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
-  const state = await timeline.evaluate((element) => {
+  const events = await timeline.evaluate((element) => {
     element.testEvents = [];
-    for (const type of ['lane-figure-input', 'lane-figure-change', 'lanes-context', 'lanes-create', 'lane-move']) {
+    for (const type of ['lanes-context', 'lanes-create', 'lane-move']) {
       element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
     }
-    element.setLanes([{ id: 'a', name: 'A', picked: true, wash: .4, overridden: true, figures: { faderDb: -6, pan: 0, sends: [] }, clips: [] }, { id: 'b', name: 'B', clips: [] }]);
+    element.setLanes([
+      { id: 'a', name: 'A', picked: true, clips: [] },
+      { id: 'b', name: 'B', clips: [] },
+    ]);
     const root = element.shadowRoot;
-    const header = root.querySelector('.lane-header[data-lane-id="a"]');
-    const edge = header.querySelector('.lane-wash-edge');
-    const headerRect = header.getBoundingClientRect();
-    const edgeRect = edge.getBoundingClientRect();
-    edge.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, clientX: edgeRect.left, clientY: edgeRect.top }));
-    element.setLaneSession('a', { name: 'Pad', state: 'queued' });
-    const queued = { session: root.querySelector('.lane-header[data-lane-id="a"]').hasAttribute('data-session'), backPips: root.querySelectorAll('.lane-header[data-lane-id="a"] .back-pip').length };
-    element.setLaneSession('a', null);
-    const restored = { session: root.querySelector('.lane-header[data-lane-id="a"]').hasAttribute('data-session'), backPips: root.querySelectorAll('.lane-header[data-lane-id="a"] .back-pip').length };
     const wrap = root.querySelector('.header-wrap');
     wrap.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, composed: true, clientX: 20, clientY: 30 }));
     wrap.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, clientX: 20, clientY: 30 }));
     const first = root.querySelector('.lane-header[data-lane-id="a"]');
     const second = root.querySelector('.lane-header[data-lane-id="b"]');
     const y = second.getBoundingClientRect().bottom - 1;
-    const pointer = (type, clientY) => first.dispatchEvent(new PointerEvent(type, { bubbles: true, composed: true, pointerId: 44, pointerType: 'mouse', button: 0, clientX: first.getBoundingClientRect().left + 20, clientY }));
-    pointer('pointerdown', first.getBoundingClientRect().top + 8); pointer('pointermove', y); pointer('pointerup', y);
-    return { edgeOffset: edgeRect.left - headerRect.left, expectedOffset: headerRect.width * .4 - 6, queued, restored, events: element.testEvents };
+    const pointer = (type, clientY) => first.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 44, pointerType: 'mouse', button: 0,
+      clientX: first.getBoundingClientRect().left + 20, clientY,
+    }));
+    pointer('pointerdown', first.getBoundingClientRect().top + 8);
+    pointer('pointermove', y);
+    pointer('pointerup', y);
+    return element.testEvents;
   });
-  expect(Math.abs(state.edgeOffset - state.expectedOffset)).toBeLessThan(1);
-  expect(state.queued).toEqual({ session: true, backPips: 1 });
-  expect(state.restored).toEqual({ session: false, backPips: 1 });
-  expect(state.events.some((event) => event.type === 'lane-figure-change' && event.detail.phase === 'end')).toBe(true);
-  expect(state.events.some((event) => event.type === 'lanes-context')).toBe(true);
-  expect(state.events.some((event) => event.type === 'lanes-create')).toBe(true);
-  expect(state.events.some((event) => event.type === 'lane-move')).toBe(true);
+  expect(events.some((event) => event.type === 'lanes-context')).toBe(true);
+  expect(events.some((event) => event.type === 'lanes-create')).toBe(true);
+  expect(events.some((event) => event.type === 'lane-move')).toBe(true);
 });
 
 test('a real double-click on an empty MIDI lane emits one lane-create', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
-    element.setLanes([{ id: 'midi', name: 'MIDI 1', kind: 'track', clips: [] }]);
+    element.setLanes([{ id: 'midi', name: 'MIDI 1', clips: [] }]);
     element.testEvents = [];
     element.addEventListener('lane-create', (event) => element.testEvents.push({ type: 'lane-create', detail: event.detail }));
   });

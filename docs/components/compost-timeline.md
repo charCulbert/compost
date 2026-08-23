@@ -79,18 +79,10 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | `lane-context` | `{laneId, beat, clientX, clientY}` | Empty-lane context menu |
 | `lane-create` | `{laneId, beat}` | Double-click empty lane space |
 | `lanes-context` / `lanes-create` | `{clientX, clientY}` | Context menu or double-click below the last header |
-| `lane-back` | `{laneId}` | Overridden-lane pip |
 | `lane-header-context` | `{laneId, clientX, clientY}` | Lane-header context menu |
 | `lane-pick` | `{laneId, shiftKey}` | Click a lane header |
 | `lane-move` | `{laneId, toIndex}` | Drag or arrow-key a lane header |
 | `lane-rename` | `{laneId, name}` | Double-click or F2 on a lane name |
-| `lane-toggle` | `{laneId, name: "arm"|"monitor"|"mute"|"solo"}` | Header control press |
-| `lane-figure-input` / `lane-figure-change` | `{laneId, kind: "fader"|"pan"|"send", sendId?, value, phase}` | Number-box or wash-edge gesture |
-| `device-toggle` | `{laneId, deviceId}` | Device power dot |
-| `device-open` | `{laneId, deviceId, altKey, clientX, clientY}` | Device name click/double-click |
-| `device-context` | `{laneId, deviceId, clientX, clientY}` | Device context menu |
-| `device-overflow` / `device-add` | `{laneId, clientX, clientY}` | `+N`, trailing `+`, or empty-device label |
-| `device-move` | `{laneId, deviceId, toLaneId, at, copy}` | Device drag; `at` is the target device id or `null` for the end |
 | `automation-change` | `{laneId, automationId, points}` | Add, move, delete or segment edit commit |
 | `automation-choose` | `{laneId, automationId, clientX, clientY}` | Open the host-owned automation chooser |
 | `automation-add` | `{laneId, clientX, clientY}` | Press `+` in an automation header |
@@ -147,7 +139,7 @@ Space is left to the host's transport shortcut.
 
 ## API and variables
 
-`setLanes(lanes)`, `setLaneHeaders(headers)`, `setLaneHeader(laneId, element)`, `setLaneClips(laneId, clips)`, `setLaneControls(laneId, controls)`, `setLaneMeters(updates)`, `setLaneFigures(laneId, figures, wash)`, `setLaneSession(laneId, session)`, `setLaneDevices(laneId, devices)`, `setLaneAutomation(laneId, automation)`, `setAutomationChooserOpen(laneId, automationId, open)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
+`setLanes(lanes)`, `setLaneHeaders(headers)`, `setLaneHeader(laneId, element)`, `setLaneClips(laneId, clips)`, `setLaneDimmed(laneId, dimmed)`, `setLaneAutomation(laneId, automation)`, `setAutomationChooserOpen(laneId, automationId, open)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
 `setLoop(start, end, enabled, emit, {punchIn, punchOut})`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
 `beginRename(clipId)`, `focusClip(clipId)`, `revealAutomation(laneId, automationId)`, `beatAtPoint(clientX)` and
 `laneAtPoint(clientY)` are the host-facing methods. `locators` and
@@ -175,7 +167,7 @@ built-in header.
 | `--compost-timeline-signal-hi`, `-wash`, `-over`, `-highlight` | Playing, wash and recording states |
 | `--compost-timeline-clip-font-size`, `-lane-font-size`, `-select`, `-marquee` | Clip typography and selection |
 | `--compost-timeline-playhead`, `-loop`, `-loop-off` | Ruler and transport marks |
-| `--compost-timeline-lane-height`, `--compost-timeline-thin-lane-height`, `--compost-timeline-row-height`, `-font`, `-numeral-font` | Track/return geometry and typography |
+| `--compost-timeline-lane-height`, `--compost-timeline-thin-lane-height`, `--compost-timeline-row-height`, `-font`, `-numeral-font` | Regular/compact lane geometry and typography |
 | `--compost-timeline-automation-row-height`, `-value` | Automation sub-row height and live value |
 | `--compost-timeline-color-scheme` | Native control colour scheme |
 
@@ -184,14 +176,12 @@ handles accept `punchIn` and `punchOut` in the optional fifth argument; the
 corresponding caps use `--compost-timeline-over`. Omitting that fifth argument
 preserves the current punch flags, including while a loop handle is dragged.
 
-A lane may carry `kind: "track"|"return"|"master"`, `picked`, `colorRGB`,
-`session`, `figures`, `wash`, `meter`, `gainReduction`, `devices` and
-`emptyDeviceLabel`. Track headers have two measured rows; return and master
-headers have one thin row. `wash` is a 0..1 fader position, `meter` is an
-optional stereo dB pair and `gainReduction` is a negative dB value. Meter and
-gain-reduction paints are partial updates, so `setLaneMeters` does not rebuild
-clips or automation. A muted or overridden lane dims its clips to `.4` without
-adding a brightness filter; overridden headers dim the lane name as well.
+A lane carries generic presentation fields: `id`, `name`, optional `color`,
+`compact`, `picked`, `dimmed`, `clips`, `envelope` and `automation`. A compact
+lane uses `--compost-timeline-thin-lane-height`; `dimmed` lowers clip opacity
+without assigning a meaning such as mute, override or disable. Product-specific
+track kinds, session state, mixer figures, meters and device chains belong in a
+caller-owned slotted header.
 
 Clip notes may include `velocity: 0..127`; the value controls each dash's rest
 opacity while the playing state uses the full lit note pass. A lane may also
@@ -200,21 +190,6 @@ noninteractive, `.3`-opacity path over the base clip row only when the
 `automation` attribute is absent. During a clip move the target `.lane` gets a
 1px inset `--compost-timeline-select` highlight; it is cleared when the gesture
 ends or is cancelled.
-
-A lane may carry `controls: {armed, monitor: "off"|"auto"|"in", muted, soloed}`.
-The header renders the `●`, monitor glyph, `M` and `S` controls with
-`aria-pressed`, short titles and keyboard focus;
-the host applies each `lane-toggle` intent and may repaint only that header
-with `setLaneControls`. Lanes without `controls` continue to use the older
-`armed` field without adding controls.
-
-`figures.faderDb`, `figures.pan` and each send `db` are compact number boxes.
-Fader and send drags use 0.1 dB per pixel; pan uses 0.01 per pixel. Shift/Alt
-uses the shared fine gesture scale, double-click resets and typed editing is
-handled by `compost-number-box`. The wash edge is the same fader gesture and
-resets to 0 dB on double-click. `devices` are signal-ordered; when the chain
-does not fit it collapses to `+N`, and the trailing plus/empty label emits
-`device-add`.
 
 When the `automation` attribute is present, each lane may carry
 `automation: [{id, label, color, min, max, stepped, step, scale, points, state, value}]`.
