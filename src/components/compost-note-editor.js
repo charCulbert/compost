@@ -75,6 +75,8 @@ export class CompostNoteEditor extends HTMLElement {
     /** @type {number|null} */ this.playhead = null;
     this.defaultVelocity = 100;
     this.defaultChannel = 0;
+    /** Caller-owned allocator for durable note identity. @type {(() => string)|null} */
+    this.noteIdFactory = null;
     this.explicitBeats = false;
     this.beats = 16;
     this.offset = 0;
@@ -368,9 +370,11 @@ export class CompostNoteEditor extends HTMLElement {
   /** Replaces the note list. Silent by default so a host can push state back. */
   /** @param {any[]} notes @param {boolean} [shouldEmit] */
   setNotes(notes, shouldEmit = false) {
-    this._notes = normaliseNotes(notes, this.beats).map((note) => (
-      note.id ? note : { ...note, id: crypto.randomUUID() }
-    ));
+    const next = normaliseNotes(notes, this.beats);
+    if (next.some((note) => !note.id)) {
+      throw new TypeError('compost-note-editor notes need caller-owned ids');
+    }
+    this._notes = next;
     const ids = new Set(this._notes.map((note) => note.id));
     for (const id of [...this.selection]) if (!ids.has(id)) this.selection.delete(id);
     this.refresh();
@@ -379,6 +383,14 @@ export class CompostNoteEditor extends HTMLElement {
 
   get step() {
     return gridStep(this.grid, this.beatsPerBar);
+  }
+
+  newNoteId() {
+    const id = this.noteIdFactory?.();
+    if (typeof id !== 'string' || !id) {
+      throw new Error('compost-note-editor needs a noteIdFactory to create notes');
+    }
+    return id;
   }
 
   get readonly() {
@@ -432,7 +444,7 @@ export class CompostNoteEditor extends HTMLElement {
   duplicateSelection() {
     if (this.readonly || this.selection.size === 0) return;
     const copies = duplicatedNotes(this._notes, [...this.selection], this.step, this.beats,
-      () => crypto.randomUUID(), this.snapMode);
+      () => this.newNoteId(), this.snapMode);
     if (!copies.length) return;
     this.selection = new Set(copies.map((note) => note.id));
     this.commit([...this._notes, ...copies]);
@@ -446,7 +458,7 @@ export class CompostNoteEditor extends HTMLElement {
     const raw = this.selection.size && span ? span.end : this.loopStart;
     const start = clamp(this.snapBeat(raw, false), 0, Math.max(0, this.beats - this.step));
     const created = {
-      id: crypto.randomUUID(),
+      id: this.newNoteId(),
       note: this.visibleKeys[Math.floor(this.visibleKeys.length / 2)] ?? this.rootNote,
       start,
       duration: Math.max(this.step, MIN_DURATION),
@@ -745,8 +757,10 @@ export class CompostNoteEditor extends HTMLElement {
       event.preventDefault();
       if (this.hasAttribute('draw')) {
         const start = this.snapBeat(this.xToBeat(point.x), event.altKey);
+        const rollback = this._notes.map((entry) => ({ ...entry }));
+        const selectionBefore = [...this.selection];
         const created = {
-          id: crypto.randomUUID(), note: this.yToNote(point.y),
+          id: this.newNoteId(), note: this.yToNote(point.y),
           start: Math.min(start, Math.max(0, this.beats - this.step)),
           duration: Math.max(this.step, MIN_DURATION),
           velocity: this.defaultVelocity, channel: this.defaultChannel,
@@ -754,7 +768,7 @@ export class CompostNoteEditor extends HTMLElement {
         this._notes = normaliseNotes([...this._notes, created], this.beats);
         this.selection = new Set([created.id]);
         this.drag = { pointerId: event.pointerId, mode: 'len', note: created, moved: true, hold: null,
-          origin: undefined, ids: [created.id] };
+          origin: undefined, rollback, ids: [created.id], selectionBefore };
         this.preview(created.note);
       } else {
         if (!event.shiftKey) this.selection.clear();
@@ -776,11 +790,12 @@ export class CompostNoteEditor extends HTMLElement {
     const onEdge = target.classList.contains('re') || target.classList.contains('rs');
     const copying = event.altKey && !onEdge;
     const selectionBefore = [...this.selection];
+    const rollback = this._notes.map((entry) => ({ ...entry }));
     let grabbed = note;
     if (copying) {
       // Alt-drag moves copies of the whole selection, which become the selection
       const copies = this._notes.filter((entry) => this.selection.has(entry.id))
-        .map((entry) => ({ ...entry, id: crypto.randomUUID() }));
+        .map((entry) => ({ ...entry, id: this.newNoteId() }));
       const copyOfGrabbed = copies[this._notes.filter((entry) => this.selection.has(entry.id)).findIndex((entry) => entry.id === note.id)];
       this._notes = normaliseNotes([...this._notes, ...copies], this.beats);
       this.selection = new Set(copies.map((entry) => entry.id));
@@ -792,7 +807,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.drag = {
       pointerId: event.pointerId, mode, note: grabbed, x: event.clientX, y: event.clientY,
       origin: this._notes.map((entry) => ({ ...entry })), ids: [...this.selection],
-      moved: false, hold: null, copy: copying, selectionBefore,
+      rollback, moved: false, hold: null, copy: copying, selectionBefore,
     };
     if (mode === 'move' && !copying) {
       this.preview(note.note);
@@ -894,6 +909,15 @@ export class CompostNoteEditor extends HTMLElement {
     this.tip.hidden = true;
     this.marquee.style.display = 'none';
     this.removeAttribute('data-drag');
+    if (event.type === 'pointercancel') {
+      if (Array.isArray(drag.rollback)) this._notes = drag.rollback;
+      const selection = drag.mode === 'marq' ? drag.base : drag.selectionBefore ?? drag.ids ?? [];
+      const noteIds = new Set(this._notes.map((entry) => entry.id));
+      this.selection = new Set([...selection].filter((id) => noteIds.has(id)));
+      this.renderNotes();
+      this.emitSelection();
+      return;
+    }
     if (drag.mode === 'marq') {
       this.renderNotes();
       this.emitSelection();
@@ -919,7 +943,7 @@ export class CompostNoteEditor extends HTMLElement {
     const point = this.gridPoint(event);
     const start = this.snapBeat(this.xToBeat(point.x), event.altKey);
     const created = {
-      id: crypto.randomUUID(), note: this.yToNote(point.y),
+      id: this.newNoteId(), note: this.yToNote(point.y),
       start: Math.min(start, Math.max(0, this.beats - this.step)),
       duration: Math.max(this.step, MIN_DURATION),
       velocity: this.defaultVelocity, channel: this.defaultChannel,

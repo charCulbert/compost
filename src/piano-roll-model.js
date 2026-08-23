@@ -5,7 +5,9 @@ import { clamp } from './utils.js';
 
 /** @typedef {{id: string, note: number, start: number, duration: number, velocity: number, channel: number}} RollNote */
 
-export const MIN_DURATION = 1 / 64;
+// A numerical guard, not a musical grid. Hosts remain free to store and edit
+// beat positions far below one audio sample before scheduling rounds to frames.
+export const MIN_DURATION = 1e-9;
 
 /** Beats per cell for a grid division, where 4 means a quarter of a beat. */
 /** @param {number} division @param {number} [beatsPerBar] */

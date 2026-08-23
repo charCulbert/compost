@@ -708,6 +708,26 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   const move = events.find((event) => event.type === 'clip-move');
   expect(move.detail.deltaBeats).toBe(200 / pxPerBeat);
 
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.setAttribute('snap', 'grid');
+  });
+  box = await clip.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63,
+    box.y + box.height / 2, { steps: 4 });
+  const snappedPreview = await timeline.evaluate((element) => ({
+    delta: element.drag?.previewDelta,
+    transform: element.shadowRoot.querySelector('.clip[data-id="beat"]')?.style.transform,
+  }));
+  expect(snappedPreview.delta).toBe(1);
+  expect(snappedPreview.transform).toContain(`translate(${pxPerBeat}px`);
+  await page.mouse.up();
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.find((event) => event.type === 'clip-move').detail.deltaBeats).toBe(1);
+  await timeline.evaluate((element) => element.setAttribute('snap', 'off'));
+
   box = await clip.boundingBox();
   await page.mouse.move(box.x + 1, box.y + box.height / 2);
   await page.mouse.down();
@@ -1794,7 +1814,7 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
   const drawn = changes[3].detail.points;
   expect(drawn.length).toBeGreaterThanOrEqual(4);
   const drawnSpan = drawn.filter((point) => point.beat >= 1 && point.beat <= 4);
-  for (let index = 0; index + 1 < drawnSpan.length; index += 2) expect(drawnSpan[index + 1].beat - drawnSpan[index].beat).toBeCloseTo(1 - 1e-6, 6);
+  for (let index = 0; index + 1 < drawnSpan.length; index += 2) expect(drawnSpan[index + 1].beat - drawnSpan[index].beat).toBeCloseTo(1 - 1e-9, 8);
   expect(drawnSpan.some((point, index) => index > 0
     && point.beat > drawnSpan[index - 1].beat
     && point.beat - drawnSpan[index - 1].beat < 1e-4)).toBe(true);
@@ -1996,7 +2016,7 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   }));
   expect(single.changes).toBe(singleBefore + 1);
   expect(single.points).toHaveLength(2);
-  expect(single.points[1].beat - single.points[0].beat).toBeCloseTo(1 - 1e-6, 6);
+  expect(single.points[1].beat - single.points[0].beat).toBeCloseTo(1 - 1e-9, 8);
 
   await timeline.evaluate((element) => element.setLaneAutomation('gain', [{ id: 'env', label: 'Gain', min: 0, max: 1, stepped: false, points: [] }]));
   const freehandBefore = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').length);
@@ -2246,6 +2266,11 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
     element.addEventListener('notes-change', () => element.testEvents.push('notes-change'));
     element.addEventListener('loop-change', (event) => element.testEvents.push(['loop-change', event.detail.end]));
   });
+  expect(await editor.evaluate((element) => {
+    try { element.setNotes([{ note: 60, start: 0, duration: 1 }]); }
+    catch (error) { return error.message; }
+    return '';
+  })).toContain('caller-owned ids');
   const pxPerBeat = await editor.evaluate((element) => element.pxPerBeat);
   const firstNote = () => editor.evaluate((element) => element.notes[0]);
 
@@ -2256,6 +2281,25 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   await page.mouse.move(box.x + box.width / 2 + pxPerBeat, box.y + box.height / 2, { steps: 6 });
   await page.mouse.up();
   expect((await firstNote()).start).toBe(1);
+
+  const beforeCancel = await editor.evaluate((element) => ({
+    notes: element.notes,
+    changes: element.testEvents.filter((entry) => entry === 'notes-change').length,
+  }));
+  box = await editor.locator('.note').first().boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat,
+    box.y + box.height / 2, { steps: 4 });
+  const cancelPointerId = await editor.evaluate((element) => element.drag?.pointerId);
+  await editor.evaluate((element, id) => element.gridElement.dispatchEvent(new PointerEvent('pointercancel', {
+    bubbles: true, composed: true, pointerId: id, pointerType: 'mouse', button: 0,
+  })), cancelPointerId);
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => ({
+    notes: element.notes,
+    changes: element.testEvents.filter((entry) => entry === 'notes-change').length,
+  }))).toEqual(beforeCancel);
 
   // drag its right edge out by a beat
   box = await editor.locator('.note').first().boundingBox();
@@ -2297,6 +2341,8 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   await page.keyboard.up('Alt');
   expect(await editor.evaluate((element) => element.notes.length)).toBe(countBefore * 2);
   expect(await editor.evaluate((element) => element.selectedIds.length)).toBe(selectedBefore);
+  expect(await editor.evaluate((element) => element.notes.every((note) =>
+    note.id.startsWith('demo-editor-note-')))).toBe(true);
   await page.keyboard.press('Backspace');
   expect(await editor.evaluate((element) => element.notes.length)).toBe(countBefore);
   await page.keyboard.press('Meta+a');

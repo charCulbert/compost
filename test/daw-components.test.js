@@ -242,20 +242,20 @@ test('automation draw emits flat grid pairs and thins freehand once', () => {
     { beat: .1, value: .2 }, { beat: 1.1, value: .8 }, { beat: 2.1, value: .4 },
   ], { min: 0, max: 1, gridStep: 1 });
   assert.deepEqual(grid.map((point) => [point.beat, point.value]), [
-    [0, .2], [1 - 1e-6, .2], [1, .8], [2 - 1e-6, .8], [2, .4], [3 - 1e-6, .4],
+    [0, .2], [1 - 1e-9, .2], [1, .8], [2 - 1e-9, .8], [2, .4], [3 - 1e-9, .4],
   ]);
   const revisited = drawAutomationPoints([], [
     { beat: 1.8, value: .9 }, { beat: .2, value: .1 },
     { beat: 1.2, value: .2 }, { beat: .8, value: .7 },
   ], { min: 0, max: 1, gridStep: 1 });
   assert.deepEqual(revisited.map((point) => [point.beat, point.value]), [
-    [0, .7], [1 - 1e-6, .7], [1, .2], [2 - 1e-6, .2],
+    [0, .7], [1 - 1e-9, .7], [1, .2], [2 - 1e-9, .2],
   ]);
   const untouched = drawAutomationPoints([
     { beat: 1 - 1e-6, value: .11 }, { beat: 3, value: .33 },
   ], [{ beat: 1.2, value: .8 }], { min: 0, max: 1, gridStep: 1 });
   assert.deepEqual(untouched.map((point) => [point.beat, point.value]), [
-    [1 - 1e-6, .11], [1, .8], [2 - 1e-6, .8], [3, .33],
+    [1 - 1e-6, .11], [1, .8], [2 - 1e-9, .8], [3, .33],
   ]);
   const samples = [{ beat: 0, value: 0 }, { beat: 1, value: .8 }, { beat: 2, value: 1 }];
   assert.deepEqual(thinAutomationPoints(samples, .01), samples);

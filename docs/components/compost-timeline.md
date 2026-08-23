@@ -13,6 +13,10 @@ automation rows are hidden, a host-supplied envelope is drawn faintly over the
 clip row. A trim or cross-lane drag previews geometry without changing host
 state; the lane under a clip drag gets an inset selection highlight until
 release.
+Clip and locator positions are full-precision beat numbers. `snap="grid"`
+visibly previews the snapped edge or movement throughout a drag; `snap="off"`
+(and the documented temporary free-drag modifier) preserves pointer-derived
+beats without imposing a sample, tick, or PPQ grid.
 The three-row ruler exposes host-owned locators and supports row-two scrolling,
 pointer-anchored Cmd/Ctrl zoom, and a fit request. Empty lane space creates a
 cross-lane time selection; clips fully contained by a committed selection are

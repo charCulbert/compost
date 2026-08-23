@@ -13,7 +13,8 @@ decides what that means musically.
 
 ```js
 const roll = document.querySelector('compost-piano-roll');
-roll.setNotes([{ note: 60, start: 0, duration: 1, velocity: 100, channel: 0 }]);
+roll.noteIdFactory = () => application.allocateNoteId();
+roll.setNotes([{ id: 'note-23', note: 60, start: 0, duration: 1, velocity: 100, channel: 0 }]);
 roll.addEventListener('notes-change', (event) => save(event.detail.notes));
 ```
 
@@ -22,7 +23,9 @@ roll.addEventListener('notes-change', (event) => save(event.detail.notes));
 A note is `{id, note, start, duration, velocity, channel}`. `start` and
 `duration` are in **beats**, not seconds, so the roll does not need to know the
 tempo. `note` is a MIDI note number, `velocity` is 1–127, `channel` is 0–15.
-Ids are generated when missing.
+The caller supplies every stable `id` and sets `noteIdFactory` before gestures
+that create notes. Beat values are full-precision numbers; the grid changes
+visible snapping but does not define storage resolution.
 
 `notes` gets a copy of the list and sets it silently; `setNotes(notes, true)`
 sets it and emits. Anything out of range is clamped into the clip rather than

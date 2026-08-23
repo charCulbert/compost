@@ -4,7 +4,8 @@ import { DEFAULT_TAPER, washLevel, washPosition } from './compost-channel-strip.
 import './compost-number-box.js';
 import { MONITOR_SVG, panText } from './compost-channel-card.js';
 
-const MIN_CLIP_LENGTH = 1e-6;
+// A numerical guard, not a tick or musical-grid resolution.
+const MIN_CLIP_LENGTH = 1e-9;
 const MIN_PX_PER_BEAT = 4;
 const MAX_PX_PER_BEAT = 480;
 const DEFAULT_PX_PER_BEAT = 24;

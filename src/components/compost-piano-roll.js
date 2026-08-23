@@ -1,6 +1,7 @@
 import { isNaturalNote, noteName } from '../midi.js';
 import {
   gridStep,
+  MIN_DURATION,
   movedNotes,
   normaliseNotes,
   notesInBox,
@@ -36,6 +37,8 @@ export class CompostPianoRoll extends HTMLElement {
     this.beatWidth = 64;
     this.defaultVelocity = 100;
     this.defaultChannel = 0;
+    /** Caller-owned allocator for durable note identity. @type {(() => string)|null} */
+    this.noteIdFactory = null;
     this.label = 'Piano roll';
     /** @type {RollNote[]} */ this._notes = [];
     /** @type {Set<string>} */ this.selection = new Set();
@@ -282,9 +285,11 @@ export class CompostPianoRoll extends HTMLElement {
   /** Replaces the note list. Silent by default so a host can push state back. */
   /** @param {any[]} notes @param {boolean} [shouldEmit] */
   setNotes(notes, shouldEmit = false) {
-    this._notes = normaliseNotes(notes, this.beats).map((note) => (
-      note.id ? note : { ...note, id: crypto.randomUUID() }
-    ));
+    const next = normaliseNotes(notes, this.beats);
+    if (next.some((note) => !note.id)) {
+      throw new TypeError('compost-piano-roll notes need caller-owned ids');
+    }
+    this._notes = next;
     const ids = new Set(this._notes.map((note) => note.id));
     for (const id of [...this.selection]) if (!ids.has(id)) this.selection.delete(id);
     this.refresh();
@@ -293,6 +298,14 @@ export class CompostPianoRoll extends HTMLElement {
 
   get step() {
     return gridStep(this.grid, this.beatsPerBar);
+  }
+
+  newNoteId() {
+    const id = this.noteIdFactory?.();
+    if (typeof id !== 'string' || !id) {
+      throw new Error('compost-piano-roll needs a noteIdFactory to create notes');
+    }
+    return id;
   }
 
   get readonly() {
@@ -498,21 +511,25 @@ export class CompostPianoRoll extends HTMLElement {
       event.preventDefault();
       this.focus();
       if (event.shiftKey) {
-        this.drag = { kind: 'marquee', from: position, element: this.makeMarquee() };
+        this.drag = { kind: 'marquee', from: position, element: this.makeMarquee(),
+          selectionBefore: [...this.selection] };
       } else {
+        const selectionBefore = [...this.selection];
         if (!event.metaKey && !event.ctrlKey) this.selection.clear();
         const start = snapBeats(position.beat, this.step, this.snapMode);
+        const rollback = this._notes.map((entry) => ({ ...entry }));
         const created = {
-          id: crypto.randomUUID(),
+          id: this.newNoteId(),
           note: clamp(position.note, 0, 127),
           start: Math.min(start, Math.max(0, this.beats - this.step)),
-          duration: Math.max(this.step, 1 / 64),
+          duration: Math.max(this.step, MIN_DURATION),
           velocity: this.defaultVelocity,
           channel: this.defaultChannel,
         };
         this._notes = normaliseNotes([...this._notes, created], this.beats);
         this.selection = new Set([created.id]);
-        this.drag = { kind: 'draw', id: created.id, from: position, origin: { ...created } };
+        this.drag = { kind: 'draw', id: created.id, from: position,
+          origin: { ...created }, rollback, selectionBefore };
         this.preview(created.note);
         this.refresh();
       }
@@ -604,7 +621,15 @@ export class CompostPianoRoll extends HTMLElement {
     if (!this.drag || event.pointerId !== this.drag.pointerId) return;
     const wasMarquee = this.drag.kind === 'marquee';
     this.drag.element?.remove();
-    const changed = !wasMarquee;
+    const cancelled = event.type === 'pointercancel';
+    const changed = !wasMarquee && !cancelled;
+    if (cancelled) {
+      const rollback = this.drag.rollback ?? this.drag.origin;
+      if (Array.isArray(rollback)) this._notes = rollback;
+      const noteIds = new Set(this._notes.map((entry) => entry.id));
+      this.selection = new Set((this.drag.selectionBefore ?? this.drag.ids ?? [])
+        .filter((id) => noteIds.has(id)));
+    }
     this.drag = null;
     this.scroller.removeEventListener('pointermove', this.handlePointerMove);
     this.scroller.removeEventListener('pointerup', this.handlePointerUp);

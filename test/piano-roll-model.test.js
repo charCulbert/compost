@@ -40,6 +40,15 @@ test('a snapped duration keeps at least one cell', () => {
   assert.ok(snapDuration(0, 0, 'off') >= MIN_DURATION);
 });
 
+test('free editing preserves sub-sample-scale beat values', () => {
+  const precise = 1.23456789e-7;
+  assert.ok(MIN_DURATION < precise);
+  assert.equal(snapBeats(precise, 0.25, 'off'), precise);
+  assert.equal(snapDuration(precise, 0.25, 'off'), precise);
+  assert.equal(normaliseNotes([note({ start: precise, duration: precise })], 1)[0].start,
+    precise);
+});
+
 test('normalising clamps notes into the clip and sorts them', () => {
   const notes = normaliseNotes([
     note({ id: 'b', start: 2 }),

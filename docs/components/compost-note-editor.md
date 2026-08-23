@@ -11,14 +11,19 @@ position it is given; it neither plays nor schedules anything.
 ```
 
 ```js
-editor.setNotes([{ note: 60, start: 0, duration: 0.5, velocity: 100, channel: 0 }]);
+editor.noteIdFactory = () => application.allocateNoteId();
+editor.setNotes([{ id: 'note-23', note: 60, start: 0, duration: 0.5, velocity: 100, channel: 0 }]);
 editor.addEventListener('notes-change', ({ detail }) => save(detail.notes));
 editor.addEventListener('loop-change', ({ detail }) => setClipLoop(detail.start, detail.end));
 editor.setAttribute('playhead', String(beat));   // from the host's clock
 ```
 
 Notes are `{id, note, start, duration, velocity, channel}` in **beats**, as
-for `compost-piano-roll`; the two share `piano-roll-model.js`.
+for `compost-piano-roll`; the two share `piano-roll-model.js`. The caller owns
+stable identity: every supplied note needs an `id`, and editing actions that
+create or copy notes call `noteIdFactory`. Beat values remain ordinary
+full-precision numbers. The selected grid affects visible snapping, not stored
+time resolution; `snap="off"` keeps the pointer-derived beat.
 
 ## Editing
 
@@ -65,6 +70,7 @@ Velocity reads twice, as the note's weight and a line across it.
 
 ## Methods and events
 
+Set `noteIdFactory` before enabling note creation or duplication. Methods are
 `setNotes(notes, shouldEmit)`, `setLoop(start, end, shouldEmit)`,
 `quantize({lengths})`, `selectAll()`, `clearSelection()`, `deleteSelection()`,
 `duplicateSelection()`, `addNote()`, `loopToSelection()`, `zoomReset()`.
