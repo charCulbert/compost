@@ -508,7 +508,7 @@ export class ParameterSlider extends HTMLElement {
       y: event.clientY,
       value: this.value,
       fineCandidate,
-      fine: Boolean(event.altKey || event.shiftKey),
+      fine: Boolean(event.shiftKey),
       moved: false,
       orientation: this.orientation,
       relative: this.interaction === 'relative',

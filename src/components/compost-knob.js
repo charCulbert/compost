@@ -423,7 +423,7 @@ export class SynthKnob extends HTMLElement {
       moved: false,
       fineCandidate: this.lastClickTime > 0
         && performance.now() - this.lastClickTime < 380,
-      fine: Boolean(event.altKey || event.shiftKey),
+      fine: Boolean(event.shiftKey),
       locked: false,
     };
     beginParameterGesture(this, this.value);
@@ -440,7 +440,7 @@ export class SynthKnob extends HTMLElement {
         drag.fine = true;
       }
       drag.moved = drag.moved || Math.abs(distance) > 4;
-      const scale = drag.fine || sourceEvent?.altKey || sourceEvent?.shiftKey
+      const scale = drag.fine || sourceEvent?.shiftKey
         ? FINE_DRAG_SCALE
         : 1;
       this.setValue(moveValueByNormalisedDelta(

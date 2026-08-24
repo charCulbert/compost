@@ -361,7 +361,7 @@ export class CompostNumberBox extends HTMLElement {
       locked: false,
       fineCandidate: this.lastClickTime > 0
         && performance.now() - this.lastClickTime < 380,
-      fine: Boolean(event.altKey || event.shiftKey),
+      fine: Boolean(event.shiftKey),
       zoneScale: this.dragScaleFor(event),
       lockDeltaEvents: 0,
       lockFallbackTimer: null,
@@ -412,7 +412,7 @@ export class CompostNumberBox extends HTMLElement {
     this.toggleAttribute('data-dragging', true);
     event?.preventDefault?.();
 
-    const fineScale = this.drag.fine || event?.altKey || event?.shiftKey
+    const fineScale = this.drag.fine || event?.shiftKey
       ? (this.attributes == null ? FINE_DRAG_SCALE : readNumberAttribute(this, 'fine-drag-scale', FINE_DRAG_SCALE))
       : 1;
     const scale = (this.drag.zoneScale || 1) * fineScale;

@@ -11,7 +11,7 @@ shared parameter lifecycle.
 `min`, `max`, and `step` define the range. `curve` and `mid` control movement;
 `reset-value` is independent. Add `allow-empty` when blank is meaningful.
 
-Normal drag uses full travel. Option-drag or a second drag uses fine movement.
+Normal drag uses full travel. Shift-drag or a second drag uses fine movement.
 `split-drag` gives the left, middle, and right thirds separate rates through
 `drag-step-left`, `drag-step-middle`, and `drag-step-right`.
 
