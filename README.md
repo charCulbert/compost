@@ -22,6 +22,11 @@ single-finger double-tap invokes the same action and consumes the second touch
 release so iOS does not zoom the surrounding page. Single taps, drags, and
 multi-touch remain separate gestures.
 
+`CONTEXT.md` defines the vocabulary these rules use, and
+`docs/interaction.md` is the interaction contract every element follows:
+event grammar, modifier table, context intents, touch parity, and the
+`readonly`/`disabled` semantics.
+
 [Examples and documentation](https://charculbert.github.io/compost/)
 
 ## Use from source
