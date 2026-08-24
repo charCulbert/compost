@@ -1978,12 +1978,13 @@ test('timeline lane resizing is reversible and keyboard accessible', async ({ pa
   expect(await timeline.evaluate((element) => Object.hasOwn(element.lanes[0], 'height'))).toBe(false);
 });
 
-test('note editor moves, trims, velocity-drags and loops through real gestures', async ({ page }) => {
+test('note editor moves, trims, velocity-drags and edits playback markers through real gestures', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => {
     element.testEvents = [];
     element.addEventListener('notes-change', () => element.testEvents.push('notes-change'));
+    element.addEventListener('range-change', (event) => element.testEvents.push(['range-change', event.detail.start]));
     element.addEventListener('loop-change', (event) => element.testEvents.push(['loop-change', event.detail.end]));
   });
   expect(await editor.evaluate((element) => {
@@ -2068,12 +2069,22 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   await page.keyboard.press('Meta+a');
 
   // the loop end drags out by a beat
-  const handle = await editor.locator('.handle.end').boundingBox();
+  const handle = await editor.locator('.loop-handle.end').boundingBox();
   await page.mouse.move(handle.x + 5, handle.y + 5);
   await page.mouse.down();
   await page.mouse.move(handle.x + 5 + pxPerBeat, handle.y + 5, { steps: 5 });
   await page.mouse.up();
   await expect(editor).toHaveAttribute('loop-end', '9');
+
+  // playback start moves without deleting notes outside it
+  const rangeHandle = await editor.locator('.range-handle.start').boundingBox();
+  const notesBeforeRange = await editor.evaluate((element) => element.notes);
+  await page.mouse.move(rangeHandle.x + 5, rangeHandle.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(rangeHandle.x + 5 + pxPerBeat * 0.5, rangeHandle.y + 5, { steps: 5 });
+  await page.mouse.up();
+  await expect(editor).toHaveAttribute('start', '1.5');
+  expect(await editor.evaluate((element) => element.notes)).toEqual(notesBeforeRange);
 
   // marquee everything, duplicate one span later, delete
   const grid = await editor.locator('.grid').boundingBox();
@@ -2090,6 +2101,7 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   const events = await editor.evaluate((element) => element.testEvents);
   expect(events.filter((entry) => entry === 'notes-change').length).toBe(8);
   expect(events).toContainEqual(['loop-change', 9]);
+  expect(events).toContainEqual(['range-change', 1.5]);
 
   // a height too short for every row shows fewer of them rather than slivers
   const rows = await editor.evaluate((element) => {
@@ -2118,10 +2130,10 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   const added = await editor.evaluate((element) => {
     const id = element.selectedIds[0];
     const note = element.notes.find((entry) => entry.id === id);
-    return { note: note?.note, start: note?.start, middle: element.visibleKeys[Math.floor(element.visibleKeys.length / 2)], loopStart: element.loopStart };
+    return { note: note?.note, start: note?.start, middle: element.visibleKeys[Math.floor(element.visibleKeys.length / 2)], rangeStart: element.rangeStart };
   });
   expect(added.note).toBe(added.middle);
-  expect(added.start).toBe(added.loopStart);
+  expect(added.start).toBe(added.rangeStart);
   expect(await editor.evaluate((element) => element.testEvents)).toContain('notes-change');
 });
 

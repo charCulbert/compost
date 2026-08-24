@@ -45,7 +45,8 @@
               Drag a note to move it, its edges to trim either end, Alt-drag
               (or press and hold) for velocity, drag on empty grid to
               marquee-select, double-click to add, draw mode to paint. The
-              loop bar drags from either end or the middle. Delete, arrows
+              start/end and nested loop markers drag independently; the loop
+              bar also moves from its middle. Delete, arrows
               (Alt for more), Cmd-A, Cmd-D duplicates one span later, Cmd-L
               loops to the selection, Cmd-Q quantizes. Wheel scrolls pitch,
               Shift-wheel time, Cmd-wheel zooms. The playhead is a position
@@ -53,8 +54,8 @@
             </p>
           </fieldset>
           <div class="demo-showcase" style="display:block">
-            <compost-note-editor data-option-target="editor" label="Clip notes" loop-start="0" loop-end="8"
-              grid="16" root-note="48" note-count="25"
+            <compost-note-editor data-option-target="editor" label="Clip notes" beats="12"
+              start="1" end="10" loop-start="2" loop-end="8" grid="16" root-note="48" note-count="25"
               style="height:340px"></compost-note-editor>
           </div>
         </div>

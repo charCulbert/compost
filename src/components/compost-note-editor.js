@@ -44,7 +44,7 @@ export function lengthText(duration) {
 
 /**
  * A MIDI note editor: pitch down the side on real piano keys, time across
- * the top under a loop region with draggable ends, notes on a grid that
+ * the top under playback and loop regions with draggable ends, notes on a grid that
  * snaps unless told not to. Notes move, trim from either edge, take
  * velocity from an Alt-drag or a press-and-hold, marquee-select, nudge from
  * the keyboard, duplicate one span later and quantize. It edits a note list
@@ -54,7 +54,7 @@ export function lengthText(duration) {
 export class CompostNoteEditor extends HTMLElement {
   static get observedAttributes() {
     return [
-      'label', 'beats', 'beats-per-bar', 'grid', 'snap', 'loop-start', 'loop-end',
+      'label', 'beats', 'beats-per-bar', 'grid', 'snap', 'start', 'end', 'loop-start', 'loop-end',
       'root-note', 'note-count', 'beat-width', 'fold', 'draw', 'playhead',
       'velocity', 'channel', 'lock-loop-start', 'readonly', 'disabled',
     ];
@@ -67,6 +67,8 @@ export class CompostNoteEditor extends HTMLElement {
     this.beatsPerBar = 4;
     this.grid = 16;
     this.snapMode = 'grid';
+    this.rangeStart = 0;
+    this.rangeEnd = 8;
     this.loopStart = 0;
     this.loopEnd = 8;
     this.rootNote = 48;
@@ -106,6 +108,7 @@ export class CompostNoteEditor extends HTMLElement {
           --compost-note-editor-bar-line: var(--compost-note-editor-muted);
           --compost-note-editor-row: color-mix(in srgb, var(--compost-note-editor-text) 5%, transparent);
           --compost-note-editor-signal: var(--compost-theme-accent, #8ea9c7);
+          --compost-note-editor-range: var(--compost-note-editor-text);
           --compost-note-editor-loop: var(--compost-note-editor-signal);
           --compost-note-editor-select: var(--compost-theme-learn, #6fa8eb);
           --compost-note-editor-marquee: color-mix(in srgb, var(--compost-note-editor-select) 14%, transparent);
@@ -159,6 +162,14 @@ export class CompostNoteEditor extends HTMLElement {
           line-height: 1;
           white-space: nowrap;
         }
+        .range-region {
+          position: absolute;
+          top: 0.89em;
+          height: 0.22em;
+          background: var(--compost-note-editor-range);
+          opacity: 0.5;
+          pointer-events: none;
+        }
         .region {
           position: absolute;
           top: 1.09em;
@@ -182,8 +193,10 @@ export class CompostNoteEditor extends HTMLElement {
         .handle.start::before { left: 0; }
         .handle.end::before { right: 0; }
         .handle:hover::before, .handle[data-on]::before { width: 4px; }
+        .range-handle { top: 0.72em; height: 1.43em; z-index: 4; }
+        .range-handle::before { background: var(--compost-note-editor-range); }
         /* a host whose clips always start at zero keeps the start where it is */
-        :host([lock-loop-start]) .handle.start { display: none; }
+        :host([lock-loop-start]) .loop-handle.start { display: none; }
         :host([lock-loop-start]) .region { cursor: default; }
         .keys {
           grid-column: 1; grid-row: 2;
@@ -233,7 +246,7 @@ export class CompostNoteEditor extends HTMLElement {
         :host([data-velmod]) .note, :host([data-velmod]) .note .rs, :host([data-velmod]) .note .re,
         :host([data-velmod]) .note .ve, :host([data-drag="vel"]) .note, :host([data-drag="vel"]) .note .ve { cursor: ns-resize; }
         :host([data-copymod]) .note .ve, :host([data-drag="copy"]) .note, :host([data-drag="copy"]) .note .ve { cursor: copy; }
-        .past { position: absolute; top: 0; bottom: 0; background: var(--compost-note-editor-past); pointer-events: none; z-index: 1; }
+        .outside { position: absolute; top: 0; bottom: 0; background: var(--compost-note-editor-past); pointer-events: none; z-index: 1; }
         .playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-note-editor-playhead);
           box-shadow: 0 0 0 0.5px var(--compost-note-editor-bg), 0 0 5px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 6; display: none; }
         .marquee { position: absolute; border: 1px solid var(--compost-note-editor-select); background: var(--compost-note-editor-marquee); pointer-events: none; display: none; }
@@ -264,15 +277,19 @@ export class CompostNoteEditor extends HTMLElement {
         <div class="corner" part="corner"></div>
         <div class="rulerwrap" part="ruler">
           <div class="ruler">
+            <div class="range-region" part="range"></div>
+            <div class="handle start range-handle" part="range-start"></div>
+            <div class="handle end range-handle" part="range-end"></div>
             <div class="region" part="loop"></div>
-            <div class="handle start" part="loop-start"></div>
-            <div class="handle end" part="loop-end"></div>
+            <div class="handle start loop-handle" part="loop-start"></div>
+            <div class="handle end loop-handle" part="loop-end"></div>
           </div>
         </div>
         <div class="keys" part="keys"></div>
         <div class="gridwrap" part="grid">
           <div class="grid">
-            <div class="past" part="past"></div>
+            <div class="outside before" part="before"></div>
+            <div class="outside past" part="past"></div>
             <div class="playhead" part="playhead"></div>
             <div class="marquee" part="marquee"></div>
           </div>
@@ -285,12 +302,16 @@ export class CompostNoteEditor extends HTMLElement {
     const part = (selector) => /** @type {HTMLElement} */ (this.root.querySelector(selector));
     this.rulerWrap = part('.rulerwrap');
     this.ruler = part('.ruler');
+    this.rangeRegion = part('.range-region');
+    this.rangeStartHandle = part('.range-handle.start');
+    this.rangeEndHandle = part('.range-handle.end');
     this.region = part('.region');
-    this.startHandle = part('.handle.start');
-    this.endHandle = part('.handle.end');
+    this.startHandle = part('.loop-handle.start');
+    this.endHandle = part('.loop-handle.end');
     this.keys = part('.keys');
     this.gridWrap = part('.gridwrap');
     this.gridElement = part('.grid');
+    this.before = part('.outside.before');
     this.past = part('.past');
     this.playheadElement = part('.playhead');
     this.marquee = part('.marquee');
@@ -307,10 +328,16 @@ export class CompostNoteEditor extends HTMLElement {
     this.gridWrap.addEventListener('wheel', (event) => this.handleWheel(event), { passive: false });
     this.keys.addEventListener('wheel', (event) => this.handleKeysWheel(event), { passive: false });
     for (const [node, kind] of [[this.endHandle, 'end'], [this.startHandle, 'start'], [this.region, 'move']]) {
-      node.addEventListener('pointerdown', (event) => this.startLoopDrag(event, kind));
-      node.addEventListener('pointermove', (event) => this.moveLoopDrag(event));
-      node.addEventListener('pointerup', (event) => this.endLoopDrag(event));
-      node.addEventListener('pointercancel', (event) => this.endLoopDrag(event));
+      node.addEventListener('pointerdown', (event) => this.startMarkerDrag(event, 'loop', kind));
+      node.addEventListener('pointermove', (event) => this.moveMarkerDrag(event));
+      node.addEventListener('pointerup', (event) => this.endMarkerDrag(event));
+      node.addEventListener('pointercancel', (event) => this.endMarkerDrag(event));
+    }
+    for (const [node, kind] of [[this.rangeStartHandle, 'start'], [this.rangeEndHandle, 'end']]) {
+      node.addEventListener('pointerdown', (event) => this.startMarkerDrag(event, 'range', kind));
+      node.addEventListener('pointermove', (event) => this.moveMarkerDrag(event));
+      node.addEventListener('pointerup', (event) => this.endMarkerDrag(event));
+      node.addEventListener('pointercancel', (event) => this.endMarkerDrag(event));
     }
     this.addEventListener('keydown', (event) => this.handleKey(event));
     this.resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(this.refresh) : null;
@@ -347,11 +374,15 @@ export class CompostNoteEditor extends HTMLElement {
     this.beatsPerBar = Math.max(1, Math.round(numberAttr(this, 'beats-per-bar', this.beatsPerBar)));
     this.grid = Math.max(1, numberAttr(this, 'grid', this.grid));
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
-    this.loopStart = Math.max(0, numberAttr(this, 'loop-start', this.loopStart));
-    this.loopEnd = Math.max(this.loopStart + MIN_DURATION, numberAttr(this, 'loop-end', this.loopEnd));
+    const rawStart = Math.max(0, numberAttr(this, 'start', this.rangeStart));
+    const rawEnd = Math.max(rawStart + MIN_DURATION, numberAttr(this, 'end', this.rangeEnd));
+    this.rangeStart = rawStart;
+    this.rangeEnd = rawEnd;
+    this.loopStart = clamp(numberAttr(this, 'loop-start', this.loopStart), rawStart, rawEnd - MIN_DURATION);
+    this.loopEnd = clamp(numberAttr(this, 'loop-end', this.loopEnd), this.loopStart + MIN_DURATION, rawEnd);
     this.explicitBeats = this.hasAttribute('beats');
     this.beats = this.explicitBeats
-      ? Math.max(this.loopEnd, numberAttr(this, 'beats', this.beats)) : Math.max(this.loopEnd + 8, 16);
+      ? Math.max(this.rangeEnd, numberAttr(this, 'beats', this.beats)) : Math.max(this.rangeEnd + 8, 16);
     this.rootNote = clamp(Math.round(numberAttr(this, 'root-note', this.rootNote)), 0, 127);
     this.noteCount = clamp(Math.round(numberAttr(this, 'note-count', this.noteCount)), MIN_ROWS, 128);
     this.beatWidth = Math.max(0, numberAttr(this, 'beat-width', 0));
@@ -404,11 +435,22 @@ export class CompostNoteEditor extends HTMLElement {
     return [...this.selection];
   }
 
+  /** Sets the non-destructive playback range, in beats. The loop remains nested. */
+  /** @param {number} start @param {number} end @param {boolean} [shouldEmit] */
+  setRange(start, end, shouldEmit = false) {
+    const nextStart = clamp(Number(start) || 0, 0, this.loopStart);
+    const nextEnd = Math.max(this.loopEnd, Number(end) || 0, nextStart + MIN_DURATION);
+    if (nextStart === this.rangeStart && nextEnd === this.rangeEnd) return;
+    this.setAttribute('start', String(nextStart));
+    this.setAttribute('end', String(nextEnd));
+    if (shouldEmit) this.emitRange();
+  }
+
   /** Sets the loop region, in beats. */
   /** @param {number} start @param {number} end @param {boolean} [shouldEmit] */
   setLoop(start, end, shouldEmit = false) {
-    const nextStart = Math.max(0, Number(start) || 0);
-    const nextEnd = Math.max(nextStart + MIN_DURATION, Number(end) || 0);
+    const nextStart = clamp(Number(start) || 0, this.rangeStart, this.rangeEnd - MIN_DURATION);
+    const nextEnd = clamp(Number(end) || 0, nextStart + MIN_DURATION, this.rangeEnd);
     if (nextStart === this.loopStart && nextEnd === this.loopEnd) return;
     this.setAttribute('loop-start', String(nextStart));
     this.setAttribute('loop-end', String(nextEnd));
@@ -468,7 +510,7 @@ export class CompostNoteEditor extends HTMLElement {
     if (this.readonly) return null;
     this.selectionRange = null;
     const span = selectionSpan(this._notes, this.selection.size ? [...this.selection] : null);
-    const raw = this.selection.size && span ? span.end : this.loopStart;
+    const raw = this.selection.size && span ? span.end : this.rangeStart;
     const start = clamp(this.snapBeat(raw, false), 0, Math.max(0, this.beats - this.step));
     const created = {
       id: this.newNoteId(),
@@ -491,6 +533,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.zoomPxPerBeat = 0;
     this.offset = 0;
     const locked = this.hasAttribute('lock-loop-start');
+    this.setRange(Math.min(this.rangeStart, locked ? 0 : span.start), Math.max(this.rangeEnd, span.end), false);
     this.setLoop(locked ? 0 : span.start, span.end, true);
   }
 
@@ -507,7 +550,7 @@ export class CompostNoteEditor extends HTMLElement {
     if (this.zoomPxPerBeat > 0) return this.zoomPxPerBeat;
     if (this.beatWidth > 0) return this.beatWidth;
     const width = this.gridWrap?.clientWidth || 400;
-    return width / Math.max(8, this.loopEnd + 4);
+    return width / Math.max(8, this.rangeEnd + 4);
   }
 
   /** @param {number} beat */
@@ -604,6 +647,11 @@ export class CompostNoteEditor extends HTMLElement {
     const px = this.pxPerBeat;
     this.ruler.style.width = `${this.beats * px}px`;
     this.ruler.style.transform = `translateX(${-this.offset}px)`;
+    this.rangeRegion.style.left = `${this.rangeStart * px}px`;
+    this.rangeRegion.style.width = `${(this.rangeEnd - this.rangeStart) * px}px`;
+    const rangeHandle = this.rangeStartHandle.offsetWidth || 11;
+    this.rangeStartHandle.style.left = `${this.rangeStart * px - 1}px`;
+    this.rangeEndHandle.style.left = `${this.rangeEnd * px - rangeHandle + 1}px`;
     this.region.style.left = `${this.loopStart * px}px`;
     this.region.style.width = `${(this.loopEnd - this.loopStart) * px}px`;
     const handle = this.startHandle.offsetWidth || 11;
@@ -620,9 +668,10 @@ export class CompostNoteEditor extends HTMLElement {
       fragment.append(label);
     }
     this.ruler.append(fragment);
-    // the tail past the loop stays visible but reads as outside
-    this.past.style.left = `${this.loopEnd * px}px`;
-    this.past.style.width = `${Math.max(0, (this.beats - this.loopEnd) * px)}px`;
+    this.before.style.left = '0px';
+    this.before.style.width = `${this.rangeStart * px}px`;
+    this.past.style.left = `${this.rangeEnd * px}px`;
+    this.past.style.width = `${Math.max(0, (this.beats - this.rangeEnd) * px)}px`;
   }
 
   renderKeys() {
@@ -673,7 +722,7 @@ export class CompostNoteEditor extends HTMLElement {
       element.part.add('note');
       element.dataset.id = note.id;
       if (this.selection.has(note.id)) element.dataset.selected = '';
-      if (note.start < this.loopStart || note.start >= this.loopEnd) element.dataset.out = '';
+      if (note.start < this.rangeStart || note.start >= this.rangeEnd) element.dataset.out = '';
       if (holdId === note.id) element.dataset.hold = '';
       element.style.left = `${(note.start * px).toFixed(2)}px`;
       element.style.width = `${Math.max(3, note.duration * px).toFixed(2)}px`;
@@ -716,6 +765,12 @@ export class CompostNoteEditor extends HTMLElement {
   emitLoop() {
     this.dispatchEvent(new CustomEvent('loop-change', {
       bubbles: true, composed: true, detail: { start: this.loopStart, end: this.loopEnd },
+    }));
+  }
+
+  emitRange() {
+    this.dispatchEvent(new CustomEvent('range-change', {
+      bubbles: true, composed: true, detail: { start: this.rangeStart, end: this.rangeEnd },
     }));
   }
 
@@ -994,23 +1049,25 @@ export class CompostNoteEditor extends HTMLElement {
     this.toggleAttribute('data-copymod', event.altKey && !event.metaKey && !event.ctrlKey);
   }
 
-  // ---- Loop region ----------------------------------------------------------------
+  // ---- Playback and loop markers --------------------------------------------------
 
   /** @param {PointerEvent} event @param {string} kind */
-  startLoopDrag(event, kind) {
+  startMarkerDrag(event, scope, kind) {
     if (this.readonly || event.button !== 0) return;
-    if (kind !== 'end' && this.hasAttribute('lock-loop-start')) return;
+    if (scope === 'loop' && kind !== 'end' && this.hasAttribute('lock-loop-start')) return;
     event.preventDefault();
     event.stopPropagation();
     this.zoomPxPerBeat = this.pxPerBeat;   // pin the scale for the drag
-    this.loopDrag = { pointerId: event.pointerId, kind, x: event.clientX,
-      start: this.loopStart, end: this.loopEnd, px: this.pxPerBeat, node: event.currentTarget };
+    const start = scope === 'range' ? this.rangeStart : this.loopStart;
+    const end = scope === 'range' ? this.rangeEnd : this.loopEnd;
+    this.loopDrag = { pointerId: event.pointerId, scope, kind, x: event.clientX,
+      start, end, px: this.pxPerBeat, node: event.currentTarget };
     /** @type {HTMLElement} */ (event.currentTarget).setAttribute('data-on', '');
     /** @type {HTMLElement} */ (event.currentTarget).setPointerCapture(event.pointerId);
   }
 
   /** @param {PointerEvent} event */
-  moveLoopDrag(event) {
+  moveMarkerDrag(event) {
     const drag = this.loopDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     const free = event.altKey || this.snapMode === 'off';
@@ -1019,27 +1076,35 @@ export class CompostNoteEditor extends HTMLElement {
     const deltaBeats = (event.clientX - drag.x) / drag.px;
     let start = drag.start;
     let end = drag.end;
-    if (drag.kind === 'end') end = Math.max(start + (free ? MIN_DURATION : step), quantise(drag.end + deltaBeats));
-    else if (drag.kind === 'start') start = clamp(quantise(drag.start + deltaBeats), 0, end - (free ? MIN_DURATION : step));
+    const minimum = free ? MIN_DURATION : step;
+    if (drag.kind === 'end') end = Math.max(start + minimum, quantise(drag.end + deltaBeats));
+    else if (drag.kind === 'start') start = clamp(quantise(drag.start + deltaBeats), 0, end - minimum);
     else {
       start = Math.max(0, quantise(drag.start + deltaBeats));
       end = start + (drag.end - drag.start);
     }
-    this.setLoop(start, end, false);
-    this.dispatchEvent(new CustomEvent('loop-input', {
-      bubbles: true, composed: true, detail: { start: this.loopStart, end: this.loopEnd },
+    if (drag.scope === 'range') this.setRange(start, end, false);
+    else this.setLoop(start, end, false);
+    const detail = drag.scope === 'range'
+      ? { start: this.rangeStart, end: this.rangeEnd }
+      : { start: this.loopStart, end: this.loopEnd };
+    this.dispatchEvent(new CustomEvent(`${drag.scope === 'range' ? 'range' : 'loop'}-input`, {
+      bubbles: true, composed: true, detail,
     }));
   }
 
   /** @param {PointerEvent} event */
-  endLoopDrag(event) {
+  endMarkerDrag(event) {
     const drag = this.loopDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     this.loopDrag = null;
     /** @type {HTMLElement} */ (drag.node).removeAttribute('data-on');
     this.zoomPxPerBeat = 0;
     this.refresh();
-    if (drag.start !== this.loopStart || drag.end !== this.loopEnd) this.emitLoop();
+    const changed = drag.scope === 'range'
+      ? drag.start !== this.rangeStart || drag.end !== this.rangeEnd
+      : drag.start !== this.loopStart || drag.end !== this.loopEnd;
+    if (changed) drag.scope === 'range' ? this.emitRange() : this.emitLoop();
   }
 
   // ---- Keyboard and wheel ---------------------------------------------------------

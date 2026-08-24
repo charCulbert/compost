@@ -613,8 +613,8 @@ function setupNoteEditorDemo() {
   ].map((note) => ({ ...note, id: editor.noteIdFactory() })));
   const report = () => {
     if (!state) return;
-    const bars = Math.round((editor.loopEnd - editor.loopStart) / editor.beatsPerBar * 1000) / 1000;
-    state.textContent = `1/${editor.grid} · ${snap?.checked ? 'snapping' : 'free'} · ${bars} bar${bars === 1 ? '' : 's'} · ${editor.notes.length} notes`;
+    const bars = Math.round((editor.rangeEnd - editor.rangeStart) / editor.beatsPerBar * 1000) / 1000;
+    state.textContent = `1/${editor.grid} · ${snap?.checked ? 'snapping' : 'free'} · ${bars} bar${bars === 1 ? '' : 's'} playback · ${editor.notes.length} notes`;
   };
   grid?.addEventListener('change', () => { editor.setAttribute('grid', grid.value); report(); });
   snap?.addEventListener('change', () => { editor.setAttribute('snap', snap.checked ? 'grid' : 'off'); report(); });
@@ -623,17 +623,24 @@ function setupNoteEditorDemo() {
   document.querySelector('[data-editor-quantize]')?.addEventListener('click', () => editor.quantize());
   document.querySelector('[data-editor-zoom]')?.addEventListener('click', () => editor.zoomReset());
   editor.addEventListener('notes-change', report);
+  editor.addEventListener('range-change', ({ detail }) => { report(); writeLog(`range-change ${detail.start}–${detail.end}`); });
   editor.addEventListener('loop-change', ({ detail }) => { report(); writeLog(`loop-change ${detail.start}–${detail.end}`); });
   editor.addEventListener('note-preview', ({ detail }) => writeLog(`note-preview ${detail.note}`));
   // a host supplies the playhead: here a clock running round the loop
   let last = performance.now();
-  let position = 0;
+  let position = editor.rangeStart;
+  let firstPass = true;
   const tick = (now) => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (playhead?.checked) {
-      const span = Math.max(0.25, editor.loopEnd - editor.loopStart);
-      position = editor.loopStart + ((position - editor.loopStart + dt * 2) % span + span) % span;
+      position += dt * 2;
+      if (firstPass && position >= editor.loopEnd) {
+        position = editor.loopStart + (position - editor.loopEnd); firstPass = false;
+      } else if (!firstPass && position >= editor.loopEnd) {
+        const span = Math.max(0.25, editor.loopEnd - editor.loopStart);
+        position = editor.loopStart + ((position - editor.loopStart) % span + span) % span;
+      }
       editor.setAttribute('playhead', position.toFixed(3));
     } else if (editor.hasAttribute('playhead')) editor.removeAttribute('playhead');
     requestAnimationFrame(tick);
