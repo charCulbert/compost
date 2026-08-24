@@ -22,6 +22,7 @@
     "./components/compost-timeline": "./src/components/compost-timeline.js",
     "./components/compost-device-selector": "./src/components/compost-device-selector.js",
     "./components/compost-drawer": "./src/components/compost-drawer.js",
+    "./components/compost-envelope-editor": "./src/components/compost-envelope-editor.js",
     "./components/compost-knob": "./src/components/compost-knob.js",
     "./components/compost-midi": "./src/components/compost-midi.js",
     "./components/compost-midi-mappings": "./src/components/compost-midi-mappings.js",
@@ -42,6 +43,7 @@
     "./midi-mapping": "./src/midi-mapping.js",
     "./midi-mappings": "./src/midi-mappings.js",
     "./parameter-controller": "./src/parameter-controller.js",
+    "./envelope-model": "./src/envelope-model.js",
     "./piano-roll-model": "./src/piano-roll-model.js",
     "./parameter-scale": "./src/parameter-scale.js",
     "./utils": "./src/utils.js"

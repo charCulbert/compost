@@ -61,15 +61,18 @@
   compost-button,
   compost-device-selector,
   compost-drawer,
+  compost-envelope-editor,
   compost-knob,
   compost-midi,
   compost-midi-mappings,
   compost-midi-monitor,
   compost-meter,
+  compost-note-editor,
   compost-number-box,
   compost-scope,
   compost-select,
-  compost-slider
+  compost-slider,
+  compost-timeline
 ) {
   color: var(--compost-theme-text);
 }

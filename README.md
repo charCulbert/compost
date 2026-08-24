@@ -9,8 +9,10 @@ persistence, routing, undo, and product policy stay with the caller. Compost
 is a generic audio-interface toolkit with first-class CLAP-shaped parameter
 gestures; it is not a DAW model or audio runtime.
 Editors therefore require caller-owned IDs for domain objects they create or
-copy. Snapping is a visible interaction mode over full-precision beat numbers,
-not a stored tick or sample grid.
+copy. Snapping is a visible interaction mode over full-precision caller values,
+not a stored tick or sample grid. `compost-envelope-editor` stays neutral about
+whether its time coordinate means beats, seconds, or a normalized stage;
+`compost-timeline` adapts that primitive to beat-based automation rows.
 
 [Examples and documentation](https://charculbert.github.io/compost/)
 

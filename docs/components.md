@@ -18,6 +18,7 @@ Import the components a page uses, or register the full set with
 - [compost-midi-monitor](components/compost-midi-monitor.md)
 - [compost-midi-mappings](components/compost-midi-mappings.md)
 - [compost-clip-grid](components/compost-clip-grid.md)
+- [compost-envelope-editor](components/compost-envelope-editor.md)
 - [compost-note-editor](components/compost-note-editor.md)
 - [compost-timeline](components/compost-timeline.md)
 - [compost-window](components/compost-window.md)

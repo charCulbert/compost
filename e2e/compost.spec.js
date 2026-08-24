@@ -24,6 +24,22 @@ for (const example of examples) {
   });
 }
 
+test('envelope editor stays state-in and emits generic time/value intent', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  await expect(editor).toHaveAttribute('aria-label', 'Envelope');
+  await expect(editor.locator('.point')).toHaveCount(3);
+
+  const box = await editor.boundingBox();
+  await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(editor.locator('.point')).toHaveCount(4);
+  expect(await editor.evaluate((element) => element.points.every((point) => 'time' in point && 'value' in point))).toBe(true);
+
+  await editor.locator('.point').nth(1).focus();
+  await page.keyboard.press('Delete');
+  await expect(editor.locator('.point')).toHaveCount(3);
+});
+
 test('documentation renders the overview', async ({ page }) => {
   await page.goto('/docs/');
 
@@ -1254,7 +1270,7 @@ test('timeline automation rows draw and commit sorted edits without clip selecti
   expect(add.detail.points).toHaveLength(3);
   expect(add.detail.points[1].beat).toBe(2);
 
-  const point = row.locator('.automation-point').nth(1);
+  const point = row.locator('compost-envelope-editor').locator('.point').nth(1);
   const pointBox = await point.boundingBox();
   await page.mouse.move(pointBox.x + pointBox.width / 2, pointBox.y + pointBox.height / 2);
   await page.mouse.down();
@@ -1288,7 +1304,8 @@ test('timeline gain curves show the same absolute-value interpolation as playbac
       id: 'volume', label: 'Volume', min: -90, max: 12, stepped: false, scale: 'gain',
       points: [{ beat: 0, value: -90 }, { beat: 4, value: 12 }],
     }] }]);
-    const path = element.shadowRoot.querySelector('.automation-line');
+    const editor = element.shadowRoot.querySelector('compost-envelope-editor');
+    const path = editor.shadowRoot.querySelector('.line');
     const targetX = 2 * element.pxPerBeat;
     let low = 0;
     let high = path.getTotalLength();
@@ -1298,7 +1315,7 @@ test('timeline gain curves show the same absolute-value interpolation as playbac
       else high = middle;
     }
     return {y: path.getPointAtLength((low + high) / 2).y,
-      height: Number(path.ownerSVGElement.getAttribute('height'))};
+      height: path.ownerSVGElement.getBoundingClientRect().height};
   });
   expect(Math.abs(midpoint.y - midpoint.height * .77)).toBeLessThan(1);
 });
@@ -1376,10 +1393,18 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
   expect(events.some((event) => event.type === 'seek' || event.type === 'time-select')).toBe(false);
 
   const row = timeline.locator('.automation-row');
-  await timeline.locator('.automation-line').hover();
-  await expect(row.locator('.automation-readout[data-hover]')).toContainText('·');
+  const hoverPoint = await timeline.locator('compost-envelope-editor').locator('.line').evaluate((path) => {
+    const point = path.getPointAtLength(path.getTotalLength() / 2);
+    const svg = path.ownerSVGElement;
+    const rect = svg.getBoundingClientRect();
+    const box = svg.viewBox.baseVal;
+    return { x: rect.left + point.x / box.width * rect.width, y: rect.top + point.y / box.height * rect.height };
+  });
+  await page.mouse.move(hoverPoint.x, hoverPoint.y);
+  await expect(row.locator('compost-envelope-editor').locator('.readout')).toContainText('·');
   await timeline.evaluate((element) => {
-    const line = element.shadowRoot.querySelector('.automation-line');
+    const editor = element.shadowRoot.querySelector('compost-envelope-editor');
+    const line = editor.shadowRoot.querySelector('.line');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     line.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, clientX: ruler.left + 2 * element._pxPerBeat, clientY: line.getBoundingClientRect().top }));
   });
@@ -1388,7 +1413,7 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
   expect(changes).toHaveLength(1);
   expect(changes[0].detail.points).toHaveLength(3);
   expect(changes[0].detail.points[1].beat).toBe(2);
-  const point = timeline.locator('.automation-point').nth(1);
+  const point = timeline.locator('compost-envelope-editor').locator('.point').nth(1);
   await point.evaluate((node) => node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, clientX: node.getBoundingClientRect().left, clientY: node.getBoundingClientRect().top })));
   events = await timeline.evaluate((element) => element.testEvents);
   changes = events.filter((event) => event.type === 'automation-change');
@@ -1396,7 +1421,8 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
   expect(changes[1].detail.points).toHaveLength(2);
 
   const segmentGesture = await timeline.evaluate((element) => {
-    const line = element.shadowRoot.querySelector('.automation-line');
+    const editor = element.shadowRoot.querySelector('compost-envelope-editor');
+    const line = editor.shadowRoot.querySelector('.line');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const box = line.getBoundingClientRect();
     const event = (type, y, extra = {}) => line.dispatchEvent(new PointerEvent(type, {
@@ -1404,13 +1430,13 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
       clientX: ruler.left + 2 * element._pxPerBeat, clientY: y, shiftKey: true, ...extra,
     }));
     event('pointerdown', box.top + box.height / 2);
-    const down = element.drag?.type || null;
+    const down = editor.drag?.mode || null;
     event('pointermove', box.top + box.height / 2 + 8);
-    const moved = Boolean(element.drag?.moved);
+    const moved = Boolean(editor.drag?.moved);
     event('pointerup', box.top + box.height / 2 + 8);
-    return { down, moved, ended: element.drag === null };
+    return { down, moved, ended: editor.drag === null };
   });
-  expect(segmentGesture).toEqual({ down: 'automation-segment', moved: true, ended: true });
+  expect(segmentGesture).toEqual({ down: 'segment', moved: true, ended: true });
   events = await timeline.evaluate((element) => element.testEvents);
   changes = events.filter((event) => event.type === 'automation-change');
   expect(changes).toHaveLength(3);
@@ -1419,7 +1445,8 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
 
   const beforeCancel = changes[2].detail.points;
   await timeline.evaluate((element) => {
-    const line = element.shadowRoot.querySelector('.automation-line');
+    const editor = element.shadowRoot.querySelector('compost-envelope-editor');
+    const line = editor.shadowRoot.querySelector('.line');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const box = line.getBoundingClientRect();
     const event = (type, y) => line.dispatchEvent(new PointerEvent(type, {
@@ -1437,9 +1464,11 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
   await timeline.evaluate((element) => element.setAttribute('draw', ''));
   await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row');
+    const editor = row.querySelector('compost-envelope-editor');
+    const surface = editor.shadowRoot.querySelector('.surface');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const box = row.getBoundingClientRect();
-    const event = (type, beat, y) => row.dispatchEvent(new PointerEvent(type, {
+    const event = (type, beat, y) => surface.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 33, pointerType: 'mouse', button: 0,
       clientX: ruler.left + beat * element._pxPerBeat, clientY: y,
     }));
@@ -1461,14 +1490,15 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
   const drawBeforeCancel = drawn;
   await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row');
+    const surface = row.querySelector('compost-envelope-editor').shadowRoot.querySelector('.surface');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const box = row.getBoundingClientRect();
-    row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + element._pxPerBeat, clientY: box.top + 10 }));
-    row.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + 3 * element._pxPerBeat, clientY: box.top + 20 }));
-    row.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + 3 * element._pxPerBeat, clientY: box.top + 20 }));
+    surface.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + element._pxPerBeat, clientY: box.top + 10 }));
+    surface.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + 3 * element._pxPerBeat, clientY: box.top + 20 }));
+    surface.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, composed: true, pointerId: 34, pointerType: 'mouse', button: 0, clientX: ruler.left + 3 * element._pxPerBeat, clientY: box.top + 20 }));
   });
   expect(await timeline.evaluate((element) => element.lanes[0].automation[0].points)).toEqual(drawBeforeCancel);
-  expect(await timeline.locator('.automation-row[data-draw-preview]').count()).toBe(0);
+  expect(await timeline.locator('compost-envelope-editor[data-preview]').count()).toBe(0);
   const rowBeforeToggle = timeline.locator('.automation-row');
   await rowBeforeToggle.focus();
   await page.keyboard.press('b');
@@ -1514,20 +1544,20 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
 
   const gainMove = await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
-    const point = row.querySelector('.automation-point');
+    const editor = row.querySelector('compost-envelope-editor');
+    const point = editor.shadowRoot.querySelector('.point');
     const rowRect = row.getBoundingClientRect();
     const pointRect = point.getBoundingClientRect();
     const startY = pointRect.top + pointRect.height / 2;
-    const pointY = Number(point.getAttribute('y')) + Number(point.getAttribute('height')) / 2;
-    const expected = element.automationValueAtPointer(element.lanes[0].automation[0], row, { clientY: rowRect.top + pointY + 8 });
-    const event = (type, y) => point.dispatchEvent(new PointerEvent(type, {
+    const expected = editor.valueAtPointer({ clientY: startY + 8 });
+    const event = (target, type, y) => target.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 71, pointerType: 'mouse', button: 0,
       clientX: pointRect.left + pointRect.width / 2, clientY: y,
     }));
-    event('pointerdown', startY);
-    event('pointermove', startY + 8);
-    const readout = row.querySelector('.automation-readout')?.textContent || '';
-    event('pointerup', startY + 8);
+    event(point, 'pointerdown', startY);
+    event(editor.surface, 'pointermove', startY + 8);
+    const readout = editor.shadowRoot.querySelector('.readout')?.textContent || '';
+    event(editor.surface, 'pointerup', startY + 8);
     return { rowHeight: rowRect.height, expected, readout };
   });
   expect(Math.abs(gainMove.rowHeight - 26)).toBeLessThan(1);
@@ -1569,7 +1599,7 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   const beforeDrawDeletes = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'time-delete').length);
   const beforeDrawClipSelects = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'clip-select').length);
   const beforeDrawKey = await timeline.evaluate((element) => element.lanes[0].automation[0].points);
-  await timeline.locator('.lane[data-lane-id="gain"] .automation-point').first().focus();
+  await timeline.locator('.lane[data-lane-id="gain"] compost-envelope-editor').locator('.point').first().focus();
   await page.keyboard.press('Delete');
   await page.keyboard.press('ArrowUp');
   await timeline.locator('.lane[data-lane-id="gain"] .automation-row').focus();
@@ -1611,27 +1641,37 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   const unsnappedRange = await timeline.evaluate((element) => {
     element.setTimeSelection(1.1, 1.4, ['gain']);
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
-    const line = row.querySelector('.automation-line');
+    const editor = row.querySelector('compost-envelope-editor');
+    const line = editor.shadowRoot.querySelector('.line');
     const box = row.getBoundingClientRect();
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
+    const clientX = ruler.left + 1.35 * element._pxPerBeat;
     const event = (type) => line.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 79, pointerType: 'mouse', button: 0,
-      clientX: ruler.left + 1.35 * element._pxPerBeat, clientY: box.top + box.height / 2,
+      clientX, clientY: box.top + box.height / 2,
     }));
     event('pointerdown');
-    const type = element.drag?.type;
+    const type = editor.drag?.mode;
     event('pointercancel');
-    return type;
+    return { type, selection: editor.selection, time: editor.timeAtPointer({ clientX }, true) };
   });
-  expect(unsnappedRange).toBe('automation-range');
-  const line = timeline.locator('.lane[data-lane-id="gain"] .automation-line');
-  await line.hover();
-  await expect(line).toHaveCSS('stroke-width', '1.5px');
-  await expect(timeline.locator('.lane[data-lane-id="gain"] .automation-row')).toHaveAttribute('data-line-hover', '');
-  await expect(timeline.locator('.lane[data-lane-id="gain"] .automation-readout[data-hover]')).toContainText('·');
+  expect(unsnappedRange.selection).toEqual({ start: 1.1, end: 1.4 });
+  expect(unsnappedRange.type).toBe('range');
+  expect(unsnappedRange.time).toBeGreaterThanOrEqual(unsnappedRange.selection.start);
+  expect(unsnappedRange.time).toBeLessThanOrEqual(unsnappedRange.selection.end);
+  const line = timeline.locator('.lane[data-lane-id="gain"] compost-envelope-editor').locator('.line');
+  const gainHoverPoint = await line.evaluate((path) => {
+    const point = path.getPointAtLength(path.getTotalLength() / 2);
+    const svg = path.ownerSVGElement;
+    const rect = svg.getBoundingClientRect();
+    const box = svg.viewBox.baseVal;
+    return { x: rect.left + point.x / box.width * rect.width, y: rect.top + point.y / box.height * rect.height };
+  });
+  await page.mouse.move(gainHoverPoint.x, gainHoverPoint.y);
+  await expect(line).toHaveCSS('stroke-width', '1.75px');
+  await expect(timeline.locator('.lane[data-lane-id="gain"] compost-envelope-editor').locator('.readout')).toContainText('·');
   await timeline.locator('.lane[data-lane-id="gain"] .lane-base').hover();
-  await expect(line).toHaveCSS('stroke-width', '1px');
-  await expect(timeline.locator('.lane[data-lane-id="gain"] .automation-row')).not.toHaveAttribute('data-line-hover', '');
+  await expect(line).toHaveCSS('stroke-width', '1.25px');
 
   await timeline.evaluate((element) => {
     element.setAttribute('draw', '');
@@ -1640,9 +1680,10 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   const singleBefore = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').length);
   await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const surface = row.querySelector('compost-envelope-editor').shadowRoot.querySelector('.surface');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const box = row.getBoundingClientRect();
-    const event = (type, extra = {}) => row.dispatchEvent(new PointerEvent(type, {
+    const event = (type, extra = {}) => surface.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 72, pointerType: 'mouse', button: 0,
       clientX: ruler.left + element._pxPerBeat, clientY: box.top + box.height / 2, ...extra,
     }));
@@ -1661,9 +1702,10 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   const freehandBefore = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').length);
   await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const surface = row.querySelector('compost-envelope-editor').shadowRoot.querySelector('.surface');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const box = row.getBoundingClientRect();
-    const event = (type, beat, y) => row.dispatchEvent(new PointerEvent(type, {
+    const event = (type, beat, y) => surface.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 73, pointerType: 'mouse', button: 0,
       clientX: ruler.left + beat * element._pxPerBeat, clientY: box.top + y, altKey: true,
     }));
@@ -1684,9 +1726,10 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   const cancelBefore = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').length);
   await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const surface = row.querySelector('compost-envelope-editor').shadowRoot.querySelector('.surface');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const box = row.getBoundingClientRect();
-    const event = (type, beat, y) => row.dispatchEvent(new PointerEvent(type, {
+    const event = (type, beat, y) => surface.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 74, pointerType: 'mouse', button: 0,
       clientX: ruler.left + beat * element._pxPerBeat, clientY: box.top + y,
     }));
@@ -1728,9 +1771,10 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   }));
   await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
+    const surface = row.querySelector('compost-envelope-editor').shadowRoot.querySelector('.surface');
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const box = row.getBoundingClientRect();
-    row.dispatchEvent(new PointerEvent('pointerdown', {
+    surface.dispatchEvent(new PointerEvent('pointerdown', {
       bubbles: true, composed: true, pointerId: 76, pointerType: 'mouse', button: 0,
       clientX: ruler.left, clientY: box.top + box.height / 2,
     }));
@@ -1751,18 +1795,19 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   });
   const firstEdge = await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
-    const point = row.querySelector('.automation-point');
+    const editor = row.querySelector('compost-envelope-editor');
+    const point = editor.shadowRoot.querySelector('.point');
     const pointRect = point.getBoundingClientRect();
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const startY = pointRect.top + pointRect.height / 2;
-    const event = (type, x, y) => point.dispatchEvent(new PointerEvent(type, {
+    const event = (target, type, x, y) => target.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 77, pointerType: 'mouse', button: 0,
       clientX: x, clientY: y,
     }));
-    event('pointerdown', pointRect.left + pointRect.width / 2, startY);
-    event('pointermove', ruler.left + 2 * element._pxPerBeat, startY);
-    const readout = row.querySelector('.automation-readout')?.textContent || '';
-    event('pointerup', ruler.left + 2 * element._pxPerBeat, startY);
+    event(point, 'pointerdown', pointRect.left + pointRect.width / 2, startY);
+    event(editor.surface, 'pointermove', ruler.left + 2 * element._pxPerBeat, startY);
+    const readout = editor.shadowRoot.querySelector('.readout')?.textContent || '';
+    event(editor.surface, 'pointerup', ruler.left + 2 * element._pxPerBeat, startY);
     return { readout, points: element.lanes[0].automation[0].points };
   });
   expect(firstEdge.readout).toMatch(/^2\.00 · /u);
@@ -1771,17 +1816,18 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
 
   const lastEdge = await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
-    const point = row.querySelectorAll('.automation-point')[2];
+    const editor = row.querySelector('compost-envelope-editor');
+    const point = editor.shadowRoot.querySelectorAll('.point')[2];
     const pointRect = point.getBoundingClientRect();
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const startY = pointRect.top + pointRect.height / 2;
-    const event = (type, x, y) => point.dispatchEvent(new PointerEvent(type, {
+    const event = (target, type, x, y) => target.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 78, pointerType: 'mouse', button: 0,
       clientX: x, clientY: y,
     }));
-    event('pointerdown', pointRect.left + pointRect.width / 2, startY);
-    event('pointermove', ruler.left + 3 * element._pxPerBeat, startY);
-    event('pointerup', ruler.left + 3 * element._pxPerBeat, startY);
+    event(point, 'pointerdown', pointRect.left + pointRect.width / 2, startY);
+    event(editor.surface, 'pointermove', ruler.left + 3 * element._pxPerBeat, startY);
+    event(editor.surface, 'pointerup', ruler.left + 3 * element._pxPerBeat, startY);
     return element.lanes[0].automation[0].points;
   });
   expect(lastEdge.map((point) => point.beat)).toEqual([0, 2, 3, 4]);
@@ -1791,18 +1837,19 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
     points: [{ beat: 0, value: .2 }, { beat: 2, value: .5 }, { beat: 4, value: .8 }] }]));
   const clampedPoint = await timeline.evaluate((element) => {
     const row = element.shadowRoot.querySelector('.automation-row[data-lane-id="gain"]');
-    const point = row.querySelectorAll('.automation-point')[1];
+    const editor = row.querySelector('compost-envelope-editor');
+    const point = editor.shadowRoot.querySelectorAll('.point')[1];
     const pointRect = point.getBoundingClientRect();
     const ruler = element.shadowRoot.querySelector('.ruler-wrap').getBoundingClientRect();
     const y = pointRect.top + pointRect.height / 2;
-    const event = (type, beat) => point.dispatchEvent(new PointerEvent(type, {
+    const event = (target, type, beat) => target.dispatchEvent(new PointerEvent(type, {
       bubbles: true, composed: true, pointerId: 80, pointerType: 'mouse', button: 0,
       clientX: ruler.left + beat * element._pxPerBeat, clientY: y,
     }));
-    event('pointerdown', 2);
-    event('pointermove', 6);
-    const readout = row.querySelector('.automation-readout')?.textContent || '';
-    event('pointerup', 6);
+    event(point, 'pointerdown', 2);
+    event(editor.surface, 'pointermove', 6);
+    const readout = editor.shadowRoot.querySelector('.readout')?.textContent || '';
+    event(editor.surface, 'pointerup', 6);
     return { readout, points: element.lanes[0].automation[0].points };
   });
   expect(clampedPoint.readout).toMatch(/^4\.00 · /u);

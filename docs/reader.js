@@ -23,6 +23,7 @@ const docs = [
   ['compost-midi-monitor', 'compost-midi-monitor', './components/compost-midi-monitor.md'],
   ['compost-midi-mappings', 'compost-midi-mappings', './components/compost-midi-mappings.md'],
   ['compost-clip-grid', 'compost-clip-grid', './components/compost-clip-grid.md'],
+  ['compost-envelope-editor', 'compost-envelope-editor', './components/compost-envelope-editor.md'],
   ['compost-note-editor', 'compost-note-editor', './components/compost-note-editor.md'],
   ['compost-timeline', 'compost-timeline', './components/compost-timeline.md'],
   ['compost-window', 'compost-window', './components/compost-window.md'],

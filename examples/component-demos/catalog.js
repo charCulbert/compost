@@ -3,7 +3,7 @@ const ids = [
   'compost-knob', 'compost-slider', 'compost-meter', 'compost-number-box', 'compost-button',
   'compost-select', 'compost-piano', 'compost-scope', 'compost-midi-monitor',
   'compost-midi-mappings', 'compost-clip-grid',
-  'compost-note-editor', 'compost-timeline', 'compost-window', 'compost-popup',
+  'compost-envelope-editor', 'compost-note-editor', 'compost-timeline', 'compost-window', 'compost-popup',
 ];
 
 export const demos = ids.map((id) => ({
@@ -25,6 +25,7 @@ export const demos = ids.map((id) => ({
     'compost-midi-monitor': 'Log incoming messages from a selected real MIDI input.',
     'compost-midi-mappings': 'Learn, edit, and clear compact MIDI mappings.',
     'compost-clip-grid': 'Clip slots with stopped, queued, playing and recording states and a stop slot.',
+    'compost-envelope-editor': 'Edit generic time/value points without assigning them automation or synthesis meaning.',
     'compost-note-editor': 'Notes on a grid with a loop region, velocity, marquee selection and a supplied playhead.',
     'compost-timeline': 'Timeline lanes with a bar ruler, loop brace, playhead and clip edit intents.',
     'compost-window': 'A floating window: dragged by its header, resized in bounds, never off screen.',

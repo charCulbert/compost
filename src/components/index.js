@@ -4,6 +4,7 @@ import './compost-clip-grid.js';
 import './compost-timeline.js';
 import './compost-device-selector.js';
 import './compost-drawer.js';
+import './compost-envelope-editor.js';
 import './compost-knob.js';
 import './compost-midi.js';
 import './compost-midi-mappings.js';

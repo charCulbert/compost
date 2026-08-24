@@ -1,12 +1,14 @@
 # compost-timeline
 
-`compost-timeline` draws timeline lanes supplied by its host. It owns no
-musical model or audio state: clips, loop values and the playhead are pushed in
-through the API, while pointer and keyboard gestures bubble as intent events.
-Lanes use the same sparse, signal-first language as `compost-clip-grid`: a clip
-at rest is a lit name and note dashes on the lane, while a playing clip carries
-a wash and optional progress. Note velocities set dash opacity (`.3 + .6 ×
-velocity / 127`, or `.55` when absent); playing notes use the full lit pass.
+`compost-timeline` draws generic timeline lanes supplied by its host. It owns
+no musical model or audio state: clips, loop values and the playhead are pushed
+in through the API, while pointer and keyboard gestures bubble as intent
+events. Its defaults are neutral bounded clips, ordinary selection outlines,
+compact lane-name fallbacks and a bar ruler. Products may compose richer lane
+headers through slots and style the exposed variables and parts.
+Structured note previews are a convenience. Note velocities set dash opacity
+(`.3 + .6 × velocity / 127`, or `.55` when absent); a caller may instead attach
+any lightweight preview element with `setClipPreview`.
 A looping clip marks every loop point with a thin line and cap in the clip's
 colour, thinning caps when their on-screen spacing would be under 8px. When
 automation rows are hidden, a host-supplied envelope is drawn faintly over the
@@ -38,7 +40,7 @@ timeline.setLanes([
 const header = document.createElement('div');
 header.textContent = 'Drums';
 timeline.setLaneHeader('drums', header);
-timeline.setLoop(0, 8, false, false, { punchIn: false, punchOut: false });
+timeline.setLoop(0, 8, false, false);
 timeline.setPlayhead(2.5);
 timeline.setLocators([
   { id: 'intro', beat: 0, name: 'Intro' },
@@ -84,6 +86,7 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | `lane-move` | `{laneId, toIndex}` | Drag or arrow-key a lane header |
 | `lane-rename` | `{laneId, name}` | Double-click or F2 on a lane name |
 | `automation-change` | `{laneId, automationId, points}` | Add, move, delete or segment edit commit |
+| `automation-input` | `{laneId, automationId, points}` | Reversible point preview during a gesture |
 | `automation-choose` | `{laneId, automationId, clientX, clientY}` | Open the host-owned automation chooser |
 | `automation-add` | `{laneId, clientX, clientY}` | Press `+` in an automation header |
 | `automation-remove` | `{laneId, automationId}` | Press `−` in an automation header |
@@ -139,8 +142,8 @@ Space is left to the host's transport shortcut.
 
 ## API and variables
 
-`setLanes(lanes)`, `setLaneHeaders(headers)`, `setLaneHeader(laneId, element)`, `setLaneClips(laneId, clips)`, `setLaneDimmed(laneId, dimmed)`, `setLaneAutomation(laneId, automation)`, `setAutomationChooserOpen(laneId, automationId, open)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
-`setLoop(start, end, enabled, emit, {punchIn, punchOut})`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
+`setLanes(lanes)`, `setLaneHeaders(headers)`, `setLaneHeader(laneId, element)`, `setClipPreview(clipId, element)`, `setLaneClips(laneId, clips)`, `setLaneDimmed(laneId, dimmed)`, `setLaneAutomation(laneId, automation)`, `setAutomationChooserOpen(laneId, automationId, open)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
+`setLoop(start, end, enabled, emit)`, `scrollTo(beat)`, `zoomToFit(endBeat)`,
 `beginRename(clipId)`, `focusClip(clipId)`, `revealAutomation(laneId, automationId)`, `beatAtPoint(clientX)` and
 `laneAtPoint(clientY)` are the host-facing methods. `locators` and
 `timeSelection` are readable host-state snapshots. The `pxPerBeat`,
@@ -159,22 +162,35 @@ element into its aligned lane wrapper and keeps generic lane selection, moving,
 context, and automation-row geometry around it. Missing entries use the
 built-in header.
 
+`setClipPreview(clipId, element)` attaches caller-owned light-DOM content to a
+clip through a native slot. Passing `null` restores the built-in structured-note
+preview. Compost retains the clip name, extent, loop and progress geometry; the
+preview element owns only its content.
+
 | Variable | Purpose |
 | --- | --- |
 | `--compost-timeline-bg`, `-text`, `-muted`, `-faint` | Surface and type |
-| `--compost-timeline-header-width` | Fixed header column width (25rem by default) |
+| `--compost-timeline-header-width` | Header column width (`11rem` by default) |
 | `--compost-timeline-line`, `-bar-line`, `-lane`, `-lane-alt`, `-header-bg` | Rules and lane surfaces |
 | `--compost-timeline-signal-hi`, `-wash`, `-over`, `-highlight` | Playing, wash and recording states |
 | `--compost-timeline-clip-font-size`, `-lane-font-size`, `-select`, `-marquee` | Clip typography and selection |
 | `--compost-timeline-playhead`, `-loop`, `-loop-off` | Ruler and transport marks |
 | `--compost-timeline-lane-height`, `--compost-timeline-thin-lane-height`, `--compost-timeline-row-height`, `-font`, `-numeral-font` | Regular/compact lane geometry and typography |
 | `--compost-timeline-automation-row-height`, `-value` | Automation sub-row height and live value |
+| `--compost-timeline-clip-bg`, `-clip-border`, `-clip-radius`, `-selected-outline`, `-selection-corners` | Clip surface and selection treatment |
+| `--compost-timeline-lane-selected-bg`, `-lane-selected-outline`, `-lane-selection-corners` | Fallback lane-name selection treatment |
 | `--compost-timeline-color-scheme` | Native control colour scheme |
 
-The host may pass `progress` from `0` to `1` on a playing clip. The loop
-handles accept `punchIn` and `punchOut` in the optional fifth argument; the
-corresponding caps use `--compost-timeline-over`. Omitting that fifth argument
-preserves the current punch flags, including while a loop handle is dragged.
+Useful parts include `frame`, `corner`, `ruler`, `time-selection`, `loop`,
+`loop-start`, `loop-end`, `playhead`, `headers`, `lanes`, `lane`,
+`lane-content`, `lane-header-fallback`, `lane-name`, `clip`, `clip-name`,
+`clip-preview`, `clip-preview-mark`, `clip-progress`, `clip-extent`,
+`clip-loop`, `grid-line`, `bar-line`, `beat-line`, `ruler-label`, `locator`
+and `marquee`.
+
+The host may pass `progress` from `0` to `1` on a playing clip. The loop brace
+is only a generic editable range; punch policy and punch markers are not part
+of this component.
 
 A lane carries generic presentation fields: `id`, `name`, optional `color`,
 `compact`, `picked`, `dimmed`, `clips`, `envelope` and `automation`. A compact
@@ -193,7 +209,8 @@ ends or is cancelled.
 
 When the `automation` attribute is present, each lane may carry
 `automation: [{id, label, color, min, max, stepped, step, scale, points, state, value}]`.
-Every entry gets a header sub-row and an editable body sub-row. `points` are
+Every entry gets a header sub-row and an editable body sub-row composed from
+`compost-envelope-editor`. `points` are
 complete `{beat, value}` objects in song beats; values are clamped to `min` and
 `max`, and `scale: "gain"` uses the shared named gain curve from
 `compost/parameter-scale`.
@@ -208,7 +225,8 @@ The chooser is a real button with `aria-haspopup="menu"` and host-synchronised
 `aria-expanded`; opening one clears the other chooser states. Compost emits the
 chooser/add/remove intents but never renders the menu.
 `value`, when supplied, is printed as a two-decimal live readout in the header.
-The body draws a flat continuation before the first and after the last point,
+The body adapts beats to the envelope editor's generic time coordinate and
+draws a flat continuation before the first and after the last point,
 steps when `stepped` is true, and uses the lane colour except for recording or
 overridden states. `setLaneAutomation` accepts an authoritative replacement;
 the host commits the one `automation-change` event emitted after an edit. Add
