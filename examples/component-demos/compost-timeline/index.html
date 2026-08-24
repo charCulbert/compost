@@ -51,27 +51,27 @@
       const automation = document.querySelector('[data-automation]');
       const draw = document.querySelector('[data-draw]');
       const lanes = [
-        { id: 'drums', name: 'Drums', color: '#c45a2c', picked: true, automation: [
-          { id: 'volume', label: 'Volume', color: '#c45a2c', min: -90, max: 12, scale: 'gain', stepped: false, state: 'playing', value: -3, points: [{ beat: 0, value: -12 }, { beat: 4, value: 0 }, { beat: 8, value: -6 }] },
+        { id: 'lane-a', name: 'Lane A', picked: true, automation: [
+          { id: 'envelope-a', label: 'Envelope A', min: 0, max: 1, stepped: false, value: .6, points: [{ beat: 0, value: .2 }, { beat: 4, value: .8 }, { beat: 8, value: .6 }] },
         ], clips: [
-          { id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, offset: 0, loop: true, state: 'stopped', notes: [{ start: 0, duration: .25, note: 36, velocity: 30 }, { start: .5, duration: .25, note: 42, velocity: 80 }, { start: 1, duration: .25, note: 38, velocity: 120 }] },
-          { id: 'fill', name: 'fill', start: 10, length: 4, duration: 4, offset: 0, loop: false, state: 'stopped', notes: [{ start: 0, duration: .5, note: 45 }, { start: 1, duration: .25, note: 48 }] },
-        ], envelope: { min: -90, max: 12, scale: 'gain', stepped: false, points: [{ beat: 0, value: -12 }, { beat: 4, value: 0 }, { beat: 8, value: -6 }] } },
-        { id: 'bass', name: 'Bass', color: '#6689ad', automation: [
-          { id: 'pan', label: 'Pan', color: '#6689ad', min: -1, max: 1, stepped: true, state: 'idle', value: 0, points: [{ beat: 0, value: -.5 }, { beat: 6, value: .5 }] },
+          { id: 'clip-1', name: 'Clip 1', start: 0, length: 8, duration: 2, offset: 0, loop: true, state: 'stopped', notes: [{ start: 0, duration: .25, note: 36, velocity: 30 }, { start: .5, duration: .25, note: 42, velocity: 80 }, { start: 1, duration: .25, note: 38, velocity: 120 }] },
+          { id: 'clip-2', name: 'Clip 2', start: 10, length: 4, duration: 4, offset: 0, loop: false, state: 'stopped', notes: [{ start: 0, duration: .5, note: 45 }, { start: 1, duration: .25, note: 48 }] },
+        ], envelope: { min: 0, max: 1, stepped: false, points: [{ beat: 0, value: .2 }, { beat: 4, value: .8 }, { beat: 8, value: .6 }] } },
+        { id: 'lane-b', name: 'Lane B', automation: [
+          { id: 'envelope-b', label: 'Envelope B', min: -1, max: 1, stepped: true, value: 0, points: [{ beat: 0, value: -.5 }, { beat: 6, value: .5 }] },
         ], clips: [
-          { id: 'bass-line', name: 'bass line', start: 4, length: 12, duration: 4, offset: 0, loop: true, state: 'playing', notes: [{ start: 0, duration: 1, note: 40 }, { start: 1.5, duration: .5, note: 43 }] },
+          { id: 'clip-3', name: 'Clip 3', start: 4, length: 12, duration: 4, offset: 0, loop: true, state: 'playing', notes: [{ start: 0, duration: 1, note: 40 }, { start: 1.5, duration: .5, note: 43 }] },
         ] },
-        { id: 'keys', name: 'Keys', color: '#a58bbd', dimmed: true, automation: [
-          { id: 'filter', label: 'Filter', color: '#a58bbd', min: 0, max: 1, stepped: false, state: 'idle', value: .7, points: [{ beat: 2, value: .2 }, { beat: 8, value: .7 }] },
+        { id: 'lane-c', name: 'Lane C', dimmed: true, automation: [
+          { id: 'envelope-c', label: 'Envelope C', min: 0, max: 1, stepped: false, value: .7, points: [{ beat: 2, value: .2 }, { beat: 8, value: .7 }] },
         ], clips: [
-          { id: 'pad', name: 'pad', start: 2, length: 6, duration: 6, offset: 0, loop: false, state: 'open', notes: [{ start: 0, duration: 2, note: 60 }, { start: 2, duration: 2, note: 64 }] },
+          { id: 'clip-4', name: 'Clip 4', start: 2, length: 6, duration: 6, offset: 0, loop: false, state: 'open', notes: [{ start: 0, duration: 2, note: 60 }, { start: 2, duration: 2, note: 64 }] },
         ] },
       ];
       timeline.setLanes(lanes);
       timeline.setLocators([
-        { id: 'intro', beat: 0, name: 'Intro' },
-        { id: 'drop', beat: 8, name: 'Drop' },
+        { id: 'marker-a', beat: 0, name: 'Marker A' },
+        { id: 'marker-b', beat: 8, name: 'Marker B' },
       ]);
       timeline.setTimeSelection(null, null);
       timeline.setLoop(0, 8, false);

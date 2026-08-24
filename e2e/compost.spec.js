@@ -513,6 +513,7 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   const clip = timeline.locator('.clip[data-id="beat"]');
   const ruler = timeline.locator('.ruler-wrap');
   await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] }]);
     element.testEvents = [];
     for (const type of ['clip-move', 'clip-trim', 'clip-delete', 'seek']) {
       element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
@@ -632,15 +633,15 @@ test('timeline rulers expose locators, time selections and measured row geometry
       lanesScrollbar: getComputedStyle(root.querySelector('.lanes-wrap')).scrollbarWidth,
     };
   });
-  expect(Math.abs(geometry.columns - 275)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.columns - 121)).toBeLessThanOrEqual(1);
   expect(Math.abs(geometry.ruler - 36.3)).toBeLessThan(1);
-  expect(Math.abs(geometry.header - 90)).toBeLessThan(1);
-  expect(Math.abs(geometry.body - 90)).toBeLessThan(1);
-  expect(Math.abs(geometry.base - 64)).toBeLessThan(1);
+  expect(Math.abs(geometry.header - 70)).toBeLessThan(1);
+  expect(Math.abs(geometry.body - 70)).toBeLessThan(1);
+  expect(Math.abs(geometry.base - 44)).toBeLessThan(1);
   expect(Math.abs(geometry.automationHeader - 26)).toBeLessThan(1);
   expect(Math.abs(geometry.automationRow - 26)).toBeLessThan(1);
-  expect(Math.abs(geometry.thinHeader - 32)).toBeLessThan(1);
-  expect(Math.abs(geometry.thinBody - 32)).toBeLessThan(1);
+  expect(Math.abs(geometry.thinHeader - 27.5)).toBeLessThan(1);
+  expect(Math.abs(geometry.thinBody - 27.5)).toBeLessThan(1);
   expect(geometry.locators.map(({ id }) => id)).toEqual(['intro', 'drop']);
   expect(geometry.rulerScrollbar).toBe('none');
   expect(geometry.lanesScrollbar).toBe('none');
@@ -802,6 +803,7 @@ test('timeline enters from the keyboard and nudges before arrow navigation', asy
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] }]);
     element.testEvents = [];
     element.addEventListener('clip-select', (event) => element.testEvents.push({ type: 'clip-select', detail: event.detail }));
     element.addEventListener('clip-nudge', (event) => element.testEvents.push({ type: 'clip-nudge', detail: event.detail }));
@@ -889,18 +891,11 @@ test('timeline keeps lane headers aligned and touch drags scroll time', async ({
   expect(touchTap.detail.source).toBe('lane');
 });
 
-test('timeline visual states match the clip grid without a second lane number', async ({ page }) => {
+test('timeline defaults to bounded neutral clips with ordinary selection', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
-    element.style.setProperty('--compost-timeline-bg', 'rgb(0, 0, 0)');
-    element.style.setProperty('--compost-timeline-lane', 'rgb(0, 0, 0)');
-    element.style.setProperty('--compost-timeline-lane-alt', 'rgb(0, 0, 0)');
-    element.style.setProperty('--compost-timeline-wash', 'rgb(4, 5, 6)');
-    element.style.setProperty('--compost-timeline-signal-hi', 'rgb(7, 8, 9)');
-    element.style.setProperty('--compost-timeline-clip-font-size', '13px');
-    element.style.setProperty('--compost-timeline-lane-font-size', '14px');
-    element.setLanes([{ id: 'lane', name: '01 MIDI 1', color: 'rgb(10, 11, 12)', clips: [
+    element.setLanes([{ id: 'lane', name: 'Lane A', clips: [
       { id: 'playing', name: 'playing', start: 0, length: 4, duration: 4, state: 'playing', progress: .5 },
     ] }]);
     element.selected = ['playing'];
@@ -909,28 +904,49 @@ test('timeline visual states match the clip grid without a second lane number', 
     const lane = element.shadowRoot.querySelector('.lane');
     const header = element.shadowRoot.querySelector('.lane-header');
     const clip = element.shadowRoot.querySelector('.clip');
-    const hostBackground = getComputedStyle(element).backgroundColor;
     const clipProgress = clip.querySelector('.clip-progress');
     return {
-      hostBackground,
       laneBackground: getComputedStyle(lane).backgroundColor,
       clipBackground: getComputedStyle(clip).backgroundColor,
+      clipBorder: getComputedStyle(clip).boxShadow,
+      clipRadius: getComputedStyle(clip).borderRadius,
       selectedOutline: getComputedStyle(clip).outlineStyle,
-      cornerBorder: getComputedStyle(clip, '::before').borderTopWidth,
-      headerFontSize: getComputedStyle(header).fontSize,
-      clipFontSize: getComputedStyle(clip.querySelector('.clip-name')).fontSize,
+      cornerOpacity: getComputedStyle(clip, '::before').opacity,
+      headerWidth: header.getBoundingClientRect().width,
       progressWidth: clipProgress?.getBoundingClientRect().width ?? 0,
       hasNumber: Boolean(header.querySelector('.number')),
     };
   });
-  expect(measured.laneBackground).toBe(measured.hostBackground);
-  expect(measured.clipBackground).toBe('rgb(4, 5, 6)');
-  expect(measured.selectedOutline).toBe('none');
-  expect(measured.cornerBorder).toBe('1px');
-  expect(measured.headerFontSize).toBe('14px');
-  expect(measured.clipFontSize).toBe('13px');
+  expect(measured.clipBackground).not.toBe('rgba(0, 0, 0, 0)');
+  expect(measured.clipBorder).not.toBe('none');
+  expect(measured.clipRadius).toBe('2px');
+  expect(measured.selectedOutline).toBe('solid');
+  expect(measured.cornerOpacity).toBe('0');
+  expect(measured.headerWidth).toBeLessThan(250);
   expect(measured.progressWidth).toBeGreaterThan(0);
   expect(measured.hasNumber).toBe(false);
+});
+
+test('timeline swaps structured note marks for a caller-owned clip preview', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const result = await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'clip', name: 'Clip',
+      start: 0, length: 4, duration: 4, notes: [{ start: 0, duration: 1, note: 60 }] }] }]);
+    const before = element.shadowRoot.querySelectorAll('.clip-note').length;
+    const preview = document.createElement('div');
+    preview.textContent = 'caller preview';
+    element.setClipPreview('clip', preview);
+    const slot = element.shadowRoot.querySelector('.clip-preview');
+    const custom = {
+      marks: element.shadowRoot.querySelectorAll('.clip-note').length,
+      assigned: slot.assignedElements()[0] === preview,
+      part: slot.getAttribute('part'),
+    };
+    element.setClipPreview('clip', null);
+    return { before, custom, restored: element.shadowRoot.querySelectorAll('.clip-note').length };
+  });
+  expect(result).toEqual({ before: 1, custom: { marks: 0, assigned: true, part: 'clip-preview' }, restored: 1 });
 });
 
 test('timeline paints velocity dashes, hidden envelopes and clip drop targets', async ({ page }) => {
@@ -1122,18 +1138,20 @@ test('timeline aligns regular and compact lanes with automation rows', async ({ 
       compactBase: bounds('.lane[data-lane-id="compact"] .lane-base').height,
       automationHeader: bounds('.lane-header[data-lane-id="regular"] .automation-header').height,
       automationRow: bounds('.lane[data-lane-id="regular"] .automation-row').height,
-      pickedTicks: getComputedStyle(root.querySelector('.lane-name[data-picked]'), '::before').backgroundImage,
+      pickedCornerOpacity: getComputedStyle(root.querySelector('.lane-name[data-picked]'), '::before').opacity,
+      pickedOutline: getComputedStyle(root.querySelector('.lane-name[data-picked]')).outlineStyle,
     };
   });
   expect(Math.abs(measured.regularHeader - measured.regularLane)).toBeLessThan(1);
   expect(Math.abs(measured.compactHeader - measured.compactLane)).toBeLessThan(1);
-  expect(Math.abs(measured.regularHeader - 90)).toBeLessThan(1);
-  expect(Math.abs(measured.regularBase - 64)).toBeLessThan(1);
-  expect(Math.abs(measured.compactHeader - 32)).toBeLessThan(1);
-  expect(Math.abs(measured.compactBase - 32)).toBeLessThan(1);
+  expect(Math.abs(measured.regularHeader - 70)).toBeLessThan(1);
+  expect(Math.abs(measured.regularBase - 44)).toBeLessThan(1);
+  expect(Math.abs(measured.compactHeader - 27.5)).toBeLessThan(1);
+  expect(Math.abs(measured.compactBase - 27.5)).toBeLessThan(1);
   expect(Math.abs(measured.automationHeader - 26)).toBeLessThan(1);
   expect(Math.abs(measured.automationRow - 26)).toBeLessThan(1);
-  expect(measured.pickedTicks).toContain('linear-gradient');
+  expect(measured.pickedCornerOpacity).toBe('0');
+  expect(measured.pickedOutline).toBe('solid');
 });
 
 test('timeline generic header intents stay local', async ({ page }) => {
@@ -1337,7 +1355,7 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
   });
   expect(Math.abs(geometry.header - 26)).toBeLessThan(1);
   expect(Math.abs(geometry.row - 26)).toBeLessThan(1);
-  expect(Math.abs(geometry.lane - 90)).toBeLessThan(1);
+  expect(Math.abs(geometry.lane - 70)).toBeLessThan(1);
   expect(geometry.root).toBe('11px');
 
   const chooser = timeline.locator('.automation-chooser');
@@ -1791,24 +1809,23 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
   expect(clampedPoint.points[1].beat).toBe(4);
 });
 
-test('timeline loop punch caps survive omitted updates and handle drags', async ({ page }) => {
+test('timeline loop handles stay generic while the range is dragged', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
-    element.setLoop(0, 8, false, false, { punchIn: true, punchOut: true });
     element.setLoop(1, 9, false);
   });
   const start = timeline.locator('.ruler-handle.start');
   const end = timeline.locator('.ruler-handle.end');
-  await expect(start).toHaveAttribute('data-punch', '');
-  await expect(end).toHaveAttribute('data-punch', '');
+  await expect(start).not.toHaveAttribute('data-punch', '');
+  await expect(end).not.toHaveAttribute('data-punch', '');
   const box = await start.boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + 24, box.y + box.height / 2, { steps: 4 });
   await page.mouse.up();
-  await expect(start).toHaveAttribute('data-punch', '');
-  await expect(end).toHaveAttribute('data-punch', '');
+  await expect(start).not.toHaveAttribute('data-punch', '');
+  await expect(end).not.toHaveAttribute('data-punch', '');
 });
 
 test('timeline lane geometry includes the separator at automation boundaries', async ({ page }) => {
