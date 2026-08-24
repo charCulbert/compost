@@ -60,22 +60,35 @@ test('envelope points can be moved by a touch pointer', async ({ page }) => {
   expect(moved.value).toBeGreaterThan(before.value);
 });
 
-test('a touch double-tap adds an envelope point', async ({ page }) => {
+test('a touch double-tap creates on the second press and continues as a drag', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-envelope-editor/');
   const editor = page.locator('compost-envelope-editor');
-  await editor.evaluate(async (element) => {
+  const gesture = await editor.evaluate(async (element) => {
+    const changes = [];
+    element.addEventListener('envelope-change', ({ detail }) => changes.push(detail.points));
     const surface = element.shadowRoot.querySelector('.surface');
     const box = element.getBoundingClientRect();
     const options = { bubbles: true, composed: true, pointerType: 'touch',
       isPrimary: true, button: 0, clientX: box.left + box.width * .72,
       clientY: box.top + box.height * .28 };
-    for (let pointerId = 81; pointerId <= 82; ++pointerId) {
-      surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, pointerId }));
-      surface.dispatchEvent(new PointerEvent('pointerup', { ...options, pointerId }));
-      surface.dispatchEvent(new MouseEvent('click', options));
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    }
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, pointerId: 81 }));
+    surface.dispatchEvent(new PointerEvent('pointerup', { ...options, pointerId: 81 }));
+    surface.dispatchEvent(new MouseEvent('click', options));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, pointerId: 82 }));
+    const createdOnDown = element.shadowRoot.querySelectorAll('.point').length === 4;
+    const createdTime = element.drag.origin[element.drag.pointIndex].time;
+    const moved = { ...options, pointerId: 82, clientX: options.clientX + 120,
+      clientY: options.clientY + 24 };
+    surface.dispatchEvent(new PointerEvent('pointermove', moved));
+    surface.dispatchEvent(new PointerEvent('pointerup', moved));
+    return { createdOnDown, createdTime,
+      finalTime: element.points.find((point) => point.time > 5)?.time ?? 0,
+      changeCount: changes.length };
   });
+  expect(gesture.createdOnDown).toBe(true);
+  expect(gesture.finalTime).toBeGreaterThan(gesture.createdTime);
+  expect(gesture.changeCount).toBe(1);
   await expect(editor.locator('.point')).toHaveCount(4);
 });
 

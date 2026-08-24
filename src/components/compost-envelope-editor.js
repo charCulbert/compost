@@ -291,10 +291,29 @@ export class CompostEnvelopeEditor extends HTMLElement {
     if (this.hasAttribute('disabled') || this.hasAttribute('readonly') || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    const point = this.pointFromEvent(event);
+    let point = this.pointFromEvent(event);
+    let origin = this.points;
+    let createdOnDoubleTap = false;
     if (event.pointerType === 'touch' && event.isPrimary) {
-      this.touchTapStart = { pointerId: event.pointerId, x: event.clientX,
-        y: event.clientY, time: performance.now(), pointIndex: point?.index ?? -1 };
+      const now = performance.now();
+      const previous = this.lastTouchTap;
+      const doubleTap = !this.draw && previous && now - previous.time <= DOUBLE_TAP_MS
+        && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= DOUBLE_TAP_DISTANCE;
+      if (doubleTap) {
+        this.lastTouchTap = null;
+        this.touchTapStart = null;
+        this.suppressDoubleClickUntil = now + DOUBLE_TAP_MS;
+        const edit = this.addAtPointer(event, point?.index ?? -1,
+          point ? 'envelope-change' : 'envelope-input');
+        if (!edit || point) return;
+        origin = edit.points;
+        point = { index: edit.pointIndex };
+        createdOnDoubleTap = true;
+        this.render(origin);
+      } else {
+        this.touchTapStart = { pointerId: event.pointerId, x: event.clientX,
+          y: event.clientY, time: now };
+      }
     }
     const rawTime = this.timeAtPointer(event, true);
     const time = this.timeAtPointer(event, event.altKey);
@@ -311,13 +330,14 @@ export class CompostEnvelopeEditor extends HTMLElement {
       startX: event.clientX,
       startY: event.clientY,
       startLocalY: event.clientY - rect.top,
-      origin: this.points,
+      origin,
       samples: [{ time, value: this.valueAtPointer(event) }],
       moved: false,
       freehand: event.altKey || this.snapMode === 'off',
+      created: createdOnDoubleTap,
     };
     clearTimeout(this.longPressTimer);
-    this.longPressTimer = setTimeout(() => {
+    this.longPressTimer = createdOnDoubleTap ? null : setTimeout(() => {
       if (!this.drag || this.drag.pointerId !== event.pointerId || this.drag.moved) return;
       const pointValue = point ? this._points[point.index] : null;
       this.dispatchEvent(eventOf('envelope-context', {
@@ -329,7 +349,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
       }));
       this.cancelPointer();
     }, 550);
-    point?.marker.focus?.({ preventScroll: true });
+    point?.marker?.focus?.({ preventScroll: true });
     this.surface.setPointerCapture?.(event.pointerId);
     this.setAttribute('data-preview', '');
   }
@@ -395,12 +415,9 @@ export class CompostEnvelopeEditor extends HTMLElement {
   }
 
   endPointer(event) {
-    const touchDoubleTap = this.finishTouchTap(event);
+    this.finishTouchTap(event);
     const drag = this.drag;
-    if (!drag || drag.pointerId !== event.pointerId) {
-      if (touchDoubleTap) this.addAtPointer(event, touchDoubleTap.pointIndex);
-      return;
-    }
+    if (!drag || drag.pointerId !== event.pointerId) return;
     event.stopPropagation();
     this.drag = null;
     clearTimeout(this.longPressTimer);
@@ -409,7 +426,9 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.readout.hidden = true;
     if (!drag.moved && drag.mode !== 'draw') {
       this.render();
-      if (touchDoubleTap) this.addAtPointer(event, touchDoubleTap.pointIndex);
+      if (drag.created) this.dispatchEvent(eventOf('envelope-change', {
+        points: drag.origin.map((point) => ({ ...point })),
+      }));
       return;
     }
     let points = drag.preview || drag.origin;
@@ -438,33 +457,29 @@ export class CompostEnvelopeEditor extends HTMLElement {
   finishTouchTap(event) {
     const start = this.touchTapStart;
     this.touchTapStart = null;
-    if (!start || event.pointerType !== 'touch' || start.pointerId !== event.pointerId) return null;
+    if (!start || event.pointerType !== 'touch' || start.pointerId !== event.pointerId) return;
     const now = performance.now();
     if (now - start.time > DOUBLE_TAP_MS || this.drag?.moved
         || Math.hypot(event.clientX - start.x, event.clientY - start.y) > TOUCH_TAP_MOVE_DISTANCE) {
       this.lastTouchTap = null;
-      return null;
+      return;
     }
-    const previous = this.lastTouchTap;
     this.lastTouchTap = { time: now, x: event.clientX, y: event.clientY };
-    if (!previous || now - previous.time > DOUBLE_TAP_MS
-        || Math.hypot(event.clientX - previous.x, event.clientY - previous.y) > DOUBLE_TAP_DISTANCE) return null;
-    this.lastTouchTap = null;
-    this.suppressDoubleClickUntil = now + DOUBLE_TAP_MS;
-    return { pointIndex: start.pointIndex };
   }
 
-  addAtPointer(event, pointIndex = this.pointFromEvent(event)?.index ?? -1) {
-    if (this.hasAttribute('disabled') || this.hasAttribute('readonly') || this.draw) return;
+  addAtPointer(event, pointIndex = this.pointFromEvent(event)?.index ?? -1,
+    eventType = 'envelope-change') {
+    if (this.hasAttribute('disabled') || this.hasAttribute('readonly') || this.draw) return null;
     event.preventDefault();
     event.stopPropagation();
-    const points = pointIndex >= 0
-      ? deleteEnvelopePoint(this._points, pointIndex)
-      : addEnvelopePoint(this._points, {
-        time: this.timeAtPointer(event, event.altKey),
-        value: this.valueAtPointer(event),
-      }, this.min, this.max);
-    this.dispatchEvent(eventOf('envelope-change', { points }));
+    const added = { time: this.timeAtPointer(event, event.altKey), value: this.valueAtPointer(event) };
+    const points = pointIndex >= 0 ? deleteEnvelopePoint(this._points, pointIndex)
+      : addEnvelopePoint(this._points, added, this.min, this.max);
+    let addedIndex = -1;
+    if (pointIndex < 0) for (let index = 0; index < points.length; ++index)
+      if (points[index].time === added.time && points[index].value === added.value) addedIndex = index;
+    this.dispatchEvent(eventOf(eventType, { points }));
+    return { points, pointIndex: addedIndex };
   }
 
   openContext(event) {
