@@ -28,6 +28,18 @@ One lifecycle, two ratified spellings; both are stable API.
   `envelope-change`, `loop-input` then `loop-change`, `time-select-input` then
   `time-select`. Preview and commit carry the same payload shape.
 
+Every `parameter-*` event carries the same detail shape:
+
+```js
+{
+  parameterID: string,   // the control's parameter-id attribute (note the casing)
+  value: number,
+  kind: 'continuous' | 'discrete' | 'trigger',
+  source: string,        // 'control' unless the emitter names another origin
+  cancelled: boolean,    // true only on a parameter-end that restored the begin value
+}
+```
+
 New events extend the spelling their element family already uses. Do not
 invent a third form, and do not rename existing events between forms.
 

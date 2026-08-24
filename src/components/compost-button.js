@@ -1,4 +1,4 @@
-import { beginParameterGesture, defineElement, editParameterGesture, endParameterGesture } from '../utils.js';
+import { beginParameterGesture, defineElement, editParameterGesture, endParameterGesture, numberAttr } from '../utils.js';
 
 export class CircleButton extends HTMLElement {
   static get observedAttributes() {
@@ -9,6 +9,7 @@ export class CircleButton extends HTMLElement {
       'parameter-id',
       'section',
       'pressed',
+      'value',
       'disabled',
       'aria-label',
       'aria-description',
@@ -245,7 +246,10 @@ export class CircleButton extends HTMLElement {
     this.button?.blur();
   }
 
-  attributeChangedCallback() {
+  attributeChangedCallback(name) {
+    // `pressed` is the canonical switch state; a `value` attribute is accepted
+    // for symmetry with the other parameter controls and maps onto it.
+    if (name === 'value') this.setValue(numberAttr(this, 'value', this.value), false);
     this.refresh();
   }
 
