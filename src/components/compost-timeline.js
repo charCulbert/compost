@@ -2519,6 +2519,14 @@ export class CompostTimeline extends HTMLElement {
     } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('header-wrap'))) {
       event.preventDefault();
       this.dispatchEvent(eventOf('lanes-context', { clientX: event.clientX, clientY: event.clientY }));
+    } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('ruler-wrap'))) {
+      event.preventDefault();
+      this.dispatchEvent(eventOf('ruler-context', { beat: this.beatAtPoint(event.clientX), clientX: event.clientX, clientY: event.clientY }));
+    } else {
+      // every remaining point of the surface still resolves to a context
+      // intent, so callers never need a native contextmenu fallback
+      event.preventDefault();
+      this.dispatchEvent(eventOf('timeline-context', { clientX: event.clientX, clientY: event.clientY }));
     }
   }
 

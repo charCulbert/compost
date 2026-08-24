@@ -73,6 +73,8 @@ consumes the second release so iOS does not zoom the surrounding page.
 | `locator-rename` | `{id, name}` | Double-click a locator name or F2 |
 | `locator-context` | `{id, clientX, clientY}` | Locator context menu |
 | `fit-request` | `{}` | Double-click row-two ruler; host calls `zoomToFit(songEnd())` |
+| `ruler-context` | `{beat, clientX, clientY}` | Ruler context menu |
+| `timeline-context` | `{clientX, clientY}` | Context menu anywhere not covered above |
 | `time-select-input` / `time-select` | `{start, end, laneIds}` | Cross-lane time-selection drag |
 | `time-delete` | `{start, end, laneIds, removeTime}` | Delete/Backspace with a time selection |
 | `loop-input` / `loop-change` | `{start, end, enabled}` | Loop brace drag |
