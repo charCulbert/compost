@@ -18,13 +18,10 @@
     "./components": "./src/components/index.js",
     "./components/compost-audio": "./src/components/compost-audio.js",
     "./components/compost-button": "./src/components/compost-button.js",
-    "./components/compost-channel-card": "./src/components/compost-channel-card.js",
-    "./components/compost-channel-strip": "./src/components/compost-channel-strip.js",
     "./components/compost-clip-grid": "./src/components/compost-clip-grid.js",
     "./components/compost-timeline": "./src/components/compost-timeline.js",
     "./components/compost-device-selector": "./src/components/compost-device-selector.js",
     "./components/compost-drawer": "./src/components/compost-drawer.js",
-    "./components/compost-gain": "./src/components/compost-gain.js",
     "./components/compost-knob": "./src/components/compost-knob.js",
     "./components/compost-midi": "./src/components/compost-midi.js",
     "./components/compost-midi-mappings": "./src/components/compost-midi-mappings.js",
@@ -47,7 +44,6 @@
     "./parameter-controller": "./src/parameter-controller.js",
     "./piano-roll-model": "./src/piano-roll-model.js",
     "./parameter-scale": "./src/parameter-scale.js",
-    "./gain-scale": "./src/gain-scale.js",
     "./utils": "./src/utils.js"
   },
   "files": [

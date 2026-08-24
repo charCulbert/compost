@@ -5,6 +5,7 @@ import {
   moveValueByNormalisedDelta,
   normalisedKeyboardStep,
   normalisedPositionToValue,
+  parameterScaleBreakpoints,
   valueToNormalisedPosition,
 } from '../src/parameter-scale.js';
 
@@ -116,6 +117,12 @@ test('gain curve remains invertible beyond the canonical range', () => {
   for (const value of [-120, -90, 0, 12, 24]) {
     assertClose(normalisedPositionToValue(valueToNormalisedPosition(value, scale), scale), value);
   }
+});
+
+test('gain curve exposes only its built-in slope changes inside a range', () => {
+  assert.deepEqual(parameterScaleBreakpoints({ min: -24, max: 6, curve: 'gain' }),
+    [-12, -6, 0]);
+  assert.deepEqual(parameterScaleBreakpoints({ min: 0, max: 1 }), []);
 });
 
 test('normalised drag moves through the selected curve', () => {

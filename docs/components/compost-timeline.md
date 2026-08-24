@@ -195,7 +195,8 @@ When the `automation` attribute is present, each lane may carry
 `automation: [{id, label, color, min, max, stepped, step, scale, points, state, value}]`.
 Every entry gets a header sub-row and an editable body sub-row. `points` are
 complete `{beat, value}` objects in song beats; values are clamped to `min` and
-`max`, and `scale: "gain"` uses the same taper as `compost-channel-strip`.
+`max`, and `scale: "gain"` uses the shared named gain curve from
+`compost/parameter-scale`.
 `stepped` changes interpolation to a previous-value hold; when no `step` is
 supplied it uses an integer value step of 1, otherwise an optional positive
 `step` snaps values during point and range edits. Continuous point, segment and

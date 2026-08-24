@@ -358,7 +358,7 @@ export class CompostClipGrid extends HTMLElement {
   /** @param {unknown} value */
   setFrom(value) {
     const current = this._from;
-    // The DAW can update clip progress at the meter rate. Keep the visible
+    // A caller can update clip progress at the meter rate. Keep the visible
     // nodes and the normalized object in place for that hot path.
     if (current?.kind === 'timeline' && value && typeof value === 'object'
       && value.kind === 'timeline' && value.name === current.name) {

@@ -8,10 +8,6 @@ globalThis.customElements ??= {
   define(name, constructor) { this.elements.set(name, constructor); },
 };
 
-const {
-  DEFAULT_TAPER, dragAxis, gainReductionFraction, parseTaper, washLevel, washPosition,
-} = await import('../src/components/compost-channel-strip.js');
-const { panBar, panText } = await import('../src/components/compost-channel-card.js');
 const { normalizeFrom, slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
 const {
@@ -27,33 +23,7 @@ const { boundedPosition, constrainedSize } = await import('../src/components/com
 const { pointPlacement } = await import('../src/components/compost-popup.js');
 const { duplicatedNotes, selectionSpan, trimmedNotes, velocityShiftedNotes } = await import('../src/piano-roll-model.js');
 
-test('the wash taper puts unity at 70% and runs between the table points', () => {
-  assert.equal(washPosition(0), 0.7);
-  assert.equal(washPosition(12), 1);
-  assert.equal(washPosition(-90), 0);
-  assert.equal(washPosition(30), 1);
-  assert.equal(washPosition(-120), 0);
-  assert.ok(Math.abs(washPosition(-3) - 0.65) < 1e-9);
-  assert.equal(washPosition(Number.NaN), 0);
-});
-
-test('a taper attribute is parsed, sorted and validated', () => {
-  assert.equal(parseTaper(''), DEFAULT_TAPER);
-  assert.equal(parseTaper('nonsense'), DEFAULT_TAPER);
-  const linear = parseTaper('-60:0 0:1');
-  assert.equal(washPosition(-30, linear), 0.5);
-  const reversed = parseTaper('0:1 -60:0');
-  assert.deepEqual(reversed, [[0, 1], [-60, 0]]);
-});
-
-test('the drag axis waits for a movement and favours vertical', () => {
-  assert.equal(dragAxis(1, 2), null);
-  assert.equal(dragAxis(0, 10), 'gain');
-  assert.equal(dragAxis(10, 8), 'gain');
-  assert.equal(dragAxis(15, 10), 'pan');
-});
-
-test('cross-view provenance and gain reduction stay host-owned and bounded', () => {
+test('cross-view provenance stays host-owned and bounded', () => {
   assert.deepEqual(normalizeFrom({ kind: 'timeline', name: 'verse', progress: 1.4 }), {
     kind: 'timeline', name: 'verse', progress: 1,
   });
@@ -62,21 +32,6 @@ test('cross-view provenance and gain reduction stay host-owned and bounded', () 
   });
   assert.deepEqual(normalizeFrom({ kind: 'overridden' }), { kind: 'overridden' });
   assert.equal(normalizeFrom({ kind: 'other' }), null);
-  assert.equal(gainReductionFraction(0), 0);
-  assert.equal(gainReductionFraction(-12), 0.5);
-  assert.equal(gainReductionFraction(-24), 1);
-  assert.equal(gainReductionFraction(-30), 1);
-  assert.equal(gainReductionFraction(3), 0);
-  assert.equal(gainReductionFraction(Number.NaN), 0);
-});
-
-test('pan reads as C, L and R with the bar growing from the middle', () => {
-  assert.equal(panText(0), 'C');
-  assert.equal(panText(0.01), 'C');
-  assert.equal(panText(-0.5), '50L');
-  assert.equal(panText(1), '100R');
-  assert.deepEqual(panBar(-0.5), { left: 25, width: 25 });
-  assert.deepEqual(panBar(0.2), { left: 50, width: 10 });
 });
 
 test('a pointer lands in the slot whose box contains it', () => {
@@ -290,18 +245,4 @@ test('trimming keeps the end, velocity pins to MIDI, duplicates land one span la
   let next = 0;
   const copies = duplicatedNotes(notes, ['a', 'b'], 0.25, 16, () => `c${next += 1}`);
   assert.deepEqual(copies.map((note) => [note.id, note.start]), [['c1', 3], ['c2', 4.5]]);
-});
-
-test('washLevel is washPosition run backwards, so a drag keeps the edge under the pointer', () => {
-  for (const db of [12, 6, 3, 0, -4.5, -12, -20, -36, -48, -60, -75, -90])
-    assert.ok(Math.abs(washLevel(washPosition(db)) - db) < 1e-9, `${db} dB round-trips`);
-  assert.equal(washLevel(0.7), 0);
-  assert.equal(washLevel(1), 12);
-  assert.equal(washLevel(0), -90);
-  assert.equal(washLevel(1.4), 12);
-  assert.equal(washLevel(-0.2), -90);
-  assert.equal(washLevel(Number.NaN), -90);
-  const taper = parseTaper('6:1 0:.5 -60:0');
-  assert.equal(washLevel(0.75, taper), 3);
-  assert.equal(washLevel(0.25, taper), -30);
 });

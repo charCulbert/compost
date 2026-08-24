@@ -1,6 +1,10 @@
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
-import { DEFAULT_TAPER, washLevel, washPosition } from '../gain-scale.js';
+import {
+  normalisedPositionToValue,
+  parameterScaleBreakpoints,
+  valueToNormalisedPosition,
+} from '../parameter-scale.js';
 
 // A numerical guard, not a tick or musical-grid resolution.
 const MIN_CLIP_LENGTH = 1e-9;
@@ -157,7 +161,7 @@ export function automationValueToY(value, min, max, height, scale = 'linear') {
   const rowHeight = Math.max(1, Number(args.height) || 1);
   const bounded = finiteClamp(Number(value), range.min, range.max);
   const fraction = args.scale === 'gain'
-    ? washPosition(bounded, DEFAULT_TAPER)
+    ? valueToNormalisedPosition(bounded, { ...range, curve: 'gain' })
     : (range.max === range.min ? .5 : (bounded - range.min) / (range.max - range.min));
   return (1 - clamp(fraction, 0, 1)) * rowHeight;
 }
@@ -170,7 +174,7 @@ export function automationValueFromY(y, min, max, height, scale = 'linear') {
   const rowHeight = Math.max(1, Number(args.height) || 1);
   const fraction = clamp(1 - (Number(y) || 0) / rowHeight, 0, 1);
   const value = args.scale === 'gain'
-    ? washLevel(fraction, DEFAULT_TAPER)
+    ? normalisedPositionToValue(fraction, { ...range, curve: 'gain' })
     : range.min + fraction * (range.max - range.min);
   return finiteClamp(value, range.min, range.max);
 }
@@ -1539,7 +1543,9 @@ export class CompostTimeline extends HTMLElement {
         const before = points[index - 1];
         const after = points[index];
         if (automation.scale === 'gain' && after.value !== before.value) {
-          const turns = DEFAULT_TAPER.map(([value]) => value)
+          const turns = parameterScaleBreakpoints({
+            min: automation.min, max: automation.max, curve: 'gain',
+          })
             .filter((value) => (value - before.value) * (value - after.value) < 0)
             .map((value) => ({
               beat: before.beat + (after.beat - before.beat) * (value - before.value) / (after.value - before.value),

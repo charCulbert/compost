@@ -6,6 +6,7 @@
 ```js
 import {
   normalisedPositionToValue,
+  parameterScaleBreakpoints,
   valueToNormalisedPosition,
 } from 'compost/parameter-scale';
 
@@ -26,3 +27,7 @@ response: `-12 dB` is at 50%, `0 dB` at 70%, and `+12 dB` at 100% for the
 canonical `-90..+12 dB` range. Other dB ranges crop and normalize that same
 absolute response. The scale remains finite; a control may present its minimum
 with `min-label="-inf"` when the application treats that floor as silence.
+
+`parameterScaleBreakpoints(options)` returns the interior value-space slope
+changes for a built-in curve. Renderers can use those points to draw the same
+response without exposing or accepting a caller-defined curve table.

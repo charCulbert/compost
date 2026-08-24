@@ -477,57 +477,7 @@ function setupScopeDemo() {
   applyOptions();
 }
 
-function setupGainDemo() {
-  const meters = [...document.querySelectorAll('[data-gain-meter]')];
-  if (!meters.length) return;
-
-  const state = document.querySelector('[data-option-state]');
-  const running = option('gain-running');
-  const phases = new Map(meters.map((meter) => [meter, meter.channels === 1 ? [0] : [0, Math.PI / 3]]));
-  let animate = true;
-  let last = performance.now();
-
-  const tick = (now) => {
-    const dt = (now - last) / 1000;
-    last = now;
-    if (animate) {
-      for (const meter of meters) {
-        const phase = phases.get(meter);
-        const levels = phase.map((base, i) => {
-          const next = base + dt * (1.7 + i * 0.6);
-          phase[i] = next;
-          // A wandering peak that occasionally spikes into the clip region.
-          const swell = (Math.sin(next) * 0.5 + 0.5) ** 2;
-          const spike = Math.sin(next * 0.17) > 0.93 ? 10 : 0;
-          return -54 + swell * 56 + spike;
-        });
-        meter.setLevels(levels);
-      }
-    }
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-
-  running?.addEventListener('change', () => {
-    animate = running.checked;
-    if (state) state.textContent = animate ? 'Meters running' : 'Meters paused';
-  });
-  document.querySelector('[data-gain-clip]')?.addEventListener('click', () => {
-    for (const meter of meters) {
-      const count = meter.channels;
-      meter.setLevels(Array.from({ length: count }, () => 3));
-    }
-    writeLog('host pushed a clip on every channel');
-  });
-  document.querySelector('[data-gain-clear]')?.addEventListener('click', () => {
-    for (const meter of meters) meter.clearClip();
-    writeLog('clearClip() called on every meter');
-  });
-  if (state) state.textContent = 'Meters running';
-}
-
 if (demo?.id === 'compost-audio') setupAudioDemo();
-if (demo?.id === 'compost-gain') setupGainDemo();
 if (demo?.id === 'compost-device-selector') setupDeviceSelectorDemo();
 if (demo?.id === 'compost-scope') setupScopeDemo();
 if (demo?.id === 'compost-knob') setupKnobOptions();
@@ -535,104 +485,6 @@ if (demo?.id === 'compost-slider') setupSliderOptions();
 if (demo?.id === 'compost-number-box') setupNumberBoxOptions();
 if (demo?.id === 'compost-button') setupButtonOptions();
 if (demo?.id === 'compost-piano') setupPianoOptions();
-
-function setupChannelStripDemo() {
-  const strips = [...document.querySelectorAll('compost-channel-strip[data-strip-meter]')];
-  const target = document.querySelector('[data-option-target="strip"]');
-  if (!strips.length || !target) return;
-  const state = document.querySelector('[data-option-state]');
-  const running = option('strip-running');
-  const muted = option('strip-muted');
-  const meter = option('strip-meter');
-  const scale = option('strip-scale');
-  const channels = option('strip-channels');
-  let animate = true;
-  let phase = 0;
-  // Gain reduction is a host-owned display stream, separate from peak levels.
-  strips.forEach((strip, index) => strip.setGainReduction(index === 0 ? -12 : index === 1 ? -6 : -18));
-  // a host would hand over real peak levels; here they wander near the gain
-  const tick = () => {
-    phase += 1 / 40;
-    if (animate) {
-      strips.forEach((strip, index) => {
-        const levels = Array.from({ length: strip.channels }, (_, channel) =>
-          strip.value - 4 + Math.sin(phase * (1.6 + index * 0.3) + channel) * 5
-          - Math.random() * 3);
-        strip.setLevels(levels);
-      });
-    }
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-  running?.addEventListener('change', () => {
-    animate = running.checked;
-    if (!animate) strips.forEach((strip) => strip.setLevels(strip.levels.map(() => -90)));
-    if (state) state.textContent = animate ? 'Meters running' : 'Meters paused';
-  });
-  muted?.addEventListener('change', () => target.toggleAttribute('muted', muted.checked));
-  meter?.addEventListener('change', () => target.setAttribute('meter-position', meter.value));
-  scale?.addEventListener('change', () => target.setAttribute('scale', scale.value));
-  channels?.addEventListener('input', () => target.setAttribute('channels', channels.value));
-}
-
-function setupChannelCardDemo() {
-  const card = document.querySelector('[data-option-target="card"]');
-  const strip = document.querySelector('[data-option-target="card-strip"]');
-  const popup = document.querySelector('[data-card-inputs]');
-  if (!card || !strip) return;
-  const state = document.querySelector('[data-option-state]');
-  const width = option('card-width');
-  const sendCount = option('card-sends');
-  const pan = option('card-pan');
-  const soloSafe = option('card-solo-safe');
-  const inputs = ['no input', 'MIDI 1 · 1', 'MIDI 1 · 2', 'MIDI 1 all', 'MIDI 2 all'];
-  let inputIndex = 1;
-  const apply = () => {
-    const px = Number(width?.value) || 132;
-    strip.style.width = `${px}px`;
-    const count = Math.max(0, Math.min(4, Number(sendCount?.value) || 0));
-    card.sends = Array.from({ length: count }, (_, index) => ({
-      label: String.fromCharCode(65 + index), value: index === 0 ? -12 : -90,
-      parameterID: `keys-send-${String.fromCharCode(65 + index).toLowerCase()}`, min: -90, max: 6,
-    }));
-    if (pan?.checked) card.setAttribute('pan', String(card.pan));
-    else card.removeAttribute('pan');
-    card.toggleAttribute('solo-safe', Boolean(soloSafe?.checked));
-    if (state) state.textContent = `${px}px · ${count} send${count === 1 ? '' : 's'}`;
-  };
-  width?.addEventListener('input', apply);
-  sendCount?.addEventListener('input', apply);
-  pan?.addEventListener('change', apply);
-  soloSafe?.addEventListener('change', apply);
-  apply();
-  // the strip and the card are two views of one channel; the host keeps them in step
-  strip.addEventListener('parameter-edit', ({ detail }) => {
-    if (detail.parameterID === 'keys-gain') card.setValue(detail.value, false, 'host');
-    if (detail.parameterID === 'keys-pan') card.setPan(detail.value, false, 'host');
-  });
-  card.addEventListener('parameter-edit', ({ detail }) => {
-    if (detail.parameterID === 'keys-gain') strip.setValue(detail.value, false, 'host');
-    if (detail.parameterID === 'keys-pan') strip.setPan(detail.value, false, 'host');
-    if (detail.name && ['arm', 'monitor', 'mute', 'solo', 'solo-safe'].includes(detail.name)) {
-      card.toggleAttribute(detail.name, detail.value >= 0.5);
-      if (detail.name === 'mute') {
-        strip.toggleAttribute('muted', detail.value >= 0.5);
-        card.toggleAttribute('muted', detail.value >= 0.5);
-      }
-    }
-  });
-  if (popup) {
-    popup.setItems(inputs.map((label, index) => ({ value: String(index), label, selected: index === inputIndex })));
-    card.addEventListener('input-click', ({ detail }) => popup.open({ anchor: detail.anchor }));
-    popup.addEventListener('popup-select', ({ detail }) => {
-      inputIndex = Number(detail.value);
-      card.setAttribute('input', inputs[inputIndex]);
-      card.toggleAttribute('input-live', inputIndex > 0);
-      popup.setItems(inputs.map((label, index) => ({ value: String(index), label, selected: index === inputIndex })));
-      writeLog(`input → ${inputs[inputIndex]}`);
-    });
-  }
-}
 
 function setupClipGridDemo() {
   const grids = [...document.querySelectorAll('compost-clip-grid[data-grid]')];
@@ -852,8 +704,6 @@ function setupPopupDemo() {
   }
 }
 
-if (demo?.id === 'compost-channel-strip') setupChannelStripDemo();
-if (demo?.id === 'compost-channel-card') setupChannelCardDemo();
 if (demo?.id === 'compost-clip-grid') setupClipGridDemo();
 if (demo?.id === 'compost-note-editor') setupNoteEditorDemo();
 if (demo?.id === 'compost-window') setupWindowDemo();

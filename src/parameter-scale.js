@@ -150,6 +150,16 @@ export function describeParameterScale(options = {}) {
   return 'linear curve';
 }
 
+/** Values where a piecewise scale changes slope, excluding its range edges. */
+export function parameterScaleBreakpoints(options = {}) {
+  const scale = normaliseParameterScale(options);
+  if (scale.curve !== 'gain') return [];
+  const low = Math.min(scale.min, scale.max);
+  const high = Math.max(scale.min, scale.max);
+  return GAIN_POINTS.map(([value]) => value)
+    .filter((value) => value > low && value < high);
+}
+
 function usableCurve(curve, { min, max }) {
   if (curve === 'log' && !(min > 0 && max > 0 && min !== max)) return 'linear';
   return curve;

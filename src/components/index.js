@@ -1,12 +1,9 @@
 import './compost-audio.js';
 import './compost-button.js';
-import './compost-channel-card.js';
-import './compost-channel-strip.js';
 import './compost-clip-grid.js';
 import './compost-timeline.js';
 import './compost-device-selector.js';
 import './compost-drawer.js';
-import './compost-gain.js';
 import './compost-knob.js';
 import './compost-midi.js';
 import './compost-midi-mappings.js';

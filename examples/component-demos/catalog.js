@@ -1,8 +1,8 @@
 const ids = [
   'compost-audio', 'compost-midi', 'compost-device-selector', 'compost-drawer',
-  'compost-knob', 'compost-slider', 'compost-meter', 'compost-gain', 'compost-number-box', 'compost-button',
+  'compost-knob', 'compost-slider', 'compost-meter', 'compost-number-box', 'compost-button',
   'compost-select', 'compost-piano', 'compost-scope', 'compost-midi-monitor',
-  'compost-midi-mappings', 'compost-channel-strip', 'compost-channel-card', 'compost-clip-grid',
+  'compost-midi-mappings', 'compost-clip-grid',
   'compost-note-editor', 'compost-timeline', 'compost-window', 'compost-popup',
 ];
 
@@ -17,7 +17,6 @@ export const demos = ids.map((id) => ({
     'compost-knob': 'Curve-aware drag, fine movement, editing, and reset behavior.',
     'compost-slider': 'Orientation, range, curve, midpoint, step, fine drag, editing, and reset behavior.',
     'compost-meter': 'Read-only mono and multichannel levels with caller-defined layers and labels.',
-    'compost-gain': 'A channel-strip fader with an independent live peak meter, peak hold, and clip.',
     'compost-number-box': 'Typed values plus normal and fine drag movement.',
     'compost-button': 'One square momentary trigger and one square latching switch.',
     'compost-select': 'A styled popup select with native-like keyboard and typeahead behavior.',
@@ -25,8 +24,6 @@ export const demos = ids.map((id) => ({
     'compost-piano': 'Play notes with pointer or computer keyboard and inspect events.',
     'compost-midi-monitor': 'Log incoming messages from a selected real MIDI input.',
     'compost-midi-mappings': 'Learn, edit, and clear compact MIDI mappings.',
-    'compost-channel-strip': 'A track column that is the channel: wash fader, meters and 0 dB notch on one dB axis.',
-    'compost-channel-card': 'Input, pan, level, sends and state switches laid out around the meter gutter.',
     'compost-clip-grid': 'Clip slots with stopped, queued, playing and recording states and a stop slot.',
     'compost-note-editor': 'Notes on a grid with a loop region, velocity, marquee selection and a supplied playhead.',
     'compost-timeline': 'Timeline lanes with a bar ruler, loop brace, playhead and clip edit intents.',
