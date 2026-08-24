@@ -577,7 +577,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-playhead); pointer-events: none; z-index: 4; }
         .ruler-playhead::before { content: ""; position: absolute; top: .08em; left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--compost-timeline-playhead); }
         .header-wrap, .lanes-wrap { min-height: 0; overflow: hidden; }
-        .header-wrap { overflow: hidden; }
+        .header-wrap { position: relative; overflow: hidden; }
         .headers { position: relative; width: 100%; }
         .lane-header { position: relative; box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, var(--compost-timeline-text)); font-size: var(--compost-timeline-lane-font-size); }
         .lane-header-content { display: block; width: 100%; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
@@ -589,6 +589,8 @@ export class CompostTimeline extends HTMLElement {
         .lane-header .lane-name[data-picked]::after { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: left bottom, left bottom, right bottom, right bottom; }
         .lane-header .lane-name:focus-visible { outline: none; text-decoration: underline dotted var(--compost-timeline-select); text-underline-offset: 3px; }
         .lane-drop-line { position: absolute; left: 0; right: 0; z-index: 8; display: none; height: 1px; background: var(--compost-timeline-select); pointer-events: none; }
+        .lane-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; z-index: 6; cursor: row-resize; touch-action: none; }
+        .lane-resize:hover::after, .lane-resize:active::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--compost-timeline-select); }
         .automation-header { box-sizing: border-box; height: var(--compost-timeline-automation-row-height); display: flex; align-items: center; gap: .3em; padding: 0 .6em 0 1.5em; border-top: 1px solid color-mix(in srgb, var(--compost-timeline-line) 50%, transparent); color: var(--compost-timeline-muted); font-size: .82em; }
         .automation-chooser { appearance: none; min-width: 0; max-width: 16em; display: inline-flex; align-items: center; gap: .35em; overflow: hidden; border: 0; padding: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
         .automation-chooser-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1039,6 +1041,8 @@ export class CompostTimeline extends HTMLElement {
 
   /** @param {TimelineLane} lane */
   laneRowHeightFor(lane) {
+    const custom = Number(lane?.height);
+    if (Number.isFinite(custom) && custom > 0) return Math.max(24, custom);
     return lane?.compact ? this.thinLaneHeight : this.laneHeight;
   }
 
@@ -1250,14 +1254,16 @@ export class CompostTimeline extends HTMLElement {
     if (!(this.laneDropLine instanceof HTMLElement)) return;
     const headers = [...this.headers.querySelectorAll('.lane-header')];
     const target = headers[Math.max(0, Math.min(headers.length - 1, toIndex))];
-    const headersRect = this.headers.getBoundingClientRect();
+    // the line is absolutely positioned in the header-wrap, whose top stays put
+    // while the headers themselves translate with the lane scroll
+    const wrapRect = this.headerWrap.getBoundingClientRect();
     let top = 0;
     if (target instanceof HTMLElement) {
       const rect = target.getBoundingClientRect();
-      top = (toIndex >= headers.length ? rect.bottom : rect.top) - headersRect.top;
+      top = (toIndex >= headers.length ? rect.bottom : rect.top) - wrapRect.top;
     } else if (headers.length) {
       const rect = headers.at(-1).getBoundingClientRect();
-      top = rect.bottom - headersRect.top;
+      top = rect.bottom - wrapRect.top;
     }
     this.laneDropLine.style.top = `${top}px`;
     this.laneDropLine.style.display = 'block';
@@ -1470,6 +1476,7 @@ export class CompostTimeline extends HTMLElement {
       slot.name = `lane-header-${encodeURIComponent(lane.id)}`;
       header.append(slot);
       for (const automation of this.automationFor(lane)) header.append(this.renderAutomationHeader(lane, automation));
+      header.append(this.renderLaneResizeHandle(lane));
       return header;
     }
 
@@ -1478,7 +1485,60 @@ export class CompostTimeline extends HTMLElement {
     main.append(this.renderLaneName(lane));
     header.append(main);
     for (const automation of this.automationFor(lane)) header.append(this.renderAutomationHeader(lane, automation));
+    header.append(this.renderLaneResizeHandle(lane));
     return header;
+  }
+
+  /** A grab edge along the header's bottom border: drag sets the lane's own row
+   * height (lane.height), double-click clears it back to the shared default.
+   * @param {TimelineLane} lane */
+  renderLaneResizeHandle(lane) {
+    const handle = document.createElement('div');
+    handle.className = 'lane-resize';
+    handle.title = 'Drag to resize lane';
+    /** @type {{pointerId:number,startY:number,startHeight:number}|null} */ let drag = null;
+    const apply = (/** @type {number|undefined} */ height) => {
+      if (height === undefined) delete lane.height;
+      else lane.height = height;
+      const header = handle.closest('.lane-header');
+      const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(lane.id)}"]`);
+      for (const element of [header, row]) {
+        if (!(element instanceof HTMLElement)) continue;
+        element.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
+        element.style.height = `${this.laneHeightFor(lane)}px`;
+      }
+    };
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      drag = { pointerId: event.pointerId, startY: event.clientY, startHeight: this.laneRowHeightFor(lane) };
+      handle.setPointerCapture?.(event.pointerId);
+    });
+    handle.addEventListener('pointermove', (event) => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      apply(clamp(drag.startHeight + event.clientY - drag.startY, 24, 400));
+    });
+    const end = (/** @type {PointerEvent} */ event) => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      const finished = drag;
+      drag = null;
+      if (event.type === 'pointercancel') { apply(finished.startHeight); return; }
+      if (this.laneRowHeightFor(lane) !== finished.startHeight) {
+        this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: this.laneRowHeightFor(lane) }));
+        this.render();
+      }
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('dblclick', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      apply(undefined);
+      this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: null }));
+      this.render();
+    });
+    return handle;
   }
 
   /** @param {TimelineLane} lane */
