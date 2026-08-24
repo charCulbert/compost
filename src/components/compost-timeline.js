@@ -313,7 +313,7 @@ function eventOf(type, detail) {
 
 export class CompostTimeline extends HTMLElement {
   static get observedAttributes() {
-    return ['label', 'beats-per-bar', 'grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'lane-height', 'automation', 'draw'];
+    return ['label', 'beats-per-bar', 'grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'readonly', 'lane-height', 'automation', 'draw'];
   }
 
   constructor() {
@@ -960,15 +960,18 @@ export class CompostTimeline extends HTMLElement {
     return this._lanes.at(-1).id;
   }
 
+  /** Readonly renders and navigates but emits no mutating intent (docs/interaction.md). */
+  get readonly() { return this.hasAttribute('readonly'); }
+
   beginRename(clipId) {
-    if (this.hasAttribute('disabled') || !this.findClip(clipId)) return;
+    if (this.hasAttribute('disabled') || this.readonly || !this.findClip(clipId)) return;
     this.renaming = String(clipId);
     this.render();
   }
 
   beginLaneRename(laneId) {
     const id = String(laneId);
-    if (this.hasAttribute('disabled') || !this._lanes.some((lane) => lane.id === id)) return;
+    if (this.hasAttribute('disabled') || this.readonly || !this._lanes.some((lane) => lane.id === id)) return;
     this.renamingLane = id;
     this.focusedLane = id;
     this.render();
@@ -1309,6 +1312,7 @@ export class CompostTimeline extends HTMLElement {
     add.setAttribute('aria-label', `Add automation to ${lane.name || lane.id}`);
     add.addEventListener('click', (event) => {
       event.stopPropagation();
+      if (this.readonly) return;
       this.dispatchEvent(eventOf('automation-add', { laneId: lane.id, clientX: event.clientX, clientY: event.clientY }));
     });
     add.addEventListener('pointerdown', (event) => event.stopPropagation());
@@ -1320,6 +1324,7 @@ export class CompostTimeline extends HTMLElement {
     remove.setAttribute('aria-label', `Remove ${automation.label || automation.id} automation from ${lane.name || lane.id}`);
     remove.addEventListener('click', (event) => {
       event.stopPropagation();
+      if (this.readonly) return;
       this.dispatchEvent(eventOf('automation-remove', { laneId: lane.id, automationId: automation.id }));
     });
     remove.addEventListener('pointerdown', (event) => event.stopPropagation());
@@ -1574,6 +1579,7 @@ export class CompostTimeline extends HTMLElement {
     if (valueStep > 0) editor.setAttribute('step', String(valueStep));
     if (this.draw) editor.setAttribute('draw', '');
     if (this.hasAttribute('disabled')) editor.setAttribute('disabled', '');
+    if (this.readonly) editor.setAttribute('readonly', '');
     editor.duration = end;
     editor.min = Number(automation.min);
     editor.max = Number(automation.max);
@@ -2019,8 +2025,9 @@ export class CompostTimeline extends HTMLElement {
       event.preventDefault();
       const rect = found.element.getBoundingClientRect();
       const edge = event.pointerType === 'touch' ? TOUCH_TRIM_EDGE : MOUSE_TRIM_EDGE;
-      const mode = event.clientX - rect.left <= edge ? 'trim-left'
-        : rect.right - event.clientX <= edge ? 'trim-right' : 'move';
+      const mode = this.readonly ? 'move'
+        : event.clientX - rect.left <= edge ? 'trim-left'
+          : rect.right - event.clientX <= edge ? 'trim-right' : 'move';
       found.element.style.cursor = mode === 'move' ? 'grab' : 'ew-resize';
       if (!event.shiftKey && !this._selected.includes(found.clip.id)) this.selectOne(found.clip.id);
       else if (event.shiftKey) this.selectOne(found.clip.id, true);
@@ -2076,7 +2083,7 @@ export class CompostTimeline extends HTMLElement {
     const dy = event.clientY - drag.startY;
     if (!drag.moved && Math.hypot(dx, dy) > DRAG_SLOP) drag.moved = true;
     if (drag.type === 'locator') {
-      if (!drag.moved) return;
+      if (!drag.moved || this.readonly) return;
       const rawBeat = this.beatAtPoint(event.clientX);
       const beat = snapBeat(rawBeat, this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
       drag.previewBeat = Math.min(beat, this.worldEnd());
@@ -2128,7 +2135,7 @@ export class CompostTimeline extends HTMLElement {
     }
     if (drag.type === 'seek-ruler') return;
     if (drag.type === 'lane-header') {
-      if (!drag.moved) return;
+      if (!drag.moved || this.readonly) return;
       drag.toIndex = this.laneIndexFromHeaderPoint(event.clientY);
       this.paintLaneDropLine(drag.toIndex);
       return;
@@ -2173,7 +2180,7 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (drag.type === 'move') {
-      if (!drag.moved) return;
+      if (!drag.moved || this.readonly) return;
       const targetLane = this.laneAtPoint(event.clientY);
       this.paintClipDropTarget(targetLane);
       const raw = dx / this._pxPerBeat;
@@ -2262,15 +2269,18 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'lane-header') {
       this.clearLaneDropLine();
       const index = this._lanes.findIndex((lane) => lane.id === drag.laneId);
-      if (drag.moved) this.dispatchEvent(eventOf('lane-move', { laneId: drag.laneId, toIndex: clamp(Number(drag.toIndex) || 0, 0, this._lanes.length - 1) }));
+      if (drag.moved) { if (!this.readonly) this.dispatchEvent(eventOf('lane-move', { laneId: drag.laneId, toIndex: clamp(Number(drag.toIndex) || 0, 0, this._lanes.length - 1) })); }
       else if (index >= 0) this.dispatchEvent(eventOf('lane-pick', { laneId: drag.laneId, shiftKey: Boolean(event.shiftKey) }));
       return;
     }
     if (drag.type === 'locator') {
-      if (drag.moved) this.dispatchEvent(eventOf('locator-move', {
-        id: drag.locatorId,
-        beat: drag.previewBeat ?? drag.startBeat,
-      }));
+      if (drag.moved) {
+        if (!this.readonly) this.dispatchEvent(eventOf('locator-move', {
+          id: drag.locatorId,
+          beat: drag.previewBeat ?? drag.startBeat,
+        }));
+        return;
+      }
       else this.dispatchEvent(eventOf('locator-jump', { id: drag.locatorId }));
       return;
     }
@@ -2340,7 +2350,7 @@ export class CompostTimeline extends HTMLElement {
       else this.render();
       return;
     }
-    if (drag.type === 'move' && drag.moved) {
+    if (drag.type === 'move' && drag.moved && !this.readonly) {
       const targetLane = this.laneAtPoint(event.clientY) || drag.laneId;
       const deltaBeats = drag.previewDelta ?? 0;
       this.dispatchEvent(eventOf('clip-move', { ids: drag.ids, laneId: targetLane, deltaBeats, copy: Boolean(event.altKey || drag.copy) }));
@@ -2390,6 +2400,7 @@ export class CompostTimeline extends HTMLElement {
 
   /** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {{beat:number,value:number}[]} points */
   commitAutomationChange(lane, automation, points) {
+    if (this.readonly) return;
     automation.points = points.map((point) => ({ ...point }));
     this.render();
     this.dispatchEvent(eventOf('automation-change', {
@@ -2417,7 +2428,7 @@ export class CompostTimeline extends HTMLElement {
     const locator = this.locatorFromEvent(event);
     if (locator) {
       const name = pathElement(event, 'ruler-locator-name');
-      if (name instanceof HTMLElement) {
+      if (name instanceof HTMLElement && !this.readonly) {
         event.preventDefault();
         this.renamingLocator = locator.locator.id;
         this.render();
@@ -2426,6 +2437,7 @@ export class CompostTimeline extends HTMLElement {
     }
     if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('ruler-wrap'))) {
       if (this.rulerRowAtPoint(event.clientY) === 1) {
+        if (this.readonly) return;
         event.preventDefault();
         const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
         this.dispatchEvent(eventOf('locator-create', { beat }));
@@ -2450,6 +2462,7 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('clip-open', { id: found.clip.id, altKey: event.altKey, clientX: event.clientX, clientY: event.clientY }));
       return;
     }
+    if (this.readonly) return;
     const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
     if (lane instanceof HTMLElement) {
       this.dispatchEvent(eventOf('lane-create', { laneId: lane.dataset.laneId, beat: snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode) }));
@@ -2527,7 +2540,7 @@ export class CompostTimeline extends HTMLElement {
     const automationHeader = this.automationHeaderFromEvent(event);
     const envelopeEditor = event.composedPath().some((node) => node instanceof HTMLElement
       && node.localName === 'compost-envelope-editor');
-    if (!event.altKey && !event.metaKey && !event.ctrlKey && key === 'b') {
+    if (!this.readonly && !event.altKey && !event.metaKey && !event.ctrlKey && key === 'b') {
       event.preventDefault();
       this.dispatchEvent(eventOf('draw-toggle', { enabled: !this.draw }));
       return;
@@ -2535,7 +2548,7 @@ export class CompostTimeline extends HTMLElement {
     if (envelopeEditor && !(this.draw && (event.key === 'Delete' || event.key === 'Backspace'))) return;
     const locatorTarget = this.locatorFromEvent(event);
     if (locatorTarget) {
-      if (event.key === 'F2') {
+      if (event.key === 'F2' && !this.readonly) {
         event.preventDefault();
         this.renamingLocator = locatorTarget.locator.id;
         this.render();
@@ -2580,7 +2593,7 @@ export class CompostTimeline extends HTMLElement {
         this.setLoop(selection.start, selection.end, true, true);
         return;
       }
-      if (event.key === 'Delete' || event.key === 'Backspace') {
+      if (!this.readonly && (event.key === 'Delete' || event.key === 'Backspace')) {
         event.preventDefault();
         this.dispatchEvent(eventOf('time-delete', {
           start: selection.start,
@@ -2590,7 +2603,7 @@ export class CompostTimeline extends HTMLElement {
         }));
         return;
       }
-      if ((event.metaKey || event.ctrlKey) && key === 'e') {
+      if (!this.readonly && (event.metaKey || event.ctrlKey) && key === 'e') {
         event.preventDefault();
         this.dispatchEvent(eventOf('clip-split', {
           ids: this.clipsInsideTimeSelection(selection),
@@ -2625,7 +2638,7 @@ export class CompostTimeline extends HTMLElement {
       if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
         event.preventDefault();
         const toIndex = clamp(index + (event.key === 'ArrowUp' ? -1 : 1), 0, this._lanes.length - 1);
-        if (toIndex !== index) this.dispatchEvent(eventOf('lane-move', { laneId: headerTarget.lane.id, toIndex }));
+        if (toIndex !== index && !this.readonly) this.dispatchEvent(eventOf('lane-move', { laneId: headerTarget.lane.id, toIndex }));
         return;
       }
       if (event.key === 'Enter' || event.key === 'F2') {
@@ -2694,7 +2707,7 @@ export class CompostTimeline extends HTMLElement {
       if (event.key === '[' || event.key === ']') { event.preventDefault(); this.zoomBy(event.key === ']' ? 1.16 : .86); }
       return;
     }
-    if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+    if (!this.readonly && event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
       event.preventDefault();
       const step = gridStep(this.beatsPerBar, this.grid) * (event.key === 'ArrowRight' ? 1 : -1);
       this.dispatchEvent(eventOf('clip-nudge', { ids: this.selected.length ? this.selected : [found.clip.id], deltaBeats: step }));
@@ -2715,13 +2728,13 @@ export class CompostTimeline extends HTMLElement {
     } else if (event.key === 'F2') {
       event.preventDefault();
       this.beginRename(found.clip.id);
-    } else if (event.key === 'Delete' || event.key === 'Backspace') {
+    } else if (!this.readonly && (event.key === 'Delete' || event.key === 'Backspace')) {
       event.preventDefault();
       this.dispatchEvent(eventOf('clip-delete', { ids: this.selected.length ? this.selected : [found.clip.id] }));
-    } else if (meta && event.key.toLowerCase() === 'd') {
+    } else if (!this.readonly && meta && event.key.toLowerCase() === 'd') {
       event.preventDefault();
       this.dispatchEvent(eventOf('clip-duplicate', { ids: this.selected.length ? this.selected : [found.clip.id] }));
-    } else if (meta && event.key.toLowerCase() === 'e') {
+    } else if (!this.readonly && meta && event.key.toLowerCase() === 'e') {
       event.preventDefault();
       this.dispatchEvent(eventOf('clip-split', { ids: this.selected.length ? this.selected : [found.clip.id], beat: this._playhead }));
     } else if (event.key === '[' || event.key === ']') {

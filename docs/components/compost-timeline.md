@@ -145,6 +145,15 @@ in the tab order; focused clips use a roving tab index.
 
 Space is left to the host's transport shortcut.
 
+## Readonly and disabled
+
+`disabled` makes the timeline inert. `readonly` keeps navigation live — seek,
+scroll, zoom, loop and locator jumps, selection, clip-open, and every
+`*-context` intent — but emits no mutating intent: no clip move/trim/create/
+delete/rename, no lane create/move/rename, no locator create/move/rename, no
+time or automation edits, no draw toggle. Automation rows pass `readonly`
+down to their envelope editors.
+
 ## API and variables
 
 `setLanes(lanes)`, `setLaneHeaders(headers)`, `setLaneHeader(laneId, element)`, `setClipPreview(clipId, element)`, `setLaneClips(laneId, clips)`, `setLaneDimmed(laneId, dimmed)`, `setLaneAutomation(laneId, automation)`, `setAutomationChooserOpen(laneId, automationId, open)`, `setLocators(locators)`, `setTimeSelection(start, end, laneIds)`, `setPlayhead(beat)`,
