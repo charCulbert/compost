@@ -13,6 +13,11 @@ copy. Snapping is a visible interaction mode over full-precision caller values,
 not a stored tick or sample grid. `compost-envelope-editor` stays neutral about
 whether its time coordinate means beats, seconds, or a normalized stage;
 `compost-timeline` adapts that primitive to beat-based automation rows.
+`compost-note-editor` keeps editable content independent from its playback and
+nested-loop markers and emits range intent without assigning a DAW playback
+policy. Envelope points retain compact marks with separate touch-sized hit
+targets; multi-touch envelope gestures are future work rather than part of the
+current contract.
 
 [Examples and documentation](https://charculbert.github.io/compost/)
 
