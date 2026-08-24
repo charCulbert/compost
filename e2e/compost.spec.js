@@ -60,6 +60,41 @@ test('envelope points can be moved by a touch pointer', async ({ page }) => {
   expect(moved.value).toBeGreaterThan(before.value);
 });
 
+test('a touch double-tap adds an envelope point', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  await editor.evaluate(async (element) => {
+    const surface = element.shadowRoot.querySelector('.surface');
+    const box = element.getBoundingClientRect();
+    const options = { bubbles: true, composed: true, pointerType: 'touch',
+      isPrimary: true, button: 0, clientX: box.left + box.width * .72,
+      clientY: box.top + box.height * .28 };
+    for (let pointerId = 81; pointerId <= 82; ++pointerId) {
+      surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, pointerId }));
+      surface.dispatchEvent(new PointerEvent('pointerup', { ...options, pointerId }));
+      surface.dispatchEvent(new MouseEvent('click', options));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+  });
+  await expect(editor.locator('.point')).toHaveCount(4);
+});
+
+test('a browser-synthesized touch dblclick does not apply the edit twice', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  const box = await editor.boundingBox();
+  const client = await page.context().newCDPSession(page);
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  const x = box.x + box.width * .72; const y = box.y + box.height * .28;
+  for (let id = 91; id <= 92; ++id) {
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart',
+      touchPoints: [{ x, y, radiusX: 8, radiusY: 8, force: 1, id }] });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(80);
+  }
+  await expect(editor.locator('.point')).toHaveCount(4);
+});
+
 test('documentation renders the overview', async ({ page }) => {
   await page.goto('/docs/');
 

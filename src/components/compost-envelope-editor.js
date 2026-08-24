@@ -17,6 +17,9 @@ import { parameterScaleBreakpoints } from '../parameter-scale.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 const DRAG_THRESHOLD = 3;
+const DOUBLE_TAP_MS = 350;
+const DOUBLE_TAP_DISTANCE = 24;
+const TOUCH_TAP_MOVE_DISTANCE = 12;
 
 const eventOf = (type, detail) => new CustomEvent(type, { bubbles: true, composed: true, detail });
 
@@ -45,6 +48,9 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.selection = null;
     this.drag = null;
     this.longPressTimer = null;
+    this.touchTapStart = null;
+    this.lastTouchTap = null;
+    this.suppressDoubleClickUntil = 0;
     this.resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.render()) : null;
 
     this.root = this.attachShadow({ mode: 'open' });
@@ -112,7 +118,9 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.surface.addEventListener('pointerleave', () => { if (!this.drag) this.readout.hidden = true; });
     this.surface.addEventListener('pointerup', (event) => this.endPointer(event));
     this.surface.addEventListener('pointercancel', () => this.cancelPointer());
-    this.surface.addEventListener('dblclick', (event) => this.addAtPointer(event));
+    this.surface.addEventListener('dblclick', (event) => {
+      if (performance.now() >= this.suppressDoubleClickUntil) this.addAtPointer(event);
+    });
     this.surface.addEventListener('contextmenu', (event) => this.openContext(event));
     this.addEventListener('keydown', (event) => this.handleKey(event));
   }
@@ -283,6 +291,10 @@ export class CompostEnvelopeEditor extends HTMLElement {
     event.preventDefault();
     event.stopPropagation();
     const point = this.pointFromEvent(event);
+    if (event.pointerType === 'touch' && event.isPrimary) {
+      this.touchTapStart = { pointerId: event.pointerId, x: event.clientX,
+        y: event.clientY, time: performance.now(), pointIndex: point?.index ?? -1 };
+    }
     const rawTime = this.timeAtPointer(event, true);
     const time = this.timeAtPointer(event, event.altKey);
     const mode = this.draw ? 'draw'
@@ -382,8 +394,12 @@ export class CompostEnvelopeEditor extends HTMLElement {
   }
 
   endPointer(event) {
+    const touchDoubleTap = this.finishTouchTap(event);
     const drag = this.drag;
-    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      if (touchDoubleTap) this.addAtPointer(event, touchDoubleTap.pointIndex);
+      return;
+    }
     event.stopPropagation();
     this.drag = null;
     clearTimeout(this.longPressTimer);
@@ -392,6 +408,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.readout.hidden = true;
     if (!drag.moved && drag.mode !== 'draw') {
       this.render();
+      if (touchDoubleTap) this.addAtPointer(event, touchDoubleTap.pointIndex);
       return;
     }
     let points = drag.preview || drag.origin;
@@ -409,6 +426,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
   cancelPointer() {
     clearTimeout(this.longPressTimer);
     this.longPressTimer = null;
+    this.touchTapStart = null;
     if (!this.drag) return;
     this.drag = null;
     this.removeAttribute('data-preview');
@@ -416,13 +434,31 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.render();
   }
 
-  addAtPointer(event) {
+  finishTouchTap(event) {
+    const start = this.touchTapStart;
+    this.touchTapStart = null;
+    if (!start || event.pointerType !== 'touch' || start.pointerId !== event.pointerId) return null;
+    const now = performance.now();
+    if (now - start.time > DOUBLE_TAP_MS || this.drag?.moved
+        || Math.hypot(event.clientX - start.x, event.clientY - start.y) > TOUCH_TAP_MOVE_DISTANCE) {
+      this.lastTouchTap = null;
+      return null;
+    }
+    const previous = this.lastTouchTap;
+    this.lastTouchTap = { time: now, x: event.clientX, y: event.clientY };
+    if (!previous || now - previous.time > DOUBLE_TAP_MS
+        || Math.hypot(event.clientX - previous.x, event.clientY - previous.y) > DOUBLE_TAP_DISTANCE) return null;
+    this.lastTouchTap = null;
+    this.suppressDoubleClickUntil = now + DOUBLE_TAP_MS;
+    return { pointIndex: start.pointIndex };
+  }
+
+  addAtPointer(event, pointIndex = this.pointFromEvent(event)?.index ?? -1) {
     if (this.hasAttribute('disabled') || this.hasAttribute('readonly') || this.draw) return;
     event.preventDefault();
     event.stopPropagation();
-    const point = this.pointFromEvent(event);
-    const points = point
-      ? deleteEnvelopePoint(this._points, point.index)
+    const points = pointIndex >= 0
+      ? deleteEnvelopePoint(this._points, pointIndex)
       : addEnvelopePoint(this._points, {
         time: this.timeAtPointer(event, event.altKey),
         value: this.valueAtPointer(event),

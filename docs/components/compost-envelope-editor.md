@@ -27,11 +27,13 @@ array. It does not mutate the caller's array. `envelope-input` reports preview
 points during a drag; `envelope-change` reports the committed points;
 `envelope-context` reports `{pointIndex, time, value, clientX, clientY}`.
 
-Double-click adds a point. Points and line segments can be dragged; a range set
-with `setSelection(start, end)` moves as one display-space selection. Focused
-points support Delete, Escape and arrow-key editing. Shift makes movement four
-times finer. Alt temporarily disables time snapping. The visible point remains
-compact while its 22px pointer target makes single-touch editing practical.
+Double-click or touch double-tap adds a point in empty space and removes an
+existing point. Movement cancels a double-tap. Points and line segments can be
+dragged; a range set with `setSelection(start, end)` moves as one display-space
+selection. Focused points support Delete, Escape and arrow-key editing. Shift
+makes movement four times finer. Alt temporarily disables time snapping. The
+visible point remains compact while its 22px pointer target makes single-touch
+editing practical.
 
 Future work: explore explicitly designed multi-touch envelope gestures (for
 example, two-finger range shaping). Keep that separate from the current
