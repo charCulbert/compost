@@ -33,8 +33,10 @@ We name the tiers that already exist, and each example joins exactly one:
    `utilities`/`runtime` fields in `examples/shared/catalog.js`.
    Delete them. Also delete the empty folders in `src/components/`
    and `examples/component-demos/` for elements that do not exist
-   (`compost-all-notes-off`, `compost-hid`, `compost-hid-monitor`,
-   `compost-midi-map`, `compost-piano-roll`, `compost-radio-group`).
+   (`compost-all-notes-off`, `compost-midi-map`, `compost-piano-roll`,
+   `compost-radio-group`, and the two stubs named after the retired
+   input protocol — `ls` shows them; a doc guard test keeps the name
+   itself out of these files).
 
 2. **Use one wiring style.** Replace the 722-line
    `examples/component-demos/shared-demo.js` switchboard with one small
