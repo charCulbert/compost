@@ -85,7 +85,10 @@ height cannot hold `note-count` rows at that size — a phone in landscape — t
 editor shows as many as fit, centred on the range asked for, and the wheel on
 the keys scrolls through the rest instead of every row shrinking to a sliver.
 
-`--compost-note-editor-*` custom properties cover the ground, lines, keys,
-signal, selection, marquee, past-loop shading, playhead, tooltip and the row
-floor; sizes are in `em`. Parts: `frame`, `ruler`, `loop`, `loop-start`, `loop-end`, `keys`,
-`grid`, `note`, `playhead`, `division`.
+The neutral defaults inherit Compost's public theme tokens; a product can
+replace them without changing the interaction model. `--compost-note-editor-*`
+custom properties cover the ground, lines, keys, signal, selection, marquee,
+past-loop shading, playhead, tooltip and the row floor; sizes are in `em`.
+Parts: `frame`, `corner`, `ruler`, `ruler-label`, `loop`, `loop-start`,
+`loop-end`, `keys`, `key`, `grid`, `grid-line`, `beat-line`, `bar-line`, `row`,
+`row-line`, `note`, `past`, `marquee`, `playhead`, `division`, `tip`.

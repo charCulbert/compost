@@ -95,32 +95,32 @@ export class CompostNoteEditor extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-note-editor-bg: #ffffff;
-          --compost-note-editor-text: #111111;
-          --compost-note-editor-muted: #6a6a6a;
-          --compost-note-editor-faint: #8a8a8a;
-          --compost-note-editor-line: rgba(17, 17, 17, 0.16);
-          --compost-note-editor-bar-line: #6a6a6a;
-          --compost-note-editor-row: rgba(128, 128, 128, 0.055);
-          --compost-note-editor-signal: #c45a2c;
+          --compost-note-editor-bg: var(--compost-theme-bg, #1f1f1f);
+          --compost-note-editor-text: var(--compost-theme-text, #f2f2f2);
+          --compost-note-editor-muted: var(--compost-theme-muted, #aaaaaa);
+          --compost-note-editor-faint: color-mix(in srgb, var(--compost-note-editor-muted) 64%, transparent);
+          --compost-note-editor-line: var(--compost-theme-line, rgba(255,255,255,.18));
+          --compost-note-editor-bar-line: var(--compost-note-editor-muted);
+          --compost-note-editor-row: color-mix(in srgb, var(--compost-note-editor-text) 5%, transparent);
+          --compost-note-editor-signal: var(--compost-theme-accent, #8ea9c7);
           --compost-note-editor-loop: var(--compost-note-editor-signal);
-          --compost-note-editor-select: #2f6da8;
-          --compost-note-editor-marquee: rgba(47, 109, 168, 0.12);
-          --compost-note-editor-wash: rgba(196, 90, 44, 0.15);
-          --compost-note-editor-past: rgba(255, 255, 255, 0.62);
-          --compost-note-editor-keys-bg: #d8d6ce;
-          --compost-note-editor-white-key: #e8e6de;
-          --compost-note-editor-white-key-text: #3a3a34;
-          --compost-note-editor-white-key-edge: #a8a6a0;
-          --compost-note-editor-black-key: #141412;
-          --compost-note-editor-black-key-text: #8a8a82;
-          --compost-note-editor-playhead: #111111;
-          --compost-note-editor-tip-bg: #ffffff;
+          --compost-note-editor-select: var(--compost-theme-learn, #6fa8eb);
+          --compost-note-editor-marquee: color-mix(in srgb, var(--compost-note-editor-select) 14%, transparent);
+          --compost-note-editor-wash: color-mix(in srgb, var(--compost-note-editor-signal) 16%, transparent);
+          --compost-note-editor-past: color-mix(in srgb, var(--compost-note-editor-bg) 72%, transparent);
+          --compost-note-editor-keys-bg: var(--compost-theme-panel, #2c2c2c);
+          --compost-note-editor-white-key: color-mix(in srgb, var(--compost-note-editor-keys-bg) 88%, var(--compost-note-editor-text));
+          --compost-note-editor-white-key-text: var(--compost-note-editor-text);
+          --compost-note-editor-white-key-edge: var(--compost-note-editor-line);
+          --compost-note-editor-black-key: var(--compost-theme-control-bg, #151515);
+          --compost-note-editor-black-key-text: var(--compost-note-editor-muted);
+          --compost-note-editor-playhead: var(--compost-note-editor-text);
+          --compost-note-editor-tip-bg: var(--compost-theme-panel, #2c2c2c);
           --compost-note-editor-key-width: 5.3em;
           --compost-note-editor-min-row: 1.1em;
           --compost-note-editor-ruler-height: 2.36em;
           --compost-note-editor-numeral-font: ui-monospace, SFMono-Regular, Menlo, monospace;
-          --compost-note-editor-color-scheme: light;
+          --compost-note-editor-color-scheme: var(--compost-theme-color-scheme, dark);
           color-scheme: var(--compost-note-editor-color-scheme);
           display: block;
           box-sizing: border-box;
@@ -205,9 +205,9 @@ export class CompostNoteEditor extends HTMLElement {
         .key.white { right: 0; background: var(--compost-note-editor-white-key); color: var(--compost-note-editor-white-key-text);
           box-shadow: inset 0 -1px 0 var(--compost-note-editor-white-key-edge); }
         .key.black { width: 62%; background: var(--compost-note-editor-black-key); color: var(--compost-note-editor-black-key-text); z-index: 2;
-          box-shadow: inset -1px 0 0 #000, 0 1px 2px rgba(0, 0, 0, 0.5); }
+          box-shadow: inset -1px 0 0 var(--compost-note-editor-line); }
         .key[data-on] { background: var(--compost-note-editor-signal); color: var(--compost-note-editor-bg); }
-        .key.octave { box-shadow: inset 0 -1px 0 #6e6c66; }
+        .key.octave { box-shadow: inset 0 -1px 0 var(--compost-note-editor-muted); }
         .gridwrap { grid-column: 2; grid-row: 2; position: relative; overflow: hidden; }
         .grid { position: absolute; top: 0; bottom: 0; left: 0; cursor: default; touch-action: none; }
         :host([draw]) .grid { cursor: crosshair; }
@@ -269,14 +269,14 @@ export class CompostNoteEditor extends HTMLElement {
         <div class="keys" part="keys"></div>
         <div class="gridwrap" part="grid">
           <div class="grid">
-            <div class="past"></div>
+            <div class="past" part="past"></div>
             <div class="playhead" part="playhead"></div>
-            <div class="marquee"></div>
+            <div class="marquee" part="marquee"></div>
           </div>
           <div class="division" part="division"></div>
         </div>
       </div>
-      <div class="tip" hidden></div>`;
+      <div class="tip" part="tip" hidden></div>`;
 
     /** @param {string} selector @returns {HTMLElement} */
     const part = (selector) => /** @type {HTMLElement} */ (this.root.querySelector(selector));
@@ -601,6 +601,7 @@ export class CompostNoteEditor extends HTMLElement {
     for (const { beat, text } of rulerLabels(this.beats, this.beatsPerBar, px)) {
       const label = document.createElement('div');
       label.className = 'bn';
+      label.part.add('ruler-label');
       label.textContent = text;
       label.style.left = `${beat * px}px`;
       fragment.append(label);
@@ -619,7 +620,7 @@ export class CompostNoteEditor extends HTMLElement {
       const accidental = !isNaturalNote(note);
       const classes = `key ${accidental ? 'black' : 'white'}${note % 12 === 11 ? ' octave' : ''}`;
       const name = height >= 9 && (fold || note % 12 === 0) ? noteName(note) : '';
-      markup.push(`<div class="${classes}" data-note="${note}" style="top:${(index * height).toFixed(2)}px;height:${Math.max(2, height - (accidental ? 1 : 0)).toFixed(2)}px">${name}</div>`);
+      markup.push(`<div class="${classes}" part="key" data-note="${note}" style="top:${(index * height).toFixed(2)}px;height:${Math.max(2, height - (accidental ? 1 : 0)).toFixed(2)}px">${name}</div>`);
     });
     this.keys.innerHTML = markup.join('');
   }
@@ -631,15 +632,15 @@ export class CompostNoteEditor extends HTMLElement {
     const markup = [];
     this.visibleKeys.forEach((note, index) => {
       const top = index * height;
-      if (!isNaturalNote(note)) markup.push(`<div class="rw" style="top:${top.toFixed(2)}px;height:${height.toFixed(2)}px"></div>`);
-      markup.push(`<div class="rl" style="top:${(top + height).toFixed(2)}px"></div>`);
+      if (!isNaturalNote(note)) markup.push(`<div class="rw" part="row" style="top:${top.toFixed(2)}px;height:${height.toFixed(2)}px"></div>`);
+      markup.push(`<div class="rl" part="row-line" style="top:${(top + height).toFixed(2)}px"></div>`);
     });
     const step = this.step;
     if (step > 0) {
       for (let beat = 0; beat <= this.beats + 1e-9; beat += step) {
         const isBar = Math.abs(beat % this.beatsPerBar) < 1e-9;
         const isBeat = Math.abs(beat % 1) < 1e-9;
-        markup.push(`<div class="gl${isBar ? ' bar' : isBeat ? ' beat' : ''}" style="left:${(beat * px).toFixed(2)}px"></div>`);
+        markup.push(`<div class="gl${isBar ? ' bar' : isBeat ? ' beat' : ''}" part="grid-line${isBar ? ' bar-line' : isBeat ? ' beat-line' : ''}" style="left:${(beat * px).toFixed(2)}px"></div>`);
       }
     }
     this.past.insertAdjacentHTML('beforebegin', markup.join(''));
