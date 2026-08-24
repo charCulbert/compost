@@ -1,8 +1,8 @@
+import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextGridID = 1;
-const DRAG_THRESHOLD = 5;
 /** An ellipsis costs about a character, a poor trade when only a few show. */
 const ELLIPSIS_MIN_CHARS = 7;
 
@@ -85,6 +85,7 @@ export class CompostClipGrid extends HTMLElement {
     /** @type {{pointerId: number, index: number, x: number, y: number, moved: boolean,
      * copy: boolean, target: CompostClipGrid|null, targetIndex: number, row: HTMLElement}|null} */
     this.drag = null;
+    this.longPress = createLongPress();
     /** @type {number|null} */ this.renaming = null;
     /** @type {{index: number, copy: boolean}|null} */ this.dropMark = null;
     this.handleWindowMove = this.handleWindowMove.bind(this);
@@ -705,6 +706,11 @@ export class CompostClipGrid extends HTMLElement {
       this.emit('clip-move', { index: hit.index, to });
     } else if (event.key === 'F2') {
       event.preventDefault(); this.beginRename(hit.index);
+    } else if (event.shiftKey && event.key === 'F10') {
+      event.preventDefault(); event.stopPropagation();
+      const rect = (this.rowElements()[hit.index] ?? this).getBoundingClientRect();
+      this.emit('clip-context', { index: hit.index,
+        clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 });
     }
   }
 
@@ -730,6 +736,12 @@ export class CompostClipGrid extends HTMLElement {
     window.addEventListener('pointermove', this.handleWindowMove);
     window.addEventListener('pointerup', this.handleWindowUp);
     window.addEventListener('pointercancel', this.handleWindowUp);
+    this.longPress.start(() => {
+      if (!this.drag || this.drag.moved) return;
+      const index = this.drag.index;
+      this.endDrag(true);
+      this.emit('clip-context', { index, clientX: event.clientX, clientY: event.clientY });
+    });
   }
 
   /** @param {PointerEvent} event */
@@ -737,8 +749,9 @@ export class CompostClipGrid extends HTMLElement {
     const drag = this.drag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     if (!drag.moved) {
-      if (Math.abs(event.clientX - drag.x) < DRAG_THRESHOLD && Math.abs(event.clientY - drag.y) < DRAG_THRESHOLD) return;
+      if (Math.abs(event.clientX - drag.x) < DRAG_SLOP && Math.abs(event.clientY - drag.y) < DRAG_SLOP) return;
       drag.moved = true;
+      this.longPress.cancel();
       drag.row.setAttribute('data-dragging', '');
       this.emit('clip-drag-start', { index: drag.index });
     }
@@ -771,6 +784,7 @@ export class CompostClipGrid extends HTMLElement {
 
   /** @param {boolean} silent */
   endDrag(silent) {
+    this.longPress.cancel();
     const drag = this.drag;
     this.drag = null;
     window.removeEventListener('pointermove', this.handleWindowMove);

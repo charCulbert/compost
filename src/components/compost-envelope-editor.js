@@ -15,11 +15,13 @@ import {
 } from '../envelope-model.js';
 import { parameterScaleBreakpoints } from '../parameter-scale.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
-
-const DRAG_THRESHOLD = 3;
-const DOUBLE_TAP_MS = 350;
-const DOUBLE_TAP_DISTANCE = 24;
-const TOUCH_TAP_MOVE_DISTANCE = 12;
+import {
+  createLongPress,
+  DOUBLE_TAP_DISTANCE,
+  DOUBLE_TAP_MS,
+  DRAG_SLOP,
+  TAP_MOVE_DISTANCE,
+} from '../internal/gestures.js';
 
 const eventOf = (type, detail) => new CustomEvent(type, { bubbles: true, composed: true, detail });
 
@@ -47,7 +49,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this._points = [];
     this.selection = null;
     this.drag = null;
-    this.longPressTimer = null;
+    this.longPress = createLongPress();
     this.touchTapStart = null;
     this.lastTouchTap = null;
     this.suppressDoubleClickUntil = 0;
@@ -336,8 +338,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
       freehand: event.altKey || this.snapMode === 'off',
       created: createdOnDoubleTap,
     };
-    clearTimeout(this.longPressTimer);
-    this.longPressTimer = createdOnDoubleTap ? null : setTimeout(() => {
+    this.longPress.cancel();
+    if (!createdOnDoubleTap) this.longPress.start(() => {
       if (!this.drag || this.drag.pointerId !== event.pointerId || this.drag.moved) return;
       const pointValue = point ? this._points[point.index] : null;
       this.dispatchEvent(eventOf('envelope-context', {
@@ -348,7 +350,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
         clientY: event.clientY,
       }));
       this.cancelPointer();
-    }, 550);
+    });
     point?.marker?.focus?.({ preventScroll: true });
     this.surface.setPointerCapture?.(event.pointerId);
     this.setAttribute('data-preview', '');
@@ -372,8 +374,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
     if (drag.pointerId !== event.pointerId) return;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
-    drag.moved ||= Math.hypot(dx, dy) >= DRAG_THRESHOLD;
-    if (drag.moved) clearTimeout(this.longPressTimer);
+    drag.moved ||= Math.hypot(dx, dy) >= DRAG_SLOP;
+    if (drag.moved) this.longPress.cancel();
     if (!drag.moved && drag.mode !== 'draw') return;
     const rect = this.surface.getBoundingClientRect();
     const factor = event.shiftKey ? .25 : 1;
@@ -420,8 +422,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.stopPropagation();
     this.drag = null;
-    clearTimeout(this.longPressTimer);
-    this.longPressTimer = null;
+    this.longPress.cancel();
     this.removeAttribute('data-preview');
     this.readout.hidden = true;
     if (!drag.moved && drag.mode !== 'draw') {
@@ -444,8 +445,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
   }
 
   cancelPointer() {
-    clearTimeout(this.longPressTimer);
-    this.longPressTimer = null;
+    this.longPress.cancel();
     this.touchTapStart = null;
     if (!this.drag) return;
     this.drag = null;
@@ -460,7 +460,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     if (!start || event.pointerType !== 'touch' || start.pointerId !== event.pointerId) return;
     const now = performance.now();
     if (now - start.time > DOUBLE_TAP_MS || this.drag?.moved
-        || Math.hypot(event.clientX - start.x, event.clientY - start.y) > TOUCH_TAP_MOVE_DISTANCE) {
+        || Math.hypot(event.clientX - start.x, event.clientY - start.y) > TAP_MOVE_DISTANCE) {
       this.lastTouchTap = null;
       return;
     }

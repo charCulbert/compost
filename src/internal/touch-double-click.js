@@ -1,11 +1,13 @@
+import { DOUBLE_TAP_DISTANCE, DOUBLE_TAP_MS, TAP_MOVE_DISTANCE } from './gestures.js';
+
 /**
  * Give touch users the same double-click gesture without letting Safari use
  * the second tap to zoom the page. Single taps and multi-touch stay native.
  */
 export function installTouchDoubleClick(element, { dispatch = true } = {}) {
-  const maxDelay = 350;
-  const maxDistance = 24;
-  const maxTapMovement = 12;
+  const maxDelay = DOUBLE_TAP_MS;
+  const maxDistance = DOUBLE_TAP_DISTANCE;
+  const maxTapMovement = TAP_MOVE_DISTANCE;
   const syntheticEvents = new WeakSet();
   let start = null;
   let previous = null;

@@ -16,12 +16,12 @@ import {
 } from '../piano-roll-model.js';
 export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
+import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextEditorID = 1;
 const HOLD_FOR_VELOCITY_MS = 300;
-const DRAG_THRESHOLD = 3;
 const MIN_ROWS = 4;
 const MAX_ROWS = 72;
 const MIN_PX_PER_BEAT = 8;
@@ -88,6 +88,7 @@ export class CompostNoteEditor extends HTMLElement {
     /** @type {Set<string>} */ this.selection = new Set();
     /** @type {number[]} */ this.visibleKeys = [];
     /** @type {any} */ this.drag = null;
+    this.longPress = createLongPress();
     /** The last marquee's beat extent, kept so a duplicate can space itself
      * by the selected time. @type {{start: number, end: number}|null} */
     this.selectionRange = null;
@@ -902,8 +903,18 @@ export class CompostNoteEditor extends HTMLElement {
     };
     if (mode === 'move' && !copying) {
       this.preview(note.note);
-      // hold still for a moment and the drag becomes velocity
-      this.drag.hold = setTimeout(() => {
+      if (event.pointerType === 'touch') {
+        // on touch a still hold asks for context actions instead; velocity
+        // editing is a caller menu action there (docs/interaction.md)
+        this.longPress.start(() => {
+          if (!this.drag || this.drag.moved) return;
+          this.endPointer({ pointerId: event.pointerId, type: 'pointercancel' });
+          this.dispatchEvent(new CustomEvent('note-context', {
+            bubbles: true, composed: true,
+            detail: { id: note.id, clientX: event.clientX, clientY: event.clientY },
+          }));
+        });
+      } else this.drag.hold = setTimeout(() => {
         if (!this.drag || this.drag.moved) return;
         this.drag.mode = 'vel';
         this.drag.hold = null;
@@ -945,10 +956,11 @@ export class CompostNoteEditor extends HTMLElement {
       return;
     }
     if (drag.hold && drag.mode === 'move'
-      && (Math.abs(event.clientX - drag.x) > DRAG_THRESHOLD || Math.abs(event.clientY - drag.y) > DRAG_THRESHOLD)) {
+      && (Math.abs(event.clientX - drag.x) > DRAG_SLOP || Math.abs(event.clientY - drag.y) > DRAG_SLOP)) {
       clearTimeout(drag.hold);
       drag.hold = null;
       drag.moved = true;
+      this.longPress.cancel();
     }
     this.setAttribute('data-drag', drag.mode);
     const free = event.altKey;
@@ -975,7 +987,9 @@ export class CompostNoteEditor extends HTMLElement {
       const current = this._notes.find((entry) => entry.id === drag.note.id);
       if (current) this.showTip(lengthText(current.duration), event);
     } else {
+      if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= DRAG_SLOP) return;
       drag.moved = true;
+      this.longPress.cancel();
       this.setAttribute('data-drag', drag.copy ? 'copy' : 'move');
       const deltaBeats = this.xToBeat(event.clientX - drag.x);
       const deltaRows = Math.round((drag.y - event.clientY) / this.rowHeight);
@@ -997,6 +1011,7 @@ export class CompostNoteEditor extends HTMLElement {
     const drag = this.drag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     clearTimeout(drag.hold);
+    this.longPress.cancel();
     this.drag = null;
     this.tip.hidden = true;
     this.marquee.style.display = 'none';
@@ -1133,7 +1148,21 @@ export class CompostNoteEditor extends HTMLElement {
 
   /** @param {KeyboardEvent} event */
   handleKey(event) {
-    if (this.readonly || event.composedPath()[0] !== this) return;
+    if (event.composedPath()[0] !== this) return;
+    if (event.shiftKey && event.key === 'F10') {
+      const id = [...this.selection].at(-1);
+      const element = id == null ? null
+        : this.gridElement.querySelector(`.note[data-id="${CSS.escape(String(id))}"]`);
+      if (!(element instanceof HTMLElement)) return;
+      event.preventDefault();
+      const rect = element.getBoundingClientRect();
+      this.dispatchEvent(new CustomEvent('note-context', {
+        bubbles: true, composed: true,
+        detail: { id, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 },
+      }));
+      return;
+    }
+    if (this.readonly) return;
     const meta = event.metaKey || event.ctrlKey;
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();

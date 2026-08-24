@@ -1,3 +1,4 @@
+import { createLongPress, DRAG_SLOP, MOUSE_TRIM_EDGE, TOUCH_TRIM_EDGE } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
@@ -30,7 +31,6 @@ const MAX_PX_PER_BEAT = 480;
 const DEFAULT_PX_PER_BEAT = 24;
 const DEFAULT_BEATS_PER_BAR = 4;
 const DEFAULT_LOOP_END = 8;
-const DRAG_THRESHOLD = 3;
 const DEFAULT_LANE_HEIGHT_EM = 4;
 const DEFAULT_THIN_LANE_HEIGHT_EM = 2.5;
 const DEFAULT_AUTOMATION_ROW_HEIGHT_EM = 2.36;
@@ -352,7 +352,7 @@ export class CompostTimeline extends HTMLElement {
     /** @type {Map<number, {x: number, y: number}>} */ this.pointers = new Map();
     /** @type {any} */ this.pinch = null;
     this.viewChangeTimer = null;
-    this.longPressTimer = null;
+    this.longPress = createLongPress();
     this.resizeObserver = null;
 
     this.root = this.attachShadow({ mode: 'open' });
@@ -596,9 +596,8 @@ export class CompostTimeline extends HTMLElement {
   disconnectedCallback() {
     this.resizeObserver?.disconnect();
     this.cancelActiveDrag({ clearPointers: true });
-    clearTimeout(this.longPressTimer);
+    this.longPress.cancel();
     clearTimeout(this.viewChangeTimer);
-    this.longPressTimer = null;
     this.viewChangeTimer = null;
   }
 
@@ -1904,7 +1903,7 @@ export class CompostTimeline extends HTMLElement {
     const found = this.clipFromEvent(event);
     if (!found) return;
     const rect = found.element.getBoundingClientRect();
-    const edge = event.pointerType === 'touch' ? 12 : 6;
+    const edge = event.pointerType === 'touch' ? TOUCH_TRIM_EDGE : MOUSE_TRIM_EDGE;
     found.element.style.cursor = event.clientX - rect.left <= edge || rect.right - event.clientX <= edge
       ? 'ew-resize' : 'grab';
   }
@@ -1952,7 +1951,7 @@ export class CompostTimeline extends HTMLElement {
     if (event.pointerType === 'touch') {
       this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (this.pointers.size >= 2) {
-        clearTimeout(this.longPressTimer);
+        this.longPress.cancel();
         this.cancelActiveDrag();
         this.clearClipDragVisuals();
         this.startPinch();
@@ -2008,18 +2007,18 @@ export class CompostTimeline extends HTMLElement {
       this.focusedClip = null;
       this.drag = { pointerId: event.pointerId, type: 'lane-header', laneId: header.dataset.laneId, startX: event.clientX, startY: event.clientY, moved: false, toIndex: this._lanes.findIndex((lane) => lane.id === header.dataset.laneId) };
       if (event.isTrusted) header.setPointerCapture?.(event.pointerId);
-      this.longPressTimer = setTimeout(() => {
+      this.longPress.start(() => {
         if (!this.drag || this.drag.type !== 'lane-header' || this.drag.moved) return;
         this.dispatchEvent(eventOf('lane-header-context', { laneId: header.dataset.laneId, clientX: event.clientX, clientY: event.clientY }));
         this.drag = null;
-      }, 550);
+      });
       return;
     }
     const found = this.clipFromEvent(event);
     if (found) {
       event.preventDefault();
       const rect = found.element.getBoundingClientRect();
-      const edge = event.pointerType === 'touch' ? 12 : 6;
+      const edge = event.pointerType === 'touch' ? TOUCH_TRIM_EDGE : MOUSE_TRIM_EDGE;
       const mode = event.clientX - rect.left <= edge ? 'trim-left'
         : rect.right - event.clientX <= edge ? 'trim-right' : 'move';
       found.element.style.cursor = mode === 'move' ? 'grab' : 'ew-resize';
@@ -2034,11 +2033,11 @@ export class CompostTimeline extends HTMLElement {
         selected: ids.map((id) => this.findClip(id)).filter(Boolean),
       };
       found.element.setPointerCapture?.(event.pointerId);
-      this.longPressTimer = setTimeout(() => {
+      this.longPress.start(() => {
         if (!this.drag || this.drag.moved || this.drag.type !== 'move') return;
         this.dispatchEvent(eventOf('clip-context', { id: found.clip.id, clientX: event.clientX, clientY: event.clientY }));
         this.endPointer({ pointerId: event.pointerId });
-      }, 550);
+      });
       return;
     }
     if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('ruler-wrap'))) {
@@ -2075,7 +2074,7 @@ export class CompostTimeline extends HTMLElement {
     }
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
-    if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) drag.moved = true;
+    if (!drag.moved && Math.hypot(dx, dy) > DRAG_SLOP) drag.moved = true;
     if (drag.type === 'locator') {
       if (!drag.moved) return;
       const rawBeat = this.beatAtPoint(event.clientX);
@@ -2205,9 +2204,8 @@ export class CompostTimeline extends HTMLElement {
   /** @param {any} [options] */
   cancelActiveDrag(options = {}) {
     const drag = this.drag;
-    clearTimeout(this.longPressTimer);
+    this.longPress.cancel();
     clearTimeout(this.viewChangeTimer);
-    this.longPressTimer = null;
     this.viewChangeTimer = null;
     this.drag = null;
     if (drag) {
@@ -2258,7 +2256,7 @@ export class CompostTimeline extends HTMLElement {
       this.clearClipDragVisuals();
       return;
     }
-    clearTimeout(this.longPressTimer);
+    this.longPress.cancel();
     this.drag = null;
     this.clearClipDragVisuals();
     if (drag.type === 'lane-header') {
