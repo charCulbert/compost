@@ -84,12 +84,14 @@ export class CompostEnvelopeEditor extends HTMLElement {
         svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
         .line { fill: none; stroke: var(--compost-envelope-signal); stroke-width: 1.25; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: ns-resize; }
         .line:hover { stroke-width: 1.75; }
-        .point { fill: var(--compost-envelope-point-bg); stroke: var(--compost-envelope-point-border); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: all; cursor: grab; }
-        .point:hover { transform: scale(1.3); transform-box: fill-box; transform-origin: center; }
+        .point { cursor: grab; }
+        .point-hit { fill: transparent; stroke: none; pointer-events: all; }
+        .point-mark { fill: var(--compost-envelope-point-bg); stroke: var(--compost-envelope-point-border); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+        .point:hover .point-mark { transform: scale(1.3); transform-box: fill-box; transform-origin: center; }
         .point:focus-visible { outline: 1px solid var(--compost-envelope-signal); outline-offset: 2px; }
         :host([draw]) .surface { cursor: crosshair; }
         :host([data-preview]) .line { stroke: var(--compost-envelope-preview); }
-        :host([data-preview]) .point { fill: var(--compost-envelope-preview); }
+        :host([data-preview]) .point-mark { fill: var(--compost-envelope-preview); }
         .readout { position: absolute; z-index: 2; transform: translate(-50%, -100%); padding: 2px 4px; background: var(--compost-envelope-bg); box-shadow: 0 0 0 1px var(--compost-envelope-line); color: var(--compost-envelope-text); font: .75em/1 ui-monospace, SFMono-Regular, Menlo, monospace; pointer-events: none; white-space: nowrap; }
       </style>
       <div class="surface" part="surface">
@@ -212,17 +214,24 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.line.setAttribute('d', this.path(points, width, height));
     this.svg.querySelectorAll('.point').forEach((point) => point.remove());
     points.forEach((point, index) => {
-      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       marker.classList.add('point');
-      marker.setAttribute('part', 'point');
       marker.dataset.pointIndex = String(index);
-      marker.setAttribute('x', String(this.x(point.time, width) - 2.5));
-      marker.setAttribute('y', String(this.y(point.value, height) - 2.5));
-      marker.setAttribute('width', '5');
-      marker.setAttribute('height', '5');
+      const x = this.x(point.time, width); const y = this.y(point.value, height);
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      hit.classList.add('point-hit');
+      hit.setAttribute('part', 'point-hit');
+      hit.setAttribute('x', String(x - 11)); hit.setAttribute('y', String(y - 11));
+      hit.setAttribute('width', '22'); hit.setAttribute('height', '22');
+      const mark = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      mark.classList.add('point-mark');
+      mark.setAttribute('part', 'point');
+      mark.setAttribute('x', String(x - 2.5)); mark.setAttribute('y', String(y - 2.5));
+      mark.setAttribute('width', '5'); mark.setAttribute('height', '5');
       marker.setAttribute('role', 'button');
       marker.setAttribute('tabindex', '0');
       marker.setAttribute('aria-label', `${this.label} point ${Number(point.time).toFixed(2)} ${Number(point.value).toFixed(2)}`);
+      marker.append(hit, mark);
       this.svg.append(marker);
     });
     this.paintSelection();

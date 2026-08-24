@@ -40,6 +40,26 @@ test('envelope editor stays state-in and emits generic time/value intent', async
   await expect(editor.locator('.point')).toHaveCount(3);
 });
 
+test('envelope points can be moved by a touch pointer', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  const before = await editor.evaluate((element) => element.points[1]);
+  const box = await editor.locator('.point').nth(1).boundingBox();
+  expect(box.width).toBeGreaterThanOrEqual(20);
+  expect(box.height).toBeGreaterThanOrEqual(20);
+  const client = await page.context().newCDPSession(page);
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  const x = box.x + box.width / 2; const y = box.y + box.height / 2;
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart',
+    touchPoints: [{ x, y, radiusX: 8, radiusY: 8, force: 1, id: 71 }] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove',
+    touchPoints: [{ x: x + 40, y: y - 24, radiusX: 8, radiusY: 8, force: 1, id: 71 }] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const moved = await editor.evaluate((element) => element.points[1]);
+  expect(moved.time).toBeGreaterThan(before.time);
+  expect(moved.value).toBeGreaterThan(before.value);
+});
+
 test('documentation renders the overview', async ({ page }) => {
   await page.goto('/docs/');
 
@@ -2082,7 +2102,12 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
   await page.mouse.move(rangeHandle.x + 5, rangeHandle.y + 5);
   await page.mouse.down();
   await page.mouse.move(rangeHandle.x + 5 + pxPerBeat * 0.5, rangeHandle.y + 5, { steps: 5 });
+  await expect(editor.locator('.marker-guide')).toHaveAttribute('data-on', '');
+  const guide = await editor.locator('.marker-guide').boundingBox();
+  const editorGrid = await editor.locator('.grid').boundingBox();
+  expect(Math.abs(guide.x - (editorGrid.x + pxPerBeat * 1.5))).toBeLessThan(1);
   await page.mouse.up();
+  await expect(editor.locator('.marker-guide')).not.toHaveAttribute('data-on', '');
   await expect(editor).toHaveAttribute('start', '1.5');
   expect(await editor.evaluate((element) => element.notes)).toEqual(notesBeforeRange);
 

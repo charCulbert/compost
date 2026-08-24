@@ -30,7 +30,13 @@ points during a drag; `envelope-change` reports the committed points;
 Double-click adds a point. Points and line segments can be dragged; a range set
 with `setSelection(start, end)` moves as one display-space selection. Focused
 points support Delete, Escape and arrow-key editing. Shift makes movement four
-times finer. Alt temporarily disables time snapping.
+times finer. Alt temporarily disables time snapping. The visible point remains
+compact while its 22px pointer target makes single-touch editing practical.
+
+Future work: explore explicitly designed multi-touch envelope gestures (for
+example, two-finger range shaping). Keep that separate from the current
+single-pointer contract until the gesture and accessibility behavior are
+specified and tested on physical devices.
 
 ## Attributes and API
 
@@ -55,7 +61,9 @@ grid changes visible snapping, not stored precision.
 The defaults are a compact, neutral graph surface. Custom properties cover
 background, text, grid line, signal, point fill/border, selection, preview,
 radius and grid size through the `--compost-envelope-*` family. Parts are
-`surface`, `grid`, `selection`, `graph`, `line`, `point` and `readout`.
+`surface`, `grid`, `selection`, `graph`, `line`, `point`, `point-hit` and
+`readout`. `point` is the visible mark; `point-hit` is its invisible pointer
+target.
 
 `compost-timeline` composes this editor for its automation rows and adapts
 `time` to song beats. An ADSR editor can use the same component with seconds or

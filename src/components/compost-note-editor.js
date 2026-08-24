@@ -247,6 +247,10 @@ export class CompostNoteEditor extends HTMLElement {
         :host([data-velmod]) .note .ve, :host([data-drag="vel"]) .note, :host([data-drag="vel"]) .note .ve { cursor: ns-resize; }
         :host([data-copymod]) .note .ve, :host([data-drag="copy"]) .note, :host([data-drag="copy"]) .note .ve { cursor: copy; }
         .outside { position: absolute; top: 0; bottom: 0; background: var(--compost-note-editor-past); pointer-events: none; z-index: 1; }
+        .marker-guide { position: absolute; top: 0; bottom: 0; width: 1px; z-index: 5; pointer-events: none; display: none; }
+        .marker-guide[data-on] { display: block; }
+        .marker-guide[data-scope="range"] { background: var(--compost-note-editor-range); }
+        .marker-guide[data-scope="loop"] { background: var(--compost-note-editor-loop); }
         .playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-note-editor-playhead);
           box-shadow: 0 0 0 0.5px var(--compost-note-editor-bg), 0 0 5px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 6; display: none; }
         .marquee { position: absolute; border: 1px solid var(--compost-note-editor-select); background: var(--compost-note-editor-marquee); pointer-events: none; display: none; }
@@ -290,6 +294,7 @@ export class CompostNoteEditor extends HTMLElement {
           <div class="grid">
             <div class="outside before" part="before"></div>
             <div class="outside past" part="past"></div>
+            <div class="marker-guide" part="marker-guide"></div>
             <div class="playhead" part="playhead"></div>
             <div class="marquee" part="marquee"></div>
           </div>
@@ -313,6 +318,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.gridElement = part('.grid');
     this.before = part('.outside.before');
     this.past = part('.past');
+    this.markerGuide = part('.marker-guide');
     this.playheadElement = part('.playhead');
     this.marquee = part('.marquee');
     this.tip = part('.tip');
@@ -640,6 +646,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.renderGrid();
     this.renderNotes();
     this.renderPlayhead();
+    this.renderMarkerGuide();
     this.division.textContent = `1/${this.grid}`;
   }
 
@@ -745,6 +752,17 @@ export class CompostNoteEditor extends HTMLElement {
     }
     this.playheadElement.style.display = 'block';
     this.playheadElement.style.left = `${(this.playhead * this.pxPerBeat).toFixed(1)}px`;
+  }
+
+  renderMarkerGuide() {
+    const drag = this.loopDrag;
+    if (!drag) { this.markerGuide.removeAttribute('data-on'); return; }
+    const beat = drag.scope === 'range'
+      ? drag.kind === 'start' ? this.rangeStart : this.rangeEnd
+      : drag.kind === 'start' ? this.loopStart : this.loopEnd;
+    this.markerGuide.dataset.scope = drag.scope;
+    this.markerGuide.style.left = `${(beat * this.pxPerBeat).toFixed(2)}px`;
+    this.markerGuide.setAttribute('data-on', '');
   }
 
   // ---- Emitting ----------------------------------------------------------------
@@ -1062,6 +1080,7 @@ export class CompostNoteEditor extends HTMLElement {
     const end = scope === 'range' ? this.rangeEnd : this.loopEnd;
     this.loopDrag = { pointerId: event.pointerId, scope, kind, x: event.clientX,
       start, end, px: this.pxPerBeat, node: event.currentTarget };
+    this.renderMarkerGuide();
     /** @type {HTMLElement} */ (event.currentTarget).setAttribute('data-on', '');
     /** @type {HTMLElement} */ (event.currentTarget).setPointerCapture(event.pointerId);
   }
@@ -1098,6 +1117,7 @@ export class CompostNoteEditor extends HTMLElement {
     const drag = this.loopDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     this.loopDrag = null;
+    this.markerGuide.removeAttribute('data-on');
     /** @type {HTMLElement} */ (drag.node).removeAttribute('data-on');
     this.zoomPxPerBeat = 0;
     this.refresh();

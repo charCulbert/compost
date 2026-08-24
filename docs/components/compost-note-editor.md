@@ -86,6 +86,9 @@ marker drags (`range-input` and `loop-input` during), `selection-change`,
 `note-preview` when a note is grabbed, drawn or a
 key is pressed, `note-context` on a right-click.
 
+While a playback or loop handle is moving, a matching guide extends through
+the note grid so the snapped or free marker position remains visible.
+
 ## Styling
 
 Rows never go under `--compost-note-editor-min-row` (`1.1em`): where the
@@ -100,4 +103,5 @@ outside-playback shading, playhead, tooltip and the row floor; sizes are in `em`
 Parts: `frame`, `corner`, `ruler`, `ruler-label`, `range`, `range-start`,
 `range-end`, `loop`, `loop-start`,
 `loop-end`, `keys`, `key`, `grid`, `grid-line`, `beat-line`, `bar-line`, `row`,
-`row-line`, `note`, `before`, `past`, `marquee`, `playhead`, `division`, `tip`.
+`row-line`, `note`, `before`, `past`, `marker-guide`, `marquee`, `playhead`,
+`division`, `tip`.
