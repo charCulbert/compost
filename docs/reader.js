@@ -14,6 +14,7 @@ const docs = [
   ['compost-drawer', 'compost-drawer', './components/compost-drawer.md'],
   ['compost-knob', 'compost-knob', './components/compost-knob.md'],
   ['compost-slider', 'compost-slider', './components/compost-slider.md'],
+  ['compost-meter', 'compost-meter', './components/compost-meter.md'],
   ['compost-gain', 'compost-gain', './components/compost-gain.md'],
   ['compost-number-box', 'compost-number-box', './components/compost-number-box.md'],
   ['compost-button', 'compost-button', './components/compost-button.md'],

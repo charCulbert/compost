@@ -38,7 +38,7 @@ function normaliseMapping(mapping, parameterProvider) {
 
   const min = rawMin;
   const max = rawMax;
-  const rawMid = mapping.mid ?? mapping.midiMid ?? mapping.mappingMid;
+  const rawMid = mapping.mid ?? mapping.midiMid ?? mapping.mappingMid ?? definition.mid;
   const mid = rawMid === null || rawMid === undefined || rawMid === ''
     ? null
     : Number(rawMid);
@@ -46,7 +46,7 @@ function normaliseMapping(mapping, parameterProvider) {
       && (!Number.isFinite(mid) || mid < definition.min || mid > definition.max
         || mid < min || mid > max)) return null;
 
-  const rawShape = mapping.shape ?? mapping.midiShape ?? mapping.mappingShape;
+  const rawShape = mapping.shape ?? mapping.midiShape ?? mapping.mappingShape ?? definition.shape;
   const shape = rawShape === null || rawShape === undefined || rawShape === ''
     ? null
     : Number(rawShape);
@@ -62,7 +62,7 @@ function normaliseMapping(mapping, parameterProvider) {
     mid,
     step: definition.step,
     values: definition.values ? [...definition.values] : null,
-    curve: mapping.curve ?? 'linear',
+    curve: mapping.curve ?? definition.curve ?? 'linear',
     shape,
   };
 }

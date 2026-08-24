@@ -11,6 +11,21 @@ test('external definitions override control semantics but preserve presentation'
   assert.equal(control.getAttribute('curve'), 'log');
 });
 
+test('parameter definitions can supply the shared response scale', () => {
+  const control = new FakeControl({
+    'parameter-id': 'gain', min: -90, max: 12, value: 0,
+  });
+  const parameters = createParameterController({
+    root: new FakeRoot([control]),
+    definitions: [{
+      parameterID: 'gain', min: -90, max: 12, defaultValue: 0, curve: 'gain',
+    }],
+  });
+
+  assert.equal(parameters.definition('gain').curve, 'gain');
+  assert.equal(control.getAttribute('curve'), 'gain');
+});
+
 test('applyValue synchronizes controls silently and rejects invalid backend values', () => {
   const first = new FakeControl({ 'parameter-id': 'gain', min: 0, max: 1, value: 0.2 });
   const second = new FakeControl({ 'parameter-id': 'gain', min: 0, max: 1, value: 0.2 });
@@ -92,6 +107,18 @@ test('local DOM mode derives a definition from the first control', () => {
     readOnly: false,
   });
   assert.equal(parameters.value('mode'), 1);
+});
+
+test('local definitions retain explicitly rendered scale metadata', () => {
+  const control = new FakeControl({
+    'parameter-id': 'frequency', min: 20, max: 20000, mid: 1000,
+    curve: 'log', shape: 1.2, value: 440,
+  });
+  const parameters = createParameterController({ root: new FakeRoot([control]) });
+
+  assert.equal(parameters.definition('frequency').mid, 1000);
+  assert.equal(parameters.definition('frequency').curve, 'log');
+  assert.equal(parameters.definition('frequency').shape, 1.2);
 });
 
 test('local definitions use the current value when no reset is declared', () => {

@@ -266,13 +266,42 @@ test('knobs and sliders expose disabled as a real control state', () => {
 test('knobs and sliders share range and curve attributes while sliders add orientation', () => {
   assert.deepEqual(
     SynthKnob.observedAttributes.filter((attribute) => attribute !== 'pointer-lock'),
-    ParameterSlider.observedAttributes.filter((attribute) => attribute !== 'orientation'),
+    ParameterSlider.observedAttributes.filter((attribute) => !['orientation', 'interaction'].includes(attribute)),
   );
   assert.ok(ParameterSlider.observedAttributes.includes('orientation'));
+  assert.ok(ParameterSlider.observedAttributes.includes('interaction'));
   for (const Control of [SynthKnob, ParameterSlider, CompostNumberBox]) {
     assert.equal(Control.observedAttributes.includes('taper'), false);
     assert.equal(Control.observedAttributes.includes('scale'), false);
   }
+});
+
+test('relative slider drag preserves the grabbed value and follows rail travel', () => {
+  const control = Object.create(ParameterSlider.prototype);
+  const values = [];
+  Object.assign(control, {
+    min: 0,
+    max: 1,
+    mid: null,
+    curve: 'linear',
+    shape: 1,
+    input: { getBoundingClientRect: () => ({ width: 200, height: 100 }) },
+    pointerStart: {
+      pointerId: 1,
+      x: 40,
+      y: 50,
+      value: 0.25,
+      fineCandidate: false,
+      fine: false,
+      moved: false,
+      orientation: 'horizontal',
+      relative: true,
+    },
+    setValue(value) { values.push(value); },
+  });
+
+  control.movePointer({ pointerId: 1, clientX: 90, clientY: 50, preventDefault() {} });
+  assert.equal(values.at(-1), 0.5);
 });
 
 test('slider orientation controls pointer travel and accessible metadata', () => {

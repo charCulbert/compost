@@ -11,6 +11,7 @@ import './compost-knob.js';
 import './compost-midi.js';
 import './compost-midi-mappings.js';
 import './compost-midi-monitor.js';
+import './compost-meter.js';
 import './compost-note-editor.js';
 import './compost-number-box.js';
 import './compost-piano.js';

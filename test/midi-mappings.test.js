@@ -164,6 +164,25 @@ test('mapping ranges and curve metadata stay inside parameter legality', () => {
   assert.equal(mappings.requestSet({ parameterID: 'gain', cc: 3, min: 0, max: 1, shape: 'bad' }), false);
 });
 
+test('accepted mappings snapshot the parameter definition scale', () => {
+  const parameters = createParameterController({
+    root: new FakeRoot(),
+    definitions: [{
+      parameterID: 'gain', name: 'Gain', min: -90, max: 12,
+      defaultValue: 0, curve: 'gain',
+    }],
+  });
+  const mappings = createMIDIMappings({ parameterProvider: parameters });
+  const values = [];
+  mappings.addEventListener('midi-parameter', ({ detail }) => values.push(detail.value));
+
+  assert.equal(mappings.applyMapping({ parameterID: 'gain', cc: 7 }), true);
+  assert.equal(mappings.get('gain').curve, 'gain');
+  mappings.handleMIDIMessage([0xb0, 7, 0]);
+  mappings.handleMIDIMessage([0xb0, 7, 127]);
+  assert.deepEqual(values, [-90, 12]);
+});
+
 test('discrete and stepped mappings use stable MIDI buckets', () => {
   const { mappings } = setup();
   const discrete = createParameterController({

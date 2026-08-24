@@ -1,3 +1,5 @@
+import { normaliseCurveName } from './parameter-scale.js';
+
 const PARAMETER_SELECTOR = '[parameter-id]';
 const EPSILON = 1e-9;
 
@@ -34,6 +36,11 @@ function definitionFromControl(control) {
       ? 'discrete'
       : 'continuous');
 
+  const scale = {};
+  for (const field of ['mid', 'curve', 'shape']) {
+    if (control.hasAttribute?.(field)) scale[field] = control.getAttribute(field);
+  }
+
   return normaliseDefinition({
     parameterID,
     kind,
@@ -45,6 +52,7 @@ function definitionFromControl(control) {
     values: valuesFromControl(control),
     unit: control.unit ?? control.getAttribute?.('unit') ?? '',
     readOnly: Boolean(control.readOnly || control.disabled || control.hasAttribute?.('disabled')),
+    ...scale,
   });
 }
 
@@ -76,6 +84,22 @@ export function normaliseDefinition(input = {}) {
     readOnly: Boolean(input.readOnly),
   };
 
+  if (input.mid !== null && input.mid !== undefined && input.mid !== '') {
+    definition.mid = number(input.mid);
+    if (definition.mid === null || definition.mid < min || definition.mid > max) {
+      throw new Error(`Invalid scale midpoint for parameter "${definition.parameterID}".`);
+    }
+  }
+  if (input.curve !== null && input.curve !== undefined && input.curve !== '') {
+    definition.curve = normaliseCurveName(input.curve);
+  }
+  if (input.shape !== null && input.shape !== undefined && input.shape !== '') {
+    definition.shape = number(input.shape);
+    if (!(definition.shape > 0)) {
+      throw new Error(`Invalid scale shape for parameter "${definition.parameterID}".`);
+    }
+  }
+
   if (!validValue(definition, definition.defaultValue)) {
     throw new Error(`Invalid default value for parameter "${definition.parameterID}".`);
   }
@@ -90,6 +114,9 @@ function sameDefinition(a, b) {
     && a.defaultValue === b.defaultValue
     && a.step === b.step
     && a.readOnly === b.readOnly
+    && a.mid === b.mid
+    && a.curve === b.curve
+    && a.shape === b.shape
     && JSON.stringify(a.values) === JSON.stringify(b.values);
 }
 
@@ -124,6 +151,10 @@ function applyDefinition(control, definition) {
 
   for (const [name, value] of Object.entries(fields)) {
     control.setAttribute?.(name, String(value));
+  }
+
+  for (const name of ['mid', 'curve', 'shape']) {
+    if (definition[name] !== undefined) control.setAttribute?.(name, String(definition[name]));
   }
 
   if (definition.values) {

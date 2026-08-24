@@ -1,5 +1,17 @@
-const CURVES = new Set(['linear', 'log']);
+const CURVES = new Set(['linear', 'log', 'gain']);
 const EPSILON = 1e-12;
+const GAIN_POINTS = [
+  [-90, 0],
+  [-60, 0.1],
+  [-48, 0.17],
+  [-36, 0.25],
+  [-24, 0.35],
+  [-12, 0.5],
+  [-6, 0.6],
+  [0, 0.7],
+  [6, 0.85],
+  [12, 1],
+];
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -56,6 +68,12 @@ export function normalisedPositionToValue(position, options = {}) {
 
   if (scale.max === scale.min) return scale.min;
 
+  if (scale.curve === 'gain') {
+    const minPosition = gainValueToPosition(scale.min);
+    const maxPosition = gainValueToPosition(scale.max);
+    return gainPositionToValue(minPosition + normal * (maxPosition - minPosition));
+  }
+
   if (scale.curve === 'log') {
     return scale.min * ((scale.max / scale.min) ** (normal ** scale.shape));
   }
@@ -76,6 +94,14 @@ export function valueToNormalisedPosition(value, options = {}) {
   const low = Math.min(scale.min, scale.max);
   const high = Math.max(scale.min, scale.max);
   const clampedValue = clamp(number, low, high);
+
+  if (scale.curve === 'gain') {
+    const minPosition = gainValueToPosition(scale.min);
+    const maxPosition = gainValueToPosition(scale.max);
+    return clamp01(
+      (gainValueToPosition(clampedValue) - minPosition) / (maxPosition - minPosition),
+    );
+  }
 
   if (scale.curve === 'log') {
     const exponent = Math.log(clampedValue / scale.min) / Math.log(scale.max / scale.min);
@@ -116,6 +142,7 @@ export function describeParameterScale(options = {}) {
   const scale = normaliseParameterScale(options);
   const shape = scale.shape === 1 ? '' : ` shape ${formatNumber(scale.shape)}`;
 
+  if (scale.curve === 'gain') return 'gain curve';
   if (scale.curve === 'log') return `log curve${shape}`;
   if (scale.hasMid && isStrictlyBetween(scale.mid, scale.min, scale.max)) {
     return `linear curve, center ${formatNumber(scale.mid)}`;
@@ -161,6 +188,26 @@ function valueToLinearPosition(value, scale) {
   }
 
   return clamp01(0.5 + 0.5 * ((value - scale.mid) / (scale.max - scale.mid)));
+}
+
+function gainValueToPosition(value) {
+  const index = GAIN_POINTS.findIndex(([pointValue]) => value <= pointValue);
+  const upper = index === -1 ? GAIN_POINTS.length - 1 : index === 0 ? 1 : index;
+  const lower = upper - 1;
+  return interpolate(value, GAIN_POINTS[lower][0], GAIN_POINTS[upper][0],
+    GAIN_POINTS[lower][1], GAIN_POINTS[upper][1]);
+}
+
+function gainPositionToValue(position) {
+  const index = GAIN_POINTS.findIndex(([, pointPosition]) => position <= pointPosition);
+  const upper = index === -1 ? GAIN_POINTS.length - 1 : index === 0 ? 1 : index;
+  const lower = upper - 1;
+  return interpolate(position, GAIN_POINTS[lower][1], GAIN_POINTS[upper][1],
+    GAIN_POINTS[lower][0], GAIN_POINTS[upper][0]);
+}
+
+function interpolate(value, sourceMin, sourceMax, targetMin, targetMax) {
+  return targetMin + ((value - sourceMin) / (sourceMax - sourceMin)) * (targetMax - targetMin);
 }
 
 function formatNumber(value) {

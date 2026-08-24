@@ -9,6 +9,7 @@ Import the components a page uses, or register the full set with
 - [compost-drawer](components/compost-drawer.md)
 - [compost-knob](components/compost-knob.md)
 - [compost-slider](components/compost-slider.md)
+- [compost-meter](components/compost-meter.md)
 - [compost-gain](components/compost-gain.md)
 - [compost-number-box](components/compost-number-box.md)
 - [compost-button](components/compost-button.md)

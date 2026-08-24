@@ -19,8 +19,13 @@ track whose value increases from bottom to top:
 Use `--slider-vertical-length` and `--slider-vertical-width` to size a vertical
 slider. The defaults are `144px` and `72px`.
 
-Click or drag for normal movement. Option-drag, Shift-drag, or a second drag for
-fine movement. Double-click, Escape, Delete, or Backspace resets the value.
+Click or drag for normal movement. The default interaction positions the value
+at the pointer. Set `interaction="relative"` when a surface should preserve its
+current value on pointer-down and move by the same fraction of the rail as the
+pointer travels.
+
+Option-drag, Shift-drag, or a second drag enables fine movement. Double-click,
+Escape, Delete, or Backspace resets the value.
 Arrow, Page, Home, and End keys adjust it from the keyboard.
 
 User gestures emit `parameter-begin`, `parameter-edit`, and `parameter-end`.

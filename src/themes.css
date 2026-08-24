@@ -65,6 +65,7 @@
   compost-midi,
   compost-midi-mappings,
   compost-midi-monitor,
+  compost-meter,
   compost-number-box,
   compost-scope,
   compost-select,
@@ -166,6 +167,18 @@ compost-slider {
   --slider-color-scheme: var(--compost-theme-color-scheme);
   --midi-map-learn-color: var(--compost-theme-learn);
   --midi-map-label-text: var(--compost-theme-learn);
+}
+
+compost-meter {
+  --meter-text: var(--compost-theme-text);
+  --meter-value: var(--compost-theme-muted);
+  --meter-line: var(--compost-theme-line);
+  --meter-rail: var(--compost-theme-track);
+  --meter-primary: var(--compost-theme-accent);
+  --meter-secondary: color-mix(in srgb, var(--compost-theme-accent) 28%, transparent);
+  --meter-over: var(--compost-theme-danger);
+  --meter-clip: var(--compost-theme-danger);
+  --meter-peak: var(--compost-theme-text);
 }
 
 compost-gain {

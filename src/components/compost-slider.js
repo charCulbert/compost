@@ -28,6 +28,7 @@ export class ParameterSlider extends HTMLElement {
       'label',
       'section',
       'orientation',
+      'interaction',
       'min',
       'max',
       'mid',
@@ -378,6 +379,10 @@ export class ParameterSlider extends HTMLElement {
     return this.getAttribute('orientation') === 'vertical' ? 'vertical' : 'horizontal';
   }
 
+  get interaction() {
+    return this.getAttribute('interaction') === 'relative' ? 'relative' : 'position';
+  }
+
   setValue(value, shouldEmit = true, source = 'control') {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return;
@@ -486,8 +491,9 @@ export class ParameterSlider extends HTMLElement {
       fine: Boolean(event.altKey || event.shiftKey),
       moved: false,
       orientation: this.orientation,
+      relative: this.interaction === 'relative',
     };
-    if (!fineCandidate && !this.pointerStart.fine) {
+    if (!this.pointerStart.relative && !fineCandidate && !this.pointerStart.fine) {
       this.setValue(this.valueFromPointer(event));
     }
     window.addEventListener('blur', this.handleWindowBlur);
@@ -502,12 +508,16 @@ export class ParameterSlider extends HTMLElement {
       : event.clientX - pointer.x;
     pointer.moved = pointer.moved || Math.abs(distance) > 4;
     event.preventDefault();
-    if (pointer.fineCandidate || pointer.fine) {
+    if (pointer.relative || pointer.fineCandidate || pointer.fine) {
       if (!pointer.moved) return;
-      pointer.fine = true;
+      const bounds = this.input?.getBoundingClientRect?.();
+      const extent = pointer.orientation === 'vertical' ? bounds?.height : bounds?.width;
+      const scale = pointer.relative && extent > 0 ? 1 / extent : 1 / 180;
+      const fine = pointer.fineCandidate || pointer.fine;
+      pointer.fine = fine;
       this.setValue(moveValueByNormalisedDelta(
         pointer.value,
-        distance / 180 * FINE_DRAG_SCALE,
+        distance * scale * (fine ? FINE_DRAG_SCALE : 1),
         this.scaleOptions(),
       ));
     } else {

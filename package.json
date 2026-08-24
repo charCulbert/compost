@@ -29,6 +29,7 @@
     "./components/compost-midi": "./src/components/compost-midi.js",
     "./components/compost-midi-mappings": "./src/components/compost-midi-mappings.js",
     "./components/compost-midi-monitor": "./src/components/compost-midi-monitor.js",
+    "./components/compost-meter": "./src/components/compost-meter.js",
     "./components/compost-note-editor": "./src/components/compost-note-editor.js",
     "./components/compost-number-box": "./src/components/compost-number-box.js",
     "./components/compost-piano": "./src/components/compost-piano.js",

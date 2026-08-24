@@ -88,6 +88,36 @@ test('explicit log shape overrides derived mid shape', () => {
   assertClose(normalisedPositionToValue(0.5, scale), Math.sqrt(20 * 20000));
 });
 
+test('gain curve uses one stable calibrated dB response', () => {
+  const scale = { min: -90, max: 12, curve: 'gain' };
+  const points = [
+    [-90, 0], [-60, 0.1], [-48, 0.17], [-36, 0.25], [-24, 0.35],
+    [-12, 0.5], [-6, 0.6], [0, 0.7], [6, 0.85], [12, 1],
+  ];
+
+  for (const [value, position] of points) {
+    assertClose(valueToNormalisedPosition(value, scale), position);
+    assertClose(normalisedPositionToValue(position, scale), value);
+  }
+});
+
+test('gain curve crops the same absolute response to custom dB ranges', () => {
+  const scale = { min: -60, max: 6, curve: 'gain' };
+
+  assert.equal(valueToNormalisedPosition(-60, scale), 0);
+  assert.equal(valueToNormalisedPosition(6, scale), 1);
+  assertClose(valueToNormalisedPosition(0, scale), 0.8);
+  assertClose(normalisedPositionToValue(0.8, scale), 0);
+});
+
+test('gain curve remains invertible beyond the canonical range', () => {
+  const scale = { min: -120, max: 24, curve: 'gain' };
+
+  for (const value of [-120, -90, 0, 12, 24]) {
+    assertClose(normalisedPositionToValue(valueToNormalisedPosition(value, scale), scale), value);
+  }
+});
+
 test('normalised drag moves through the selected curve', () => {
   const scale = {
     min: 20,
@@ -151,4 +181,5 @@ test('scale description is stable for previews', () => {
     describeParameterScale({ min: 20, max: 20000, mid: 1000, curve: 'log' }),
     'log curve shape 0.8203',
   );
+  assert.equal(describeParameterScale({ min: -90, max: 12, curve: 'gain' }), 'gain curve');
 });

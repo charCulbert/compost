@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compost demo</title>
+    <link rel="stylesheet" href="../../shared/styles.css">
+    <script type="module" src="../../../src/components/compost-meter.js" data-usage-import></script>
+    <script type="module" src="../shared-demo.js"></script>
+    <script type="module" src="./main.js"></script>
+  </head>
+  <body data-demo="compost-meter">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 data-title>Demo</h1>
+          <p class="muted" data-summary></p>
+        </div>
+        <div class="example-link-group">
+          <a class="example-nav-button" href="../../../docs/?doc=compost-meter">Docs</a>
+          <a class="example-nav-button" href="../../">All examples</a>
+        </div>
+      </header>
+      <section class="panel" data-demo-root>
+        <div class="demo-playground">
+          <fieldset class="demo-options">
+            <legend>Caller state</legend>
+            <label>Left primary <input type="range" min="-90" max="12" step="0.1" value="-12" data-level="left"></label>
+            <label>Right primary <input type="range" min="-90" max="12" step="0.1" value="-6" data-level="right"></label>
+            <label class="check"><input type="checkbox" data-clipped> Right clipped</label>
+            <output data-option-state>Peak and average layers · stereo · dBFS</output>
+          </fieldset>
+          <div class="demo-showcase">
+            <compost-meter label="Output" min="-90" max="12" curve="gain"></compost-meter>
+          </div>
+        </div>
+      </section>
+      <section class="panel wide">
+        <h2>Events</h2>
+        <p class="muted">Meters are state-in displays and emit no parameter gestures.</p>
+        <pre class="log" data-log></pre>
+      </section>
+    </main>
+  </body>
+</html>
