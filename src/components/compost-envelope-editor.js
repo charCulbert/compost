@@ -118,6 +118,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.surface.addEventListener('pointerleave', () => { if (!this.drag) this.readout.hidden = true; });
     this.surface.addEventListener('pointerup', (event) => this.endPointer(event));
     this.surface.addEventListener('pointercancel', () => this.cancelPointer());
+    this.surface.addEventListener('touchend', (event) => event.preventDefault(), { passive: false });
     this.surface.addEventListener('dblclick', (event) => {
       if (performance.now() >= this.suppressDoubleClickUntil) this.addAtPointer(event);
     });

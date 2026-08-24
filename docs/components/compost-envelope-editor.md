@@ -33,7 +33,9 @@ dragged; a range set with `setSelection(start, end)` moves as one display-space
 selection. Focused points support Delete, Escape and arrow-key editing. Shift
 makes movement four times finer. Alt temporarily disables time snapping. The
 visible point remains compact while its 22px pointer target makes single-touch
-editing practical.
+editing practical. The editor consumes touch gestures, including the default
+touch-end action, so a double-tap edits the envelope instead of zooming the
+surrounding page.
 
 Future work: explore explicitly designed multi-touch envelope gestures (for
 example, two-finger range shaping). Keep that separate from the current

@@ -95,6 +95,16 @@ test('a browser-synthesized touch dblclick does not apply the edit twice', async
   await expect(editor.locator('.point')).toHaveCount(4);
 });
 
+test('the envelope surface cancels the touch default that zooms iOS pages', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  const prevented = await page.locator('compost-envelope-editor').evaluate((element) => {
+    const event = new Event('touchend', { bubbles: true, composed: true, cancelable: true });
+    element.shadowRoot.querySelector('.surface').dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(prevented).toBe(true);
+});
+
 test('documentation renders the overview', async ({ page }) => {
   await page.goto('/docs/');
 
