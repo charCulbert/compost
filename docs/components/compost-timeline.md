@@ -84,6 +84,7 @@ and calls `setLanes` or `setLaneClips` with the authoritative result.
 | `lane-header-context` | `{laneId, clientX, clientY}` | Lane-header context menu |
 | `lane-pick` | `{laneId, shiftKey}` | Click a lane header |
 | `lane-move` | `{laneId, toIndex}` | Drag or arrow-key a lane header |
+| `lane-resize` | `{laneId, height}` | Lane resize commits; `height` is `null` when reset |
 | `lane-rename` | `{laneId, name}` | Double-click or F2 on a lane name |
 | `automation-change` | `{laneId, automationId, points}` | Add, move, delete or segment edit commit |
 | `automation-input` | `{laneId, automationId, points}` | Reversible point preview during a gesture |
@@ -121,6 +122,8 @@ in the tab order; focused clips use a roving tab index.
 | Alt-Left/Right | Nudge by one grid step |
 | `[` / `]` | Zoom out / in around the playhead |
 | Shift-F10 | Open a context menu |
+| Arrow Up / Down on a lane separator | Resize by 4px; Shift resizes by 16px |
+| Home on a lane separator | Reset to the shared lane height |
 | Escape | Clear selection |
 | Enter / Space on a locator | Jump to that locator |
 | F2 on a locator | Rename the locator |
@@ -185,7 +188,7 @@ Useful parts include `frame`, `corner`, `ruler`, `time-selection`, `loop`,
 `loop-start`, `loop-end`, `playhead`, `headers`, `lanes`, `lane`,
 `lane-content`, `lane-header-fallback`, `lane-name`, `clip`, `clip-name`,
 `clip-preview`, `clip-preview-mark`, `clip-progress`, `clip-extent`,
-`clip-loop`, `grid-line`, `bar-line`, `beat-line`, `ruler-label`, `locator`
+`clip-loop`, `grid-line`, `bar-line`, `beat-line`, `ruler-label`, `locator`, `lane-resize`
 and `marquee`.
 
 The host may pass `progress` from `0` to `1` on a playing clip. The loop brace
@@ -193,7 +196,10 @@ is only a generic editable range; punch policy and punch markers are not part
 of this component.
 
 A lane carries generic presentation fields: `id`, `name`, optional `color`,
-`compact`, `picked`, `dimmed`, `clips`, `envelope` and `automation`. A compact
+`compact`, `picked`, `dimmed`, `height`, `clips`, `envelope` and `automation`.
+`height` is an optional pixel row height; dragging or keyboard-editing the
+bottom separator previews it and emits `lane-resize` for the host to accept.
+A compact
 lane uses `--compost-timeline-thin-lane-height`; `dimmed` lowers clip opacity
 without assigning a meaning such as mute, override or disable. Product-specific
 track kinds, session state, mixer figures, meters and device chains belong in a

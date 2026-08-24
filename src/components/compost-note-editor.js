@@ -425,12 +425,14 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   selectAll() {
+    this.selectionRange = null;
     this.selection = new Set(this._notes.map((note) => note.id));
     this.renderNotes();
     this.emitSelection();
   }
 
   clearSelection() {
+    this.selectionRange = null;
     this.selection.clear();
     this.renderNotes();
     this.emitSelection();
@@ -439,6 +441,7 @@ export class CompostNoteEditor extends HTMLElement {
   deleteSelection() {
     if (this.readonly || this.selection.size === 0) return;
     const next = this._notes.filter((note) => !this.selection.has(note.id));
+    this.selectionRange = null;
     this.selection.clear();
     this.commit(next);
   }
@@ -463,6 +466,7 @@ export class CompostNoteEditor extends HTMLElement {
    * selection, on the middle visible row. Selects it and reports the change. */
   addNote() {
     if (this.readonly) return null;
+    this.selectionRange = null;
     const span = selectionSpan(this._notes, this.selection.size ? [...this.selection] : null);
     const raw = this.selection.size && span ? span.end : this.loopStart;
     const start = clamp(this.snapBeat(raw, false), 0, Math.max(0, this.beats - this.step));
@@ -760,6 +764,7 @@ export class CompostNoteEditor extends HTMLElement {
   /** @param {PointerEvent} event */
   startPointer(event) {
     if (this.readonly || event.button !== 0 || this.drag) return;
+    const selectionRangeBefore = this.selectionRange ? { ...this.selectionRange } : null;
     this.selectionRange = null;   // a new gesture replaces the marquee's time span
     const element = this.noteElementFrom(event);
     const point = this.gridPoint(event);
@@ -779,12 +784,12 @@ export class CompostNoteEditor extends HTMLElement {
         this._notes = normaliseNotes([...this._notes, created], this.beats);
         this.selection = new Set([created.id]);
         this.drag = { pointerId: event.pointerId, mode: 'len', note: created, moved: true, hold: null,
-          origin: undefined, rollback, ids: [created.id], selectionBefore };
+          origin: undefined, rollback, ids: [created.id], selectionBefore, selectionRangeBefore };
         this.preview(created.note);
       } else {
         if (!event.shiftKey) this.selection.clear();
         this.drag = { pointerId: event.pointerId, mode: 'marq', x0: point.x, y0: point.y,
-          base: new Set(this.selection), hold: null };
+          base: new Set(this.selection), hold: null, selectionRangeBefore };
         this.marquee.style.display = 'block';
         Object.assign(this.marquee.style, { left: `${point.x}px`, top: `${point.y}px`, width: '0px', height: '0px' });
       }
@@ -818,7 +823,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.drag = {
       pointerId: event.pointerId, mode, note: grabbed, x: event.clientX, y: event.clientY,
       origin: this._notes.map((entry) => ({ ...entry })), ids: [...this.selection],
-      rollback, moved: false, hold: null, copy: copying, selectionBefore,
+      rollback, moved: false, hold: null, copy: copying, selectionBefore, selectionRangeBefore,
     };
     if (mode === 'move' && !copying) {
       this.preview(note.note);
@@ -923,6 +928,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.removeAttribute('data-drag');
     if (event.type === 'pointercancel') {
       if (Array.isArray(drag.rollback)) this._notes = drag.rollback;
+      this.selectionRange = drag.selectionRangeBefore ?? null;
       const selection = drag.mode === 'marq' ? drag.base : drag.selectionBefore ?? drag.ids ?? [];
       const noteIds = new Set(this._notes.map((entry) => entry.id));
       this.selection = new Set([...selection].filter((id) => noteIds.has(id)));

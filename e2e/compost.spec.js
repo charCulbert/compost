@@ -1943,6 +1943,41 @@ test('timeline reveals an automation row through the vertical lane viewport', as
   expect(Math.abs(geometry.headerMove + geometry.scrolled)).toBeLessThanOrEqual(.1);
 });
 
+test('timeline lane resizing is reversible and keyboard accessible', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.addEventListener('lane-resize', (event) => element.testEvents.push(event.detail));
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [] }]);
+  });
+  const handle = timeline.locator('.lane-resize').first();
+  await expect(handle).toHaveAttribute('role', 'separator');
+  const initial = Number(await handle.getAttribute('aria-valuenow'));
+  await handle.focus();
+  await page.keyboard.press('ArrowUp');
+  expect(Number(await handle.getAttribute('aria-valuenow'))).toBe(initial + 4);
+  expect(await timeline.evaluate((element) => element.testEvents.at(-1))).toEqual({ laneId: 'lane', height: initial + 4 });
+  await page.keyboard.press('Home');
+  expect(await timeline.evaluate((element) => ({
+    event: element.testEvents.at(-1), custom: Object.hasOwn(element.lanes[0], 'height'),
+  }))).toEqual({ event: { laneId: 'lane', height: null }, custom: false });
+
+  const box = await handle.boundingBox();
+  await handle.evaluate((element) => element.addEventListener('pointerdown', (event) => {
+    element.dataset.testPointerId = String(event.pointerId);
+  }, { once: true }));
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 20, { steps: 3 });
+  const pointerId = Number(await handle.getAttribute('data-test-pointer-id'));
+  await handle.evaluate((element, id) => element.dispatchEvent(new PointerEvent('pointercancel', {
+    bubbles: true, composed: true, pointerId: id, pointerType: 'mouse', button: 0,
+  })), pointerId);
+  await page.mouse.up();
+  expect(await timeline.evaluate((element) => Object.hasOwn(element.lanes[0], 'height'))).toBe(false);
+});
+
 test('note editor moves, trims, velocity-drags and loops through real gestures', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
@@ -2051,6 +2086,7 @@ test('note editor moves, trims, velocity-drags and loops through real gestures',
   expect(await editor.evaluate((element) => element.notes.length)).toBe(10);
   await page.keyboard.press('Backspace');
   expect(await editor.evaluate((element) => element.notes.length)).toBe(5);
+  expect(await editor.evaluate((element) => element.selectionRange)).toBe(null);
   const events = await editor.evaluate((element) => element.testEvents);
   expect(events.filter((entry) => entry === 'notes-change').length).toBe(8);
   expect(events).toContainEqual(['loop-change', 9]);

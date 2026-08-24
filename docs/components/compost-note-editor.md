@@ -48,6 +48,8 @@ not stored time resolution; `snap="off"` keeps the pointer-derived beat.
 The cursor says what a drag will do: grab, trim, `copy` while Alt is held, or
 ns-resize for velocity while Cmd/Ctrl is held.
 Velocity reads twice, as the note's weight and a line across it.
+When the marquee extends beyond the selected notes, duplicate spacing follows
+the marquee's full time span; repeated duplication advances that span too.
 
 ## Attributes
 

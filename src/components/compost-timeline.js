@@ -41,7 +41,7 @@ const DEFAULT_AUTOMATION_ROW_HEIGHT_EM = 2.36;
  * offset?: number, duration: number, loop?: boolean, state?: string,
  * progress?: number, notes?: {start: number, duration: number, note: number, velocity?: number}[], color?: string}} TimelineClip */
 /** @typedef {{id: string, name: string, color?: string,
- * compact?: boolean, picked?: boolean, dimmed?: boolean,
+ * compact?: boolean, picked?: boolean, dimmed?: boolean, height?: number,
  * envelope?: {points: {beat: number, value: number}[], min: number, max: number, stepped?: boolean, scale?: 'linear'|'gain'}|null,
  * automation?: AutomationLaneView[],
  * clips: TimelineClip[]}} TimelineLane */
@@ -1372,11 +1372,19 @@ export class CompostTimeline extends HTMLElement {
   renderLaneResizeHandle(lane) {
     const handle = document.createElement('div');
     handle.className = 'lane-resize';
-    handle.title = 'Drag to resize lane';
-    /** @type {{pointerId:number,startY:number,startHeight:number}|null} */ let drag = null;
+    handle.part.add('lane-resize');
+    handle.tabIndex = 0;
+    handle.setAttribute('role', 'separator');
+    handle.setAttribute('aria-label', `Resize ${lane.name}`);
+    handle.setAttribute('aria-orientation', 'horizontal');
+    handle.setAttribute('aria-valuemin', '24');
+    handle.setAttribute('aria-valuemax', '400');
+    handle.title = 'Drag or use Arrow keys to resize; double-click or Home resets';
+    /** @type {{pointerId:number,startY:number,startHeight:number,startCustomHeight:number|null}|null} */ let drag = null;
     const apply = (/** @type {number|undefined} */ height) => {
       if (height === undefined) delete lane.height;
       else lane.height = height;
+      handle.setAttribute('aria-valuenow', String(this.laneRowHeightFor(lane)));
       const header = handle.closest('.lane-header');
       const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(lane.id)}"]`);
       for (const element of [header, row]) {
@@ -1384,12 +1392,17 @@ export class CompostTimeline extends HTMLElement {
         element.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
         element.style.height = `${this.laneHeightFor(lane)}px`;
       }
+      this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
+      const grid = this.lanesWorld.querySelector('.grid-world');
+      if (grid instanceof HTMLElement) grid.style.height = `${this.totalLaneHeight()}px`;
     };
     handle.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
       event.stopPropagation();
-      drag = { pointerId: event.pointerId, startY: event.clientY, startHeight: this.laneRowHeightFor(lane) };
+      const customHeight = Number(lane.height);
+      drag = { pointerId: event.pointerId, startY: event.clientY, startHeight: this.laneRowHeightFor(lane),
+        startCustomHeight: Number.isFinite(customHeight) && customHeight > 0 ? customHeight : null };
       handle.setPointerCapture?.(event.pointerId);
     });
     handle.addEventListener('pointermove', (event) => {
@@ -1400,7 +1413,7 @@ export class CompostTimeline extends HTMLElement {
       if (!drag || event.pointerId !== drag.pointerId) return;
       const finished = drag;
       drag = null;
-      if (event.type === 'pointercancel') { apply(finished.startHeight); return; }
+      if (event.type === 'pointercancel') { apply(finished.startCustomHeight ?? undefined); return; }
       if (this.laneRowHeightFor(lane) !== finished.startHeight) {
         this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: this.laneRowHeightFor(lane) }));
         this.render();
@@ -1415,6 +1428,20 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: null }));
       this.render();
     });
+    handle.addEventListener('keydown', (event) => {
+      if (event.key === 'Home') {
+        event.preventDefault();
+        apply(undefined);
+        this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: null }));
+        return;
+      }
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      event.preventDefault();
+      const direction = event.key === 'ArrowUp' ? 1 : -1;
+      apply(clamp(this.laneRowHeightFor(lane) + direction * (event.shiftKey ? 16 : 4), 24, 400));
+      this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: this.laneRowHeightFor(lane) }));
+    });
+    apply(lane.height);
     return handle;
   }
 
