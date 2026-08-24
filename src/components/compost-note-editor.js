@@ -85,6 +85,9 @@ export class CompostNoteEditor extends HTMLElement {
     /** @type {Set<string>} */ this.selection = new Set();
     /** @type {number[]} */ this.visibleKeys = [];
     /** @type {any} */ this.drag = null;
+    /** The last marquee's beat extent, kept so a duplicate can space itself
+     * by the selected time. @type {{start: number, end: number}|null} */
+    this.selectionRange = null;
     /** @type {any} */ this.loopDrag = null;
     this.editorID = `compost-note-editor-${nextEditorID++}`;
     this.handleModifierKey = this.handleModifierKey.bind(this);
@@ -440,12 +443,18 @@ export class CompostNoteEditor extends HTMLElement {
     this.commit(next);
   }
 
-  /** Copies the selection one span later and selects the copies. */
+  /** Copies the selection one span later — or one marquee length later when the
+   * marquee took in empty time beyond the notes — and selects the copies. */
   duplicateSelection() {
     if (this.readonly || this.selection.size === 0) return;
+    const originals = this._notes.filter((note) => this.selection.has(note.id));
     const copies = duplicatedNotes(this._notes, [...this.selection], this.step, this.beats,
-      () => this.newNoteId(), this.snapMode);
+      () => this.newNoteId(), this.snapMode, this.selectionRange);
     if (!copies.length) return;
+    if (this.selectionRange) {
+      const shift = Math.max(...copies.map((copy, index) => copy.start - originals[index].start));
+      this.selectionRange = { start: this.selectionRange.start + shift, end: this.selectionRange.end + shift };
+    }
     this.selection = new Set(copies.map((note) => note.id));
     this.commit([...this._notes, ...copies]);
   }
@@ -751,6 +760,7 @@ export class CompostNoteEditor extends HTMLElement {
   /** @param {PointerEvent} event */
   startPointer(event) {
     if (this.readonly || event.button !== 0 || this.drag) return;
+    this.selectionRange = null;   // a new gesture replaces the marquee's time span
     const element = this.noteElementFrom(event);
     const point = this.gridPoint(event);
     this.focus({ preventScroll: true });
@@ -844,6 +854,7 @@ export class CompostNoteEditor extends HTMLElement {
       const fromNote = this.yToNote(y + height);
       const toNote = this.yToNote(y);
       const box = { fromBeat: this.xToBeat(x), toBeat: this.xToBeat(x + width), fromNote, toNote };
+      drag.range = { start: box.fromBeat, end: box.toBeat };
       this.selection = new Set(drag.base);
       for (const note of notesInBox(this._notes, box)) {
         // a folded view has gaps between rows; only rows that are shown count
@@ -920,6 +931,10 @@ export class CompostNoteEditor extends HTMLElement {
       return;
     }
     if (drag.mode === 'marq') {
+      // the dragged extent survives the gesture, so a duplicate can space
+      // itself by the selected time rather than by the notes alone
+      this.selectionRange = this.selection.size && drag.range
+        && drag.range.end > drag.range.start ? drag.range : null;
       this.renderNotes();
       this.emitSelection();
       return;

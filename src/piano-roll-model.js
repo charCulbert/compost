@@ -144,13 +144,15 @@ export function selectionSpan(notes, ids = null) {
 }
 
 /** Copies notes one span later — rounded up to the grid so the copy lands on
- * a cell — and returns the copies, which a caller usually selects. */
+ * a cell — and returns the copies, which a caller usually selects. A selected
+ * time range that reaches past the notes stretches the spacing to match. */
 /** @param {RollNote[]} notes @param {string[]} ids @param {number} step @param {number} beats
- * @param {() => string} newId @param {string} [mode] */
-export function duplicatedNotes(notes, ids, step, beats, newId, mode = 'grid') {
+ * @param {() => string} newId @param {string} [mode]
+ * @param {{start: number, end: number}|null} [range] */
+export function duplicatedNotes(notes, ids, step, beats, newId, mode = 'grid', range = null) {
   const span = selectionSpan(notes, ids);
   if (!span) return [];
-  const raw = span.end - span.start;
+  const raw = Math.max(span.end - span.start, range ? range.end - range.start : 0);
   const shift = mode === 'off' || !(step > 0) ? raw : Math.max(step, Math.ceil(raw / step - 1e-9) * step);
   return notes.filter((note) => ids.includes(note.id)).map((note) => normaliseNote({
     ...note, id: newId(), start: Math.min(Math.max(0, beats - note.duration), note.start + shift),

@@ -245,4 +245,10 @@ test('trimming keeps the end, velocity pins to MIDI, duplicates land one span la
   let next = 0;
   const copies = duplicatedNotes(notes, ['a', 'b'], 0.25, 16, () => `c${next += 1}`);
   assert.deepEqual(copies.map((note) => [note.id, note.start]), [['c1', 3], ['c2', 4.5]]);
+  // a selected time range reaching past the notes stretches the spacing to match
+  const spaced = duplicatedNotes(notes, ['a', 'b'], 0.25, 16, () => `d${next += 1}`, 'grid', { start: 1, end: 5 });
+  assert.deepEqual(spaced.map((note) => [note.id, note.start]), [['d3', 5], ['d4', 6.5]]);
+  // a range narrower than the notes leaves the span-based spacing alone
+  const narrow = duplicatedNotes(notes, ['a', 'b'], 0.25, 16, () => `e${next += 1}`, 'grid', { start: 1, end: 1.5 });
+  assert.deepEqual(narrow.map((note) => [note.id, note.start]), [['e5', 3], ['e6', 4.5]]);
 });
