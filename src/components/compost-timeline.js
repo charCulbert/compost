@@ -1,3 +1,4 @@
+import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
 import './compost-envelope-editor.js';
@@ -554,6 +555,7 @@ export class CompostTimeline extends HTMLElement {
       event.__compostTimelineHandled = true;
       this.handleDoubleClick(event);
     });
+    installTouchDoubleClick(this);
     this.addEventListener('contextmenu', (event) => {
       if (event.__compostTimelineHandled) return;
       event.__compostTimelineHandled = true;

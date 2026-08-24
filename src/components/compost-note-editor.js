@@ -16,6 +16,7 @@ import {
 } from '../piano-roll-model.js';
 export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
+import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextEditorID = 1;
@@ -329,6 +330,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.gridElement.addEventListener('pointerup', (event) => this.endPointer(event));
     this.gridElement.addEventListener('pointercancel', (event) => this.endPointer(event));
     this.gridElement.addEventListener('dblclick', (event) => this.handleDoubleClick(event));
+    installTouchDoubleClick(this.gridElement);
     this.gridElement.addEventListener('contextmenu', (event) => this.handleContextMenu(event));
     this.keys.addEventListener('pointerdown', (event) => this.previewFromKey(event));
     this.gridWrap.addEventListener('wheel', (event) => this.handleWheel(event), { passive: false });

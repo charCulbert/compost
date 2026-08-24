@@ -1,3 +1,4 @@
+import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextGridID = 1;
@@ -259,6 +260,7 @@ export class CompostClipGrid extends HTMLElement {
 
     this.addEventListener('click', (event) => this.handleClick(event));
     this.addEventListener('dblclick', (event) => this.handleDoubleClick(event));
+    installTouchDoubleClick(this);
     this.addEventListener('contextmenu', (event) => this.handleContextMenu(event));
     this.addEventListener('pointerdown', (event) => this.beginDrag(event));
     this.addEventListener('keydown', (event) => this.handleKey(event));

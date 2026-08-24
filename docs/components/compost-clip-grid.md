@@ -33,7 +33,7 @@ applies.
 | `clip-stop` | The stop slot |
 | `clip-record` | The record ring in an empty slot of an armed track |
 | `clip-select` | A click on the name |
-| `clip-open` | A double-click on the name, or Shift-Enter / `e` on a focused name (`detail.altKey` and `detail.clientX/Y` too) |
+| `clip-open` | A double-click or touch double-tap on the name, or Shift-Enter / `e` on a focused name (`detail.altKey` and `detail.clientX/Y` too); touch does not invoke iOS page zoom |
 | `clip-context` | A right-click; `detail.clientX/Y` for a menu |
 | `clip-rename` | After `beginRename(index)` or F2; `detail.name` |
 | `clip-delete`, `clip-duplicate`, `clip-move` | Delete, Cmd/Ctrl-D, Alt-arrows on a focused name |

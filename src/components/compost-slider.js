@@ -5,6 +5,7 @@ import {
   normalisedPositionToValue,
   valueToNormalisedPosition,
 } from '../parameter-scale.js';
+import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import {
   clamp,
   beginParameterGesture,
@@ -325,6 +326,7 @@ export class ParameterSlider extends HTMLElement {
     this.input.addEventListener('pointermove', (event) => this.movePointer(event));
     this.input.addEventListener('pointerup', (event) => this.endPointer(event));
     this.input.addEventListener('pointercancel', () => this.cancelPointer());
+    installTouchDoubleClick(this.input, { dispatch: false });
 
     this.addEventListener('keydown', (event) => {
       this.handleKey(event);

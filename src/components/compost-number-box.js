@@ -3,6 +3,7 @@ import {
   normaliseCurveName,
   valueToNormalisedPosition,
 } from '../parameter-scale.js';
+import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import {
   clamp,
   beginParameterGesture,
@@ -235,6 +236,7 @@ export class CompostNumberBox extends HTMLElement {
     this.valueElement = this.root.querySelector('.value');
 
     this.box.addEventListener('pointerdown', (event) => this.beginDrag(event));
+    installTouchDoubleClick(this.box, { dispatch: false });
     this.box.addEventListener('pointermove', (event) => this.moveDrag(event));
     this.box.addEventListener('pointerup', (event) => this.endDrag(event));
     this.box.addEventListener('pointercancel', (event) => this.endDrag(event, false));

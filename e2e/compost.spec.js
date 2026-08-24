@@ -1,6 +1,47 @@
 import { test, expect } from '@playwright/test';
 import { examples } from '../examples/shared/catalog.js';
 
+async function dispatchTouchDoubleTap(locator) {
+  return locator.evaluate(async (target) => {
+    const rect = target.getBoundingClientRect();
+    const touch = {
+      identifier: 1,
+      target,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+    const dispatch = (type, touches, changedTouches) => {
+      const event = new Event(type, { bubbles: true, composed: true, cancelable: true });
+      Object.defineProperties(event, {
+        touches: { value: touches },
+        changedTouches: { value: changedTouches },
+      });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    dispatch('touchstart', [touch], [touch]);
+    const firstPrevented = dispatch('touchend', [], [touch]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    dispatch('touchstart', [touch], [touch]);
+    const secondPrevented = dispatch('touchend', [], [touch]);
+    return { firstPrevented, secondPrevented };
+  });
+}
+
+async function performTouchDoubleTap(page, locator) {
+  const box = await locator.boundingBox();
+  const client = await page.context().newCDPSession(page);
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  for (let id = 201; id <= 202; id += 1) {
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart',
+      touchPoints: [{ x, y, radiusX: 8, radiusY: 8, force: 1, id }] });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(60);
+  }
+}
+
 for (const example of examples) {
   test(`${example.id} loads`, async ({ page }) => {
     const errors = [];
@@ -116,6 +157,71 @@ test('the envelope surface cancels the touch default that zooms iOS pages', asyn
     return event.defaultPrevented;
   });
   expect(prevented).toBe(true);
+});
+
+test('double-tap component actions cancel the iOS zoom default', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  let activationCount = 0;
+  const noteGrid = page.locator('compost-note-editor').locator('.grid');
+  await noteGrid.evaluate((element) => element.addEventListener('dblclick', () => {
+    window.__touchDoubleActivations = (window.__touchDoubleActivations || 0) + 1;
+  }));
+  let result = await dispatchTouchDoubleTap(noteGrid);
+  activationCount = await page.evaluate(() => window.__touchDoubleActivations || 0);
+  expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
+  expect(activationCount).toBe(1);
+
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timelineLane = page.locator('compost-timeline').locator('.lane').first();
+  await timelineLane.evaluate((element) => element.addEventListener('dblclick', () => {
+    window.__touchDoubleActivations = (window.__touchDoubleActivations || 0) + 1;
+  }));
+  result = await dispatchTouchDoubleTap(timelineLane);
+  activationCount = await page.evaluate(() => window.__touchDoubleActivations || 0);
+  expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
+  expect(activationCount).toBe(1);
+
+  await page.goto('/examples/component-demos/compost-clip-grid/');
+  const clipName = page.locator('compost-clip-grid').first().locator('.name').first();
+  await clipName.evaluate((element) => element.addEventListener('dblclick', () => {
+    window.__touchDoubleActivations = (window.__touchDoubleActivations || 0) + 1;
+  }));
+  result = await dispatchTouchDoubleTap(clipName);
+  activationCount = await page.evaluate(() => window.__touchDoubleActivations || 0);
+  expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
+  expect(activationCount).toBe(1);
+
+  for (const [demo, component, surface] of [
+    ['compost-slider', 'compost-slider', '.range-input'],
+    ['compost-knob', 'compost-knob', '.dial'],
+    ['compost-number-box', 'compost-number-box', '.box'],
+  ]) {
+    await page.goto(`/examples/component-demos/${demo}/`);
+    result = await dispatchTouchDoubleTap(page.locator(component).first().locator(surface));
+    expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
+  }
+});
+
+test('touch double-tap resets parameter controls', async ({ page }) => {
+  for (const [demo, component, surface] of [
+    ['compost-slider', 'compost-slider', '.range-input'],
+    ['compost-knob', 'compost-knob', '.dial'],
+    ['compost-number-box', 'compost-number-box', '.box'],
+  ]) {
+    await test.step(demo, async () => {
+      await page.goto(`/examples/component-demos/${demo}/`);
+      const control = page.locator(component).first();
+      const resetValue = await control.evaluate((element) => {
+        element.setValue(element.min + (element.max - element.min) * 0.25, false);
+        const reset = element.value;
+        element.setAttribute('reset-value', String(reset));
+        element.setValue(element.max, false);
+        return reset;
+      });
+      await performTouchDoubleTap(page, control.locator(surface));
+      await expect.poll(() => control.evaluate((element) => element.value)).toBe(resetValue);
+    });
+  }
 });
 
 test('documentation renders the overview', async ({ page }) => {

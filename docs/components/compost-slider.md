@@ -27,8 +27,9 @@ at the pointer. Set `interaction="relative"` when a surface should preserve its
 current value on pointer-down and move by the same fraction of the rail as the
 pointer travels.
 
-Option-drag, Shift-drag, or a second drag enables fine movement. Double-click,
-Escape, Delete, or Backspace resets the value.
+Option-drag, Shift-drag, or a second drag enables fine movement. Double-click
+or touch double-tap resets the value without triggering iOS page zoom. Escape,
+Delete, or Backspace also resets it.
 Arrow, Page, Home, and End keys adjust it from the keyboard.
 
 User gestures emit `parameter-begin`, `parameter-edit`, and `parameter-end`.

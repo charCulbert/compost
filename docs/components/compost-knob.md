@@ -14,6 +14,6 @@ Use `setValue(value, false, source)` to update it without emitting events.
 response. `reset-value` is independent from `mid`. `unit`, `text`/`options`, and
 `display-fraction-digits` control presentation.
 
-Drag to adjust, Option-drag for fine movement, double-click to reset, or use
-Arrow, Page, Home, End, Escape, Delete, and Backspace. `editable` enables typed
-values.
+Drag to adjust, Option-drag for fine movement, double-click or touch double-tap
+to reset, or use Arrow, Page, Home, End, Escape, Delete, and Backspace. The
+touch reset consumes iOS's page-zoom default. `editable` enables typed values.

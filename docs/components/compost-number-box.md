@@ -15,8 +15,9 @@ Normal drag uses full travel. Option-drag or a second drag uses fine movement.
 `split-drag` gives the left, middle, and right thirds separate rates through
 `drag-step-left`, `drag-step-middle`, and `drag-step-right`.
 
-Double-click, Escape, Delete, or Backspace resets the value. While typing,
-Delete and Backspace edit text and Escape cancels the edit.
+Double-click or touch double-tap resets the value without triggering iOS page
+zoom. Escape, Delete, or Backspace also resets it. While typing, Delete and
+Backspace edit text and Escape cancels the edit.
 
 `label` names the box. A host that needs a longer name for assistive tech —
 `Send A · Keys` rather than `Send A` — can set `aria-label` on the element and

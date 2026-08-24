@@ -61,6 +61,8 @@ timeline.addEventListener('draw-toggle', ({ detail }) => timeline.toggleAttribut
 
 All events bubble and are composed. The host applies the detail to its model
 and calls `setLanes` or `setLaneClips` with the authoritative result.
+Every double-click action also accepts a single-finger touch double-tap and
+consumes the second release so iOS does not zoom the surrounding page.
 
 | Event | Detail | When |
 | --- | --- | --- |

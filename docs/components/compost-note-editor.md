@@ -36,7 +36,7 @@ not stored time resolution; `snap="off"` keeps the pointer-derived beat.
 | Drag its left edge | Trims the start and keeps the end put, for every selected note |
 | Cmd/Ctrl-drag (or press and hold) | Sets velocity for the selection, Shift for fine |
 | Drag on empty grid | Marquee-selects; Shift adds to the selection |
-| Double-click empty grid | Adds a note |
+| Double-click or touch double-tap empty grid | Adds a note without triggering iOS page zoom |
 | `draw` | A press adds a note and the drag sets its length |
 | Drag the playback start/end markers | Sets the non-destructive playback range |
 | Drag the loop bar's ends, or its middle | Sets the loop region nested inside playback |

@@ -5,6 +5,7 @@ import {
   normalisedPositionToValue,
   valueToNormalisedPosition,
 } from '../parameter-scale.js';
+import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import {
   clamp,
   beginParameterGesture,
@@ -327,6 +328,7 @@ export class SynthKnob extends HTMLElement {
     this.valueElement = this.root.querySelector('.value');
 
     this.dial.addEventListener('pointerdown', (event) => this.beginDrag(event));
+    installTouchDoubleClick(this.dial, { dispatch: false });
     this.addEventListener('keydown', (event) => this.handleKey(event));
     this.valueElement.addEventListener('click', (event) => {
       event.preventDefault();

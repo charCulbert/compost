@@ -17,7 +17,10 @@ whether its time coordinate means beats, seconds, or a normalized stage;
 nested-loop markers and emits range intent without assigning a DAW playback
 policy. Envelope points retain compact marks with separate touch-sized hit
 targets; multi-touch envelope gestures are future work rather than part of the
-current contract.
+current contract. Where a component assigns meaning to double-click, a
+single-finger double-tap invokes the same action and consumes the second touch
+release so iOS does not zoom the surrounding page. Single taps, drags, and
+multi-touch remain separate gestures.
 
 [Examples and documentation](https://charculbert.github.io/compost/)
 
