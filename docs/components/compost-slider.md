@@ -18,6 +18,9 @@ track whose value increases from bottom to top:
 
 Use `--slider-vertical-length` and `--slider-vertical-width` to size a vertical
 slider. The defaults are `144px` and `72px`.
+The `panel`, `row`, `label`, `value`, `input`, `track`, `fill`, and `thumb`
+parts allow an application to restyle the same interaction without replacing
+its geometry or parameter gestures.
 
 Click or drag for normal movement. The default interaction positions the value
 at the pointer. Set `interaction="relative"` when a surface should preserve its

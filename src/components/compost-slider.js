@@ -185,20 +185,27 @@ export class ParameterSlider extends HTMLElement {
           width: 100%;
           height: var(--slider-thumb-size);
           margin: 0;
-          background:
-            linear-gradient(90deg,
-              var(--slider-fill) 0 var(--slider-percent),
-              var(--slider-track) var(--slider-percent) 100%);
-          background-repeat: no-repeat;
-          background-position: center;
-          background-size: 100% var(--slider-track-height);
           border-radius: 999px;
           cursor: pointer;
           opacity: 0.78;
           touch-action: none;
         }
-        .range-input::after {
-          content: "";
+        .track,
+        .fill {
+          position: absolute;
+          left: 0;
+          top: calc(50% - var(--slider-track-height) / 2);
+          height: var(--slider-track-height);
+        }
+        .track {
+          width: 100%;
+          background: var(--slider-track);
+        }
+        .fill {
+          width: var(--slider-percent);
+          background: var(--slider-fill);
+        }
+        .thumb {
           position: absolute;
           left: var(--slider-percent);
           top: 50%;
@@ -233,14 +240,21 @@ export class ParameterSlider extends HTMLElement {
           width: var(--slider-thumb-size);
           height: var(--slider-vertical-length);
           margin-inline: auto;
-          background: linear-gradient(0deg,
-            var(--slider-fill) 0 var(--slider-percent),
-            var(--slider-track) var(--slider-percent) 100%);
-          background-position: center;
-          background-size: var(--slider-track-height) 100%;
-          background-repeat: no-repeat;
         }
-        :host([orientation="vertical"]) .range-input::after {
+        :host([orientation="vertical"]) .track,
+        :host([orientation="vertical"]) .fill {
+          left: calc(50% - var(--slider-track-height) / 2);
+          top: auto;
+          bottom: 0;
+          width: var(--slider-track-height);
+        }
+        :host([orientation="vertical"]) .track {
+          height: 100%;
+        }
+        :host([orientation="vertical"]) .fill {
+          height: var(--slider-percent);
+        }
+        :host([orientation="vertical"]) .thumb {
           left: 50%;
           top: calc(100% - var(--slider-percent));
         }
@@ -293,7 +307,11 @@ export class ParameterSlider extends HTMLElement {
       </style>
       <label part="panel">
         <span class="row" part="row"><span class="label" part="label"></span><output part="value"></output></span>
-        <div class="range-input" part="input" aria-hidden="true"></div>
+        <div class="range-input" part="input" aria-hidden="true">
+          <span class="track" part="track"></span>
+          <span class="fill" part="fill"></span>
+          <span class="thumb" part="thumb"></span>
+        </div>
         <span class="midi-map-label" aria-hidden="true"></span>
       </label>`;
 

@@ -304,6 +304,14 @@ test('relative slider drag preserves the grabbed value and follows rail travel',
   assert.equal(values.at(-1), 0.5);
 });
 
+test('slider exposes separate track, fill, and thumb styling parts', () => {
+  const source = fs.readFileSync(new URL('../src/components/compost-slider.js', import.meta.url), 'utf8');
+  assert.match(source, /class="track" part="track"/u);
+  assert.match(source, /class="fill" part="fill"/u);
+  assert.match(source, /class="thumb" part="thumb"/u);
+  assert.doesNotMatch(source, /\.range-input::after/u);
+});
+
 test('slider orientation controls pointer travel and accessible metadata', () => {
   const control = Object.create(ParameterSlider.prototype);
   const aria = new Map();
