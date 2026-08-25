@@ -273,6 +273,27 @@ test('select supports keyboard selection', async ({ page }) => {
   await expect(combobox).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('select listbox keeps the same width across reopens', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-select/');
+  const select = page.locator('compost-select[aria-label="Wave shape"]');
+  const combobox = page.getByRole('combobox', { name: 'Wave shape' });
+  const listbox = select.locator('[role="listbox"]');
+  // A trigger narrower than its options is the case that used to grow on every open.
+  await select.evaluate((element) => { element.style.width = '120px'; });
+
+  const widths = [];
+  for (let i = 0; i < 3; i += 1) {
+    await combobox.click();
+    await expect(listbox).toBeVisible();
+    widths.push((await listbox.boundingBox()).width);
+    await page.keyboard.press('Escape');
+    await expect(listbox).toBeHidden();
+  }
+
+  expect(widths[1]).toBe(widths[0]);
+  expect(widths[2]).toBe(widths[0]);
+});
+
 test('drawer summary toggles its public open state', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-drawer/');
   const drawer = page.locator('compost-drawer[data-drawer-id="bottom"]');

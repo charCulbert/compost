@@ -141,6 +141,7 @@ export class CompostSelect extends HTMLElement {
           box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
         }
         .option {
+          box-sizing: border-box;
           min-width: 100%;
           padding: 9px 12px;
           cursor: pointer;
@@ -264,6 +265,8 @@ export class CompostSelect extends HTMLElement {
     const viewportHeight = document.documentElement.clientHeight;
     const popupOffset = Number.parseFloat(getComputedStyle(this)
       .getPropertyValue('--compost-select-popup-offset')) || 0;
+    // Measure the natural content width, not the width set on a previous open.
+    this.listbox.style.width = '';
     const placement = popupPlacement({
       trigger,
       viewportWidth,
