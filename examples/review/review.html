@@ -116,6 +116,19 @@
     <div style="display: grid; place-items: center; height: 100%; color: color-mix(in srgb, currentColor 65%, transparent)">Plug-in contents</div>
   </compost-window>
 </template>
+<template id="compost-popup">
+  <div data-popup-surface tabindex="0" aria-label="Context menu"
+    style="display: grid; place-items: center; width: min(24em, calc(100vw - 64px)); height: 8em; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); user-select: none">
+    Right-click to open context menu
+  </div>
+  <compost-popup heading="Context menu" label="Context menu">
+    <option value="open">Open</option>
+    <option value="rename">Rename</option>
+    <option value="duplicate">Duplicate</option>
+    <hr>
+    <option value="delete">Delete</option>
+  </compost-popup>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -144,7 +157,7 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-window') {
@@ -154,6 +167,16 @@
         windowElement.open = true;
         windowElement.moveTo(32, 32);
         windowElement.raise();
+      });
+    }
+    if (el === 'compost-popup') {
+      const popup = s.querySelector('compost-popup');
+      const surface = s.querySelector('[data-popup-surface]');
+      surface.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        document.querySelectorAll('compost-popup').forEach((other) => { if (other !== popup) other.close('switch'); });
+        const rect = surface.getBoundingClientRect();
+        popup.openAt(event.clientX || rect.left + rect.width / 2, event.clientY || rect.top + rect.height / 2);
       });
     }
     if (el === 'compost-envelope-editor') {
@@ -178,6 +201,12 @@
     const firstWindow = document.querySelector('section.plain compost-window');
     firstWindow.open = true;
     firstWindow.moveTo(32, 32);
+  }
+  if (el === 'compost-popup') {
+    const firstPopup = document.querySelector('section.plain compost-popup');
+    const surface = document.querySelector('section.plain [data-popup-surface]');
+    const rect = surface.getBoundingClientRect();
+    firstPopup.openAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
   }
   if (el === 'compost-meter' || el === 'compost-scope') {
     if (el === 'compost-meter') {

@@ -68,20 +68,18 @@ export class CompostPopup extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-popup-bg: #ffffff;
-          --compost-popup-text: #111111;
-          --compost-popup-muted: #6a6a6a;
-          --compost-popup-border: rgba(17, 17, 17, 0.24);
-          --compost-popup-hover-bg: rgba(17, 17, 17, 0.07);
-          --compost-popup-active-text: #005fc0;
-          --compost-popup-heading-text: #6a6a6a;
+          --compost-popup-bg: Canvas;
+          --compost-popup-text: currentColor;
+          --compost-popup-muted: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-popup-border: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-popup-hover-bg: color-mix(in srgb, currentColor 10%, transparent);
+          --compost-popup-active-text: var(--compost-accent, AccentColor);
+          --compost-popup-heading-text: var(--compost-popup-muted);
           --compost-popup-font-size: 1em;
           --compost-popup-item-padding: 0.27em 1.1em;
           --compost-popup-min-width: 12em;
           --compost-popup-z-index: 1000;
-          --compost-popup-color-scheme: light;
           --compost-popup-swatch-columns: 4;
-          color-scheme: var(--compost-popup-color-scheme);
           display: contents;
           font: inherit;
         }
@@ -94,11 +92,10 @@ export class CompostPopup extends HTMLElement {
           max-width: min(24em, calc(100vw - 16px));
           margin: 0;
           padding: 0.35em 0;
-          border: 0;
+          border: 1px solid var(--compost-popup-border);
           overflow: auto;
           background: var(--compost-popup-bg);
           color: var(--compost-popup-text);
-          box-shadow: 0 0 0 1px var(--compost-popup-border);
           font: inherit;
           font-size: var(--compost-popup-font-size);
           line-height: 1.4;
@@ -125,13 +122,12 @@ export class CompostPopup extends HTMLElement {
         .item[aria-disabled="true"] { cursor: default; opacity: 0.45; }
         .item[data-active] { background: var(--compost-popup-hover-bg); }
         .item[aria-checked="true"] { color: var(--compost-popup-active-text); }
-        /* the picked entry carries a mark beside it, in its own colour */
         .item::before {
           content: "";
           flex: none;
           width: 0.36em;
           height: 0.36em;
-          border-radius: 50%;
+          border-radius: 0;
           background: currentColor;
           opacity: 0;
         }
@@ -150,7 +146,6 @@ export class CompostPopup extends HTMLElement {
         .item .detail { margin-left: auto; color: var(--compost-popup-muted); font-style: normal; }
         .item[aria-checked="true"] .detail { color: var(--compost-popup-active-text); }
         .separator { height: 1px; margin: 0.35em 0; background: var(--compost-popup-border); }
-        /* colour choices are a grid of squares, not a list of words */
         .swatches {
           display: grid;
           grid-template-columns: repeat(var(--compost-popup-swatch-columns, 4), max-content);
@@ -158,10 +153,8 @@ export class CompostPopup extends HTMLElement {
           gap: 0.45em;
           padding: 0.35em 1.1em;
         }
-        /* a swatch is a ring of its colour; the chosen one is filled, and the
-           "no colour" swatch is a ring of the muted ink */
         .item.swatch {
-          padding: 0; width: 1.35em; height: 1.35em; border-radius: 50%; gap: 0;
+          padding: 0; width: 1.35em; height: 1.35em; border-radius: 0; gap: 0;
           background: transparent;
           box-shadow: inset 0 0 0 var(--compost-popup-swatch-ring, 1.5px) var(--compost-popup-item-color, currentColor);
         }
@@ -184,7 +177,6 @@ export class CompostPopup extends HTMLElement {
           max-height: 82vh !important;
         }
         :host([sheet]) .item { padding: 0.8em 1.2em; }
-        @media (prefers-reduced-motion: reduce) { .menu { transition: none; } }
       </style>
       <div class="menu" part="menu" role="menu" popover="manual" tabindex="-1"></div>`;
 
