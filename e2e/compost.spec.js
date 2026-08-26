@@ -273,6 +273,20 @@ test('select supports keyboard selection', async ({ page }) => {
   await expect(combobox).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('dragging the slider track does not open the value editor', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-slider/');
+  const slider = page.getByRole('slider', { name: 'Feedback' });
+  const track = slider.locator('[part="input"]');
+  const box = await track.boundingBox();
+
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+
+  await expect(slider.locator('.value-editor')).toHaveCount(0);
+});
+
 test('select listbox keeps the same width across reopens', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-select/');
   const select = page.locator('compost-select[aria-label="Wave shape"]');

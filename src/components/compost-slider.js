@@ -110,7 +110,7 @@ export class ParameterSlider extends HTMLElement {
         :host([data-midi-map-target-active][data-midi-map-pulse]) {
           outline-offset: 4px;
         }
-        label {
+        .panel {
           display: grid;
           gap: var(--slider-label-gap);
           font-size: var(--slider-label-size);
@@ -219,7 +219,7 @@ export class ParameterSlider extends HTMLElement {
           left: 50%;
           top: calc(100% - var(--slider-percent));
         }
-        :host([disabled]) label {
+        :host([disabled]) .panel {
           opacity: 0.45;
         }
         :host([disabled]) .range-input,
@@ -246,7 +246,7 @@ export class ParameterSlider extends HTMLElement {
           white-space: nowrap;
         }
       </style>
-      <label part="panel">
+      <div class="panel" part="panel">
         <span class="row" part="row"><span class="label" part="label"></span><output part="value"></output></span>
         <div class="range-input" part="input" aria-hidden="true">
           <span class="track" part="track"></span>
@@ -254,7 +254,7 @@ export class ParameterSlider extends HTMLElement {
           <span class="thumb" part="thumb"></span>
         </div>
         <span class="midi-map-label" aria-hidden="true"></span>
-      </label>`;
+      </div>`;
 
     this.labelElement = this.root.querySelector('.label');
     this.output = this.root.querySelector('output');
