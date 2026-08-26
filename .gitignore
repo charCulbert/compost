@@ -91,3 +91,4 @@ Makefile
 .env.*
 !.env.example
 !.env.*.example
+.claude/
