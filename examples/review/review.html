@@ -2,8 +2,8 @@
 <!--
   Style review page. Open ?el=compost-knob to load one element under three
   page contexts: unstyled, color-scheme: dark, and a branded serif page.
-  Serve the repository root without caching: python3 dev/serve.py 8931
-  then open http://127.0.0.1:8931/dev/review.html?el=compost-knob
+  Serve the repository root without caching: python3 examples/review/serve.py 8931
+  then open http://127.0.0.1:8931/examples/review/review.html?el=compost-knob
 -->
 <html lang="en"><head><meta charset="utf-8"><title>Compost review</title>
 <style>
@@ -50,7 +50,7 @@
     'compost-clip-grid', 'compost-piano', 'compost-note-editor', 'compost-timeline',
   ];
   const el = new URLSearchParams(location.search).get('el') || ELEMENTS[0];
-  await import(`../src/components/${el}.js`);
+  await import(`../../src/components/${el}.js`);
   const tpl = document.getElementById(el);
   const contexts = [['plain', 'Unstyled page'], ['dark', 'color-scheme: dark'], ['brand', 'Branded page: serif, 18px, --compost-accent']];
   for (const [cls, title] of contexts) {

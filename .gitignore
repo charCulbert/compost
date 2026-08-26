@@ -94,4 +94,4 @@ Makefile
 .claude/
 
 # Style review screenshots
-dev/*.png
+examples/review/*.png

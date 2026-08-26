@@ -1,15 +1,15 @@
-// Headless check for dev/review.html: renders one element in the three page
-// contexts, reports console errors, computed ink/font per context, the
-// focused element after Tab, and saves dev/review-<element>.png.
+// Headless check for examples/review/review.html: renders one element in the
+// three page contexts, reports console errors, computed ink/font per context,
+// the focused element after Tab, and saves examples/review/review-<element>.png.
 //
-//   python3 dev/serve.py 8931 &
-//   node dev/review-check.mjs compost-knob [port]
+//   python3 examples/review/serve.py 8931 &
+//   node examples/review/review-check.mjs compost-knob [port]
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, '..');
+const root = resolve(here, '..', '..');
 // A worktree under .claude/worktrees/<name> borrows the main checkout's modules.
 const playwrightPath = ['node_modules', '../../../node_modules']
   .map((dir) => resolve(root, dir, 'playwright/index.mjs'))
@@ -27,7 +27,7 @@ const page = await (await browser.newContext({ viewport: { width: 1000, height: 
 const errors = [];
 page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 page.on('pageerror', (error) => errors.push(String(error)));
-await page.goto(`http://127.0.0.1:${port}/dev/review.html?el=${el}`);
+await page.goto(`http://127.0.0.1:${port}/examples/review/review.html?el=${el}`);
 await page.waitForTimeout(500);
 const info = await page.evaluate((el) => [...document.querySelectorAll('section')].map((section) => {
   const element = section.querySelector(el);

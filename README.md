@@ -126,7 +126,7 @@ import { createParameterController } from 'compost/parameter-controller';
 ## Working on it
 
 `npm test` runs the unit tests, `npm run test:e2e` the Playwright suite.
-`python3 dev/serve.py 8931` serves the repo without caching;
-`dev/review.html?el=<element>` shows one element in three page contexts and
-`node dev/review-check.mjs <element>` does the same headlessly. The current
-plan is in `docs/plans/`.
+`npm run dev` serves the repo without caching;
+`examples/review/review.html?el=<element>` shows one element in three page
+contexts and `node examples/review/review-check.mjs <element>` does the same
+headlessly. The current plan is in `docs/plans/`.
