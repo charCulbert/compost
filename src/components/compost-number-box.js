@@ -573,6 +573,16 @@ export class CompostNumberBox extends HTMLElement {
   handleKey(event) {
     if (this.disabled || this.editing || event.metaKey || event.ctrlKey) return;
 
+    if (this.drag && !['Shift', 'Alt', 'Control', 'Meta'].includes(event.key)) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.endActiveDrag(false);
+        return;
+      }
+
+      this.endActiveDrag(true);
+    }
+
     if (event.key === 'Enter') {
       event.preventDefault();
       this.beginEdit(this.editableValueText(), false);

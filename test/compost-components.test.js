@@ -932,6 +932,25 @@ test('number box pointer, typed commit/cancel, reset, and silent backend paths a
   }
 });
 
+test('number box keyboard input ends an active pointer drag', () => {
+  const control = Object.create(CompostNumberBox.prototype);
+  let pointerMoves = 0;
+  Object.assign(control, {
+    drag: { pointerId: 7, x: 0, y: 0, locked: false },
+    editing: false,
+    hasAttribute: () => false,
+    beginEdit() {},
+    endActiveDrag() { this.drag = null; },
+    applyDragDistance() { pointerMoves += 1; },
+  });
+
+  control.handleKey({ key: '5', preventDefault() {} });
+  control.moveDrag({ pointerId: 7, clientX: 20, clientY: 0 });
+
+  assert.equal(control.drag, null);
+  assert.equal(pointerMoves, 0);
+});
+
 test('number box uses normal, split-zone, and second-click fine drag scaling', () => {
   const control = Object.create(CompostNumberBox.prototype);
   const values = [];
