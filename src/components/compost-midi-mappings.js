@@ -47,32 +47,26 @@ export class MIDIMappingsEditor extends HTMLElement {
       <style>
         :host {
           --compost-midi-mappings-bg: transparent;
-          --compost-midi-mappings-border: #9a9a9a;
-          --compost-midi-mappings-text: #111111;
-          --compost-midi-mappings-muted: #444444;
-          --compost-midi-mappings-row-bg: #ffffff;
-          --compost-midi-mappings-row-alt-bg: #f1f1f1;
-          --compost-midi-mappings-head-bg: #d6d6d6;
-          --compost-midi-mappings-head-text: #333333;
-          --compost-midi-mappings-field-bg: transparent;
-          --compost-midi-mappings-field-text: #111111;
-          --compost-midi-mappings-field-border: #bdbdbd;
-          --compost-midi-mappings-field-fill: rgba(0, 95, 192, 0.16);
-          --compost-midi-mappings-focus-color: #111111;
+          --compost-midi-mappings-border: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-midi-mappings-text: currentColor;
+          --compost-midi-mappings-muted: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-midi-mappings-row-bg: Canvas;
+          --compost-midi-mappings-head-bg: color-mix(in srgb, currentColor 10%, transparent);
+          --compost-midi-mappings-head-text: currentColor;
+          --compost-midi-mappings-field-fill: color-mix(in srgb, var(--compost-accent, AccentColor) 18%, transparent);
+          --compost-midi-mappings-focus-color: currentColor;
           --compost-midi-mappings-action-bg: transparent;
           --compost-midi-mappings-action-text: var(--compost-midi-mappings-text);
           --compost-midi-mappings-action-border: var(--compost-midi-mappings-border);
-          --compost-midi-mappings-learn-color: #005fc0;
-          --compost-midi-mappings-color-scheme: light;
+          --compost-midi-mappings-learn-color: var(--compost-accent, AccentColor);
           --compost-midi-mappings-table-width: 100%;
-          color-scheme: var(--compost-midi-mappings-color-scheme);
           color: var(--compost-midi-mappings-text);
           display: block;
           font: inherit;
         }
         .panel {
           display: grid;
-          gap: 4px;
+          gap: 0.5em;
           padding: 0;
           background: var(--compost-midi-mappings-bg);
         }
@@ -85,49 +79,29 @@ export class MIDIMappingsEditor extends HTMLElement {
         .toolbar {
           display: flex;
           flex-wrap: wrap;
-          gap: 6px;
+          gap: 0.5em;
         }
         button {
-          min-height: 26px;
+          min-height: 2em;
           border: 1px solid var(--compost-midi-mappings-action-border);
           border-radius: 0;
           background: var(--compost-midi-mappings-action-bg);
           color: var(--compost-midi-mappings-action-text);
           cursor: pointer;
           font: inherit;
-          font-size: 0.72em;
-          padding: 3px 8px;
+          font-size: 0.85em;
+          padding: 0.25em 0.75em;
         }
         button.clear-button {
           background: transparent;
         }
         button[data-midi-learn-state="selecting"],
         button[data-midi-learn-state="learning"] {
-          border-color: var(--compost-midi-mappings-learn-color);
-          box-shadow: inset 0 0 0 1px var(--compost-midi-mappings-learn-color);
-          animation: midi-map-breathe 2.5s ease-in-out infinite;
+          outline: 2px solid var(--compost-midi-mappings-learn-color);
+          outline-offset: 2px;
         }
         button[data-midi-map-pulse] {
-          box-shadow: inset 0 0 0 2px var(--compost-midi-mappings-learn-color);
-        }
-        @keyframes midi-map-breathe {
-          0%, 100% {
-            background: color-mix(
-              in srgb,
-              var(--compost-midi-mappings-action-bg) 92%,
-              var(--compost-midi-mappings-learn-color)
-            );
-          }
-          50% {
-            background: color-mix(
-              in srgb,
-              var(--compost-midi-mappings-action-bg) 84%,
-              var(--compost-midi-mappings-learn-color)
-            );
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          button[data-midi-learn-state] { animation: none; }
+          background: var(--compost-midi-mappings-field-fill);
         }
         button:disabled {
           cursor: default;
@@ -140,10 +114,8 @@ export class MIDIMappingsEditor extends HTMLElement {
         h2 {
           margin: 0;
           font: inherit;
-          font-size: 0.78em;
-          font-weight: 750;
-          letter-spacing: 0.04em;
-          text-transform: uppercase;
+          font-size: 1em;
+          font-weight: 700;
         }
         .empty,
         .status,
@@ -166,25 +138,25 @@ export class MIDIMappingsEditor extends HTMLElement {
           border-collapse: collapse;
           table-layout: fixed;
           width: min(100%, var(--compost-midi-mappings-table-width));
-          min-width: min(390px, 100%);
+          min-width: min(24em, 100%);
           border: 1px solid var(--compost-midi-mappings-border);
           -webkit-user-select: none;
           user-select: none;
         }
         col.channel {
-          width: 58px;
+          width: 4.5em;
         }
         col.cc {
-          width: 46px;
+          width: 3.5em;
         }
         col.min,
         col.max {
-          width: 62px;
+          width: 4em;
         }
         thead {
           background: var(--compost-midi-mappings-head-bg);
           color: var(--compost-midi-mappings-head-text);
-          font-size: 0.62em;
+          font-size: 0.7em;
           font-weight: 700;
           letter-spacing: 0.05em;
         }
@@ -199,8 +171,8 @@ export class MIDIMappingsEditor extends HTMLElement {
         }
         th,
         td {
-          height: 23px;
-          padding: 0 4px;
+          height: 1.5em;
+          padding: 0 0.25em;
           border-left: 1px solid var(--compost-midi-mappings-border);
           vertical-align: middle;
         }
@@ -215,17 +187,9 @@ export class MIDIMappingsEditor extends HTMLElement {
           border-top: 1px solid var(--compost-midi-mappings-border);
           background: var(--compost-midi-mappings-row-bg);
         }
-        tbody tr:nth-child(even) {
-          background: var(--compost-midi-mappings-row-alt-bg);
-        }
-
         tbody tr:hover,
         tbody tr:focus-within {
-          background: color-mix(
-            in srgb,
-            var(--compost-midi-mappings-field-fill) 35%,
-            var(--compost-midi-mappings-row-bg)
-          );
+          background: color-mix(in srgb, currentColor 10%, var(--compost-midi-mappings-row-bg));
         }
         tbody tr:first-child {
           border-top: 0;
@@ -246,42 +210,43 @@ export class MIDIMappingsEditor extends HTMLElement {
           display: grid;
           align-items: center;
           min-width: 0;
-          min-height: 23px;
+          min-height: 1.5em;
         }
         .control {
-          gap: 1px;
+          gap: 0.0625em;
         }
         .control-cell {
           display: grid;
           grid-template-columns: minmax(0, 1fr) auto;
-          gap: 4px;
+          gap: 0.3em;
           align-items: center;
           min-width: 0;
         }
         button.row-delete {
-          min-width: 34px;
-          min-height: 32px;
-          padding: 0 4px;
+          min-width: 1.75em;
+          min-height: 1.5em;
+          border: 0;
+          background: transparent;
+          padding: 0;
+        }
+        button.row-delete:hover {
+          background: color-mix(in srgb, currentColor 10%, transparent);
         }
         compost-number-box {
           --number-box-width: 100%;
-          --number-box-height: 25px;
-          --number-box-bg: var(--compost-midi-mappings-field-bg);
-          --number-box-text: var(--compost-midi-mappings-field-text);
-          --number-box-border: transparent;
-          --number-box-active-bg: var(--compost-midi-mappings-field-bg);
-          --number-box-active-text: var(--compost-midi-mappings-field-text);
-          --number-box-fill: var(--compost-midi-mappings-field-fill);
-          --number-box-focus: var(--compost-midi-mappings-focus-color);
-          --number-box-font-size: 0.68em;
+          --number-box-height: 1.5em;
+          --number-box-font-size: 0.72em;
           --number-box-font-weight: 700;
-          --number-box-padding: 0 3px;
+          --number-box-padding: 0 0.2em;
           --number-box-text-align: right;
-          --number-box-color-scheme: var(--compost-midi-mappings-color-scheme);
           display: block;
           inline-size: 100%;
           -webkit-user-select: none;
           user-select: none;
+        }
+        compost-number-box::part(box) {
+          border: 0;
+          background: transparent;
         }
         caption {
           text-align: left;
@@ -295,17 +260,17 @@ export class MIDIMappingsEditor extends HTMLElement {
         }
       </style>
       <section class="panel" part="panel" aria-labelledby="compost-midi-mappings-heading" aria-describedby="${this.instructionsID}">
+        <div class="header">
+          <h2 id="compost-midi-mappings-heading" part="heading" data-heading></h2>
+        </div>
         <div class="toolbar">
           <button class="map-button" type="button" aria-pressed="false" aria-keyshortcuts="M Delete Backspace Escape">Map MIDI</button>
           <button class="clear-button" type="button">Clear MIDI Mappings</button>
         </div>
-        <div class="header">
-          <h2 id="compost-midi-mappings-heading" part="heading" data-heading></h2>
-        </div>
         <p class="sr-only" id="${this.instructionsID}" data-instructions>
           MIDI mappings editor. This table lists learned MIDI mappings.
           Edit channel, CC, minimum, and maximum fields. Leave channel blank for any channel.
-          Use its delete button, or focus a mapping row and press Delete or Backspace, to clear it.
+          Use its remove button, or focus a mapping row and press Delete or Backspace, to clear it.
         </p>
         <p class="empty" data-empty>No MIDI mappings yet.</p>
         <div class="table-scroll" data-table-scroll>
@@ -603,7 +568,7 @@ export class MIDIMappingsEditor extends HTMLElement {
           <div class="control-cell">
             <div class="name">${escapeHTML(mapping.label || mapping.name || mapping.parameterID)}</div>
             <button class="row-delete" type="button" data-clear-mapping="${escapeHTML(mapping.parameterID)}"
-              aria-label="Delete ${escapeHTML(mapping.label || mapping.name || mapping.parameterID)} mapping"${disabledAttr}>Del</button>
+              aria-label="Remove ${escapeHTML(mapping.label || mapping.name || mapping.parameterID)} mapping"${disabledAttr}>&times;</button>
           </div>
         </td>
         <td class="field">
@@ -623,7 +588,7 @@ export class MIDIMappingsEditor extends HTMLElement {
     const range = `${formatNumber(mapping.min)} to ${formatNumber(mapping.max)}`;
     const action = this.hasAttribute('disabled') || !this._mappings
       ? ''
-      : ' Use the delete button, or focus this row and press Delete or Backspace, to clear this mapping.';
+      : ' Use the remove button, or focus this row and press Delete or Backspace, to clear this mapping.';
 
     return `${name}. ${channel}, CC ${mapping.cc}, maps incoming MIDI values to ${range}.${action}`;
   }

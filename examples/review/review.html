@@ -142,6 +142,11 @@
     <compost-midi-monitor></compost-midi-monitor>
   </div>
 </template>
+<template id="compost-midi-mappings">
+  <div style="width: min(38em, calc(100vw - 64px))">
+    <compost-midi-mappings></compost-midi-mappings>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -232,6 +237,23 @@
       monitor.handleMIDIMessage([0xb0, 74, 89]);
       monitor.handleMIDIMessage([0x80, 60, 0]);
       monitor.handleMIDIMessage([0xf8, 0, 0]);
+    }
+    if (el === 'compost-midi-mappings') {
+      const { createMIDIMappings } = await import('../../src/midi-mappings.js');
+      const definitions = new Map([
+        ['cutoff', { parameterID: 'cutoff', name: 'Cutoff', kind: 'continuous', min: 20, max: 20000, step: 1, curve: 'log' }],
+        ['resonance', { parameterID: 'resonance', name: 'Resonance', kind: 'continuous', min: 0, max: 1, step: 0.001 }],
+        ['bypass', { parameterID: 'bypass', name: 'Bypass', kind: 'discrete', min: 0, max: 1, step: 1, values: [0, 1] }],
+      ]);
+      const mappings = createMIDIMappings({ parameterProvider: { definition: (id) => definitions.get(id) || null } });
+      mappings.addEventListener('midi-mapping-request', ({ detail }) => mappings.applyMapping(detail));
+      mappings.addEventListener('midi-unmapping-request', ({ detail }) => mappings.applyClear(detail.parameterID));
+      mappings.applyMappings([
+        { parameterID: 'cutoff', cc: 74, channel: 1, min: 80, max: 12000 },
+        { parameterID: 'resonance', cc: 71, channel: null, min: 0, max: 1 },
+        { parameterID: 'bypass', cc: 64, channel: null, min: 0, max: 1 },
+      ]);
+      s.querySelector('compost-midi-mappings').mappings = mappings;
     }
     if (el === 'compost-envelope-editor') {
       const editor = s.querySelector('compost-envelope-editor');
