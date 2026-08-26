@@ -487,11 +487,6 @@ test('number box MIDI labels replace the inline value', () => {
   assert.match(source, /\[data-midi-map-mode\]\[data-midi-map-label\]\) \.value \{[\s\S]*opacity: 0/u);
 });
 
-test('button MIDI labels replace the inline label', () => {
-  const source = fs.readFileSync(new URL('../src/components/compost-button.js', import.meta.url), 'utf8');
-  assert.match(source, /\[data-midi-map-mode\]\[data-midi-map-label\]\) \.content \{[\s\S]*opacity: 0/u);
-});
-
 test('momentary button ignores silent backend reflection', () => {
   const button = Object.create(CircleButton.prototype);
   let triggers = 0;

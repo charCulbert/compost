@@ -72,7 +72,7 @@ export class CircleButton extends HTMLElement {
           content: var(--midi-map-label);
           position: absolute;
           left: 50%;
-          top: 50%;
+          bottom: 0.55em;
           z-index: 2;
           max-width: calc(100% - 0.625em);
           color: var(--_accent);
@@ -83,7 +83,7 @@ export class CircleButton extends HTMLElement {
           overflow: hidden;
           pointer-events: none;
           text-overflow: ellipsis;
-          transform: translate(-50%, -50%);
+          transform: translateX(-50%);
           white-space: nowrap;
         }
         .content {
@@ -101,7 +101,7 @@ export class CircleButton extends HTMLElement {
           line-height: 1;
         }
         :host([data-midi-map-mode][data-midi-map-label]) .content {
-          opacity: 0;
+          transform: translateY(-0.45em);
         }
         slot {
           display: grid;
