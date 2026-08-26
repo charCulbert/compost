@@ -174,10 +174,9 @@ export class ParameterSlider extends HTMLElement {
           left: var(--slider-percent);
           top: 50%;
           box-sizing: border-box;
-          width: var(--slider-thumb-size);
+          width: 2px;
           height: var(--slider-thumb-size);
-          border-radius: 50%;
-          background: var(--_accent);
+          background: currentColor;
           transform: translate(-50%, -50%);
           pointer-events: none;
         }
@@ -218,6 +217,8 @@ export class ParameterSlider extends HTMLElement {
         :host([orientation="vertical"]) .thumb {
           left: 50%;
           top: calc(100% - var(--slider-percent));
+          width: var(--slider-thumb-size);
+          height: 2px;
         }
         :host([disabled]) .panel {
           opacity: 0.45;

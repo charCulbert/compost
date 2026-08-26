@@ -17,7 +17,7 @@ track whose value increases from bottom to top:
 ```
 
 Use `--slider-vertical-length` and `--slider-vertical-width` to size a vertical
-slider. The defaults are `144px` and `72px`.
+slider. The defaults are `9em` and `4.5em`.
 The `panel`, `row`, `label`, `value`, `input`, `track`, `fill`, and `thumb`
 parts allow an application to restyle the same interaction without replacing
 its geometry or parameter gestures.
@@ -26,6 +26,11 @@ Click or drag for normal movement. The default interaction positions the value
 at the pointer. Set `interaction="relative"` when a surface should preserve its
 current value on pointer-down and move by the same fraction of the rail as the
 pointer travels.
+
+```html
+<compost-slider interaction="relative" parameter-id="cutoff" label="Cutoff"
+  min="20" max="20000" curve="log" value="800"></compost-slider>
+```
 
 Shift-drag or a second drag enables fine movement. Double-click
 or touch double-tap resets the value without triggering iOS page zoom. Escape,

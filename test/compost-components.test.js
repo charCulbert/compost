@@ -261,13 +261,15 @@ test('knobs and sliders expose disabled as a real control state', () => {
   }
 });
 
-test('knobs and sliders share range and curve attributes while sliders add orientation', () => {
+test('knobs and sliders share range and curve attributes while sliders add orientation and interaction', () => {
+  const sliderOnly = ['orientation', 'interaction'];
   assert.deepEqual(
     SynthKnob.observedAttributes.filter((attribute) => attribute !== 'pointer-lock'),
-    ParameterSlider.observedAttributes.filter((attribute) => !['orientation', 'interaction'].includes(attribute)),
+    ParameterSlider.observedAttributes.filter((attribute) => !sliderOnly.includes(attribute)),
   );
-  assert.ok(ParameterSlider.observedAttributes.includes('orientation'));
-  assert.ok(ParameterSlider.observedAttributes.includes('interaction'));
+  for (const attribute of sliderOnly) {
+    assert.ok(ParameterSlider.observedAttributes.includes(attribute));
+  }
   for (const Control of [SynthKnob, ParameterSlider, CompostNumberBox]) {
     assert.equal(Control.observedAttributes.includes('taper'), false);
     assert.equal(Control.observedAttributes.includes('scale'), false);
