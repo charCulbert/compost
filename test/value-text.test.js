@@ -29,6 +29,12 @@ test('formatValue falls back to numeric formatting without a matching text label
 test('continuous values default to sensible display precision', () => {
   assert.equal(formatValue(0.68471234, 0, ' s'), '0.68 s');
   assert.equal(formatNumber(0.68471234, 0), '0.68');
+  // Guessed precision never shows as trailing zeros; stepped precision does.
+  assert.equal(formatValue(800, 0, ' Hz'), '800 Hz');
+  assert.equal(formatNumber(0.6, 0), '0.6');
+  assert.equal(formatNumber(100, 0), '100');
+  assert.equal(formatNumber(1, 0.1), '1.0');
+  assert.equal(formatNumber(800, 0, 2), '800.00');
   assert.equal(
     formatValue(0.68471234, 0, ' s', '', 3),
     '0.685 s',

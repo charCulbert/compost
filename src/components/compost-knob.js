@@ -98,7 +98,7 @@ export class SynthKnob extends HTMLElement {
           user-select: none;
         }
         :host(:focus-visible) {
-          outline: auto;
+          outline: 2px solid currentColor;
           outline-offset: 2px;
         }
         :host([data-midi-map-target-active]) {

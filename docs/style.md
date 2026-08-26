@@ -16,8 +16,9 @@ like built-in form controls. They bring functionality, not a palette.
    Elements never pin a scheme; a dark page gets dark controls.
 4. **Muted tones derive from ink.** `currentColor` mixed to 65% for secondary
    text, 30% for tracks and rails, 18% for hairlines, 10% for hover, 6% for tints.
-5. **Focus is the browser's ring.** `outline: auto` on `:focus-visible`. The
-   MIDI-learn state borrows the ring in accent.
+5. **Focus is a square ring.** `outline: 2px solid currentColor`, offset 2px,
+   on `:focus-visible`. (The browser's own ring is rounded and differs per
+   browser.) The MIDI-learn state is the same ring in accent.
 6. **Form.** 1px hairlines, no rounded corners, no motion. Sizes are in `em`, so
    `font-size` scales a control the way it scales a native one.
 7. **Styling from outside.** Inherit first (`color`, `font`, `color-scheme`,

@@ -81,8 +81,14 @@ export function fractionDigitsForStep(step, displayFractionDigits = null) {
 export function formatNumber(value, step, displayFractionDigits = null) {
   const number = Number(value);
   if (!Number.isFinite(number)) return String(value);
-  return number.toFixed(
+  const fixed = number.toFixed(
     fractionDigitsForStep(step, displayFractionDigits));
+  // Digits that come from a step or an explicit request are a promise of
+  // stable width. Digits that were only a guess (no step) should not show as
+  // trailing zeros: 800 reads as "800", not "800.00".
+  const guessed = displayFractionDigits === null && !(Number(step) > 0);
+  if (!guessed || !fixed.includes('.')) return fixed;
+  return fixed.replace(/0+$/, '').replace(/\.$/, '');
 }
 
 export function formatValue(
