@@ -1,7 +1,31 @@
 import { clamp, defineElement } from '../utils.js';
-import { popupPlacement } from './compost-select.js';
 
 let nextPopupID = 1;
+
+export function popupPlacement({
+  trigger,
+  viewportWidth,
+  viewportHeight,
+  contentWidth,
+  contentHeight,
+  popupOffset = 0,
+  margin = 8,
+}) {
+  const availableBelow = viewportHeight - trigger.bottom - popupOffset - margin;
+  const availableAbove = trigger.top - popupOffset - margin;
+  const openAbove = availableBelow < Math.min(contentHeight, 180)
+    && availableAbove > availableBelow;
+  const maxHeight = Math.max(60, Math.min(320,
+    openAbove ? availableAbove : availableBelow));
+  const width = Math.min(Math.max(trigger.width, contentWidth), viewportWidth - margin * 2);
+  const left = Math.min(Math.max(margin, trigger.right - width),
+    viewportWidth - width - margin);
+  const height = Math.min(contentHeight, maxHeight);
+  const top = openAbove
+    ? Math.max(margin, trigger.top - popupOffset - height)
+    : Math.min(viewportHeight - margin - height, trigger.bottom + popupOffset);
+  return { left, top, width, maxHeight, openAbove };
+}
 
 // Where a popup opened from a point (a context menu) lands: beside the pointer,
 // pulled back inside the viewport when it would run off an edge.

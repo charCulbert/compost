@@ -82,6 +82,53 @@ test('styled select exposes native-like value and disabled attributes', () => {
   assert.ok(CompostSelect.observedAttributes.includes('aria-describedby'));
 });
 
+test('select exposes numeric enum metadata and accepts silent host updates', () => {
+  const { control, events } = lifecycleHarness(CompostSelect, {
+    'parameter-id': 'waveform',
+    value: '0',
+  });
+  const options = [
+    { value: '0', disabled: false },
+    { value: '2', disabled: false },
+    { value: '7', disabled: false },
+  ];
+  Object.assign(control, {
+    parameterID: 'waveform',
+    optionElements: () => options,
+  });
+
+  assert.equal(control.parameterKind, 'discrete');
+  assert.deepEqual(control.parameterValues, [0, 2, 7]);
+  assert.equal(control.min, 0);
+  assert.equal(control.max, 7);
+  assert.equal(control.setValue(2, false, 'backend'), true);
+  assert.equal(control.value, '2');
+  assert.deepEqual(events, []);
+});
+
+test('select user choices emit one complete discrete parameter gesture', () => {
+  const { control, events } = lifecycleHarness(CompostSelect, {
+    'parameter-id': 'waveform',
+    value: '0',
+  });
+  Object.assign(control, {
+    parameterID: 'waveform',
+    select: { value: '2' },
+    optionElements: () => [
+      { value: '0', disabled: false },
+      { value: '2', disabled: false },
+    ],
+  });
+
+  control.handleChange({ stopPropagation() {} });
+
+  assert.equal(control.value, '2');
+  assert.deepEqual(lifecycleTypes(events), [
+    'parameter-begin', 'parameter-edit', 'parameter-end',
+  ]);
+  assert.deepEqual(events.slice(0, 3).map((event) => event.detail.value), [0, 2, 2]);
+});
+
 test('stopping suspends the context and keeps the audio graph alive', async () => {
   const audio = Object.create(WebAudio.prototype);
   const events = [];

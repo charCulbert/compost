@@ -21,6 +21,17 @@ export interface PopupCloseDetail {
   reason: string;
 }
 
+/** Where a popup anchored to a trigger lands, kept inside the viewport. */
+export function popupPlacement(request: {
+  trigger: DOMRect;
+  viewportWidth: number;
+  viewportHeight: number;
+  contentWidth: number;
+  contentHeight: number;
+  popupOffset?: number;
+  margin?: number;
+}): {left: number, top: number, width: number, maxHeight: number, openAbove: boolean};
+
 /** Where a popup opened from a point (a context menu) lands. */
 export function pointPlacement(request: {
   x: number;
