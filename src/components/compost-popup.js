@@ -90,7 +90,7 @@ export class CompostPopup extends HTMLElement {
           inset: auto;
           z-index: var(--compost-popup-z-index);
           box-sizing: border-box;
-          min-width: var(--compost-popup-min-width);
+          min-width: calc(var(--compost-popup-min-width) + 2px);
           max-width: min(24em, calc(100vw - 16px));
           margin: 0;
           padding: 0.35em 0;

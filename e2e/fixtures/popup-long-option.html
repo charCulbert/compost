@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>body { font-family: system-ui, sans-serif; }</style>
+  </head>
+  <body>
+    <button type="button">Track input</button>
+    <compost-popup heading="Track input" label="Track input" value="all">
+      <option value="none">No input</option>
+      <option value="all">MIDI 1 · all channels</option>
+      <option value="one">MIDI 1 · channel 1</option>
+    </compost-popup>
+    <script type="module">
+      await import('../../src/components/compost-popup.js');
+      const popup = document.querySelector('compost-popup');
+      popup.open({ anchor: document.querySelector('button') });
+    </script>
+  </body>
+</html>

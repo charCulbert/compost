@@ -2456,6 +2456,16 @@ test('popup anchors, keeps on screen, picks by keyboard and closes on an outside
   await expect(context).toBeHidden();
 });
 
+test('popup grows to fit an unconstrained option label', async ({ page }) => {
+  await page.goto('/e2e/fixtures/popup-long-option.html');
+
+  await expect(page.getByRole('menu', { name: 'Track input' })).toBeVisible();
+  const label = page.getByRole('menuitemradio', { name: 'MIDI 1 · all channels' }).locator('.label');
+  const size = await label.evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }));
+  expect(size.client).toBeGreaterThan(0);
+  expect(size.scroll).toBeLessThanOrEqual(size.client);
+});
+
 test('timeline automation headers stay level with their rows and a trim preview keeps notes in time', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
