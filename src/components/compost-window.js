@@ -99,19 +99,17 @@ export class CompostWindow extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-window-bg: #ffffff;
-          --compost-window-text: #111111;
-          --compost-window-muted: #6a6a6a;
-          --compost-window-border: rgba(17, 17, 17, 0.24);
-          --compost-window-header-height: 1.85em;
-          --compost-window-header-font-size: 0.85em;
-          --compost-window-close-color: #6a6a6a;
-          --compost-window-close-hover-color: #111111;
-          --compost-window-grip-color: #6a6a6a;
-          --compost-window-focus: #005fc0;
-          --compost-window-color-scheme: light;
+          --compost-window-bg: Canvas;
+          --compost-window-text: currentColor;
+          --compost-window-muted: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-window-border: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-window-header-height: 2em;
+          --compost-window-header-font-size: .875em;
+          --compost-window-close-color: currentColor;
+          --compost-window-close-hover-color: currentColor;
+          --compost-window-grip-color: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-window-focus: currentColor;
           --compost-window-z-index: 900;
-          color-scheme: var(--compost-window-color-scheme);
           position: fixed;
           left: 0;
           top: 0;
@@ -125,12 +123,12 @@ export class CompostWindow extends HTMLElement {
           max-height: 100vh;
           background: var(--compost-window-bg);
           color: var(--compost-window-text);
-          box-shadow: 0 0 0 1px var(--compost-window-border);
+          border: 1px solid var(--compost-window-border);
           font: inherit;
           outline: none;
         }
         :host([open]) { display: flex; }
-        :host(:focus-visible) { box-shadow: 0 0 0 1px var(--compost-window-focus); }
+        :host(:focus-visible) { outline: 2px solid var(--compost-window-focus); outline-offset: -2px; }
         header {
           flex: none;
           box-sizing: border-box;
@@ -138,7 +136,9 @@ export class CompostWindow extends HTMLElement {
           align-items: center;
           gap: 0.6em;
           height: var(--compost-window-header-height);
-          padding: 0 0.7em;
+          padding: 0 0 0 .7em;
+          border-bottom: 1px solid var(--compost-window-border);
+          background: color-mix(in srgb, currentColor 6%, transparent);
           color: var(--compost-window-muted);
           font-size: var(--compost-window-header-font-size);
           cursor: move;
@@ -162,8 +162,9 @@ export class CompostWindow extends HTMLElement {
           box-sizing: border-box;
           min-width: var(--compost-window-control-min, 0px);
           min-height: var(--compost-window-control-min, 0px);
-          padding: 0.25em;
-          margin: 0 -0.25em 0 0;
+          width: 2em;
+          height: 100%;
+          padding: 0;
           border: 0;
           background: none;
           color: var(--compost-window-close-color);
@@ -176,11 +177,8 @@ export class CompostWindow extends HTMLElement {
           display: flex;
           align-items: center;
         }
-        .close svg { display: block; width: 0.8em; height: 0.8em; }
-        .close rect { fill: none; stroke: currentColor; }
-        .close:hover { color: var(--compost-window-close-hover-color); }
-        .close:hover rect { fill: currentColor; }
-        .close:focus-visible { outline: 1px solid var(--compost-window-focus); outline-offset: 1px; }
+        .close:hover { background: color-mix(in srgb, currentColor 10%, transparent); color: var(--compost-window-close-hover-color); }
+        .close:focus-visible { outline: 2px solid var(--compost-window-focus); outline-offset: -2px; }
         .content {
           flex: 1 1 auto;
           min-width: 0;
@@ -248,9 +246,7 @@ export class CompostWindow extends HTMLElement {
       <header part="header">
         <slot name="title"><span class="title" part="title"></span></slot>
         <slot name="controls"></slot>
-        <button class="close" part="close" type="button" aria-label="Close">
-          <svg viewBox="0 0 7 7" aria-hidden="true"><rect x="0.5" y="0.5" width="6" height="6"/></svg>
-        </button>
+        <button class="close" part="close" type="button" aria-label="Close">&times;</button>
       </header>
       <div class="content" part="content"><slot></slot></div>
       <div class="grip" part="grip" aria-hidden="true"></div>`;

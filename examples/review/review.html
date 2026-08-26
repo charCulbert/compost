@@ -110,6 +110,12 @@
     </compost-drawer>
   </div>
 </template>
+<template id="compost-window">
+  <button type="button" data-open-window>Open window</button>
+  <compost-window heading="Plug-in" width="320" height="160">
+    <div style="display: grid; place-items: center; height: 100%; color: color-mix(in srgb, currentColor 65%, transparent)">Plug-in contents</div>
+  </compost-window>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -138,8 +144,17 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
+    }
+    if (el === 'compost-window') {
+      const windowElement = s.querySelector('compost-window');
+      s.querySelector('[data-open-window]').addEventListener('click', () => {
+        document.querySelectorAll('compost-window').forEach((other) => { if (other !== windowElement) other.open = false; });
+        windowElement.open = true;
+        windowElement.moveTo(32, 32);
+        windowElement.raise();
+      });
     }
     if (el === 'compost-envelope-editor') {
       const editor = s.querySelector('compost-envelope-editor');
@@ -158,6 +173,11 @@
       snap.addEventListener('change', () => editor.setAttribute('snap', snap.checked ? 'grid' : 'off'));
       stepped.addEventListener('change', () => editor.toggleAttribute('stepped', stepped.checked));
     }
+  }
+  if (el === 'compost-window') {
+    const firstWindow = document.querySelector('section.plain compost-window');
+    firstWindow.open = true;
+    firstWindow.moveTo(32, 32);
   }
   if (el === 'compost-meter' || el === 'compost-scope') {
     if (el === 'compost-meter') {
