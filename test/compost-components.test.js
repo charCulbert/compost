@@ -214,6 +214,53 @@ test('resuming emits audio-resumed instead of rebuilding the graph', async () =>
   assert.deepEqual(events, ['audio-resumed']);
 });
 
+test('an interrupted audio context resumes from the next user start gesture', async () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { AudioContext: class AudioContext {} };
+  const audio = Object.create(WebAudio.prototype);
+  const events = [];
+  let resumes = 0;
+  const context = {
+    state: 'interrupted',
+    async resume() {
+      resumes += 1;
+      this.state = 'running';
+    },
+  };
+  Object.assign(audio, {
+    context,
+    dispatchAudioEvent(type) { events.push(type); },
+    handleStateChange() {},
+    setStatus() {},
+  });
+
+  try {
+    await audio.start();
+  } finally {
+    globalThis.window = previousWindow;
+  }
+
+  assert.equal(resumes, 1);
+  assert.equal(audio.context, context);
+  assert.deepEqual(events, ['audio-resumed']);
+  assert.equal(events.includes('audio-started'), false);
+
+  const stillInterrupted = {
+    state: 'interrupted',
+    async resume() { resumes += 1; },
+  };
+  audio.context = stillInterrupted;
+  events.length = 0;
+  globalThis.window = { AudioContext: class AudioContext {} };
+  try {
+    await audio.start();
+  } finally {
+    globalThis.window = previousWindow;
+  }
+  assert.equal(resumes, 2);
+  assert.deepEqual(events, []);
+});
+
 test('piano touch drag transfers the active note between keys', () => {
   const piano = Object.create(PianoKeyboard.prototype);
   const events = [];

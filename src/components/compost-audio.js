@@ -241,7 +241,10 @@ export class WebAudio extends HTMLElement {
     }
 
     try {
-      const wasSuspended = this.context?.state === 'suspended';
+      const previousState = this.context?.state;
+      const wasResumable = Boolean(previousState
+        && previousState !== 'running'
+        && previousState !== 'closed');
       if (!this.context || this.context.state === 'closed') {
         try {
           this.context = new AudioContextConstructor({ latencyHint: this.latencyHint });
@@ -252,12 +255,14 @@ export class WebAudio extends HTMLElement {
         this.context.addEventListener('statechange', () => this.handleStateChange());
       }
 
-      if (this.context.state === 'suspended') {
+      if (this.context.state !== 'running' && this.context.state !== 'closed') {
         await this.context.resume();
       }
 
-      this.dispatchAudioEvent(wasSuspended ? 'audio-resumed' : 'audio-started');
       this.handleStateChange();
+      if (this.context.state === 'running') {
+        this.dispatchAudioEvent(wasResumable ? 'audio-resumed' : 'audio-started');
+      }
       return this.context;
     } catch (error) {
       this.setStatus(`Could not start audio: ${error.message}`);
@@ -330,6 +335,7 @@ export class WebAudio extends HTMLElement {
   statusForState(state) {
     if (state === 'running') return 'Audio context running.';
     if (state === 'suspended') return 'Audio context suspended.';
+    if (state === 'interrupted') return 'Audio context interrupted.';
     if (state === 'closed') return 'Audio context stopped.';
     return '';
   }
@@ -373,6 +379,8 @@ export class WebAudio extends HTMLElement {
     this.powerButton.setAttribute('aria-label', stateStatus ? `${ariaLabel}. ${stateStatus}` : ariaLabel);
     this.powerButton.setAttribute('aria-description', isRunning
       ? 'Audio is running. Press to stop the audio context.'
+      : this.context?.state === 'interrupted'
+        ? 'Audio was interrupted. Press to resume.'
       : this.context?.state === 'suspended'
         ? 'Audio is suspended. Press to resume the audio context.'
         : 'Audio is stopped. Press to start the audio context.');

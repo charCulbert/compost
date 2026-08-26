@@ -1,7 +1,7 @@
 /** The detail on `audio-*` lifecycle events. */
 export interface AudioEventDetail {
   context: AudioContext | null;
-  state: AudioContextState | 'closed';
+  state: AudioContextState | 'closed' | 'interrupted';
   error?: Error;
   [key: string]: unknown;
 }
