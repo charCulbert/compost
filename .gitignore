@@ -92,3 +92,6 @@ Makefile
 !.env.example
 !.env.*.example
 .claude/
+
+# Style review screenshots
+dev/*.png

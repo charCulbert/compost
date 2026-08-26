@@ -48,9 +48,19 @@ What gets done, in this order:
 
 ## Verifying a round
 
-Open `http://127.0.0.1:8931/review.html?el=<element>`. It renders the real
-element from this branch in three page contexts: unstyled, `color-scheme:
-dark`, and a branded page (serif, 18px, `--compost-accent`). Check:
+Serve the branch without caching and open the review page:
+
+```sh
+python3 dev/serve.py 8931
+open http://127.0.0.1:8931/dev/review.html?el=<element>
+```
+
+`dev/review.html` renders the real element from this branch in three page
+contexts: unstyled, `color-scheme: dark`, and a branded page (serif, 18px,
+`--compost-accent`). Each element has one `<template>` on that page showing
+its default states; `node dev/review-check.mjs <element>` is the headless
+version (console errors, computed ink per context, Tab focus, screenshot).
+Check:
 
 - **Reads**: ink, accent and muted tones come from the page; no leftover fixed
   colour in any context; nothing invisible on dark.
@@ -80,5 +90,5 @@ commit in the same round.
 - Units are glued to numbers (`800Hz`); decide whether the element spaces
   alphabetic units.
 - `refreshEditableValue(valueText)` in knob and slider ignores its argument.
-- Type declarations (`src/components/*.d.ts`) live on local `main`, not on
-  this branch: rebase before merging and add `relative` to the slider types.
+- `compost-button`'s `momentary` mode is a click-triggered pulse, not a
+  held-high state; the interface pass should call it `trigger`.

@@ -1,0 +1,69 @@
+<!doctype html>
+<!--
+  Style review page. Open ?el=compost-knob to load one element under three
+  page contexts: unstyled, color-scheme: dark, and a branded serif page.
+  Serve the repository root without caching: python3 dev/serve.py 8931
+  then open http://127.0.0.1:8931/dev/review.html?el=compost-knob
+-->
+<html lang="en"><head><meta charset="utf-8"><title>Compost review</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; }
+  section { padding: 24px 32px; border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
+  section h2 { font: inherit; font-size: 12px; opacity: .6; margin: 0 0 14px; text-transform: uppercase; letter-spacing: .06em; }
+  .row { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  output { display: block; margin-top: 12px; font-size: 12px; opacity: .7; font-family: ui-monospace, monospace; height: 1.2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plain { background: white; color: black; }
+  .dark  { color-scheme: dark; background: Canvas; color: CanvasText; }
+  .brand { background: #f3ead8; color: #3b2a1a; font-family: Palatino, "Palatino Linotype", serif; font-size: 18px; --compost-accent: #c8412b; }
+  pre { margin: 0; padding: 16px 32px; font-size: 12px; background: #f6f6f6; overflow-x: auto; }
+  nav { padding: 12px 32px; font-size: 12px; line-height: 2; } nav a { margin-right: 10px; }
+</style></head><body>
+
+<!-- One template per element. Defaults only: no ::part() overrides, no custom properties. -->
+<template id="compost-knob">
+  <compost-knob label="Cutoff" min="20" max="20000" value="800" curve="log" unit="Hz" editable></compost-knob>
+  <compost-knob label="Resonance" min="0" max="1" value="0.35"></compost-knob>
+  <compost-knob label="Drive" min="0" max="10" value="3" disabled></compost-knob>
+  <compost-knob label="Learning" min="0" max="1" value="0.6" data-midi-map-target-active data-midi-map-mode data-midi-map-label style="--midi-map-label:'CC 74'"></compost-knob>
+</template>
+<template id="compost-slider">
+  <div style="width: 260px; display: grid; gap: 20px; align-self: center">
+    <compost-slider label="Cutoff" min="20" max="20000" value="800" curve="log" unit="Hz" editable></compost-slider>
+    <compost-slider label="Mix" value="0.5" disabled></compost-slider>
+  </div>
+  <compost-slider label="Level" orientation="vertical" min="-60" max="6" value="-12" step="0.5" unit=" dB" min-label="-inf" style="align-self: center"></compost-slider>
+  <div style="width: 260px; display: grid; gap: 20px; align-self: center">
+    <compost-slider label="Learning" value="0.7" data-midi-map-target-active data-midi-map-mode data-midi-map-label style="--midi-map-label:'CC 1'"></compost-slider>
+    <compost-slider label="Cutoff (relative drag)" min="20" max="20000" value="800" curve="log" unit="Hz" interaction="relative"></compost-slider>
+  </div>
+</template>
+
+<div id="root"></div>
+<pre id="markup"></pre>
+<nav id="nav"></nav>
+<script type="module">
+  const ELEMENTS = [
+    'compost-knob', 'compost-slider', 'compost-button', 'compost-number-box', 'compost-select',
+    'compost-meter', 'compost-scope', 'compost-envelope-editor',
+    'compost-drawer', 'compost-window', 'compost-popup', 'compost-device-selector',
+    'compost-midi', 'compost-midi-monitor', 'compost-midi-mappings', 'compost-audio',
+    'compost-clip-grid', 'compost-piano', 'compost-note-editor', 'compost-timeline',
+  ];
+  const el = new URLSearchParams(location.search).get('el') || ELEMENTS[0];
+  await import(`../src/components/${el}.js`);
+  const tpl = document.getElementById(el);
+  const contexts = [['plain', 'Unstyled page'], ['dark', 'color-scheme: dark'], ['brand', 'Branded page: serif, 18px, --compost-accent']];
+  for (const [cls, title] of contexts) {
+    const s = document.createElement('section'); s.className = cls;
+    s.innerHTML = `<h2>${title}</h2><div class="row"></div><output>last event: —</output>`;
+    if (tpl) s.querySelector('.row').append(tpl.content.cloneNode(true));
+    else s.querySelector('.row').textContent = `No template for ${el} yet: add <template id="${el}"> to this page.`;
+    const out = s.querySelector('output');
+    for (const type of ['parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change'])
+      s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
+    document.getElementById('root').append(s);
+  }
+  document.getElementById('markup').textContent = tpl ? tpl.innerHTML.trim().replace(/^ {2}/gm, '') : '';
+  document.getElementById('nav').innerHTML = ELEMENTS.map((n) => `<a href="?el=${n}"${n === el ? ' style="font-weight:700"' : ''}>${n}</a>`).join('');
+</script>
+</body></html>
