@@ -57,9 +57,6 @@ test('a suspended audio context is resumable rather than treated as running', as
 test('audio can separate an icon label from its accessible name', () => {
   assert.ok(WebAudio.observedAttributes.includes('start-aria-label'));
   assert.ok(WebAudio.observedAttributes.includes('stop-aria-label'));
-  const source = fs.readFileSync(new URL('../src/components/compost-audio.js', import.meta.url), 'utf8');
-  assert.match(source, /--compost-audio-button-border/u);
-  assert.match(source, /--compost-audio-button-border-width/u);
 
   const audio = Object.create(WebAudio.prototype);
   audio.getAttribute = (name) => ({

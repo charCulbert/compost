@@ -147,6 +147,9 @@
     <compost-midi-mappings></compost-midi-mappings>
   </div>
 </template>
+<template id="compost-audio">
+  <compost-audio modal centered-while-off></compost-audio>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -170,12 +173,17 @@
     s.innerHTML = `<h2>${title}</h2><div class="row"></div><output>last event: —</output>`;
     if (tpl) s.querySelector('.row').append(tpl.content.cloneNode(true));
     else s.querySelector('.row').textContent = `No template for ${el} yet: add <template id="${el}"> to this page.`;
+    if (el === 'compost-audio' && cls !== 'plain') {
+      const audio = s.querySelector('compost-audio');
+      audio.removeAttribute('modal');
+      audio.removeAttribute('centered-while-off');
+    }
     customElements.upgrade(s);
     document.getElementById('root').append(s);
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-window') {

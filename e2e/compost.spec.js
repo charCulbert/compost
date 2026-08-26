@@ -338,24 +338,24 @@ test('drawer keeps its declared initial size during upgrade', async ({ page }) =
   await expect(drawer).toHaveCSS('width', '240px');
 });
 
-test('centered audio keeps its toolbar footprint while moving', async ({ page }) => {
+test('centered audio keeps its toolbar footprint without animating', async ({ page }) => {
   await page.goto('/examples/signal-generator/');
   const audio = page.locator('compost-audio');
   const slider = page.locator('.audio-output > compost-slider');
   const offHostWidth = await audio.evaluate((element) => element.getBoundingClientRect().width);
   const sliderLeft = await slider.evaluate((element) => element.getBoundingClientRect().left);
 
-  const animationDuration = await audio.evaluate((element) => {
+  const animations = await audio.evaluate((element) => {
     element.context = { state: 'running', close: async () => {} };
     element.refresh();
-    return element.panelMoveAnimation?.effect.getTiming().duration ?? 0;
+    return element.panel.getAnimations().length;
   });
 
   expect(await audio.evaluate((element) => element.getBoundingClientRect().width))
     .toBeCloseTo(offHostWidth);
   expect(await slider.evaluate((element) => element.getBoundingClientRect().left))
     .toBeCloseTo(sliderLeft);
-  expect(animationDuration).toBe(220);
+  expect(animations).toBe(0);
 });
 
 test('parameter controller reflects host updates to both controls', async ({ page }) => {
