@@ -9,7 +9,8 @@ curve, formatting, reset, and editing options as `compost-knob`.
 ```
 
 Sliders are horizontal by default. Set `orientation="vertical"` for a vertical
-track whose value increases from bottom to top:
+track whose value increases from bottom to top, with the label and value below
+the track:
 
 ```html
 <compost-slider orientation="vertical" parameter-id="level" label="Level"

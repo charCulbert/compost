@@ -56,6 +56,15 @@
   --compost-theme-scope-trace: var(--compost-theme-accent);
 }
 
+/* Elements on the plain-HTML style (docs/style.md) read the page instead of
+   per-element tokens: currentColor, color-scheme and --compost-accent. Until
+   every element has moved, a theme provides those three as well. */
+[data-compost-theme] {
+  color: var(--compost-theme-text);
+  color-scheme: var(--compost-theme-color-scheme);
+  --compost-accent: var(--compost-theme-accent);
+}
+
 :where(
   compost-audio,
   compost-button,
@@ -158,20 +167,6 @@ compost-midi-mappings {
   --compost-midi-mappings-color-scheme: var(--compost-theme-color-scheme);
 }
 
-compost-slider {
-  --slider-text: var(--compost-theme-text);
-  --slider-value: var(--compost-theme-muted);
-  --slider-fill: var(--compost-theme-accent);
-  --slider-track: var(--compost-theme-track);
-  --slider-thumb: var(--compost-theme-text);
-  --slider-thumb-border: var(--compost-theme-control-bg);
-  --slider-value-editor-bg: var(--compost-theme-control-bg);
-  --slider-focus-bracket-color: var(--compost-theme-accent);
-  --slider-color-scheme: var(--compost-theme-color-scheme);
-  --midi-map-learn-color: var(--compost-theme-learn);
-  --midi-map-label-text: var(--compost-theme-learn);
-}
-
 compost-meter {
   --meter-text: var(--compost-theme-text);
   --meter-value: var(--compost-theme-muted);
@@ -193,20 +188,6 @@ compost-number-box {
   --number-box-fill: color-mix(in srgb, var(--compost-theme-accent) 42%, transparent);
   --number-box-focus: var(--compost-theme-accent);
   --number-box-color-scheme: var(--compost-theme-color-scheme);
-  --midi-map-learn-color: var(--compost-theme-learn);
-  --midi-map-label-text: var(--compost-theme-learn);
-}
-
-compost-knob {
-  --knob-text: var(--compost-theme-text);
-  --knob-value: var(--compost-theme-muted);
-  --knob-fill: var(--compost-theme-accent);
-  --knob-track: var(--compost-theme-track);
-  --knob-cap: var(--compost-theme-control-bg);
-  --knob-cap-border: var(--compost-theme-control-border);
-  --knob-indicator: var(--compost-theme-text);
-  --knob-focus-bracket-color: var(--compost-theme-accent);
-  --knob-color-scheme: var(--compost-theme-color-scheme);
   --midi-map-learn-color: var(--compost-theme-learn);
   --midi-map-label-text: var(--compost-theme-learn);
 }

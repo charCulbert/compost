@@ -188,6 +188,7 @@ export class ParameterSlider extends HTMLElement {
           align-items: center;
           flex-direction: column;
           gap: var(--slider-vertical-row-gap);
+          order: 1;
         }
         :host([orientation="vertical"]) .label,
         :host([orientation="vertical"]) output {
