@@ -75,6 +75,13 @@
 <template id="compost-meter">
   <compost-meter label="Output" min="-90" max="12" curve="gain"></compost-meter>
 </template>
+<template id="compost-scope">
+  <div style="width: min(42em, calc(100vw - 64px))">
+    <compost-scope value-range="1"
+      x-marker-labels="0:start,0.5:middle,1:end"
+      y-marker-labels="-0.5:low,0:center,0.5:high"></compost-scope>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -100,22 +107,30 @@
     else s.querySelector('.row').textContent = `No template for ${el} yet: add <template id="${el}"> to this page.`;
     customElements.upgrade(s);
     const out = s.querySelector('output');
-    if (el === 'compost-meter') out.remove();
+    if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
       for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     document.getElementById('root').append(s);
   }
-  if (el === 'compost-meter') {
-    const audio = document.createElement('audio');
-    audio.controls = true;
-    audio.loop = true;
-    audio.preload = 'metadata';
-    audio.src = './assets/plucky.wav';
-    document.getElementById('media').append(audio);
-    const { connectMeters } = await import('./meter-review.js');
-    connectMeters(audio, [...document.querySelectorAll('compost-meter')]);
+  if (el === 'compost-meter' || el === 'compost-scope') {
+    if (el === 'compost-meter') {
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.loop = true;
+      audio.preload = 'metadata';
+      audio.src = './assets/plucky.wav';
+      document.getElementById('media').append(audio);
+      const { connectMeters } = await import('./meter-review.js');
+      connectMeters(audio, [...document.querySelectorAll('compost-meter')]);
+    } else {
+      const { setupScopeReview } = await import('./scope-review.js');
+      setupScopeReview(
+        document.getElementById('media'),
+        [...document.querySelectorAll('compost-scope')],
+      );
+    }
   }
   document.getElementById('markup').textContent = tpl ? tpl.innerHTML.trim().replace(/^ {2}/gm, '') : '';
   document.getElementById('nav').innerHTML = ELEMENTS.map((n) => `<a href="?el=${n}"${n === el ? ' style="font-weight:700"' : ''}>${n}</a>`).join('');

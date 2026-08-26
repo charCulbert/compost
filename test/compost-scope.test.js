@@ -51,209 +51,140 @@ globalThis.customElements = {
 
 const { ScopeVisualizer } = await import('../src/components/compost-scope.js');
 
-test('scope exposes a stable configuration description without announcing samples', () => {
+test('canvas colors resolve through inherited style probes', () => {
+  const previousGetComputedStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = (element) => ({ color: element.resolvedColor });
+  const scope = new ScopeVisualizer();
+  scope.root.querySelector = () => ({ resolvedColor: 'rgb(12, 34, 56)' });
+
+  try {
+    assert.equal(scope.color('trace-1'), 'rgb(12, 34, 56)');
+  } finally {
+    globalThis.getComputedStyle = previousGetComputedStyle;
+  }
+});
+
+test('scope label fonts scale with the canvas pixel ratio', () => {
+  const scope = new ScopeVisualizer();
+  const font = scope.canvasFont({
+    font: '14px sans-serif',
+    fontFamily: 'sans-serif',
+    fontSize: '14px',
+    fontStyle: 'normal',
+    fontWeight: '400',
+  }, 2);
+
+  assert.equal(font, 'normal 400 28px sans-serif');
+});
+
+test('scope exposes a stable one-channel presentation description', () => {
   const scope = new ScopeVisualizer();
   const attributes = new Map();
   scope.getAttribute = (name) => attributes.get(name) ?? null;
   scope.setAttribute = (name, value) => attributes.set(name, String(value));
-  scope.channelIndexes = [0, 1];
-  scope.samplesShown = 512;
-  scope.periodsShown = null;
   scope.valueRange = 1;
   scope.yOffset = 0;
-  scope.trigger = 'up';
-  scope.triggerLevel = 0.25;
 
   scope.refreshAccessibilityDescription();
 
   assert.equal(
     attributes.get('aria-description'),
-    '2 channels; 512-sample window; vertical range -1 to 1; rising edge trigger at 0.25.',
+    'One-channel waveform; vertical range -1 to 1.',
   );
 });
 
-test('setSamples retains typed arrays without reducing precision or copying', () => {
+test('setSamples retains one typed array without copying or reducing precision', () => {
   const scope = new ScopeVisualizer();
-  const left = new Float64Array([0.123456789012345, -0.25, 0.5]);
-  const right = new Float32Array([0.75, 0, -0.75]);
-  const trigger = new Float32Array([0, 1, 0]);
+  const samples = new Float64Array([0.123456789012345, -0.25, 0.5]);
 
-  const result = scope.setSamples([left, right], { triggerSamples: trigger });
-
-  assert.equal(result, scope);
-  assert.equal(scope.sampleSource, 'manual');
-  assert.equal(scope.channelSamples[0], left);
-  assert.equal(scope.channelSamples[1], right);
-  assert.equal(scope.samples, left);
-  assert.equal(scope.triggerSamples, trigger);
-  assert.equal(scope.samples[0], 0.123456789012345);
-});
-
-test('setSamples can own a typed-array snapshot', () => {
-  const scope = new ScopeVisualizer();
-  const samples = new Float64Array([0.1, 0.2, 0.3]);
-
-  scope.setSamples(samples, { copy: true });
-
-  assert.notEqual(scope.samples, samples);
-  assert.ok(scope.samples instanceof Float64Array);
-  assert.deepEqual(scope.samples, samples);
-});
-
-test('setSamples retains plain mono arrays without copying or reducing precision', () => {
-  const scope = new ScopeVisualizer();
-  const samples = [0.123456789012345, 0.5];
-
-  scope.setSamples(samples);
-
+  assert.equal(scope.setSamples(samples), scope);
   assert.equal(scope.samples, samples);
   assert.equal(scope.samples[0], 0.123456789012345);
 });
 
-test('setSamples can own a plain-array snapshot', () => {
+test('setSamples can own typed and plain sample snapshots', () => {
   const scope = new ScopeVisualizer();
-  const samples = [0.1, 0.2, 0.3];
+  const typed = new Float64Array([0.1, 0.2, 0.3]);
+  scope.setSamples(typed, { copy: true });
+  assert.notEqual(scope.samples, typed);
+  assert.deepEqual(scope.samples, typed);
 
-  scope.setSamples(samples, { copy: true });
-
-  assert.notEqual(scope.samples, samples);
-  assert.deepEqual(scope.samples, samples);
+  const plain = [0.4, 0.5];
+  scope.setSamples(plain, { copy: true });
+  assert.notEqual(scope.samples, plain);
+  assert.deepEqual(scope.samples, plain);
 });
 
-test('setSamples rejects unaligned channel and trigger windows', () => {
+test('setSamples rejects empty, nonnumeric, and multichannel inputs', () => {
   const scope = new ScopeVisualizer();
-
+  assert.throws(() => scope.setSamples(new Float32Array()), /requires samples/);
+  assert.throws(() => scope.setSamples(['nope']), /one numeric sample array/);
   assert.throws(
-    () => scope.setSamples([new Float32Array(4), new Float32Array(3)]),
-    /every channel to have the same length/,
-  );
-  assert.throws(
-    () => scope.setSamples(new Float32Array(4), { triggerSamples: new Float32Array(3) }),
-    /triggerSamples to match the channel length/,
+    () => scope.setSamples([new Float32Array([0]), new Float32Array([1])]),
+    /one numeric sample array/,
   );
 });
 
-test('switching back to analyser input restores Web Audio Float32 buffers', () => {
-  const scope = new ScopeVisualizer();
-  const manualSamples = new Float64Array(scope.fftSize);
-  const manualTrigger = new Float64Array(scope.fftSize);
-
-  scope.setSamples(manualSamples, { triggerSamples: manualTrigger });
-  scope.sampleSource = 'audio';
-  scope.triggerChannel = 1;
-  scope.ensureSampleBuffer();
-
-  assert.ok(scope.samples instanceof Float32Array);
-  assert.ok(scope.triggerSamples instanceof Float32Array);
-  assert.notEqual(scope.samples, manualSamples);
-  assert.notEqual(scope.triggerSamples, manualTrigger);
-});
-
-test('external trigger samples select the exactly aligned capture position', () => {
-  const scope = new ScopeVisualizer();
-  const samples = new Float32Array([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]);
-  const trigger = new Float32Array([0, 0, 0, 1, 0, 0, 0, 0]);
-
-  scope.samplesShown = 4;
-  scope.trigger = 'external';
-  scope.setSamples(samples, { triggerSamples: trigger });
-
-  assert.equal(scope.getTriggeredStartIndex(), 3);
-});
-
-test('up and down trigger modes find signal crossings', () => {
-  const scope = new ScopeVisualizer();
-  scope.samplesShown = 4;
-  scope.triggerLevel = 0;
-  scope.samples = new Float32Array([-0.5, -0.25, 0.25, 0.5, -0.25, -0.5, -0.25, -0.5]);
-
-  scope.trigger = 'up';
-  assert.equal(scope.getTriggeredStartIndex(), 1);
-
-  scope.trigger = 'down';
-  assert.equal(scope.getTriggeredStartIndex(), 3);
-});
-
-test('up and down trigger modes use the newest valid crossing', () => {
-  const scope = new ScopeVisualizer();
-  scope.samplesShown = 4;
-  scope.triggerLevel = 0;
-  scope.samples = new Float32Array([-0.5, 0.5, -0.5, 0.5, -0.5, 0.5, -0.5, 0.5]);
-
-  scope.trigger = 'up';
-  assert.equal(scope.getTriggeredStartIndex(), 2);
-
-  scope.samples = new Float32Array([0.5, -0.5, 0.5, -0.5, 0.5, -0.5, 0.5, -0.5]);
-  scope.trigger = 'down';
-  assert.equal(scope.getTriggeredStartIndex(), 2);
-});
-
-test('external period windows span a whole number of trigger intervals', () => {
-  const scope = new ScopeVisualizer();
-  const samples = new Float32Array(12);
-  const trigger = new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]);
-
-  scope.trigger = 'external';
-  scope.periodsShown = 2;
-  scope.setSamples(samples, { triggerSamples: trigger });
-
-  assert.deepEqual(scope.getExternalPeriodWindow(), { startIndex: 4, endIndex: 11 });
-  assert.deepEqual(scope.displayWindow(), { startIndex: 4, endIndex: 11 });
-  assert.equal(scope.getTriggeredStartIndex(), 4);
-});
-
-test('external period windows never fall back to an unsynchronised sample window', () => {
-  const scope = new ScopeVisualizer();
-  const samples = new Float32Array(8);
-  const trigger = new Float32Array([0, 1, 0, 0, 1, 0, 0, 0]);
-
-  scope.trigger = 'external';
-  scope.periodsShown = 2;
-  scope.setSamples(samples, { triggerSamples: trigger });
-
-  assert.equal(scope.getExternalPeriodWindow(), null);
-  assert.equal(scope.displayWindow(), null);
-});
-
-test('manual trigger holds only after an explicit capture', () => {
-  const scope = new ScopeVisualizer();
-  assert.equal(scope.normaliseTrigger('manual'), 'manual');
-  scope.samplesShown = 4;
-  scope.samples = new Float32Array([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]);
-  scope.triggerSamples = new Float32Array([0, 0, 0, 1, 0, 0, 0, 0]);
-  scope.trigger = 'manual';
-
-  assert.equal(scope.getTriggeredStartIndex(), 4);
-  scope.manualTriggerHold = true;
-  assert.equal(scope.getTriggeredStartIndex(), 3);
-
-  scope.trigger = 'external';
-  assert.equal(scope.captureTrigger(), false);
-});
-
-test('connectAudio disconnects a previously connected source', () => {
-  const scope = new ScopeVisualizer();
-  const context = {};
-  const input = { context };
-  const connections = [];
-  const disconnections = [];
-  const first = {
-    connect: (target) => connections.push(['first', target]),
-    disconnect: (target) => disconnections.push(['first', target]),
-  };
-  const second = {
-    connect: (target) => connections.push(['second', target]),
-    disconnect: (target) => disconnections.push(['second', target]),
+test('setSamples coalesces updates to one browser-frame draw', () => {
+  const previousRAF = globalThis.requestAnimationFrame;
+  const callbacks = [];
+  globalThis.requestAnimationFrame = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
   };
 
-  scope.configureAudioTap = () => {
-    scope.input = input;
-  };
-  scope.applyAudioOptions = () => {};
-  scope.connectAudio(context, { source: first });
-  scope.connectAudio(context, { source: second });
+  const scope = new ScopeVisualizer();
+  scope.isConnected = true;
+  let draws = 0;
+  let events = 0;
+  scope.draw = () => { draws += 1; return true; };
+  scope.dispatchEvent = () => { events += 1; };
 
-  assert.deepEqual(connections, [['first', input], ['second', input]]);
-  assert.deepEqual(disconnections, [['first', input]]);
-  assert.equal(scope.connectedSource, second);
+  try {
+    scope.setSamples([0, 1]);
+    scope.setSamples([1, 0]);
+    assert.equal(callbacks.length, 1);
+    assert.deepEqual(scope.samples, [1, 0]);
+    callbacks[0](12);
+    assert.equal(draws, 1);
+    assert.equal(events, 1);
+  } finally {
+    globalThis.requestAnimationFrame = previousRAF;
+  }
+});
+
+test('scope draws the complete supplied sample array across its width', () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { devicePixelRatio: 1 };
+  const points = [];
+  const scope = new ScopeVisualizer();
+  scope.samples = new Float32Array([0, 0.5, -0.5]);
+  scope.waveCtx = {
+    clearRect() {},
+    beginPath() {},
+    moveTo: (x) => points.push(x),
+    lineTo: (x) => points.push(x),
+    stroke() {},
+  };
+  scope.color = () => 'black';
+
+  try {
+    assert.equal(scope.drawWave(100, 50, 25), true);
+    assert.deepEqual(points, [0, 50, 100]);
+  } finally {
+    globalThis.window = previousWindow;
+  }
+});
+
+test('scope keeps acquisition and signal policy outside the renderer', () => {
+  const scope = new ScopeVisualizer();
+  assert.equal(typeof scope.setSamples, 'function');
+  for (const member of ['connectAudio', 'captureTrigger', 'start', 'stop']) {
+    assert.equal(member in scope, false);
+  }
+  for (const attribute of [
+    'frequency', 'trigger', 'trigger-level', 'samples-shown', 'periods-shown',
+    'sample-rate', 'channels', 'source-channels', 'trigger-channel', 'fft-size',
+    'smoothing-time-constant',
+  ]) assert.equal(ScopeVisualizer.observedAttributes.includes(attribute), false);
 });

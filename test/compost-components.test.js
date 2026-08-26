@@ -236,64 +236,14 @@ test('piano touch drag transfers the active note between keys', () => {
   assert.equal(event.defaultPrevented, true);
 });
 
-test('scope period windows derive samples while keeping X markers in periods', () => {
-  const scope = Object.create(ScopeVisualizer.prototype);
-  Object.assign(scope, {
-    audioContext: { sampleRate: 48000 },
-    frequency: 200,
-    periodsShown: 4,
-    sampleRate: 44100,
-    samplesShown: 1024,
-  });
-
-  assert.equal(scope.visibleSampleCount(), 960);
-  assert.equal(scope.xAxisRange(), 4);
-
-  scope.periodsShown = null;
-  assert.equal(scope.visibleSampleCount(), 1024);
-  assert.equal(scope.xAxisRange(), 1024);
-});
-
-test('scope frequency changes do not rebuild an adequately sized audio tap', () => {
-  const scope = Object.create(ScopeVisualizer.prototype);
-  Object.assign(scope, {
-    channelIndexes: [0],
-    triggerChannel: null,
-    fftSize: 2048,
-    smoothingTimeConstant: 0,
-    frequency: 220,
-    periodsShown: 4,
-    samplesShown: 1024,
-    sampleRate: 48000,
-    audioContext: { sampleRate: 48000 },
-  });
-
-  const key = scope.audioConfigKey();
-  scope.frequency = 440;
-  assert.equal(scope.audioConfigKey(), key);
-
-  scope.fftSize = 4096;
-  assert.notEqual(scope.audioConfigKey(), key);
-});
-
-test('scope demo signal supplies external trigger pulses', () => {
-  const scope = Object.create(ScopeVisualizer.prototype);
-  Object.assign(scope, {
-    channelSamples: [new Float32Array(1024)],
-    triggerSamples: new Float32Array(1024),
-    frequency: 220,
-    drive: 0.2,
-    gain: 0.75,
-    gate: 1,
-    _level: 1,
-    _phase: 0.4,
-    ensureSampleBuffer() {},
-  });
-
-  scope.generateDemoSamples();
-
-  assert.ok(scope.triggerSamples.some((sample) => sample === 1));
-  assert.ok(scope.triggerSamples.some((sample) => sample === 0));
+test('scope keeps signal acquisition, policy, and palette choices outside the display', () => {
+  for (const attribute of [
+    'drive', 'gain', 'gate', 'background-color', 'grid-color', 'zero-color',
+    'trace-color', 'trace-colors', 'trigger-color', 'marker-color', 'label-color',
+  ]) {
+    assert.equal(ScopeVisualizer.observedAttributes.includes(attribute), false);
+  }
+  assert.equal('generateDemoSamples' in ScopeVisualizer.prototype, false);
 });
 
 test('knobs and sliders expose disabled as a real control state', () => {
