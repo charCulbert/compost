@@ -51,6 +51,7 @@ export class CircleButton extends HTMLElement {
         :host([pressed]) button,
         :host([data-active-flash]) button {
           background: var(--_accent);
+          color: AccentColorText;
         }
         button:disabled {
           cursor: default;
