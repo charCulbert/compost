@@ -17,36 +17,33 @@ export class MIDIMonitor extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-midi-monitor-bg: #ffffff;
-          --compost-midi-monitor-border: #111111;
-          --compost-midi-monitor-text: #111111;
-          --compost-midi-monitor-muted: #555555;
-          --compost-midi-monitor-color-scheme: light;
-          color-scheme: var(--compost-midi-monitor-color-scheme);
+          --compost-midi-monitor-bg: Canvas;
+          --compost-midi-monitor-border: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-midi-monitor-text: currentColor;
+          --compost-midi-monitor-muted: color-mix(in srgb, currentColor 65%, transparent);
           display: block;
           color: var(--compost-midi-monitor-text);
           font: inherit;
         }
         .panel {
           display: grid;
-          gap: 7px;
+          gap: 0.4em;
         }
         .label {
           color: var(--compost-midi-monitor-muted);
-          font-size: 12px;
-          opacity: 0.72;
+          font-size: 0.85em;
         }
         pre {
-          min-height: var(--compost-midi-monitor-height, 150px);
-          max-height: var(--compost-midi-monitor-max-height, 260px);
+          min-height: var(--compost-midi-monitor-height, 9em);
+          max-height: var(--compost-midi-monitor-max-height, 16em);
           overflow: auto;
           margin: 0;
-          padding: 10px;
+          padding: 0.65em;
           border: 1px solid var(--compost-midi-monitor-border);
-          border-radius: 4px;
+          border-radius: 0;
           background: var(--compost-midi-monitor-bg);
           color: var(--compost-midi-monitor-text);
-          font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+          font: 0.75em/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
           white-space: pre-wrap;
         }
         .entry {

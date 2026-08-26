@@ -137,6 +137,11 @@
     <compost-midi></compost-midi>
   </div>
 </template>
+<template id="compost-midi-monitor">
+  <div style="width: min(36em, calc(100vw - 64px))">
+    <compost-midi-monitor></compost-midi-monitor>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -220,6 +225,13 @@
           return snapshot;
         },
       });
+    }
+    if (el === 'compost-midi-monitor') {
+      const monitor = s.querySelector('compost-midi-monitor');
+      monitor.handleMIDIMessage([0x90, 60, 104]);
+      monitor.handleMIDIMessage([0xb0, 74, 89]);
+      monitor.handleMIDIMessage([0x80, 60, 0]);
+      monitor.handleMIDIMessage([0xf8, 0, 0]);
     }
     if (el === 'compost-envelope-editor') {
       const editor = s.querySelector('compost-envelope-editor');
