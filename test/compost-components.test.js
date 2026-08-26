@@ -660,6 +660,18 @@ test('knob pointer and typed gestures close once with cancellation details', () 
     ]);
     assert.equal(events.at(-1).detail.cancelled, true);
 
+    // A secondary button (context menu) must not start a drag at all.
+    events.length = 0;
+    control.beginDrag({
+      pointerId: 3,
+      button: 2,
+      clientX: 0,
+      clientY: 0,
+      preventDefault() {},
+    });
+    assert.deepEqual(lifecycleTypes(events), []);
+    assert.equal(windowListeners.has('pointermove'), false);
+
     events.length = 0;
     control.beginValueEdit('0.5');
     const validInput = control.valueElement.child;

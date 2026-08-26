@@ -326,7 +326,9 @@ export class SynthKnob extends HTMLElement {
   }
 
   beginDrag(event) {
-    if (this.disabled) return;
+    // Only the primary button drags. A secondary button opens the context
+    // menu, which swallows the pointerup and would leave the drag running.
+    if (this.disabled || (event.button !== undefined && event.button !== 0)) return;
 
     event.preventDefault();
     HTMLElement.prototype.focus.call(this, { preventScroll: true });
