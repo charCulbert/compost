@@ -34,48 +34,35 @@ export class WebMIDI extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-midi-panel-bg: transparent;
-          --compost-midi-border: transparent;
-          --compost-midi-text: #111111;
-          --compost-midi-muted: #555555;
-          --compost-midi-control-bg: #ffffff;
-          --compost-midi-control-border: #111111;
-          --compost-midi-focus-color: #111111;
-          --compost-midi-color-scheme: light;
-          color-scheme: var(--compost-midi-color-scheme);
+          --compost-midi-text: currentColor;
+          --compost-midi-muted: color-mix(in srgb, currentColor 65%, transparent);
+          color: var(--compost-midi-text);
           display: block;
+          font: inherit;
         }
         .panel {
           display: grid;
-          gap: 12px;
+          gap: 0.75em;
           padding: 0;
           border: 0;
           border-radius: 0;
           background: transparent;
-          color: var(--compost-midi-text);
-          font-size: 13px;
+          color: inherit;
+          font: inherit;
         }
         .row {
           display: grid;
-          grid-template-columns: var(--compost-midi-columns, repeat(auto-fit, minmax(min(100%, 130px), 1fr)));
-          gap: 12px;
+          grid-template-columns: var(--compost-midi-columns, repeat(auto-fit, minmax(min(100%, 8em), 1fr)));
+          gap: 1em;
         }
-        .field { display: grid; gap: 7px; }
+        .field { display: grid; gap: 0.35em; }
         .field[hidden] { display: none !important; }
-        label { display: block; }
+        label { display: block; font-size: 0.85em; }
         compost-select {
-          --compost-select-bg: var(--compost-midi-control-bg);
-          --compost-select-border: var(--compost-midi-control-border);
-          --compost-select-text: var(--compost-midi-text);
-          --compost-select-active-bg: var(--compost-midi-focus-color);
-          --compost-select-active-text: var(--compost-midi-active-text, var(--compost-midi-control-bg));
-          --compost-select-hover-bg: color-mix(in srgb, var(--compost-midi-control-bg) 82%, var(--compost-midi-text));
-          --compost-select-focus: var(--compost-midi-focus-color);
-          --compost-select-height: 30px;
           min-width: 0;
           width: 100%;
         }
-        .status { color: var(--compost-midi-muted); font-size: 12px; opacity: 0.72; }
+        .status { color: var(--compost-midi-muted); font-size: 0.85em; }
         .sr-only {
           position: absolute;
           width: 1px;

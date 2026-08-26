@@ -132,6 +132,11 @@
 <template id="compost-device-selector">
   <compost-device-selector></compost-device-selector>
 </template>
+<template id="compost-midi">
+  <div style="width: min(30em, calc(100vw - 64px))">
+    <compost-midi></compost-midi>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -160,7 +165,7 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-window') {
