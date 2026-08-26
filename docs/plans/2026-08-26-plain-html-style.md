@@ -30,6 +30,15 @@ shapes; everything after applies them.
 - [ ] compost-note-editor
 - [ ] compost-timeline
 
+## Done ahead of the elements
+
+`src/themes.css` and the `[data-compost-theme]` bridge rule are retired: no
+`./themes` export, no runtime theme picker in the examples. Every example
+that leaned on the old picker (signal generator's theme buttons, the shared
+theme selector) is broken until its element's round rebuilds it on plain
+`color` / `color-scheme` / `--compost-accent`, per README, Style. Expected;
+don't patch it early.
+
 ## Each round
 
 What gets done, in this order:
@@ -38,13 +47,12 @@ What gets done, in this order:
    pins out, `currentColor` / `--compost-accent` / `Canvas` in, square focus
    and learn rings, sizes in `em`, every structural piece named with `part`.
    Geometry tokens stay.
-2. Delete the element's block from `src/themes.css`.
-3. Any bug met on the way is its own commit with its own test.
-4. Update `src/components/<element>.d.ts` for any attribute or property that
+2. Any bug met on the way is its own commit with its own test.
+3. Update `src/components/<element>.d.ts` for any attribute or property that
    changed; parts are named in the element's template.
-5. Add the element's scenario to the review page, run the unit tests and a
+4. Add the element's scenario to the review page, run the unit tests and a
    headless render check in all three contexts.
-6. Commit: `style: <element> follows the plain-HTML ethos`.
+5. Commit: `style: <element> follows the plain-HTML ethos`.
 
 ## Verifying a round
 
@@ -78,9 +86,7 @@ commit in the same round.
 1. Interface pass: attribute↔property reflection, intent-event names and
    `detail` shapes, `disabled`, form association via `ElementInternals`; one
    conformance table and one shared test that runs against every element.
-2. Collapse `src/themes.css` to palettes that set `color`, `color-scheme` and
-   `--compost-accent`; rewrite `docs/themes.md`; retire the bridge rule.
-3. Examples: one minimal page per element showing one scenario, with the
+2. Examples: one minimal page per element showing one scenario, with the
    markup on the page, defaults only. The bigger showcases (signal generator,
    parameter sync) stay as the place several elements and a real backend meet.
 

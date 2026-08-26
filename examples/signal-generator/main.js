@@ -23,8 +23,6 @@ import {
   editParameterGesture,
   endParameterGesture,
 } from '../../src/utils.js';
-import { setTheme } from '../shared/example-page.js';
-
 const params = {
   frequency: 220,
   amplitude: 1,
@@ -263,12 +261,6 @@ for (const button of scopeWindowModeButtons) {
 presetGroup.addEventListener('change', (event) => {
   applySignalPreset(event.target.value);
 });
-
-for (const button of themeButtons) {
-  button.addEventListener('click', () => applyColorPreset(button.dataset.themeValue));
-}
-window.addEventListener('compost-theme-change', (event) => syncThemeButtons(event.detail.theme));
-syncThemeButtons(document.documentElement.dataset.compostTheme);
 
 for (const button of waveShapeButtons) {
   button.addEventListener('click', () => {
@@ -539,19 +531,6 @@ function setActiveSignalPreset(name) {
   presetGroup.value = name;
 }
 
-function applyColorPreset(name) {
-  if (!['dark', 'light', 'gruvbox'].includes(name)) return;
-
-  document.body.removeAttribute('data-component-defaults');
-  setTheme(name);
-}
-
-function syncThemeButtons(name) {
-  for (const button of themeButtons) {
-    button.setAttribute('aria-checked', String(button.dataset.themeValue === name));
-  }
-}
-
 function setScopeWindowMode(mode, { resetMarkers = false } = {}) {
   scopeParams.windowMode = mode === 'samples' ? 'samples' : 'periods';
 
@@ -590,5 +569,4 @@ function updateWaveShapeButtons() {
 }
 
 applySignalPreset('saw-standard');
-applyColorPreset('dark');
 syncDemo();

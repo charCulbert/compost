@@ -1,29 +1,14 @@
-@import url('../../src/themes.css');
-
+/* Retired: the runtime theme picker and its --compost-theme-* bridge. This
+   stylesheet still leans on --bg/--panel/--line/--text/--muted/--accent for
+   page chrome below; those are unset now, so the examples look wrong until
+   they're rebuilt on plain color/color-scheme/--compost-accent per README. */
 :root {
-  --bg: var(--compost-theme-bg);
-  --panel: var(--compost-theme-panel);
-  --panel-glass: var(--compost-theme-panel-glass);
-  --line: var(--compost-theme-line);
-  --text: var(--compost-theme-text);
-  --muted: var(--compost-theme-muted);
-  --accent: var(--compost-theme-accent);
-  --learn: var(--compost-theme-learn);
-  --learn-shadow: none;
-  --danger: var(--compost-theme-danger);
-  --control-bg: var(--compost-theme-control-bg);
-  --control-border: var(--compost-theme-control-border);
-  --track: var(--compost-theme-track);
-  --key-active: var(--compost-theme-accent);
   --piano-neutral-natural-bg: #d8d8d6;
   --piano-neutral-natural-border: #151515;
   --piano-neutral-accidental-bg: #151515;
   --piano-neutral-accidental-border: #151515;
   --piano-neutral-label: #555555;
   --piano-neutral-active: #6d98cc;
-  --active-text: var(--compost-theme-active-text);
-  --example-color-scheme: var(--compost-theme-color-scheme);
-  color-scheme: var(--example-color-scheme);
   --compost-ui-font: ui-sans-serif, system-ui, sans-serif;
   font-family: var(--compost-ui-font);
 }

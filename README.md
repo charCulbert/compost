@@ -108,9 +108,7 @@ test for every visual decision. The elements bring behaviour, not a palette:
 
 With no CSS you get black on white, system font, OS accent. To change the
 look, set `color`, `font`, `color-scheme` and `--compost-accent` on the page;
-use `::part()` for anything finer. The older `src/themes.css` /
-`data-compost-theme` palettes still work through a bridge rule while the
-elements move over, and go away after.
+use `::part()` for anything finer.
 
 ## Install
 

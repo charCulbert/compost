@@ -36,7 +36,6 @@
     "./components/compost-select": "./src/components/compost-select.js",
     "./components/compost-slider": "./src/components/compost-slider.js",
     "./components/compost-window": "./src/components/compost-window.js",
-    "./themes": "./src/themes.css",
     "./device-settings": "./src/device-settings.js",
     "./midi": "./src/midi.js",
     "./midi-learn-ui": "./src/midi-learn-ui.js",
