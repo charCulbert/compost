@@ -162,6 +162,7 @@ export class SynthKnob extends HTMLElement {
           color: var(--_accent);
           font-size: 0.65em;
           font-weight: 700;
+          font-variant-numeric: lining-nums tabular-nums;
           line-height: 1;
           overflow: hidden;
           pointer-events: none;
@@ -203,7 +204,7 @@ export class SynthKnob extends HTMLElement {
         .value {
           color: var(--_muted);
           font-size: calc(0.75em * var(--knob-scale));
-          font-variant-numeric: tabular-nums;
+          font-variant-numeric: lining-nums tabular-nums;
           min-block-size: 1.3em;
           min-inline-size: calc(var(--knob-value-editor-width, 4.5em) * var(--knob-scale));
           position: relative;
