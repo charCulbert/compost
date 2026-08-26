@@ -37,6 +37,12 @@
     <compost-slider label="Cutoff (relative drag)" min="20" max="20000" value="800" curve="log" unit="Hz" interaction="relative"></compost-slider>
   </div>
 </template>
+<template id="compost-button">
+  <compost-button label="Ping"></compost-button>
+  <compost-button label="Bypass" mode="switch" pressed></compost-button>
+  <compost-button label="Disabled" disabled></compost-button>
+  <compost-button label="Learning" data-midi-map-target-active data-midi-map-mode data-midi-map-label style="--midi-map-label:'CC 12'"></compost-button>
+</template>
 
 <div id="root"></div>
 <pre id="markup"></pre>
@@ -59,7 +65,7 @@
     if (tpl) s.querySelector('.row').append(tpl.content.cloneNode(true));
     else s.querySelector('.row').textContent = `No template for ${el} yet: add <template id="${el}"> to this page.`;
     const out = s.querySelector('output');
-    for (const type of ['parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change'])
+    for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change'])
       s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     document.getElementById('root').append(s);
   }

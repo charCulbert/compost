@@ -25,42 +25,20 @@ export class CircleButton extends HTMLElement {
       <style>
         :host {
           display: inline-block;
-          --compost-button-bg: #ffffff;
-          --compost-button-border: #111111;
-          --compost-button-text: #111111;
-          --compost-button-fill: #111111;
-          --compost-button-fill-text: #ffffff;
-          --compost-button-border-width: 3px;
-          --compost-button-radius: 0;
-          --compost-button-focus-bracket-color: #111111;
-          --compost-button-focus-bracket-offset: 9px;
-          --compost-button-focus-bracket-pulse-offset: 10px;
-          --compost-button-focus-bracket-length: 11px;
-          --compost-button-focus-bracket-thickness: 2px;
-          --compost-button-focus-bracket-opacity: 0.45;
-          --compost-button-gap: #ffffff;
-          --compost-button-ring-space: 10px;
           --compost-button-flash-ms: 180ms;
-          --compost-button-color-scheme: light;
-          --midi-map-learn-color: #005fc0;
-          --midi-map-label-text: var(--midi-map-learn-color);
-          --midi-map-label-shadow: none;
-          color-scheme: var(--compost-button-color-scheme);
-          color: var(--compost-button-text);
+          --_accent: var(--compost-accent, AccentColor);
           font: inherit;
-          padding: var(--compost-button-ring-space);
           -webkit-user-select: none;
           user-select: none;
         }
         button {
-          width: var(--compost-button-width, var(--compost-button-size, 64px));
-          height: var(--compost-button-height, var(--compost-button-size, 64px));
-          border: var(--compost-button-border-width) solid var(--compost-button-gap);
-          border-radius: var(--compost-button-radius);
-          background: var(--compost-button-bg);
-          color: var(--compost-button-text);
-          outline: var(--compost-button-outline-width, 1px) solid var(--compost-button-border);
-          outline-offset: 0;
+          box-sizing: border-box;
+          width: var(--compost-button-width, var(--compost-button-size, 4em));
+          height: var(--compost-button-height, var(--compost-button-size, 4em));
+          border: 1px solid currentColor;
+          border-radius: 0;
+          background: Canvas;
+          color: inherit;
           cursor: pointer;
           font: inherit;
           display: grid;
@@ -70,67 +48,24 @@ export class CircleButton extends HTMLElement {
           touch-action: manipulation;
           position: relative;
         }
-        button::before {
-          content: "";
-          position: absolute;
-          inset: calc(-1 * var(--compost-button-focus-bracket-offset));
-          border: 0 solid var(--compost-button-focus-bracket-color);
-          opacity: 0;
-          pointer-events: none;
-        }
-        button::after {
-          content: "";
-          position: absolute;
-          inset: calc(-1 * var(--compost-button-focus-bracket-offset));
-          border: 0 solid var(--compost-button-focus-bracket-color);
-          opacity: 0;
-          pointer-events: none;
-        }
-        button::before {
-          border-top-width: var(--compost-button-focus-bracket-thickness);
-          border-bottom-width: var(--compost-button-focus-bracket-thickness);
-          clip-path: polygon(0 0, var(--compost-button-focus-bracket-length) 0, var(--compost-button-focus-bracket-length) 100%, 0 100%, 0 0, 100% 0, calc(100% - var(--compost-button-focus-bracket-length)) 0, calc(100% - var(--compost-button-focus-bracket-length)) 100%, 100% 100%, 100% 0);
-        }
-        button::after {
-          border-left-width: var(--compost-button-focus-bracket-thickness);
-          border-right-width: var(--compost-button-focus-bracket-thickness);
-          clip-path: polygon(0 0, 100% 0, 100% var(--compost-button-focus-bracket-length), 0 var(--compost-button-focus-bracket-length), 0 0, 0 100%, 100% 100%, 100% calc(100% - var(--compost-button-focus-bracket-length)), 0 calc(100% - var(--compost-button-focus-bracket-length)), 0 100%);
-        }
         :host([pressed]) button,
         :host([data-active-flash]) button {
-          outline-color: var(--compost-button-fill);
-          background: var(--compost-button-fill);
-          color: var(--compost-button-fill-text);
-        }
-        button:active {
-          opacity: 0.82;
+          background: var(--_accent);
         }
         button:disabled {
           cursor: default;
           opacity: 0.45;
         }
         button:focus-visible {
-          outline-width: 1px;
-          outline-offset: 0;
+          outline: 2px solid currentColor;
+          outline-offset: 2px;
         }
-        button:focus::before,
-        button:focus::after {
-          opacity: var(--compost-button-focus-bracket-opacity);
+        :host([data-midi-map-target-active]) button {
+          outline: 2px solid var(--_accent);
+          outline-offset: 2px;
         }
-        button:focus-visible::before,
-        button:focus-visible::after {
-          opacity: 1;
-        }
-        :host([data-midi-map-target-active]) button::before,
-        :host([data-midi-map-target-active]) button::after {
-          border-color: var(--midi-map-learn-color);
-          inset: calc(-1 * var(--compost-button-focus-bracket-offset));
-          opacity: 1;
-          transition: inset 220ms ease;
-        }
-        :host([data-midi-map-target-active][data-midi-map-pulse]) button::before,
-        :host([data-midi-map-target-active][data-midi-map-pulse]) button::after {
-          inset: calc(-1 * var(--compost-button-focus-bracket-pulse-offset));
+        :host([data-midi-map-target-active][data-midi-map-pulse]) button {
+          outline-offset: 4px;
         }
         :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
           content: var(--midi-map-label);
@@ -138,26 +73,17 @@ export class CircleButton extends HTMLElement {
           left: 50%;
           top: 50%;
           z-index: 2;
-          max-width: calc(100% - 10px);
-          padding: 0;
-          color: var(--midi-map-label-text);
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.02em;
+          max-width: calc(100% - 0.625em);
+          color: var(--_accent);
+          font-size: 0.65em;
+          font-weight: 700;
+          font-variant-numeric: lining-nums tabular-nums;
           line-height: 1;
-          opacity: 1;
           overflow: hidden;
           pointer-events: none;
-          text-shadow: var(--midi-map-label-shadow);
           text-overflow: ellipsis;
           transform: translate(-50%, -50%);
           white-space: nowrap;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          :host([data-midi-map-target-active]) button::before,
-          :host([data-midi-map-target-active]) button::after {
-            transition: none;
-          }
         }
         .content {
           grid-area: 1 / 1;
@@ -169,6 +95,7 @@ export class CircleButton extends HTMLElement {
           height: 100%;
           padding: var(--compost-button-label-padding, 0 8px);
           pointer-events: none;
+          font-size: var(--compost-button-label-size, 0.75em);
           text-align: center;
           line-height: 1;
         }
@@ -181,7 +108,8 @@ export class CircleButton extends HTMLElement {
           width: 100%;
           height: 100%;
           line-height: 1.05;
-          overflow-wrap: anywhere;
+          overflow-wrap: normal;
+          word-break: normal;
           white-space: normal;
         }
         .midi-map-label {
@@ -194,23 +122,25 @@ export class CircleButton extends HTMLElement {
         .fallback {
           display: block;
           line-height: 1.05;
-          max-width: var(--compost-button-label-max-width, calc(100% - 12px));
+          max-width: var(--compost-button-label-max-width, calc(100% - 0.75em));
           overflow: visible;
-          overflow-wrap: anywhere;
+          overflow-wrap: normal;
           text-overflow: clip;
+          word-break: normal;
           white-space: normal;
         }
         ::slotted(*) {
           display: block;
           line-height: 1.05;
-          max-width: var(--compost-button-label-max-width, calc(100% - 12px));
-          overflow-wrap: anywhere;
+          max-width: var(--compost-button-label-max-width, calc(100% - 0.75em));
+          overflow-wrap: normal;
+          word-break: normal;
           white-space: normal;
         }
       </style>
       <button part="button" type="button">
         <span class="content" part="label"><slot><span class="fallback"></span></slot></span>
-        <span class="midi-map-label" aria-hidden="true"></span>
+        <span class="midi-map-label" part="midi-map-label" aria-hidden="true"></span>
       </button>`;
 
     this.button = this.root.querySelector('button');
