@@ -481,12 +481,6 @@ test('parameter lifecycle details always state whether the gesture was cancelled
   assert.equal(events.at(-1).detail.cancelled, true);
 });
 
-test('number box MIDI labels replace the inline value', () => {
-  const source = fs.readFileSync(new URL('../src/components/compost-number-box.js', import.meta.url), 'utf8');
-  assert.match(source, /\.midi-map-label::after \{[\s\S]*top: 50%;[\s\S]*transform: translate\(-50%, -50%\)/u);
-  assert.match(source, /\[data-midi-map-mode\]\[data-midi-map-label\]\) \.value \{[\s\S]*opacity: 0/u);
-});
-
 test('momentary button ignores silent backend reflection', () => {
   const button = Object.create(CircleButton.prototype);
   let triggers = 0;

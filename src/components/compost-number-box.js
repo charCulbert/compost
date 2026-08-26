@@ -98,27 +98,18 @@ export class CompostNumberBox extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --number-box-bg: #f4f4f4;
-          --number-box-text: #111111;
-          --number-box-border: #bdbdbd;
-          --number-box-active-bg: #d8edf4;
-          --number-box-active-text: #111111;
-          --number-box-fill: rgba(0, 95, 192, 0.28);
-          --number-box-focus: #111111;
-          --number-box-width: 72px;
-          --number-box-height: 24px;
-          --number-box-padding: 0 5px;
-          --number-box-font-size: 13px;
-          --number-box-font-weight: 700;
+          --number-box-width: 4.5em;
+          --number-box-height: 1.5em;
+          --number-box-padding: 0 0.3125em;
+          --number-box-font-size: 0.8125em;
           --number-box-text-align: center;
-          --number-box-color-scheme: light;
-          --number-box-cursor: ns-resize;
+          --number-box-cursor: move;
           --number-box-percent: 0%;
-          --midi-map-learn-color: #005fc0;
-          --midi-map-label-text: var(--midi-map-learn-color);
-          --midi-map-label-shadow: none;
-          color-scheme: var(--number-box-color-scheme);
-          display: inline-block;
+          --_accent: var(--compost-accent, AccentColor);
+          --_fill: color-mix(in srgb, var(--_accent) 30%, transparent);
+          --_muted: color-mix(in srgb, currentColor 65%, transparent);
+          display: inline-grid;
+          gap: 0.25em;
           inline-size: var(--number-box-width);
           font: inherit;
           -webkit-user-select: none;
@@ -131,18 +122,18 @@ export class CompostNumberBox extends HTMLElement {
           block-size: var(--number-box-height);
           display: grid;
           place-items: center;
-          border: 1px solid var(--number-box-border);
+          border: 1px solid currentColor;
           border-radius: 0;
           background:
             linear-gradient(90deg,
-              var(--number-box-fill) 0 var(--number-box-percent, 0%),
+              var(--_fill) 0 var(--number-box-percent, 0%),
               transparent var(--number-box-percent, 0%) 100%),
-            var(--number-box-bg);
-          color: var(--number-box-text);
+            Canvas;
+          color: inherit;
           cursor: var(--number-box-cursor);
           font: inherit;
           font-size: var(--number-box-font-size);
-          font-weight: var(--number-box-font-weight);
+          font-weight: var(--number-box-font-weight, inherit);
           line-height: 1;
           padding: var(--number-box-padding);
           position: relative;
@@ -151,14 +142,9 @@ export class CompostNumberBox extends HTMLElement {
           -webkit-user-select: none;
           user-select: none;
         }
-        .box:active,
-        :host([data-dragging]) .box {
-          color: var(--number-box-active-text);
-        }
-        .box:focus,
         .box:focus-visible {
-          outline: 2px solid var(--number-box-focus);
-          outline-offset: 1px;
+          outline: 2px solid currentColor;
+          outline-offset: 2px;
         }
         .value {
           display: grid;
@@ -170,11 +156,11 @@ export class CompostNumberBox extends HTMLElement {
           inline-size: 100%;
           font: inherit;
           font-size: var(--number-box-font-size);
-          font-weight: var(--number-box-font-weight);
+          font-weight: var(--number-box-font-weight, inherit);
           line-height: 1;
         }
         .value.placeholder {
-          color: color-mix(in srgb, var(--number-box-text) 62%, transparent);
+          color: var(--_muted);
         }
         input {
           box-sizing: border-box;
@@ -188,7 +174,7 @@ export class CompostNumberBox extends HTMLElement {
           align-items: center;
           font: inherit;
           font-size: var(--number-box-font-size);
-          font-weight: var(--number-box-font-weight);
+          font-weight: var(--number-box-font-weight, inherit);
           line-height: 1;
           outline: 0;
           padding: 0;
@@ -199,38 +185,37 @@ export class CompostNumberBox extends HTMLElement {
         }
         :host([disabled]) .box {
           cursor: default;
-          opacity: 0.48;
+          opacity: 0.45;
         }
         :host([data-midi-map-target-active]) .box {
-          outline: 2px solid var(--midi-map-learn-color);
-          outline-offset: 1px;
+          outline: 2px solid var(--_accent);
+          outline-offset: 2px;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
-          content: var(--midi-map-label);
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          z-index: 2;
-          max-width: calc(100% - 10px);
-          color: var(--midi-map-label-text);
-          font-size: 9px;
-          font-weight: 800;
+        .midi-map-label {
+          display: none;
+          min-width: 0;
+          color: var(--_accent);
+          font-size: 0.65em;
+          font-weight: 700;
+          font-variant-numeric: lining-nums tabular-nums;
           line-height: 1;
           overflow: hidden;
           pointer-events: none;
-          text-shadow: var(--midi-map-label-shadow);
           text-overflow: ellipsis;
-          transform: translate(-50%, -50%);
+          text-align: center;
           white-space: nowrap;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .value {
-          opacity: 0;
+        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label {
+          display: block;
+        }
+        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
+          content: var(--midi-map-label);
         }
       </style>
       <div class="box" part="box" tabindex="0" role="spinbutton">
         <span class="value" part="value"></span>
-        <span class="midi-map-label" aria-hidden="true"></span>
-      </div>`;
+      </div>
+      <span class="midi-map-label" part="midi-map-label" aria-hidden="true"></span>`;
 
     this.box = this.root.querySelector('.box');
     this.valueElement = this.root.querySelector('.value');
@@ -652,6 +637,7 @@ export class CompostNumberBox extends HTMLElement {
     this.editing = true;
     beginParameterGesture(this, this.value);
     const input = document.createElement('input');
+    input.setAttribute('part', 'input');
     input.type = 'text';
     input.inputMode = 'decimal';
     input.value = initialValue;
