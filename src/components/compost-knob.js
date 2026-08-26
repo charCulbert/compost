@@ -80,51 +80,38 @@ export class SynthKnob extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --knob-panel-bg: transparent;
-          --knob-border: transparent;
-          --knob-text: #111111;
-          --knob-value: #555555;
-          --knob-fill: #111111;
-          --knob-track: rgba(17, 17, 17, 0.38);
           --knob-scale: 1;
-          --knob-dial-size: 76px;
-          --knob-ring-width: 7px;
+          --knob-dial-size: 4.75em;
+          --knob-ring-width: 0.45em;
           --knob-ring-stroke-width: calc(var(--knob-ring-width) * var(--knob-scale));
           --knob-cap-size: calc(var(--knob-dial-size) - (var(--knob-ring-width) * 2));
           --knob-cap-inset: calc(((var(--knob-dial-size) - var(--knob-cap-size)) / 2) * var(--knob-scale));
-          --knob-cap: #f7f7f7;
-          --knob-cap-border: #111111;
-          --knob-indicator: #111111;
-          --knob-indicator-width: calc(1px * var(--knob-scale));
-          --knob-indicator-inset: calc(5px * var(--knob-scale));
-          --knob-indicator-length: calc(13px * var(--knob-scale));
-          --knob-focus-bracket-color: #111111;
-          --knob-focus-bracket-base-offset: 7px;
-          --knob-focus-bracket-base-pulse-offset: 9px;
-          --knob-focus-bracket-base-length: 12px;
-          --knob-focus-bracket-base-thickness: 2px;
-          --knob-focus-bracket-offset: calc(var(--knob-focus-bracket-base-offset) * var(--knob-scale));
-          --knob-focus-bracket-pulse-offset: calc(var(--knob-focus-bracket-base-pulse-offset) * var(--knob-scale));
-          --knob-focus-bracket-length: calc(var(--knob-focus-bracket-base-length) * var(--knob-scale));
-          --knob-focus-bracket-thickness: calc(var(--knob-focus-bracket-base-thickness) * var(--knob-scale));
-          --knob-focus-bracket-opacity: 0.45;
-          --knob-color-scheme: light;
-          --midi-map-learn-color: #005fc0;
-          --midi-map-label-text: var(--midi-map-learn-color);
-          --midi-map-label-shadow: none;
-          color-scheme: var(--knob-color-scheme);
-          display: block;
+          --knob-indicator-width: 1px;
+          --knob-indicator-inset: calc(0.3em * var(--knob-scale));
+          --knob-indicator-length: calc(0.8em * var(--knob-scale));
+          --_accent: var(--compost-accent, AccentColor);
+          --_muted: color-mix(in srgb, currentColor 65%, transparent);
+          --_track: color-mix(in srgb, currentColor 30%, transparent);
+          display: inline-block;
+          vertical-align: top;
           -webkit-user-select: none;
           user-select: none;
+        }
+        :host(:focus-visible) {
+          outline: auto;
+          outline-offset: 2px;
+        }
+        :host([data-midi-map-target-active]) {
+          outline: 2px solid var(--_accent);
+          outline-offset: 2px;
+        }
+        :host([data-midi-map-target-active][data-midi-map-pulse]) {
+          outline-offset: 4px;
         }
         .knob {
           display: grid;
           justify-items: center;
-          gap: calc(10px * var(--knob-scale));
-          padding: 0;
-          border: 0;
-          border-radius: 0;
-          background: transparent;
+          gap: calc(0.6em * var(--knob-scale));
           position: relative;
         }
         .dial {
@@ -132,15 +119,11 @@ export class SynthKnob extends HTMLElement {
           --arc: 0deg;
           width: calc(var(--knob-dial-size) * var(--knob-scale));
           height: calc(var(--knob-dial-size) * var(--knob-scale));
-          border: 0;
           border-radius: 50%;
           display: grid;
           place-items: center;
-          background: transparent;
           cursor: ns-resize;
           touch-action: none;
-          opacity: 0.82;
-          overflow: visible;
           position: relative;
         }
         .ring {
@@ -149,8 +132,8 @@ export class SynthKnob extends HTMLElement {
           border-radius: 50%;
           background:
             conic-gradient(from -135deg,
-              var(--knob-fill) 0deg var(--arc),
-              var(--knob-track) var(--arc) 270deg,
+              var(--_accent) 0deg var(--arc),
+              var(--_track) var(--arc) 270deg,
               transparent 270deg);
           -webkit-mask:
             radial-gradient(farthest-side,
@@ -162,61 +145,12 @@ export class SynthKnob extends HTMLElement {
               #000 calc(100% - var(--knob-ring-stroke-width)));
           pointer-events: none;
         }
-        .focus-brackets {
-          position: absolute;
-          inset: calc(-1 * var(--knob-focus-bracket-offset));
-          opacity: 0;
-          pointer-events: none;
-          z-index: 1;
-        }
-        .focus-brackets::before,
-        .focus-brackets::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          border: 0 solid var(--knob-focus-bracket-color);
-          pointer-events: none;
-        }
-        .focus-brackets::before {
-          border-top-width: var(--knob-focus-bracket-thickness);
-          border-bottom-width: var(--knob-focus-bracket-thickness);
-          clip-path: polygon(0 0, var(--knob-focus-bracket-length) 0, var(--knob-focus-bracket-length) 100%, 0 100%, 0 0, 100% 0, calc(100% - var(--knob-focus-bracket-length)) 0, calc(100% - var(--knob-focus-bracket-length)) 100%, 100% 100%, 100% 0);
-        }
-        .focus-brackets::after {
-          border-left-width: var(--knob-focus-bracket-thickness);
-          border-right-width: var(--knob-focus-bracket-thickness);
-          clip-path: polygon(0 0, 100% 0, 100% var(--knob-focus-bracket-length), 0 var(--knob-focus-bracket-length), 0 0, 0 100%, 100% 100%, 100% calc(100% - var(--knob-focus-bracket-length)), 0 calc(100% - var(--knob-focus-bracket-length)), 0 100%);
-        }
-        .dial:active {
-          opacity: 1;
-        }
         :host([disabled]) .knob {
           opacity: 0.45;
         }
         :host([disabled]) .dial,
         :host([disabled]) .value {
           cursor: default;
-        }
-        :host(:focus) {
-          outline: none;
-        }
-        :host(:focus) .focus-brackets {
-          opacity: var(--knob-focus-bracket-opacity);
-        }
-        :host(:focus-visible) .focus-brackets {
-          opacity: 1;
-        }
-        :host([data-midi-map-target-active]) .focus-brackets {
-          inset: calc(-1 * var(--knob-focus-bracket-offset));
-          opacity: 1;
-          transition: inset 220ms ease;
-        }
-        :host([data-midi-map-target-active]) .focus-brackets::before,
-        :host([data-midi-map-target-active]) .focus-brackets::after {
-          border-color: var(--midi-map-learn-color);
-        }
-        :host([data-midi-map-target-active][data-midi-map-pulse]) .focus-brackets {
-          inset: calc(-1 * var(--knob-focus-bracket-pulse-offset));
         }
         :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
           content: var(--midi-map-label);
@@ -225,43 +159,32 @@ export class SynthKnob extends HTMLElement {
           top: 50%;
           z-index: 2;
           max-width: calc(100% - 10px);
-          padding: 0;
-          color: var(--midi-map-label-text);
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.02em;
+          color: var(--_accent);
+          font-size: 0.65em;
+          font-weight: 700;
           line-height: 1;
-          opacity: 1;
           overflow: hidden;
           pointer-events: none;
-          text-shadow: var(--midi-map-label-shadow);
           text-overflow: ellipsis;
           transform: translate(-50%, -50%);
           white-space: nowrap;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          :host([data-midi-map-target-active]) .focus-brackets {
-            transition: none;
-          }
         }
         .cap {
           box-sizing: border-box;
           position: absolute;
           inset: var(--knob-cap-inset);
-          border: 1px solid var(--knob-cap-border);
+          border: 1px solid currentColor;
           border-radius: 50%;
-          background: var(--knob-cap);
           z-index: 1;
         }
         .cap::before {
           content: "";
           position: absolute;
           left: 50%;
-          top: var(--knob-indicator-inset, 5px);
-          width: var(--knob-indicator-width, 1px);
-          height: var(--knob-indicator-length, 13px);
-          border-radius: 8px;
-          background: var(--knob-indicator);
+          top: var(--knob-indicator-inset);
+          width: var(--knob-indicator-width);
+          height: var(--knob-indicator-length);
+          background: currentColor;
           transform: translateX(-50%);
         }
         .midi-map-label {
@@ -272,25 +195,22 @@ export class SynthKnob extends HTMLElement {
           z-index: 2;
         }
         .label {
-          color: var(--knob-text);
-          font-size: calc(13px * var(--knob-scale));
+          font-size: calc(0.8125em * var(--knob-scale));
           line-height: 1.2;
           text-align: center;
           overflow-wrap: anywhere;
         }
         .value {
-          color: var(--knob-value);
-          font-size: calc(12px * var(--knob-scale));
+          color: var(--_muted);
+          font-size: calc(0.75em * var(--knob-scale));
           font-variant-numeric: tabular-nums;
           min-block-size: 1.3em;
-          min-inline-size: calc(var(--knob-value-editor-width, 72px) * var(--knob-scale));
-          opacity: 0.72;
+          min-inline-size: calc(var(--knob-value-editor-width, 4.5em) * var(--knob-scale));
           position: relative;
           text-align: center;
         }
         :host([editable]:not([disabled])) .value {
           cursor: text;
-          border-radius: 4px;
           padding: 1px 4px;
         }
         .value-editor {
@@ -298,13 +218,12 @@ export class SynthKnob extends HTMLElement {
           left: 50%;
           top: 50%;
           z-index: 4;
-          width: calc(var(--knob-value-editor-width, 72px) * var(--knob-scale));
-          border: 1px solid var(--knob-cap-border);
-          border-radius: 4px;
-          background: var(--knob-cap);
-          color: var(--knob-text);
+          width: calc(var(--knob-value-editor-width, 4.5em) * var(--knob-scale));
+          border: 1px solid currentColor;
+          border-radius: 0;
+          background: Field;
+          color: inherit;
           font: inherit;
-          font-size: 12px;
           text-align: center;
           transform: translate(-50%, -50%);
           -webkit-user-select: text;
@@ -316,7 +235,6 @@ export class SynthKnob extends HTMLElement {
           <span class="ring" part="ring track fill" aria-hidden="true"></span>
           <span class="cap" part="cap"></span>
           <span class="midi-map-label" aria-hidden="true"></span>
-          <span class="focus-brackets" aria-hidden="true"></span>
         </div>
         <div class="label" part="label"></div>
         <div class="value" part="value"></div>
