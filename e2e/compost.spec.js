@@ -604,6 +604,18 @@ test('MIDI monitor stays quiet by default and renders bounded messages', async (
   await expect(log).toHaveAttribute('aria-live', 'polite');
 });
 
+test('MIDI mapping panel does not clip its map-mode focus ring', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-midi-mappings/');
+  const editor = page.locator('compost-midi-mappings');
+  await editor.getByRole('button', { name: 'Map MIDI' }).focus();
+
+  const overflow = await editor.evaluate((element) => ({
+    panel: getComputedStyle(element.shadowRoot.querySelector('.panel')).overflowX,
+    table: getComputedStyle(element.shadowRoot.querySelector('.table-scroll')).overflowX,
+  }));
+  expect(overflow).toEqual({ panel: 'visible', table: 'auto' });
+});
+
 test('clip grid reports launches, stops and drops between grids', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-clip-grid/');
   const drums = page.locator('compost-clip-grid[data-grid="0"]');

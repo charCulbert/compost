@@ -75,10 +75,12 @@ export class MIDIMappingsEditor extends HTMLElement {
           gap: 4px;
           padding: 0;
           background: var(--compost-midi-mappings-bg);
-          overflow-x: auto;
         }
         .header {
           display: block;
+        }
+        .table-scroll {
+          overflow-x: auto;
         }
         .toolbar {
           display: flex;
@@ -306,26 +308,28 @@ export class MIDIMappingsEditor extends HTMLElement {
           Use its delete button, or focus a mapping row and press Delete or Backspace, to clear it.
         </p>
         <p class="empty" data-empty>No MIDI mappings yet.</p>
-        <table data-table>
-          <caption class="sr-only" data-caption>MIDI mappings editor</caption>
-          <colgroup>
-            <col class="channel">
-            <col class="cc">
-            <col class="control">
-            <col class="min">
-            <col class="max">
-          </colgroup>
-          <thead>
-            <tr>
-              <th scope="col">Channel</th>
-              <th scope="col">CC</th>
-              <th scope="col">Control</th>
-              <th scope="col">Min</th>
-              <th scope="col">Max</th>
-            </tr>
-          </thead>
-          <tbody data-list></tbody>
-        </table>
+        <div class="table-scroll" data-table-scroll>
+          <table data-table>
+            <caption class="sr-only" data-caption>MIDI mappings editor</caption>
+            <colgroup>
+              <col class="channel">
+              <col class="cc">
+              <col class="control">
+              <col class="min">
+              <col class="max">
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Channel</th>
+                <th scope="col">CC</th>
+                <th scope="col">Control</th>
+                <th scope="col">Min</th>
+                <th scope="col">Max</th>
+              </tr>
+            </thead>
+            <tbody data-list></tbody>
+          </table>
+        </div>
         <div class="status" data-status aria-live="polite" aria-atomic="true"></div>
       </section>`;
 
@@ -333,6 +337,7 @@ export class MIDIMappingsEditor extends HTMLElement {
     this.mapButton = this.root.querySelector('.map-button');
     this.clearButton = this.root.querySelector('.clear-button');
     this.empty = this.root.querySelector('[data-empty]');
+    this.tableScroll = this.root.querySelector('[data-table-scroll]');
     this.table = this.root.querySelector('[data-table]');
     this.caption = this.root.querySelector('[data-caption]');
     this.list = this.root.querySelector('[data-list]');
@@ -582,6 +587,7 @@ export class MIDIMappingsEditor extends HTMLElement {
     this.heading.textContent = this.getAttribute('heading') || this.getAttribute('label') || 'MIDI mappings';
     this.caption.textContent = `${this.heading.textContent} editor table`;
     this.empty.hidden = hasMappings;
+    this.tableScroll.hidden = !hasMappings;
     this.table.hidden = !hasMappings;
     this.list.innerHTML = mappings.map((mapping) => {
       const bounds = this.parameterBoundsFor(mapping);
