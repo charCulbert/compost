@@ -83,85 +83,50 @@ export class ParameterSlider extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --slider-panel-bg: transparent;
-          --slider-border: transparent;
-          --slider-text: #111111;
-          --slider-value: #555555;
-          --slider-track: rgba(17, 17, 17, 0.2);
-          --slider-fill: #111111;
-          --slider-thumb: #111111;
-          --slider-thumb-border: #ffffff;
-          --slider-value-editor-bg: #ffffff;
           --slider-track-height: 3px;
-          --slider-thumb-size: 18px;
-          --slider-label-gap: 12px;
-          --slider-row-gap: 12px;
-          --slider-label-size: 13px;
-          --slider-vertical-length: 144px;
-          --slider-vertical-width: 72px;
+          --slider-thumb-size: 1.125em;
+          --slider-label-gap: 0.75em;
+          --slider-row-gap: 0.75em;
+          --slider-label-size: 0.8125em;
+          --slider-vertical-length: 9em;
+          --slider-vertical-width: 4.5em;
           --slider-vertical-row-gap: 2px;
           --slider-percent: 0%;
-          --slider-focus-bracket-color: #111111;
-          --slider-focus-bracket-offset: 7px;
-          --slider-focus-bracket-pulse-offset: 9px;
-          --slider-focus-bracket-length: 12px;
-          --slider-focus-bracket-thickness: 2px;
-          --slider-focus-bracket-opacity: 0.45;
-          --slider-color-scheme: light;
-          --midi-map-learn-color: #005fc0;
-          --midi-map-label-text: var(--midi-map-learn-color);
-          --midi-map-label-shadow: none;
-          color-scheme: var(--slider-color-scheme);
+          --_accent: var(--compost-accent, AccentColor);
+          --_muted: color-mix(in srgb, currentColor 65%, transparent);
+          --_track: color-mix(in srgb, currentColor 30%, transparent);
           display: block;
           -webkit-user-select: none;
           user-select: none;
         }
+        :host(:focus-visible) {
+          outline: 2px solid currentColor;
+          outline-offset: 2px;
+        }
+        :host([data-midi-map-target-active]) {
+          outline: 2px solid var(--_accent);
+          outline-offset: 2px;
+        }
+        :host([data-midi-map-target-active][data-midi-map-pulse]) {
+          outline-offset: 4px;
+        }
         label {
           display: grid;
           gap: var(--slider-label-gap);
-          padding: 0;
-          border: 0;
-          border-radius: 0;
-          background: transparent;
-          color: var(--slider-text);
           font-size: var(--slider-label-size);
           position: relative;
         }
-        label::before {
-          content: "";
-          position: absolute;
-          inset: calc(-1 * var(--slider-focus-bracket-offset));
-          opacity: 0;
-          pointer-events: none;
-          background:
-            linear-gradient(var(--slider-focus-bracket-color), var(--slider-focus-bracket-color)) left top / var(--slider-focus-bracket-length) var(--slider-focus-bracket-thickness) no-repeat,
-            linear-gradient(var(--slider-focus-bracket-color), var(--slider-focus-bracket-color)) left top / var(--slider-focus-bracket-thickness) var(--slider-focus-bracket-length) no-repeat,
-            linear-gradient(var(--slider-focus-bracket-color), var(--slider-focus-bracket-color)) right top / var(--slider-focus-bracket-length) var(--slider-focus-bracket-thickness) no-repeat,
-            linear-gradient(var(--slider-focus-bracket-color), var(--slider-focus-bracket-color)) right top / var(--slider-focus-bracket-thickness) var(--slider-focus-bracket-length) no-repeat,
-            linear-gradient(var(--slider-focus-bracket-color), var(--slider-focus-bracket-color)) left bottom / var(--slider-focus-bracket-length) var(--slider-focus-bracket-thickness) no-repeat,
-            linear-gradient(var(--slider-focus-bracket-color), var(--slider-focus-bracket-color)) left bottom / var(--slider-focus-bracket-thickness) var(--slider-focus-bracket-length) no-repeat,
-            linear-gradient(var(--slider-focus-bracket-color), var(--slider-focus-bracket-color)) right bottom / var(--slider-focus-bracket-length) var(--slider-focus-bracket-thickness) no-repeat,
-            linear-gradient(var(--slider-focus-bracket-color), var(--slider-focus-bracket-color)) right bottom / var(--slider-focus-bracket-thickness) var(--slider-focus-bracket-length) no-repeat;
-        }
-        :host(:focus) label::before {
-          opacity: var(--slider-focus-bracket-opacity);
-        }
-        :host(:focus-visible) label::before {
-          opacity: 1;
-        }
         .row { display: flex; justify-content: space-between; gap: var(--slider-row-gap); }
         output {
-          color: var(--slider-value);
-          font-variant-numeric: tabular-nums;
+          color: var(--_muted);
+          font-variant-numeric: lining-nums tabular-nums;
           min-block-size: 1.3em;
-          min-inline-size: var(--slider-value-width, var(--slider-value-editor-width, 72px));
-          opacity: 0.72;
+          min-inline-size: var(--slider-value-width, var(--slider-value-editor-width, 4.5em));
           position: relative;
           text-align: right;
         }
         :host([editable]:not([disabled])) output {
           cursor: text;
-          border-radius: 4px;
           padding: 1px 4px;
         }
         .value-editor {
@@ -169,11 +134,11 @@ export class ParameterSlider extends HTMLElement {
           right: 0;
           top: 50%;
           z-index: 4;
-          width: var(--slider-value-editor-width, 72px);
-          border: 1px solid var(--slider-fill);
-          border-radius: 4px;
-          background: var(--slider-value-editor-bg);
-          color: var(--slider-text);
+          width: var(--slider-value-editor-width, 4.5em);
+          border: 1px solid currentColor;
+          border-radius: 0;
+          background: Field;
+          color: inherit;
           font: inherit;
           text-align: center;
           transform: translateY(-50%);
@@ -186,9 +151,7 @@ export class ParameterSlider extends HTMLElement {
           width: 100%;
           height: var(--slider-thumb-size);
           margin: 0;
-          border-radius: 999px;
           cursor: pointer;
-          opacity: 0.78;
           touch-action: none;
         }
         .track,
@@ -200,11 +163,11 @@ export class ParameterSlider extends HTMLElement {
         }
         .track {
           width: 100%;
-          background: var(--slider-track);
+          background: var(--_track);
         }
         .fill {
           width: var(--slider-percent);
-          background: var(--slider-fill);
+          background: var(--_accent);
         }
         .thumb {
           position: absolute;
@@ -213,13 +176,10 @@ export class ParameterSlider extends HTMLElement {
           box-sizing: border-box;
           width: var(--slider-thumb-size);
           height: var(--slider-thumb-size);
-          border: 2px solid var(--slider-thumb-border);
           border-radius: 50%;
-          background: var(--slider-thumb);
+          background: var(--_accent);
           transform: translate(-50%, -50%);
-        }
-        .range-input:active {
-          opacity: 1;
+          pointer-events: none;
         }
         :host([orientation="vertical"]) {
           display: inline-block;
@@ -266,44 +226,24 @@ export class ParameterSlider extends HTMLElement {
         :host([disabled]) output {
           cursor: default;
         }
-        :host(:focus) {
-          outline: none;
-        }
-        :host([data-midi-map-target-active]) label::before {
-          --slider-focus-bracket-color: var(--midi-map-learn-color);
-          inset: calc(-1 * var(--slider-focus-bracket-offset));
-          opacity: 1;
-          transition: inset 220ms ease;
-        }
-        :host([data-midi-map-target-active][data-midi-map-pulse]) label::before {
-          inset: calc(-1 * var(--slider-focus-bracket-pulse-offset));
-        }
         :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
           content: var(--midi-map-label);
           position: absolute;
           left: 50%;
           bottom: calc(var(--slider-thumb-size) / 2 - 2px);
           z-index: 2;
-          width: min(90%, 92px);
-          padding: 0;
-          color: var(--midi-map-label-text);
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.02em;
+          width: min(90%, 7em);
+          color: var(--_accent);
+          font-size: 0.65em;
+          font-weight: 700;
+          font-variant-numeric: lining-nums tabular-nums;
           line-height: 1;
-          opacity: 1;
           overflow: hidden;
           pointer-events: none;
-          text-shadow: var(--midi-map-label-shadow);
           text-overflow: ellipsis;
           text-align: left;
           transform: translate(-50%, 50%);
           white-space: nowrap;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          :host([data-midi-map-target-active]) label::before {
-            transition: none;
-          }
         }
       </style>
       <label part="panel">
