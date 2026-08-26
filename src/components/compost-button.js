@@ -172,6 +172,9 @@ export class CircleButton extends HTMLElement {
           text-align: center;
           line-height: 1;
         }
+        :host([data-midi-map-mode][data-midi-map-label]) .content {
+          opacity: 0;
+        }
         slot {
           display: grid;
           place-items: center;
