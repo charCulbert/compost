@@ -294,9 +294,9 @@ export class CompostPopup extends HTMLElement {
       item.part.add('item');
       item.id = `${this.listID}-item-${index}`;
       item.dataset.index = String(index);
-      item.setAttribute('role', 'menuitemradio');
+      item.setAttribute('role', marks ? 'menuitemradio' : 'menuitem');
       const checked = value !== null ? option.value === value : option.hasAttribute('selected');
-      item.setAttribute('aria-checked', String(checked));
+      if (marks) item.setAttribute('aria-checked', String(checked));
       item.setAttribute('aria-disabled', String(option.disabled));
       if (option.dataset.color !== undefined) {
         item.dataset.color = option.dataset.color;

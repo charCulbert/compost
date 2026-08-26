@@ -2450,6 +2450,8 @@ test('popup anchors, keeps on screen, picks by keyboard and closes on an outside
   await surface.click({ button: 'right', position: { x: surfaceBox.width - 4, y: surfaceBox.height / 2 } });
   const context = page.getByRole('menu', { name: 'Clip actions' });
   await expect(context).toBeVisible();
+  await expect(context.getByRole('menuitem')).toHaveCount(5);
+  await expect(context.getByRole('menuitemradio')).toHaveCount(0);
   const box = await context.boundingBox();
   expect(box.x + box.width).toBeLessThanOrEqual(600);
   await page.mouse.click(20, 20);
