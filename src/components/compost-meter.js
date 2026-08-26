@@ -20,56 +20,55 @@ export class CompostMeter extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --meter-text: #111111;
-          --meter-value: #555555;
-          --meter-line: rgba(17, 17, 17, 0.2);
-          --meter-rail: rgba(17, 17, 17, 0.1);
-          --meter-primary: #6689ad;
-          --meter-secondary: rgba(102, 137, 173, 0.28);
-          --meter-over: #a64d45;
-          --meter-clip: #a64d45;
-          --meter-peak: #111111;
-          --meter-width: 40px;
-          --meter-length: 144px;
+          --_accent: var(--compost-accent, AccentColor);
+          --_muted: color-mix(in srgb, currentColor 65%, transparent);
+          --_outline: color-mix(in srgb, currentColor 30%, transparent);
+          --_secondary: color-mix(in srgb, var(--_accent) 28%, transparent);
+          --meter-width: 2.5em;
+          --meter-length: 9em;
           --meter-gap: 0px;
-          --meter-primary-width: 3px;
+          --meter-primary-width: 0.1875em;
           --meter-marker-thickness: 1px;
           --meter-clip-thickness: 2px;
           --meter-separator-thickness: 1px;
           display: inline-block;
-          color: var(--meter-text);
-          font-size: 13px;
+          color: inherit;
+          font: inherit;
         }
         .panel {
           display: grid;
           justify-items: center;
-          gap: 7px;
+          gap: 0.4375em;
         }
         .label {
           justify-self: start;
         }
         .legend {
-          color: var(--meter-value);
-          font: 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+          color: var(--_muted);
+          font-size: 0.75em;
+          font-variant-numeric: lining-nums tabular-nums;
+          line-height: 1.25;
           letter-spacing: 0.02em;
         }
         .meter {
           position: relative;
           display: flex;
           gap: var(--meter-gap);
+          box-sizing: border-box;
           width: var(--meter-width);
           height: var(--meter-length);
+          border-block: 1px solid var(--_outline);
         }
         .lane {
           position: relative;
           min-width: 1px;
           flex: 1 1 0;
           overflow: visible;
-          border-left: var(--meter-separator-thickness) solid var(--meter-line);
-          background: var(--meter-rail);
+          border-left: var(--meter-separator-thickness) solid var(--_outline);
+          background: transparent;
         }
         .lane:last-child {
-          border-right: var(--meter-separator-thickness) solid var(--meter-line);
+          border-right: var(--meter-separator-thickness) solid var(--_outline);
         }
         .secondary,
         .primary,
@@ -81,7 +80,7 @@ export class CompostMeter extends HTMLElement {
         .secondary {
           left: 0;
           width: 100%;
-          background: var(--meter-secondary);
+          background: var(--_secondary);
         }
         .primary,
         .over {
@@ -89,34 +88,33 @@ export class CompostMeter extends HTMLElement {
           width: var(--meter-primary-width);
         }
         .primary {
-          background: var(--meter-primary);
+          background: var(--_accent);
         }
         .over {
-          background: var(--meter-over);
+          background: currentColor;
         }
         .peak {
           left: 0;
           width: 100%;
           height: var(--meter-marker-thickness);
-          background: var(--meter-peak);
+          background: currentColor;
         }
         .clip {
           position: absolute;
           left: 0;
           right: 0;
-          top: -5px;
+          top: -0.3125em;
           height: var(--meter-clip-thickness);
           background: transparent;
         }
         .lane[data-clipped] .clip {
-          background: var(--meter-clip);
+          background: currentColor;
         }
         .channel-labels {
           display: flex;
           gap: var(--meter-gap);
           width: var(--meter-width);
-          color: var(--meter-value);
-          opacity: 0.72;
+          color: var(--_muted);
         }
         .channel-labels span {
           flex: 1 1 0;
@@ -212,6 +210,7 @@ export class CompostMeter extends HTMLElement {
       meter.append(lane);
 
       const channelLabel = document.createElement('span');
+      channelLabel.setAttribute('part', 'channel-label');
       channelLabel.textContent = channel.label || '';
       labels.append(channelLabel);
       this.setLaneAccessibility(lane, channel, label, channels.length > 1);
