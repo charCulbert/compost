@@ -19,29 +19,15 @@ test('the repository root redirects to the examples page', () => {
   assert.doesNotMatch(html, /Small tools for audio apps|class="links"/u);
 });
 
-test('the public theme stylesheet owns the bundled component palettes', () => {
+test('the retired theme surface stays out of the package and examples', () => {
   const packageJSON = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  const themes = fs.readFileSync(path.join(root, 'src/themes.css'), 'utf8');
   const sharedStyles = fs.readFileSync(path.join(root, 'examples/shared/styles.css'), 'utf8');
   const examplePage = fs.readFileSync(path.join(root, 'examples/shared/example-page.js'), 'utf8');
 
-  assert.equal(packageJSON.exports['./themes'], './src/themes.css');
-  assert.match(sharedStyles, /@import url\('\.\.\/\.\.\/src\/themes\.css'\);/u);
-  assert.match(themes, /data-compost-theme="dark"/u);
-  assert.match(themes, /data-compost-theme="light"/u);
-  assert.match(themes, /data-compost-theme="gruvbox"/u);
-  assert.match(themes, /compost-midi-mappings \{/u);
-  assert.match(themes, /compost-select \{/u);
-  assert.match(themes, /compost-device-selector \{/u);
-  assert.match(themes, /compost-note-editor \{/u);
-  // The keyboard still takes its colours from constructor options, not the theme.
-  assert.doesNotMatch(themes, /compost-piano \{/u);
-  assert.doesNotMatch(sharedStyles, /--compost-select-bg|--compost-midi-mappings-row-bg/u);
-  assert.match(examplePage, /dataset\.compostTheme = theme/u);
-  assert.match(examplePage, /setTheme\(THEMES\.some\(\(theme\) => theme\.value === savedTheme\)/u);
-  assert.match(examplePage, /localStorage\.setItem\(THEME_STORAGE_KEY, theme\)/u);
-  assert.match(examplePage, /addEventListener\('storage'/u);
-  assert.doesNotMatch(`${sharedStyles}\n${examplePage}`, /data-colors|dataset\.colors|modern-dark/u);
+  assert.equal(fs.existsSync(path.join(root, 'src/themes.css')), false);
+  assert.equal(packageJSON.exports['./themes'], undefined);
+  assert.doesNotMatch(sharedStyles, /@import[^;]*themes\.css|var\(--compost-theme-/u);
+  assert.doesNotMatch(examplePage, /compostTheme|THEME_STORAGE_KEY|data-compost-theme/u);
 });
 
 test('knob and slider demos expose the same range and curve options', () => {
