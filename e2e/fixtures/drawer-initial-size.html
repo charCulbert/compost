@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+  </head>
+  <body>
+    <template>
+      <compost-drawer edge="left" open resizable min-size="160" max-size="360"
+        style="--compost-drawer-size: 240px">
+        Drawer contents
+      </compost-drawer>
+    </template>
+    <script type="module">
+      await import('../../src/components/compost-drawer.js');
+      const section = document.createElement('section');
+      section.append(document.querySelector('template').content.cloneNode(true));
+      customElements.upgrade(section);
+      document.body.append(section);
+    </script>
+  </body>
+</html>

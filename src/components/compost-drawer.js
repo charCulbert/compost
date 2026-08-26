@@ -281,6 +281,7 @@ export class CompostDrawer extends HTMLElement {
   }
 
   attributeChangedCallback() {
+    if (!this.isConnected) return;
     this.refresh();
   }
 

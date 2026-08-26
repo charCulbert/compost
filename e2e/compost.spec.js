@@ -330,6 +330,14 @@ test('drawer summary toggles its public open state', async ({ page }) => {
   await expect(resizeHandle).toHaveAttribute('aria-valuenow', '420');
 });
 
+test('drawer keeps its declared initial size during upgrade', async ({ page }) => {
+  await page.goto('/e2e/fixtures/drawer-initial-size.html');
+  const drawer = page.locator('compost-drawer');
+
+  await expect(drawer).toHaveCSS('--compost-drawer-size', '240px');
+  await expect(drawer).toHaveCSS('width', '240px');
+});
+
 test('centered audio keeps its toolbar footprint while moving', async ({ page }) => {
   await page.goto('/examples/signal-generator/');
   const audio = page.locator('compost-audio');
