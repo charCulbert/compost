@@ -11,16 +11,15 @@ export class CompostDrawer extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-drawer-bg: #eeeeec;
-          --compost-drawer-border: #8f8f8b;
-          --compost-drawer-text: #111111;
-          --compost-drawer-title-bg: #d5d5d2;
-          --compost-drawer-title-hover-bg: #dfdfdc;
-          --compost-drawer-focus: #0066cc;
-          --compost-drawer-radius: 0;
-          --compost-drawer-title-padding: 7px 10px;
-          --compost-drawer-title-size: 40px;
-          --compost-drawer-content-padding: 12px;
+          --compost-drawer-bg: Canvas;
+          --compost-drawer-border: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-drawer-text: currentColor;
+          --compost-drawer-title-bg: color-mix(in srgb, currentColor 6%, transparent);
+          --compost-drawer-title-hover-bg: color-mix(in srgb, currentColor 10%, transparent);
+          --compost-drawer-focus: currentColor;
+          --compost-drawer-title-padding: .45em .625em;
+          --compost-drawer-title-size: 2.5em;
+          --compost-drawer-content-padding: .75em;
           --compost-drawer-size: auto;
           display: block;
           color: var(--compost-drawer-text);
@@ -49,12 +48,14 @@ export class CompostDrawer extends HTMLElement {
           height: 100%;
         }
         .resize-handle {
+          --_resize-line: var(--compost-drawer-border);
           position: relative;
           z-index: 2;
           display: none;
-          height: 5px;
-          background-color: var(--compost-drawer-border);
-          opacity: 1;
+          height: .5em;
+          background: linear-gradient(to bottom,
+            transparent calc(50% - .5px), var(--_resize-line) calc(50% - .5px),
+            var(--_resize-line) calc(50% + .5px), transparent calc(50% + .5px));
           cursor: row-resize;
           touch-action: none;
           pointer-events: auto;
@@ -65,8 +66,11 @@ export class CompostDrawer extends HTMLElement {
         :host([data-axis="horizontal"]) .resize-handle {
           grid-column: 2;
           grid-row: 1;
-          width: 5px;
+          width: .5em;
           height: auto;
+          background: linear-gradient(to right,
+            transparent calc(50% - .5px), var(--_resize-line) calc(50% - .5px),
+            var(--_resize-line) calc(50% + .5px), transparent calc(50% + .5px));
           cursor: col-resize;
         }
         :host([open][resizable][edge="top"]) .resize-handle {
@@ -86,14 +90,16 @@ export class CompostDrawer extends HTMLElement {
         }
         .resize-handle:hover,
         .resize-handle:focus-visible {
-          background: var(--compost-drawer-focus);
-          outline: none;
+          --_resize-line: currentColor;
+        }
+        .resize-handle:focus-visible {
+          outline: 2px solid var(--compost-drawer-focus);
+          outline-offset: -2px;
         }
         details {
           box-sizing: border-box;
           overflow: hidden;
           border: 1px solid var(--compost-drawer-border);
-          border-radius: var(--compost-drawer-radius);
           background: var(--compost-drawer-bg);
           color: inherit;
         }
@@ -104,9 +110,6 @@ export class CompostDrawer extends HTMLElement {
         }
         :host([data-axis="horizontal"]) summary {
           width: 100%;
-          /* Mirrors the vertical axis: the open grid column is auto-sized, so
-             without this the title collapses to the width of its rotated text
-             and the handle is thinner open than closed. */
           min-width: calc(var(--compost-drawer-title-size) - 2px);
           writing-mode: vertical-rl;
         }
@@ -126,10 +129,6 @@ export class CompostDrawer extends HTMLElement {
           border-top: 0;
           border-bottom: 1px solid var(--compost-drawer-border);
         }
-        :host([open][resizable][data-axis="vertical"]) details {
-          border-top-left-radius: 0;
-          border-top-right-radius: 0;
-        }
         :host([open][edge="top"]) details {
           grid-template-rows: auto minmax(0, 1fr);
         }
@@ -140,9 +139,6 @@ export class CompostDrawer extends HTMLElement {
           grid-row: 2;
           border-top: 1px solid var(--compost-drawer-border);
           border-bottom: 0;
-        }
-        :host([open][resizable][edge="top"]) details {
-          border-radius: var(--compost-drawer-radius) var(--compost-drawer-radius) 0 0;
         }
         :host([open][data-axis="horizontal"]) details {
           display: grid;
@@ -163,9 +159,6 @@ export class CompostDrawer extends HTMLElement {
         :host([open][resizable][data-axis="horizontal"]) details {
           grid-column: 1;
           grid-row: 1;
-          border-top-right-radius: 0;
-          border-bottom-right-radius: 0;
-          border-top-left-radius: var(--compost-drawer-radius);
         }
         :host([open][edge="right"]) details {
           grid-template-columns: minmax(0, 1fr) auto;
@@ -178,22 +171,17 @@ export class CompostDrawer extends HTMLElement {
           border-right: 1px solid var(--compost-drawer-border);
           border-left: 0;
         }
-        :host([open][resizable][edge="right"]) details {
-          border-radius: 0 var(--compost-drawer-radius) var(--compost-drawer-radius) 0;
-        }
         summary {
           position: relative;
           z-index: 2;
           display: flex;
           align-items: center;
-          gap: 8px;
-          min-height: 18px;
+          gap: .5em;
+          min-height: 1.125em;
           padding: var(--compost-drawer-title-padding);
           background-color: var(--compost-drawer-title-bg);
-          opacity: 1;
           cursor: pointer;
           font: inherit;
-          font-weight: 600;
           list-style: none;
           user-select: none;
           -webkit-user-select: none;
@@ -213,11 +201,10 @@ export class CompostDrawer extends HTMLElement {
           width: 0;
           height: 0;
           flex: none;
-          border-top: 5px solid transparent;
-          border-bottom: 5px solid transparent;
-          border-left: 7px solid currentColor;
+          border-top: .3em solid transparent;
+          border-bottom: .3em solid transparent;
+          border-left: .42em solid currentColor;
           transform-origin: 35% 50%;
-          transition: transform 120ms ease;
         }
         :host([edge="top"]) .marker,
         :host([edge="bottom"]) .marker { transform: rotate(0deg); }
@@ -234,11 +221,6 @@ export class CompostDrawer extends HTMLElement {
           overflow: auto;
           border-top: 1px solid var(--compost-drawer-border);
           padding: var(--compost-drawer-content-padding);
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .marker {
-            transition: none;
-          }
         }
       </style>
       <div class="resize-handle" part="resize-handle" role="separator"

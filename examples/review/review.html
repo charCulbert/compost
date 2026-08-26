@@ -97,6 +97,19 @@
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click a line to add a point; double-click or Alt-click a point to remove it. Drag empty space to select, then drag a selected point or press Cmd+D. Option-drag a segment to curve it. Shift is fine movement; Option inverts snapping for point moves.</small>
   </div>
 </template>
+<template id="compost-drawer">
+  <div style="display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; width: min(42em, calc(100vw - 64px)); height: 20em; overflow: hidden; border: 1px solid color-mix(in srgb, currentColor 18%, transparent)">
+    <compost-drawer edge="left" open resizable min-size="160" max-size="360" style="grid-row: 1 / 3; --compost-drawer-size: 240px">
+      <span slot="title">Browser</span>
+      Browser contents
+    </compost-drawer>
+    <div style="display: grid; place-items: center; min-width: 0; padding: 1em; color: color-mix(in srgb, currentColor 65%, transparent)">Workspace</div>
+    <compost-drawer edge="bottom" open resizable min-size="80" max-size="180" style="grid-column: 2; --compost-drawer-size: 120px">
+      <span slot="title">Device</span>
+      Device contents
+    </compost-drawer>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -125,7 +138,7 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-envelope-editor') {
