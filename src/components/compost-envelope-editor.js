@@ -3,17 +3,18 @@ import {
   deleteEnvelopePoint,
   drawEnvelopePoints,
   effectiveEnvelopeStep,
+  envelopeCurvePosition,
   envelopeRange,
   envelopeValueAtTime,
   envelopeValueFromY,
   envelopeValueToY,
   moveEnvelopePoint,
   moveEnvelopePointsByY,
-  moveEnvelopeRangeByY,
   preserveEnvelopeEdgePoints,
+  sliceEnvelopeRange,
   snapEnvelopeValue,
+  splitEnvelopeAtTime,
 } from '../envelope-model.js';
-import { parameterScaleBreakpoints } from '../parameter-scale.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import {
   createLongPress,
@@ -24,6 +25,8 @@ import {
 } from '../internal/gestures.js';
 
 const eventOf = (type, detail) => new CustomEvent(type, { bubbles: true, composed: true, detail });
+const POINT_PREVIEW_DISTANCE = 3;
+const SEGMENT_HANDLE_DISTANCE = 10;
 
 /**
  * A generic time/value envelope surface. The caller owns the points and what
@@ -48,6 +51,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.draw = false;
     this._points = [];
     this.selection = null;
+    this.selectionPointIndexes = [];
     this.drag = null;
     this.longPress = createLongPress();
     this.touchTapStart = null;
@@ -59,24 +63,24 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-envelope-bg: var(--compost-theme-bg, #1f1f1f);
-          --compost-envelope-text: var(--compost-theme-text, #f2f2f2);
-          --compost-envelope-muted: var(--compost-theme-muted, #aaaaaa);
-          --compost-envelope-line: var(--compost-theme-line, rgba(255,255,255,.18));
-          --compost-envelope-signal: var(--compost-theme-accent, #8ea9c7);
+          --compost-envelope-bg: Canvas;
+          --compost-envelope-text: currentColor;
+          --compost-envelope-muted: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-envelope-line: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-envelope-grid: color-mix(in srgb, currentColor 18%, transparent);
+          --compost-envelope-signal: var(--compost-accent, AccentColor);
           --compost-envelope-point-bg: var(--compost-envelope-signal);
           --compost-envelope-point-border: var(--compost-envelope-bg);
           --compost-envelope-selection: color-mix(in srgb, var(--compost-envelope-signal) 12%, transparent);
-          --compost-envelope-preview: var(--compost-theme-learn, #6fa8eb);
-          --compost-envelope-radius: 0;
-          --compost-envelope-grid-size: 1em;
+          --compost-envelope-preview: var(--compost-envelope-signal);
+          --compost-envelope-grid-size: var(--_grid-x, 1em) 1em;
           display: block;
           box-sizing: border-box;
           min-width: 0;
           min-height: 2.5em;
           overflow: hidden;
           border: 1px solid var(--compost-envelope-line);
-          border-radius: var(--compost-envelope-radius);
+          border-radius: 0;
           background: var(--compost-envelope-bg);
           color: var(--compost-envelope-text);
           font: inherit;
@@ -85,39 +89,65 @@ export class CompostEnvelopeEditor extends HTMLElement {
           user-select: none;
         }
         :host([disabled]) { opacity: .55; pointer-events: none; }
-        :host(:focus-visible) { box-shadow: inset 0 0 0 1px var(--compost-envelope-signal); }
+        :host(:focus-visible) { outline: 2px solid currentColor; outline-offset: -2px; }
         .surface { position: relative; width: 100%; height: 100%; min-height: inherit; touch-action: none; overflow: hidden; }
-        .grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(to right, var(--compost-envelope-line) 1px, transparent 1px), linear-gradient(to bottom, var(--compost-envelope-line) 1px, transparent 1px); background-size: var(--compost-envelope-grid-size) var(--compost-envelope-grid-size); opacity: .22; }
-        .selection { position: absolute; inset-block: 0; display: none; background: var(--compost-envelope-selection); border-inline: 1px solid var(--compost-envelope-signal); pointer-events: none; }
-        svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-        .line { fill: none; stroke: var(--compost-envelope-signal); stroke-width: 1.25; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: ns-resize; }
-        .line:hover { stroke-width: 1.75; }
+        .grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(to right, var(--compost-envelope-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--compost-envelope-grid) 1px, transparent 1px); background-size: var(--compost-envelope-grid-size); }
+        .selection-marquee { position: absolute; z-index: 1; display: none; box-sizing: border-box; border: 1px solid var(--compost-envelope-signal); background: var(--compost-envelope-selection); pointer-events: none; }
+        svg { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; }
+        .line-hit, .line, .selection-highlight, .segment-highlight { fill: none; vector-effect: non-scaling-stroke; }
+        .line-hit { stroke: transparent; stroke-width: 1.25em; pointer-events: stroke; }
+        .line { stroke: var(--compost-envelope-signal); stroke-width: 1px; pointer-events: none; }
+        .selection-highlight { stroke: currentColor; stroke-width: 2px; opacity: .7; pointer-events: none; }
+        .segment-highlight { stroke: currentColor; stroke-width: 3px; pointer-events: none; }
+        .point-preview { pointer-events: none; }
+        .point-preview[hidden] { display: none; }
+        .surface[data-hover-target="point"] { cursor: crosshair; }
+        .surface[data-hover-target="segment"] { cursor: ns-resize; }
         .point { cursor: grab; }
-        .point-hit { fill: transparent; stroke: none; pointer-events: all; }
-        .point-mark { fill: var(--compost-envelope-point-bg); stroke: var(--compost-envelope-point-border); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
-        .point:hover .point-mark { transform: scale(1.3); transform-box: fill-box; transform-origin: center; }
-        .point:focus-visible { outline: 1px solid var(--compost-envelope-signal); outline-offset: 2px; }
+        .point-hit { x: -.75em; y: -.75em; width: 1.5em; height: 1.5em; fill: transparent; stroke: none; pointer-events: all; }
+        .point-mark { x: -.1875em; y: -.1875em; width: .375em; height: .375em; fill: var(--compost-envelope-point-bg); stroke: var(--compost-envelope-point-border); stroke-width: 1px; vector-effect: non-scaling-stroke; pointer-events: none; }
+        .point:hover .point-mark { x: -.25em; y: -.25em; width: .5em; height: .5em; }
+        .point:focus-visible .point-mark { stroke: currentColor; stroke-width: 2px; }
         :host([draw]) .surface { cursor: crosshair; }
         :host([data-preview]) .line { stroke: var(--compost-envelope-preview); }
         :host([data-preview]) .point-mark { fill: var(--compost-envelope-preview); }
-        .readout { position: absolute; z-index: 2; transform: translate(-50%, -100%); padding: 2px 4px; background: var(--compost-envelope-bg); box-shadow: 0 0 0 1px var(--compost-envelope-line); color: var(--compost-envelope-text); font: .75em/1 ui-monospace, SFMono-Regular, Menlo, monospace; pointer-events: none; white-space: nowrap; }
+        .readout { position: absolute; z-index: 3; transform: translate(-50%, -100%); padding: .2em .35em; border: 1px solid var(--compost-envelope-line); background: var(--compost-envelope-bg); color: var(--compost-envelope-text); font: .75em/1 ui-monospace, SFMono-Regular, Menlo, monospace; pointer-events: none; white-space: nowrap; }
       </style>
       <div class="surface" part="surface">
         <div class="grid" part="grid"></div>
-        <div class="selection" part="selection"></div>
-        <svg part="graph" aria-hidden="true"><path class="line" part="line"></path></svg>
+        <div class="selection-marquee" part="selection-marquee"></div>
+        <svg part="graph" aria-hidden="true">
+          <path class="line-hit" part="line-hit"></path>
+          <path class="line" part="line"></path>
+          <path class="selection-highlight" part="selection-highlight"></path>
+          <path class="segment-highlight" part="segment-highlight"></path>
+          <g class="point-preview" part="point-preview" hidden>
+            <rect class="point-mark" part="point-preview-mark"></rect>
+          </g>
+        </svg>
         <span class="readout" part="readout" hidden></span>
       </div>
     `;
     this.surface = this.root.querySelector('.surface');
+    this.selectionMarquee = this.root.querySelector('.selection-marquee');
     this.svg = this.root.querySelector('svg');
+    this.lineHit = this.root.querySelector('.line-hit');
     this.line = this.root.querySelector('.line');
+    this.selectionHighlight = this.root.querySelector('.selection-highlight');
+    this.segmentHighlight = this.root.querySelector('.segment-highlight');
+    this.pointPreview = this.root.querySelector('.point-preview');
     this.readout = this.root.querySelector('.readout');
-    this.selectionElement = this.root.querySelector('.selection');
 
     this.surface.addEventListener('pointerdown', (event) => this.startPointer(event));
     this.surface.addEventListener('pointermove', (event) => this.movePointer(event));
-    this.surface.addEventListener('pointerleave', () => { if (!this.drag) this.readout.hidden = true; });
+    this.surface.addEventListener('pointerleave', () => {
+      if (!this.drag) {
+        this.readout.hidden = true;
+        this.segmentHighlight.setAttribute('d', '');
+        this.pointPreview.hidden = true;
+        delete this.surface.dataset.hoverTarget;
+      }
+    });
     this.surface.addEventListener('pointerup', (event) => this.endPointer(event));
     this.surface.addEventListener('pointercancel', () => this.cancelPointer());
     this.surface.addEventListener('touchend', (event) => event.preventDefault(), { passive: false });
@@ -157,6 +187,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.step = effectiveEnvelopeStep(this.stepped, this.hasAttribute('step') ? this.getAttribute('step') : undefined);
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     this.grid = Math.max(1e-9, numberAttr(this, 'grid', this.grid));
+    this.surface.style.setProperty('--_grid-x', `${this.grid / this.duration * 100}%`);
     this.draw = this.hasAttribute('draw');
     this.setAttribute('role', 'group');
     this.setAttribute('aria-label', this.label);
@@ -173,6 +204,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
         value: snapEnvelopeValue(Number(point.value), this.min, this.max, this.step),
       }))
       .sort((a, b) => a.time - b.time);
+    this.selectionPointIndexes = this.selectionPointIndexes
+      .filter((index) => index >= 0 && index < this._points.length);
     this.render();
   }
 
@@ -182,7 +215,10 @@ export class CompostEnvelopeEditor extends HTMLElement {
     const low = Math.max(0, Math.min(Number(start), Number(end)));
     const high = Math.min(this.duration, Math.max(Number(start), Number(end)));
     this.selection = Number.isFinite(low) && Number.isFinite(high) && high > low ? { start: low, end: high } : null;
-    this.paintSelection();
+    this.selectionPointIndexes = this.selection
+      ? this._points.flatMap((point, index) => point.time >= low && point.time <= high ? [index] : [])
+      : [];
+    this.render();
   }
 
   size() {
@@ -199,20 +235,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     for (let index = 1; index < sorted.length; index += 1) {
       const before = sorted[index - 1];
       const after = sorted[index];
-      if (this.stepped) path += ` H ${this.x(after.time, width)}`;
-      else {
-        if (this.scale === 'gain' && after.value !== before.value) {
-          const turns = parameterScaleBreakpoints({ min: this.min, max: this.max, curve: 'gain' })
-            .filter((value) => (value - before.value) * (value - after.value) < 0)
-            .map((value) => ({
-              time: before.time + (after.time - before.time) * (value - before.value) / (after.value - before.value),
-              value,
-            }))
-            .sort((a, b) => a.time - b.time);
-          for (const turn of turns) path += ` L ${this.x(turn.time, width)} ${this.y(turn.value, height)}`;
-        }
-        path += ` L ${this.x(after.time, width)} ${this.y(after.value, height)}`;
-      }
+      path += this.segmentCommands(before, after, width, height);
     }
     path += ` H ${width}`;
     return path;
@@ -221,42 +244,91 @@ export class CompostEnvelopeEditor extends HTMLElement {
   render(points = this._points) {
     if (!this.isConnected) return;
     const { width, height } = this.size();
+    this.pointPreview.hidden = true;
+    delete this.surface.dataset.hoverTarget;
+    this.selectionMarquee.style.display = this.selection ? 'block' : 'none';
+    if (this.selection) {
+      this.selectionMarquee.style.left = `${this.selection.start / this.duration * 100}%`;
+      this.selectionMarquee.style.width = `${(this.selection.end - this.selection.start) / this.duration * 100}%`;
+      this.selectionMarquee.style.insetBlock = '0';
+    }
     this.svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    this.line.setAttribute('d', this.path(points, width, height));
+    const path = this.path(points, width, height);
+    this.lineHit.setAttribute('d', path);
+    this.line.setAttribute('d', path);
+    this.selectionHighlight.setAttribute('d', this.selectionPath(points, width, height));
+    this.segmentHighlight.setAttribute('d', '');
     this.svg.querySelectorAll('.point').forEach((point) => point.remove());
     points.forEach((point, index) => {
       const marker = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       marker.classList.add('point');
       marker.dataset.pointIndex = String(index);
       const x = this.x(point.time, width); const y = this.y(point.value, height);
+      marker.setAttribute('transform', `translate(${x} ${y})`);
       const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       hit.classList.add('point-hit');
       hit.setAttribute('part', 'point-hit');
-      hit.setAttribute('x', String(x - 11)); hit.setAttribute('y', String(y - 11));
-      hit.setAttribute('width', '22'); hit.setAttribute('height', '22');
       const mark = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       mark.classList.add('point-mark');
       mark.setAttribute('part', 'point');
-      mark.setAttribute('x', String(x - 2.5)); mark.setAttribute('y', String(y - 2.5));
-      mark.setAttribute('width', '5'); mark.setAttribute('height', '5');
       marker.setAttribute('role', 'button');
       marker.setAttribute('tabindex', '0');
       marker.setAttribute('aria-label', `${this.label} point ${Number(point.time).toFixed(2)} ${Number(point.value).toFixed(2)}`);
       marker.append(hit, mark);
       this.svg.append(marker);
     });
-    this.paintSelection();
   }
 
-  paintSelection() {
-    if (!this.selectionElement) return;
-    if (!this.selection) {
-      this.selectionElement.style.display = 'none';
-      return;
+  selectSection(start, end) {
+    const low = Math.max(0, Math.min(start, end));
+    const high = Math.min(this.duration, Math.max(start, end));
+    this.selection = high > low ? { start: low, end: high } : null;
+    this.selectionPointIndexes = this.selection
+      ? this._points.flatMap((point, index) => point.time >= low && point.time <= high ? [index] : [])
+      : [];
+    this.render();
+    this.selectionMarquee.style.display = 'block';
+    this.selectionMarquee.style.left = `${low / this.duration * 100}%`;
+    this.selectionMarquee.style.width = `${(high - low) / this.duration * 100}%`;
+    this.selectionMarquee.style.insetBlock = '0';
+  }
+
+  segmentPath(index, points = this._points, width = this.size().width, height = this.size().height) {
+    const before = points[index];
+    const after = points[index + 1];
+    if (!before || !after) return '';
+    return `M ${this.x(before.time, width)} ${this.y(before.value, height)}${this.segmentCommands(before, after, width, height)}`;
+  }
+
+  selectionPath(points, width, height) {
+    if (!this.selection) return '';
+    const selected = sliceEnvelopeRange(points, this.selection.start, this.selection.end,
+      this.min, this.max, this.scale, this.stepped);
+    if (selected.length < 2) return '';
+    let path = `M ${this.x(selected[0].time, width)} ${this.y(selected[0].value, height)}`;
+    for (let index = 1; index < selected.length; index += 1) {
+      path += this.segmentCommands(selected[index - 1], selected[index], width, height);
     }
-    this.selectionElement.style.display = 'block';
-    this.selectionElement.style.left = `${this.selection.start / this.duration * 100}%`;
-    this.selectionElement.style.width = `${(this.selection.end - this.selection.start) / this.duration * 100}%`;
+    return path;
+  }
+
+  segmentCommands(before, after, width, height) {
+    if (this.stepped) {
+      return ` H ${this.x(after.time, width)} V ${this.y(after.value, height)}`;
+    }
+    const curve = Number(before.curve) || 0;
+    if (Math.abs(curve) < 1e-9 && this.scale === 'linear') {
+      return ` L ${this.x(after.time, width)} ${this.y(after.value, height)}`;
+    }
+    let path = '';
+    for (let index = 1; index <= 24; index += 1) {
+      const position = index / 24;
+      const curved = envelopeCurvePosition(position, curve);
+      const time = before.time + (after.time - before.time) * position;
+      const value = before.value + (after.value - before.value) * curved;
+      path += ` L ${this.x(time, width)} ${this.y(value, height)}`;
+    }
+    return path;
   }
 
   pointFromEvent(event) {
@@ -267,8 +339,12 @@ export class CompostEnvelopeEditor extends HTMLElement {
   timeAtPointer(event, free = false) {
     const rect = this.surface.getBoundingClientRect();
     const raw = clamp((event.clientX - rect.left) / Math.max(1, rect.width) * this.duration, 0, this.duration);
-    if (free || this.snapMode === 'off') return raw;
+    if (free) return raw;
     return clamp(Math.round(raw / this.grid) * this.grid, 0, this.duration);
+  }
+
+  freeTime(event) {
+    return this.snapMode === 'off' ? !event.altKey : event.altKey;
   }
 
   valueAtPointer(event) {
@@ -287,6 +363,31 @@ export class CompostEnvelopeEditor extends HTMLElement {
       if (time >= this._points[index].time && time <= this._points[index + 1].time) return index;
     }
     return time < this._points[0].time ? 0 : this._points.length - 2;
+  }
+
+  curveTargetAtPointer(event) {
+    if (!this._points.length) return null;
+    const rect = this.surface.getBoundingClientRect();
+    const rawTime = this.timeAtPointer(event, true);
+    const curveY = this.y(envelopeValueAtTime(this._points, rawTime,
+      this.min, this.max, this.scale, this.stepped), rect.height);
+    const distance = event.clientY - rect.top - curveY;
+    if (Math.abs(distance) <= POINT_PREVIEW_DISTANCE) {
+      const time = this.timeAtPointer(event, this.freeTime(event));
+      return {
+        kind: 'point',
+        time,
+        value: envelopeValueAtTime(this._points, time,
+          this.min, this.max, this.scale, this.stepped),
+      };
+    }
+    const first = this._points[0].time;
+    const last = this._points.at(-1).time;
+    if (distance > POINT_PREVIEW_DISTANCE && distance <= SEGMENT_HANDLE_DISTANCE
+        && rawTime >= first && rawTime <= last) {
+      return { kind: 'segment', time: rawTime };
+    }
+    return null;
   }
 
   startPointer(event) {
@@ -318,26 +419,35 @@ export class CompostEnvelopeEditor extends HTMLElement {
       }
     }
     const rawTime = this.timeAtPointer(event, true);
-    const time = this.timeAtPointer(event, event.altKey);
+    const time = this.timeAtPointer(event, this.freeTime(event));
+    const curveTarget = point ? null : this.curveTargetAtPointer(event);
+    const selectedPoint = point && this.selectionPointIndexes.includes(point.index);
     const mode = this.draw ? 'draw'
-      : point ? 'point'
-        : this.selection && rawTime >= this.selection.start && rawTime <= this.selection.end ? 'range' : 'segment';
-    if (!this.draw && !point && !event.composedPath().includes(this.line)) return;
-    const rect = this.surface.getBoundingClientRect();
+      : selectedPoint ? 'range'
+        : point ? 'point'
+          : curveTarget?.kind === 'segment' ? 'segment'
+            : curveTarget?.kind === 'point' ? 'insert' : 'selection';
     this.drag = {
       pointerId: event.pointerId,
       mode,
       pointIndex: point?.index ?? -1,
-      segmentIndex: this.segmentIndex(time),
+      segmentIndex: this.segmentIndex(curveTarget?.time ?? time),
       startX: event.clientX,
       startY: event.clientY,
-      startLocalY: event.clientY - rect.top,
+      startTime: time,
+      originSelection: this.selection ? { ...this.selection } : null,
+      originSelectionPointIndexes: [...this.selectionPointIndexes],
       origin,
       samples: [{ time, value: this.valueAtPointer(event) }],
+      clickPoint: curveTarget?.kind === 'point' ? curveTarget : null,
       moved: false,
-      freehand: event.altKey || this.snapMode === 'off',
+      freehand: this.freeTime(event),
+      deletePoint: Boolean(point && event.altKey),
       created: createdOnDoubleTap,
     };
+    this.segmentHighlight.setAttribute('d', '');
+    this.pointPreview.hidden = true;
+    delete this.surface.dataset.hoverTarget;
     this.longPress.cancel();
     if (!createdOnDoubleTap) this.longPress.start(() => {
       if (!this.drag || this.drag.pointerId !== event.pointerId || this.drag.moved) return;
@@ -351,9 +461,10 @@ export class CompostEnvelopeEditor extends HTMLElement {
       }));
       this.cancelPointer();
     });
-    point?.marker?.focus?.({ preventScroll: true });
+    if (point) point.marker?.focus?.({ preventScroll: true });
+    else this.focus({ preventScroll: true });
     this.surface.setPointerCapture?.(event.pointerId);
-    this.setAttribute('data-preview', '');
+    if (mode !== 'selection') this.setAttribute('data-preview', '');
   }
 
   movePointer(event) {
@@ -361,14 +472,27 @@ export class CompostEnvelopeEditor extends HTMLElement {
     const drag = this.drag;
     if (!drag) {
       const point = this.pointFromEvent(event);
-      if (!point && !event.composedPath().includes(this.line)) {
+      const curveTarget = point ? null : this.curveTargetAtPointer(event);
+      if (!point && !curveTarget) {
         this.readout.hidden = true;
+        this.segmentHighlight.setAttribute('d', '');
+        this.pointPreview.hidden = true;
+        delete this.surface.dataset.hoverTarget;
         return;
       }
-      const time = point ? this._points[point.index]?.time : this.timeAtPointer(event, true);
+      const time = point ? this._points[point.index]?.time : curveTarget.time;
       const value = point ? this._points[point.index]?.value
         : envelopeValueAtTime(this._points, time, this.min, this.max, this.scale, this.stepped);
-      if (Number.isFinite(time) && Number.isFinite(value)) this.showReadout(time, value);
+      this.segmentHighlight.setAttribute('d', curveTarget?.kind === 'segment'
+        ? this.segmentPath(this.segmentIndex(time))
+        : '');
+      this.pointPreview.hidden = curveTarget?.kind !== 'point';
+      if (curveTarget?.kind === 'point') {
+        this.pointPreview.setAttribute('transform', `translate(${this.x(time)} ${this.y(value)})`);
+      }
+      if (curveTarget) this.surface.dataset.hoverTarget = curveTarget.kind;
+      else delete this.surface.dataset.hoverTarget;
+      if (Number.isFinite(time) && Number.isFinite(value)) this.showReadout(time, value, false);
       return;
     }
     if (drag.pointerId !== event.pointerId) return;
@@ -379,7 +503,13 @@ export class CompostEnvelopeEditor extends HTMLElement {
     if (!drag.moved && drag.mode !== 'draw') return;
     const rect = this.surface.getBoundingClientRect();
     const factor = event.shiftKey ? .25 : 1;
-    const time = this.timeAtPointer(event, event.altKey || drag.freehand);
+    drag.freehand = this.freeTime(event);
+    const time = this.timeAtPointer(event, drag.freehand);
+    if (drag.mode === 'selection') {
+      this.selectSection(drag.startTime, time);
+      return;
+    }
+    if (drag.mode === 'insert') return;
     const options = { min: this.min, max: this.max, height: rect.height, scale: this.scale, stepped: this.stepped, step: this.step };
     let points = drag.origin;
     let readoutTime = time;
@@ -394,25 +524,60 @@ export class CompostEnvelopeEditor extends HTMLElement {
       readoutValue = points[drag.pointIndex].value;
       points = preserveEnvelopeEdgePoints(drag.origin, points, drag.pointIndex);
     } else if (drag.mode === 'segment') {
-      points = moveEnvelopePointsByY(drag.origin, [drag.segmentIndex, drag.segmentIndex + 1], dy * factor, options);
+      if (event.altKey && !this.stepped) {
+        const before = drag.origin[drag.segmentIndex];
+        const after = drag.origin[drag.segmentIndex + 1];
+        const direction = Math.sign(after.value - before.value);
+        const curve = clamp((Number(before.curve) || 0)
+          + dy / Math.max(1, rect.height) * 2 * direction, -1, 1);
+        points = drag.origin.map((point, index) => index === drag.segmentIndex
+          ? { ...point, curve: Math.abs(curve) < 1e-9 ? 0 : curve }
+          : { ...point });
+        readoutTime = (before.time + after.time) / 2;
+        readoutValue = envelopeValueAtTime(points, readoutTime,
+          this.min, this.max, this.scale, this.stepped);
+      } else {
+        points = moveEnvelopePointsByY(drag.origin,
+          [drag.segmentIndex, drag.segmentIndex + 1], dy * factor, options);
+      }
     } else if (drag.mode === 'range') {
-      points = moveEnvelopeRangeByY(drag.origin, this.selection.start, this.selection.end, dy * factor, options);
+      const selection = drag.originSelection;
+      const indexes = drag.originSelectionPointIndexes;
+      const selected = new Set(indexes);
+      const deltaTime = clamp((time - drag.startTime) * factor,
+        -selection.start, this.duration - selection.end);
+      const tagged = moveEnvelopePointsByY(drag.origin, indexes, dy * factor, options)
+        .map((point, index) => ({
+          point: selected.has(index) ? { ...point, time: point.time + deltaTime } : point,
+          selected: selected.has(index),
+        }))
+        .sort((a, b) => a.point.time - b.point.time);
+      points = tagged.map(({ point }) => point);
+      drag.previewSelectionPointIndexes = tagged.flatMap(({ selected: isSelected }, index) => isSelected ? [index] : []);
+      drag.previewSelection = {
+        start: selection.start + deltaTime,
+        end: selection.end + deltaTime,
+      };
+      this.selection = drag.previewSelection;
+      this.selectionPointIndexes = drag.previewSelectionPointIndexes;
     } else {
       const sample = { time, value: this.valueAtPointer(event) };
       const previous = drag.samples.at(-1);
       if (!previous || previous.time !== sample.time || previous.value !== sample.value) drag.samples.push(sample);
-      drag.freehand ||= event.altKey;
       points = drawEnvelopePoints(drag.origin, drag.samples, {
         ...options,
         gridStep: this.grid,
-        snap: drag.freehand ? 'off' : this.snapMode,
+        snap: drag.freehand ? 'off' : 'grid',
         freehand: drag.freehand,
         tolerance: 0,
       });
     }
     drag.preview = points;
     this.render(points);
-    this.showReadout(readoutTime, readoutValue);
+    if (drag.mode === 'segment') {
+      this.segmentHighlight.setAttribute('d', this.segmentPath(drag.segmentIndex, points));
+    }
+    this.showReadout(readoutTime, readoutValue, false);
     this.dispatchEvent(eventOf('envelope-input', { points: points.map((point) => ({ ...point })) }));
   }
 
@@ -425,11 +590,32 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.longPress.cancel();
     this.removeAttribute('data-preview');
     this.readout.hidden = true;
+    if (drag.mode === 'selection') {
+      if (!drag.moved) this.setSelection();
+      this.dispatchSelection();
+      return;
+    }
     if (!drag.moved && drag.mode !== 'draw') {
       this.render();
-      if (drag.created) this.dispatchEvent(eventOf('envelope-change', {
-        points: drag.origin.map((point) => ({ ...point })),
-      }));
+      if (drag.deletePoint) {
+        this.dispatchEvent(eventOf('envelope-change', {
+          points: deleteEnvelopePoint(drag.origin, drag.pointIndex),
+        }));
+      } else if (drag.created) {
+        this.dispatchEvent(eventOf('envelope-change', {
+          points: drag.origin.map((point) => ({ ...point })),
+        }));
+      } else if (drag.clickPoint) {
+        this.suppressDoubleClickUntil = performance.now() + DOUBLE_TAP_MS;
+        this.dispatchEvent(eventOf('envelope-change', {
+          points: splitEnvelopeAtTime(drag.origin, drag.clickPoint.time,
+            this.min, this.max, this.scale, this.stepped),
+        }));
+      }
+      return;
+    }
+    if (drag.mode === 'insert') {
+      this.render();
       return;
     }
     let points = drag.preview || drag.origin;
@@ -437,9 +623,10 @@ export class CompostEnvelopeEditor extends HTMLElement {
       points = drawEnvelopePoints(drag.origin, drag.samples, {
         min: this.min, max: this.max, height: this.size().height, scale: this.scale,
         stepped: this.stepped, step: this.step, gridStep: this.grid,
-        snap: drag.freehand ? 'off' : this.snapMode, freehand: drag.freehand,
+        snap: drag.freehand ? 'off' : 'grid', freehand: drag.freehand,
       });
     }
+    if (drag.mode === 'range' && drag.previewSelection) this.dispatchSelection();
     this.render();
     this.dispatchEvent(eventOf('envelope-change', { points: points.map((point) => ({ ...point })) }));
   }
@@ -448,9 +635,14 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.longPress.cancel();
     this.touchTapStart = null;
     if (!this.drag) return;
+    const drag = this.drag;
     this.drag = null;
     this.removeAttribute('data-preview');
     this.readout.hidden = true;
+    if (drag.mode === 'selection' || drag.mode === 'range') {
+      this.selection = drag.originSelection;
+      this.selectionPointIndexes = drag.originSelectionPointIndexes;
+    }
     this.render();
   }
 
@@ -472,7 +664,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     if (this.hasAttribute('disabled') || this.hasAttribute('readonly') || this.draw) return null;
     event.preventDefault();
     event.stopPropagation();
-    const added = { time: this.timeAtPointer(event, event.altKey), value: this.valueAtPointer(event) };
+    const added = { time: this.timeAtPointer(event, this.freeTime(event)), value: this.valueAtPointer(event) };
     const points = pointIndex >= 0 ? deleteEnvelopePoint(this._points, pointIndex)
       : addEnvelopePoint(this._points, added, this.min, this.max);
     let addedIndex = -1;
@@ -497,7 +689,13 @@ export class CompostEnvelopeEditor extends HTMLElement {
 
   handleKey(event) {
     const point = this.pointFromEvent(event);
-    if (!point || this.hasAttribute('disabled') || this.hasAttribute('readonly')) return;
+    if (this.hasAttribute('disabled') || this.hasAttribute('readonly')) return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd' && this.selection) {
+      event.preventDefault();
+      this.duplicateSelection();
+      return;
+    }
+    if (!point) return;
     if (event.shiftKey && event.key === 'F10') {
       event.preventDefault();
       const rect = point.marker.getBoundingClientRect();
@@ -540,11 +738,52 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.dispatchEvent(eventOf('envelope-change', { points }));
   }
 
-  showReadout(time, value) {
+  showReadout(time, value, includeTime = true) {
     this.readout.hidden = false;
-    this.readout.textContent = `${Number(time).toFixed(2)} · ${Number(value).toFixed(2)}`;
+    this.readout.textContent = includeTime
+      ? `${Number(time).toFixed(2)} · ${Number(value).toFixed(2)}`
+      : Number(value).toFixed(2);
     this.readout.style.left = `${time / this.duration * 100}%`;
     this.readout.style.top = `${this.y(value)}px`;
+  }
+
+  dispatchSelection() {
+    this.dispatchEvent(eventOf('envelope-selection', this.selection
+      ? { ...this.selection }
+      : { start: null, end: null }));
+  }
+
+  duplicateSelection() {
+    const { start, end } = this.selection;
+    const length = end - start;
+    const nextEnd = end + length;
+    if (!(length > 0) || nextEnd > this.duration) return;
+    const selected = sliceEnvelopeRange(this._points, start, end,
+      this.min, this.max, this.scale, this.stepped);
+    if (!selected.length) return;
+    let source = splitEnvelopeAtTime(this._points, start,
+      this.min, this.max, this.scale, this.stepped);
+    source = splitEnvelopeAtTime(source, end,
+      this.min, this.max, this.scale, this.stepped);
+    const tagged = source
+      .filter((point) => point.time <= end || point.time > nextEnd)
+      .map((point) => ({ point: { ...point }, selected: false }));
+    for (const point of selected) {
+      const duplicate = { ...point, time: point.time + length };
+      const existing = tagged.find((entry) => entry.point.time === duplicate.time
+        && entry.point.value === duplicate.value);
+      if (existing) {
+        existing.point = duplicate;
+        existing.selected = true;
+      }
+      else tagged.push({ point: duplicate, selected: true });
+    }
+    tagged.sort((a, b) => a.point.time - b.point.time);
+    const points = tagged.map(({ point }) => point);
+    this.selection = { start: end, end: nextEnd };
+    this.selectionPointIndexes = tagged.flatMap(({ selected: isSelected }, index) => isSelected ? [index] : []);
+    this.dispatchSelection();
+    this.dispatchEvent(eventOf('envelope-change', { points }));
   }
 }
 

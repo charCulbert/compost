@@ -94,11 +94,24 @@ export function effectiveEnvelopeStep(stepped = false, step) {
   return increment > 0 && Number.isFinite(increment) ? increment : 0;
 }
 
+/** Map linear segment progress through a signed, endpoint-preserving curve. */
+export function envelopeCurvePosition(position, curve = 0) {
+  const amount = clamp(Number(position) || 0, 0, 1);
+  const bend = clamp(Number(curve) || 0, -1, 1);
+  if (Math.abs(bend) < 1e-9) return amount;
+  const exponent = bend * 8;
+  return Math.expm1(exponent * amount) / Math.expm1(exponent);
+}
+
 export function envelopeValueAtTime(points, time, min = 0, max = 1, scale = 'linear', stepped = false) {
   const range = envelopeRange(min, max);
   const sorted = (Array.isArray(points) ? points : [])
     .filter((point) => Number.isFinite(Number(point?.time)) && Number.isFinite(Number(point?.value)))
-    .map((point) => ({ time: Math.max(0, Number(point.time)), value: finiteClamp(Number(point.value), range.min, range.max) }))
+    .map((point) => ({
+      ...point,
+      time: Math.max(0, Number(point.time)),
+      value: finiteClamp(Number(point.value), range.min, range.max),
+    }))
     .sort((a, b) => a.time - b.time);
   if (!sorted.length) return range.min;
   const at = Math.max(0, Number(time) || 0);
@@ -111,10 +124,47 @@ export function envelopeValueAtTime(points, time, min = 0, max = 1, scale = 'lin
     if (at > next.time) continue;
     if (stepped) return at === next.time ? next.value : previous.value;
     if (next.time <= previous.time) return previous.value;
-    const amount = (at - previous.time) / (next.time - previous.time);
+    const amount = envelopeCurvePosition(
+      (at - previous.time) / (next.time - previous.time),
+      previous.curve,
+    );
     return finiteClamp(previous.value + (next.value - previous.value) * amount, range.min, range.max);
   }
   return last.value;
+}
+
+/** Insert a point on the existing envelope without changing its shape. */
+export function splitEnvelopeAtTime(points, time, min = 0, max = 1, scale = 'linear', stepped = false) {
+  const at = Math.max(0, Number(time) || 0);
+  const source = (Array.isArray(points) ? points : []).map((point) => ({ ...point }))
+    .sort((a, b) => Number(a.time) - Number(b.time));
+  if (source.some((point) => Math.abs(Number(point.time) - at) <= MIN_ENVELOPE_TIME)) return source;
+  const value = envelopeValueAtTime(source, at, min, max, scale, stepped);
+  const beforeIndex = source.findLastIndex((point) => Number(point.time) < at);
+  const before = source[beforeIndex];
+  const after = source[beforeIndex + 1];
+  const inserted = { time: at, value };
+  if (!stepped && before && after && Number(after.time) > Number(before.time)) {
+    const position = (at - Number(before.time)) / (Number(after.time) - Number(before.time));
+    const curve = clamp(Number(before.curve) || 0, -1, 1);
+    before.curve = curve * position;
+    inserted.curve = curve * (1 - position);
+  }
+  source.push(inserted);
+  return source.sort((a, b) => Number(a.time) - Number(b.time));
+}
+
+/** Copy a bounded envelope shape, including exact partial curves at its edges. */
+export function sliceEnvelopeRange(points, start, end, min = 0, max = 1, scale = 'linear', stepped = false) {
+  const low = Math.max(0, Math.min(Number(start) || 0, Number(end) || 0));
+  const high = Math.max(low, Math.max(Number(start) || 0, Number(end) || 0));
+  if (!(high > low + MIN_ENVELOPE_TIME)) return [];
+  let split = splitEnvelopeAtTime(points, low, min, max, scale, stepped);
+  split = splitEnvelopeAtTime(split, high, min, max, scale, stepped);
+  const result = split.filter((point) => Number(point.time) >= low - MIN_ENVELOPE_TIME
+    && Number(point.time) <= high + MIN_ENVELOPE_TIME);
+  if (result.length) delete result.at(-1).curve;
+  return result;
 }
 
 function editOptions(options = {}) {

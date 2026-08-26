@@ -27,11 +27,13 @@ const { SynthKnob } = await import('../src/components/compost-knob.js');
 const { CompostNumberBox } = await import('../src/components/compost-number-box.js');
 const { ScopeVisualizer } = await import('../src/components/compost-scope.js');
 const { CompostSelect } = await import('../src/components/compost-select.js');
+const { CompostEnvelopeEditor } = await import('../src/components/compost-envelope-editor.js');
 const { PianoKeyboard } = await import('../src/components/compost-piano.js');
 const { ParameterSlider } = await import('../src/components/compost-slider.js');
 const { CompostDrawer } = await import('../src/components/compost-drawer.js');
 const { CircleButton } = await import('../src/components/compost-button.js');
 const { MIDIMappingsEditor } = await import('../src/components/compost-midi-mappings.js');
+const { envelopeValueAtTime } = await import('../src/envelope-model.js');
 const {
   beginParameterGesture,
   editParameterGesture,
@@ -244,6 +246,146 @@ test('scope keeps signal acquisition, policy, and palette choices outside the di
     assert.equal(ScopeVisualizer.observedAttributes.includes(attribute), false);
   }
   assert.equal('generateDemoSamples' in ScopeVisualizer.prototype, false);
+});
+
+test('envelope Alt modifier inverts the configured time snapping mode', () => {
+  const editor = Object.create(CompostEnvelopeEditor.prototype);
+  Object.assign(editor, {
+    duration: 4,
+    grid: .25,
+    surface: { getBoundingClientRect: () => ({ left: 0, width: 100 }) },
+  });
+  const event = { clientX: 33, altKey: false };
+
+  editor.snapMode = 'grid';
+  assert.equal(editor.timeAtPointer(event, editor.freeTime(event)), 1.25);
+  event.altKey = true;
+  assert.equal(editor.timeAtPointer(event, editor.freeTime(event)), 1.32);
+
+  editor.snapMode = 'off';
+  event.altKey = false;
+  assert.equal(editor.timeAtPointer(event, editor.freeTime(event)), 1.32);
+  event.altKey = true;
+  assert.equal(editor.timeAtPointer(event, editor.freeTime(event)), 1.25);
+});
+
+test('envelope curve hover distinguishes point insertion from the segment handle below it', () => {
+  const editor = Object.create(CompostEnvelopeEditor.prototype);
+  Object.assign(editor, {
+    duration: 1,
+    min: 0,
+    max: 1,
+    scale: 'linear',
+    stepped: false,
+    grid: .1,
+    snapMode: 'off',
+    _points: [{ time: 0, value: .5 }, { time: 1, value: .5 }],
+    surface: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) },
+  });
+
+  assert.equal(editor.curveTargetAtPointer({ clientX: 50, clientY: 50, altKey: false }).kind, 'point');
+  assert.equal(editor.curveTargetAtPointer({ clientX: 50, clientY: 56, altKey: false }).kind, 'segment');
+  assert.equal(editor.curveTargetAtPointer({ clientX: 50, clientY: 44, altKey: false }), null);
+});
+
+test('envelope Cmd+D duplicates the selected range and advances its selection', () => {
+  const events = [];
+  const editor = Object.create(CompostEnvelopeEditor.prototype);
+  Object.assign(editor, {
+    duration: 4,
+    selection: { start: 1, end: 2 },
+    selectionPointIndexes: [1, 2],
+    _points: [
+      { time: 0, value: 0 },
+      { time: 1, value: .25 },
+      { time: 2, value: .75 },
+      { time: 2.5, value: 1 },
+      { time: 4, value: 0 },
+    ],
+    setSelection(start, end) { this.selection = { start, end }; },
+    dispatchEvent(event) { events.push(event); },
+  });
+
+  editor.duplicateSelection();
+
+  assert.deepEqual(editor.selection, { start: 2, end: 3 });
+  assert.deepEqual(events.map((event) => event.type), ['envelope-selection', 'envelope-change']);
+  assert.deepEqual(events.at(-1).detail.points.map(({ time, value }) => [time, value]), [
+    [0, 0], [1, .25], [2, .75], [2, .25], [3, .75], [4, 0],
+  ]);
+});
+
+test('envelope Cmd+D preserves a partial curved selection and its source shape', () => {
+  const original = [
+    { time: 0, value: 0, curve: .8 },
+    { time: 1, value: 1 },
+    { time: 2, value: 0 },
+  ];
+  const events = [];
+  const editor = Object.create(CompostEnvelopeEditor.prototype);
+  Object.assign(editor, {
+    duration: 2,
+    min: 0,
+    max: 1,
+    scale: 'linear',
+    stepped: false,
+    selection: { start: .25, end: .75 },
+    selectionPointIndexes: [],
+    _points: original.map((point) => ({ ...point })),
+    dispatchEvent(event) { events.push(event); },
+  });
+
+  editor.duplicateSelection();
+
+  const points = events.find((event) => event.type === 'envelope-change').detail.points;
+  for (const position of [.1, .3, .5, .7, .9]) {
+    const sourceTime = .25 + position * .5;
+    const duplicateTime = .75 + position * .5;
+    const expected = envelopeValueAtTime(original, sourceTime);
+    assert.ok(Math.abs(envelopeValueAtTime(points, sourceTime) - expected) < 1e-9);
+    assert.ok(Math.abs(envelopeValueAtTime(points, duplicateTime) - expected) < 1e-9);
+  }
+});
+
+test('dragging a point inside an envelope selection starts a section move', () => {
+  const editor = Object.create(CompostEnvelopeEditor.prototype);
+  const marker = { focus() {} };
+  Object.assign(editor, {
+    draw: false,
+    snapMode: 'grid',
+    selection: { start: 1, end: 2 },
+    selectionPointIndexes: [0],
+    _points: [{ time: 1.5, value: .5 }],
+    line: {},
+    segmentHighlight: { setAttribute() {} },
+    pointPreview: {},
+    selectionMarquee: { style: {} },
+    surface: {
+      dataset: {},
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
+      setPointerCapture() {},
+    },
+    longPress: { cancel() {}, start() {} },
+    pointFromEvent: () => ({ marker, index: 0 }),
+    timeAtPointer: () => 1.5,
+    valueAtPointer: () => .5,
+    hasAttribute: () => false,
+    setAttribute() {},
+  });
+
+  editor.startPointer({
+    pointerId: 1,
+    pointerType: 'mouse',
+    button: 0,
+    clientX: 50,
+    clientY: 50,
+    altKey: false,
+    preventDefault() {},
+    stopPropagation() {},
+    composedPath: () => [marker],
+  });
+
+  assert.equal(editor.drag.mode, 'range');
 });
 
 test('knobs and sliders expose disabled as a real control state', () => {

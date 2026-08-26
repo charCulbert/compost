@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import {
   addEnvelopePoint,
   drawEnvelopePoints,
+  envelopeCurvePosition,
   envelopeValueAtTime,
   envelopeValueFromY,
   envelopeValueToY,
   moveEnvelopePoint,
+  sliceEnvelopeRange,
+  splitEnvelopeAtTime,
 } from '../src/envelope-model.js';
 
 test('generic envelope geometry is independent of its caller time unit', () => {
@@ -15,6 +18,33 @@ test('generic envelope geometry is independent of its caller time unit', () => {
   assert.equal(envelopeValueAtTime([
     { time: 0, value: 0 }, { time: 2, value: 1 },
   ], 1), .5);
+});
+
+test('segment curves preserve endpoints and bend interpolation in both directions', () => {
+  assert.equal(envelopeCurvePosition(0, 1), 0);
+  assert.equal(envelopeCurvePosition(1, -1), 1);
+  assert.ok(envelopeCurvePosition(.5, 1) < .5);
+  assert.ok(envelopeCurvePosition(.5, -1) > .5);
+  assert.ok(envelopeValueAtTime([
+    { time: 0, value: 0, curve: 1 }, { time: 1, value: 1 },
+  ], .5) < .5);
+});
+
+test('splitting and slicing a curve preserve its exact shape', () => {
+  const original = [{ time: 0, value: 0, curve: .8 }, { time: 1, value: 1 }];
+  const split = splitEnvelopeAtTime(original, .4);
+  assert.ok(Math.abs(split[0].curve - .32) < 1e-12);
+  assert.ok(Math.abs(split[1].curve - .48) < 1e-12);
+  for (const time of [.1, .4, .7, .9]) {
+    assert.ok(Math.abs(envelopeValueAtTime(split, time)
+      - envelopeValueAtTime(original, time)) < 1e-12);
+  }
+
+  const slice = sliceEnvelopeRange(original, .25, .75);
+  for (const time of [.25, .4, .6, .75]) {
+    assert.ok(Math.abs(envelopeValueAtTime(slice, time)
+      - envelopeValueAtTime(original, time)) < 1e-12);
+  }
 });
 
 test('generic envelope point edits stay sorted, bounded and neighbour-safe', () => {
