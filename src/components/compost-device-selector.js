@@ -45,70 +45,60 @@ export class CompostDeviceSelector extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-device-selector-bg: #ffffff;
-          --compost-device-selector-text: #111111;
-          --compost-device-selector-muted: #555555;
-          --compost-device-selector-border: #bdbdbd;
-          --compost-device-selector-control-bg: #ffffff;
-          --compost-device-selector-control-border: #111111;
-          --compost-device-selector-button-bg: #ffffff;
-          --compost-device-selector-button-text: #111111;
-          --compost-device-selector-error: #9f2f24;
-          --compost-device-selector-focus-color: #111111;
-          --compost-device-selector-color-scheme: light;
-          color-scheme: var(--compost-device-selector-color-scheme);
+          --compost-device-selector-bg: Canvas;
+          --compost-device-selector-text: currentColor;
+          --compost-device-selector-muted: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-device-selector-border: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-device-selector-control-bg: Canvas;
+          --compost-device-selector-control-border: currentColor;
+          --compost-device-selector-button-bg: Canvas;
+          --compost-device-selector-button-text: currentColor;
+          --compost-device-selector-error: currentColor;
+          --compost-device-selector-focus-color: currentColor;
           color: var(--compost-device-selector-text);
           display: inline-block;
           font: inherit;
         }
         button {
           box-sizing: border-box;
-          min-height: 32px;
+          min-height: 2em;
           border: 1px solid var(--compost-device-selector-control-border);
           border-radius: 0;
-          background: var(--compost-device-selector-control-bg);
-          color: var(--compost-device-selector-text);
-          font: inherit;
-        }
-        button {
           background: var(--compost-device-selector-button-bg);
           color: var(--compost-device-selector-button-text);
           cursor: pointer;
-          padding: 0 12px;
+          padding: 0.25em 0.75em;
+          font: inherit;
           white-space: nowrap;
         }
         button:disabled {
           cursor: default;
           opacity: 0.55;
         }
-        button:focus,
-        input:focus {
-          outline: 1px solid color-mix(in srgb, var(--compost-device-selector-focus-color) 45%, transparent);
-          outline-offset: 2px;
-        }
         button:focus-visible,
         input:focus-visible,
         :host(:focus-visible) [data-open] {
           outline: 2px solid var(--compost-device-selector-focus-color);
+          outline-offset: 2px;
         }
         dialog {
           box-sizing: border-box;
-          inline-size: min(680px, calc(100vw - 32px));
-          max-block-size: min(780px, calc(100vh - 32px));
-          border: 1px solid var(--compost-device-selector-border);
-          border-radius: 6px;
+          inline-size: min(42em, calc(100vw - 2em));
+          max-block-size: calc(100vh - 2em);
+          border: 1px solid var(--compost-device-selector-control-border);
+          border-radius: 0;
           padding: 0;
           background: var(--compost-device-selector-bg);
           color: var(--compost-device-selector-text);
-          box-shadow: 0 18px 56px rgba(0, 0, 0, 0.32);
+          font: inherit;
         }
         dialog::backdrop {
-          background: rgba(0, 0, 0, 0.48);
+          background: color-mix(in srgb, CanvasText 45%, transparent);
         }
         .panel {
           display: grid;
-          gap: 16px;
-          padding: 18px;
+          gap: 1em;
+          padding: 1em;
         }
         .header,
         .footer {
@@ -116,22 +106,22 @@ export class CompostDeviceSelector extends HTMLElement {
           flex-wrap: wrap;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
+          gap: 0.75em;
         }
         h2 {
           margin: 0;
           font: inherit;
-          font-size: 1.18em;
+          font-size: 1em;
           font-weight: 700;
         }
         .settings {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
+          gap: 0.75em 1em;
         }
         .field {
           display: grid;
-          gap: 6px;
+          gap: 0.35em;
           min-width: 0;
         }
         .field[hidden] {
@@ -140,45 +130,38 @@ export class CompostDeviceSelector extends HTMLElement {
         label,
         legend {
           color: var(--compost-device-selector-muted);
-          font-size: 0.86em;
-          font-weight: 650;
+          font-size: 0.85em;
+          font-weight: inherit;
         }
         compost-select {
-          --compost-select-bg: var(--compost-device-selector-control-bg);
-          --compost-select-border: var(--compost-device-selector-control-border);
-          --compost-select-text: var(--compost-device-selector-text);
-          --compost-select-active-bg: var(--compost-device-selector-focus-color);
-          --compost-select-active-text: var(--compost-device-selector-active-text, var(--compost-device-selector-control-bg));
-          --compost-select-hover-bg: color-mix(in srgb, var(--compost-device-selector-control-bg) 82%, var(--compost-device-selector-text));
-          --compost-select-focus: var(--compost-device-selector-focus-color);
-          --compost-select-height: 32px;
           inline-size: 100%;
         }
         fieldset {
           display: grid;
-          gap: 9px;
+          gap: 0.5em;
           min-width: 0;
           margin: 0;
           border: 1px solid var(--compost-device-selector-border);
-          border-radius: 6px;
-          padding: 12px;
+          border-radius: 0;
+          padding: 0.75em;
         }
         .midi-devices {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-          gap: 8px 14px;
+          gap: 0.5em 1em;
         }
         .midi-devices label {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 0.5em;
           min-width: 0;
           color: var(--compost-device-selector-text);
           font-size: 0.92em;
-          font-weight: 500;
+          font-weight: inherit;
         }
         .midi-devices input {
           margin: 0;
+          accent-color: var(--compost-accent, AccentColor);
         }
         .empty {
           color: var(--compost-device-selector-muted);

@@ -129,6 +129,9 @@
     <option value="delete">Delete</option>
   </compost-popup>
 </template>
+<template id="compost-device-selector">
+  <compost-device-selector></compost-device-selector>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -157,7 +160,7 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-window') {
@@ -177,6 +180,40 @@
         document.querySelectorAll('compost-popup').forEach((other) => { if (other !== popup) other.close('switch'); });
         const rect = surface.getBoundingClientRect();
         popup.openAt(event.clientX || rect.left + rect.width / 2, event.clientY || rect.top + rect.height / 2);
+      });
+    }
+    if (el === 'compost-device-selector') {
+      const selector = s.querySelector('compost-device-selector');
+      let snapshot = {
+        audio: {
+          api: 'Core Audio',
+          apis: ['Core Audio'],
+          inputDevices: [{ id: 'mic', name: 'Built-in Microphone' }],
+          outputDevices: [{ id: 'speakers', name: 'Built-in Output' }, { id: 'headphones', name: 'Headphones' }],
+          inputDeviceId: 'mic',
+          outputDeviceId: 'speakers',
+          sampleRate: 48000,
+          bufferSize: 128,
+          sampleRates: [44100, 48000, 96000],
+          bufferSizes: [64, 128, 256],
+        },
+        midi: {
+          inputDevices: [{ id: 'keyboard', name: 'MIDI Keyboard' }],
+          outputDevices: [{ id: 'synth', name: 'Hardware Synth' }],
+          inputDeviceIds: ['keyboard'],
+          outputDeviceIds: [],
+        },
+      };
+      selector.connectHost({
+        getSnapshot: () => snapshot,
+        applySettings: (request) => {
+          snapshot = {
+            ...snapshot,
+            audio: { ...snapshot.audio, ...request.settings.audio },
+            midi: { ...snapshot.midi, ...request.settings.midi },
+          };
+          return snapshot;
+        },
       });
     }
     if (el === 'compost-envelope-editor') {
@@ -207,6 +244,9 @@
     const surface = document.querySelector('section.plain [data-popup-surface]');
     const rect = surface.getBoundingClientRect();
     firstPopup.openAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+  if (el === 'compost-device-selector') {
+    document.querySelector('section.plain compost-device-selector').open();
   }
   if (el === 'compost-meter' || el === 'compost-scope') {
     if (el === 'compost-meter') {
