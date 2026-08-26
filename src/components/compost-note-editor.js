@@ -905,7 +905,7 @@ export class CompostNoteEditor extends HTMLElement {
       this.preview(note.note);
       if (event.pointerType === 'touch') {
         // on touch a still hold asks for context actions instead; velocity
-        // editing is a caller menu action there (docs/interaction.md)
+        // editing is a caller menu action there (README, Events)
         this.longPress.start(() => {
           if (!this.drag || this.drag.moved) return;
           this.endPointer({ pointerId: event.pointerId, type: 'pointercancel' });

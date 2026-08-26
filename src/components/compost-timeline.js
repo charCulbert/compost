@@ -960,7 +960,7 @@ export class CompostTimeline extends HTMLElement {
     return this._lanes.at(-1).id;
   }
 
-  /** Readonly renders and navigates but emits no mutating intent (docs/interaction.md). */
+  /** Readonly renders and navigates but emits no mutating intent (README, Events). */
   get readonly() { return this.hasAttribute('readonly'); }
 
   beginRename(clipId) {

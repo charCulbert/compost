@@ -36,7 +36,7 @@ export function setupExamplePage(id) {
   const links = document.createElement('div');
   links.className = 'example-link-group';
   links.innerHTML = `
-    <a class="example-nav-button" href="../../docs/">Docs</a>
+    <a class="example-nav-button" href="https://github.com/charCulbert/compost#readme">README</a>
     <a class="example-nav-button" href="../">All examples</a>
   `;
   target.append(links);

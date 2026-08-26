@@ -56,7 +56,7 @@
   --compost-theme-scope-trace: var(--compost-theme-accent);
 }
 
-/* Elements on the plain-HTML style (docs/style.md) read the page instead of
+/* Elements on the plain-HTML style (README, Style) read the page instead of
    per-element tokens: currentColor, color-scheme and --compost-accent. Until
    every element has moved, a theme provides those three as well. */
 [data-compost-theme] {

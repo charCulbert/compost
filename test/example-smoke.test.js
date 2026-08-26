@@ -150,23 +150,15 @@ test('example catalog has the canonical order and every target exists', async ()
   assert.equal(fs.existsSync(path.join(root, 'examples/component-demos/index.js')), false);
 });
 
-test('every component demo links to its Markdown guide', async () => {
+test('every component demo is named after its element and listed in the README', async () => {
   const { demos } = await import('../examples/component-demos/catalog.js');
-  const reader = fs.readFileSync(path.join(root, 'docs/reader.js'), 'utf8');
-  const guideIndex = fs.readFileSync(path.join(root, 'docs/components.md'), 'utf8');
-  const readerTitles = new Map([...reader.matchAll(
-    /\['(compost-[^']+)',\s*'([^']+)',\s*'\.\/components\/\1\.md'\]/gu,
-  )].map(([, id, title]) => [id, title]));
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 
   for (const { id, title } of demos) {
     const html = fs.readFileSync(path.join(root, `examples/component-demos/${id}/index.html`), 'utf8');
-    const guide = fs.readFileSync(path.join(root, `docs/components/${id}.md`), 'utf8');
     assert.equal(title, id, `${id} public name`);
-    assert.equal(readerTitles.get(id), title, `${id} docs navigation`);
-    assert.equal(guide.startsWith(`# ${title}\n`), true, `${id} guide heading`);
-    assert.match(guideIndex, new RegExp(`\\[${title}\\]\\(components/${id}\\.md\\)`, 'u'), id);
-    assert.match(guide, new RegExp(`\\b${id}\\b`, 'u'), `${id} custom element name`);
-    assert.match(html, new RegExp(`href="\\.\\.\\/\\.\\.\\/\\.\\.\\/docs/\\?doc=${id}"`, 'u'), id);
+    assert.match(readme, new RegExp(`\`${id}\``, 'u'), `${id} in the README`);
+    assert.doesNotMatch(html, /docs\//u, `${id} links to a docs site that no longer exists`);
     assert.doesNotMatch(html, />Component demos</u, id);
   }
 });
@@ -177,19 +169,7 @@ test('component demos inherit the shared theme preference without adding a picke
   assert.doesNotMatch(sharedDemo, /setupThemeSelector|data-shared-theme-group/u);
 });
 
-test('documentation inherits the shared site theme preference', () => {
-  const html = fs.readFileSync(path.join(root, 'docs/index.html'), 'utf8');
-  const reader = fs.readFileSync(path.join(root, 'docs/reader.js'), 'utf8');
-
-  assert.match(html, /href="\.\.\/src\/themes\.css"/u);
-  assert.match(html, /--bg: var\(--compost-theme-bg\)/u);
-  assert.match(reader, /import '\.\.\/examples\/shared\/example-page\.js';/u);
-  assert.match(reader, /\['overview', 'Overview', '\.\.\/README\.md'\]/u);
-  assert.equal(fs.existsSync(path.join(root, 'docs/overview.md')), false);
-});
-
 test('documentation describes the current backend-neutral surface only', () => {
-  const reader = fs.readFileSync(path.join(root, 'docs/reader.js'), 'utf8');
   const retiredProtocol = String.fromCharCode(72, 73, 68);
   const markdown = [
     fs.readFileSync(path.join(root, 'README.md'), 'utf8'),
@@ -203,13 +183,9 @@ test('documentation describes the current backend-neutral surface only', () => {
     'MIDI[ -]' + 'router',
   ].join('|'), 'iu');
 
-  assert.doesNotMatch(`${markdown}\n${reader}`, obsoleteTerms);
+  assert.doesNotMatch(markdown, obsoleteTerms);
   assert.match(markdown, /Web Audio/u);
   assert.match(markdown, /WebView/u);
-
-  for (const [, href] of reader.matchAll(/\['[^']+',\s*'[^']+',\s*'([^']+\.md)'\]/gu)) {
-    assert.equal(fs.existsSync(path.resolve(root, 'docs', href)), true, href);
-  }
 });
 
 test('the signal generator is a drawer-based plain AudioWorklet integration', () => {

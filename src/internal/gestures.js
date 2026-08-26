@@ -1,5 +1,5 @@
 /**
- * The shared gesture constants and recognizers from docs/interaction.md.
+ * The shared gesture constants and recognizers described in the README under Events.
  * Elements import these instead of restating the numbers, so every element
  * feels the same distances and delays.
  */

@@ -1,8 +1,8 @@
 # Plain-HTML style pass
 
-Move every element onto the rules in [docs/style.md](../style.md), one element
-per round, each signed off by eye before the next. Branch:
-`worktree-select-fix-and-style-philosophy`.
+Move every element onto the rules in the README's Style section, one element
+per round, each signed off by eye before the next. The README is the only
+document; this file is the working plan.
 
 ## Order
 
@@ -40,8 +40,8 @@ What gets done, in this order:
    Geometry tokens stay.
 2. Delete the element's block from `src/themes.css`.
 3. Any bug met on the way is its own commit with its own test.
-4. Update `docs/components/<element>.md`: dead tokens out, new attributes and
-   parts in.
+4. Update `src/components/<element>.d.ts` for any attribute or property that
+   changed; parts are named in the element's template.
 5. Add the element's scenario to the review page, run the unit tests and a
    headless render check in all three contexts.
 6. Commit: `style: <element> follows the plain-HTML ethos`.
@@ -80,8 +80,9 @@ commit in the same round.
    conformance table and one shared test that runs against every element.
 2. Collapse `src/themes.css` to palettes that set `color`, `color-scheme` and
    `--compost-accent`; rewrite `docs/themes.md`; retire the bridge rule.
-3. Examples: one minimal Document page per element showing one scenario, with
-   the markup on the page. Defaults only; `::part()` stays a docs topic.
+3. Examples: one minimal page per element showing one scenario, with the
+   markup on the page, defaults only. The bigger showcases (signal generator,
+   parameter sync) stay as the place several elements and a real backend meet.
 
 ## Parked
 

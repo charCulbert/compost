@@ -224,13 +224,6 @@ test('touch double-tap resets parameter controls', async ({ page }) => {
   }
 });
 
-test('documentation renders the overview', async ({ page }) => {
-  await page.goto('/docs/');
-
-  await expect(page.locator('[data-doc-content] h1')).toHaveText('Compost');
-  await expect(page.locator('[data-doc-content]')).toContainText('Use through npm');
-});
-
 test('knob keyboard edits use a complete parameter gesture', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-knob/');
   const knob = page.locator('compost-knob[data-option-target="knob"]');

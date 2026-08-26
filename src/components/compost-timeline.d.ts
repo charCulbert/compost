@@ -163,8 +163,7 @@ export function moveAutomationRange(points: {beat: number, value: number}[], sta
 /**
  * `<compost-timeline>`: an arrangement view of lanes, clips, locators, a
  * loop brace and automation sub-rows. The host owns all state; the element
- * draws it and reports intent as CustomEvents (see docs/components/
- * compost-timeline.md for the full intent table): `seek`, `loop-input`,
+ * draws it and reports intent as CustomEvents: `seek`, `loop-input`,
  * `loop-change`, `loop-toggle`, `locator-*`, `time-select`, `time-delete`,
  * `clip-select`, `clip-open`, `clip-context`, `clip-move`, `clip-trim`,
  * `clip-rename`, `clip-delete`, `clip-duplicate`, `clip-split`,
