@@ -25,5 +25,7 @@ like built-in form controls. They bring functionality, not a palette.
    `--compost-accent`); then `::part()` for structure; custom properties only
    for what CSS cannot reach (canvas colours, geometry).
 8. **Unstyled is unstyled HTML.** Black on white, system font, OS accent.
+9. **Labels sit where that shape expects them.** Above a horizontal control,
+   like a form field; below a knob or a vertical fader, like a panel legend.
 
 Themes are pages that set `color`, `color-scheme` and `--compost-accent`.
