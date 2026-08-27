@@ -41,6 +41,8 @@ test('note lengths and ruler labels read musically', () => {
   assert.equal(lengthText(0.25), '0.1 beat');
   assert.equal(lengthText(0.5), '0.2 beat');
   assert.equal(lengthText(0.75), '0.3 beat');
+  assert.equal(lengthText(0.5, 0.5), '1 beat');
+  assert.equal(lengthText(0.25, 0.5), '0.2 beat');
   assert.deepEqual(rulerLabels(8, 4, 20).map((label) => label.text), ['1', '2']);
   assert.deepEqual(rulerLabels(8, 4, 60).map((label) => label.text),
     ['1', '1.2', '1.3', '1.4', '2', '2.2', '2.3', '2.4']);

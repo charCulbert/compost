@@ -26,8 +26,8 @@ export interface NoteContextDetail { id: string | undefined, clientX: number, cl
 /** Bar, beat and grid-cell labels, made sparser when space is tight. */
 export function rulerLabels(beats: number, meter: number | {barLength: number, beatLength: number}, pxPerBeat: number, gridStep?: number): {beat: number, text: string}[];
 
-/** A length in beats, written the way a musician reads it. */
-export function lengthText(duration: number): string;
+/** A length in the meter's denominator beats, written the way a musician reads it. */
+export function lengthText(duration: number, beatLength?: number): string;
 
 /** The musical name of a grid expressed as cells per bar. */
 export function gridText(division: string | number, beatsPerBar?: number): string;

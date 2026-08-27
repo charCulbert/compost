@@ -29,12 +29,13 @@ const DOUBLE_CLICK_MS = 500;
 
 /** @typedef {import('../piano-roll-model.js').RollNote} RollNote */
 
-/** A length in beats, written the way a musician reads it. */
-/** @param {number} duration */
-export function lengthText(duration) {
-  const whole = Math.floor(duration);
-  const sixteenths = Math.round((duration - whole) * 4 * 100) / 100;
-  return `${whole}${sixteenths ? `.${sixteenths}` : ''} beat${duration >= 2 ? 's' : ''}`;
+/** A length in the meter's denominator beats, written the way a musician reads it. */
+/** @param {number} duration @param {number} [beatLength] */
+export function lengthText(duration, beatLength = 1) {
+  const beats = duration / (beatLength > 0 ? beatLength : 1);
+  const whole = Math.floor(beats);
+  const subdivisions = Math.round((beats - whole) * 4 * 100) / 100;
+  return `${whole}${subdivisions ? `.${subdivisions}` : ''} beat${beats >= 2 ? 's' : ''}`;
 }
 
 /** The musical name of a grid expressed as cells per bar. */
@@ -788,7 +789,7 @@ export class CompostNoteEditor extends HTMLElement {
     const beats = this.selectionRegion.end - this.selectionRegion.start;
     const bars = beats / this.beatsPerBar;
     this.division.textContent = Math.abs(bars - Math.round(bars)) < 1e-9
-      ? `${Math.round(bars)} bar${Math.round(bars) === 1 ? '' : 's'}` : lengthText(beats);
+      ? `${Math.round(bars)} bar${Math.round(bars) === 1 ? '' : 's'}` : lengthText(beats, this.beatLength);
   }
 
   renderRuler() {
@@ -1308,7 +1309,7 @@ export class CompostNoteEditor extends HTMLElement {
         this._preview = velocityShiftedNotes(this._preview, drag.ids, (drag.y - event.clientY) * factor);
       }
       const current = this._preview.find((entry) => entry.id === drag.note.id);
-      if (current) this.showTip(`${lengthText(current.duration)}${drag.created ? ` · vel ${current.velocity}` : ''}`, event);
+      if (current) this.showTip(`${lengthText(current.duration, this.beatLength)}${drag.created ? ` · vel ${current.velocity}` : ''}`, event);
     } else if (drag.mode === 'lenL') {
       const origin = this._notes.find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
       if (!origin) return;
@@ -1318,7 +1319,7 @@ export class CompostNoteEditor extends HTMLElement {
       this._preview = trimmedNotes(this._notes, drag.ids, start - origin.start,
         this.beats, this.step, 'off');
       const current = this._preview.find((entry) => entry.id === drag.note.id);
-      if (current) this.showTip(lengthText(current.duration), event);
+      if (current) this.showTip(lengthText(current.duration, this.beatLength), event);
     } else {
       if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= DRAG_SLOP) return;
       drag.moved = true;

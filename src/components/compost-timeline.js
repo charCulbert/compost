@@ -1990,7 +1990,7 @@ export class CompostTimeline extends HTMLElement {
   lengthLabel(beats) {
     const bars = beats / this.beatsPerBar;
     if (Math.abs(bars - Math.round(bars)) < MIN_CLIP_LENGTH) return `${Math.round(bars)} bar${Math.round(bars) === 1 ? '' : 's'}`;
-    const rounded = Math.round(beats * 100) / 100;
+    const rounded = Math.round(beats / this.beatLength * 100) / 100;
     return `${rounded} beat${rounded === 1 ? '' : 's'}`;
   }
 
