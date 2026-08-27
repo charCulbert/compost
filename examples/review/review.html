@@ -199,11 +199,21 @@
     <span>Arrangement · 6/8</span>
     <compost-timeline label="Arrangement" time-signature="6/8" grid="1/16"
       style="height: 24em"></compost-timeline>
-    <div style="display: flex; gap: 1em; flex-wrap: wrap">
-      <label><input type="checkbox" data-timeline-play checked> Run transport</label>
+    <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
+      <label>Grid <select data-timeline-grid>
+        <option value="bar">1 bar</option>
+        <option value="1/4">1/4</option><option value="1/4T">1/4 triplet</option>
+        <option value="1/8">1/8</option><option value="1/8T">1/8 triplet</option>
+        <option value="1/16" selected>1/16</option><option value="1/16T">1/16 triplet</option>
+        <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
+      </select></label>
+      <label><input type="checkbox" data-timeline-snap checked> Snap</label>
+      <label><input type="checkbox" data-timeline-loop checked> Loop</label>
+      <label><input type="checkbox" data-timeline-draw> Draw</label>
       <label><input type="checkbox" data-timeline-automation> Automation view</label>
+      <button type="button" data-timeline-play>Play</button>
     </div>
-    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag clips or their edges; Alt-drag copies. Drag the ruler or lanes to select time. Command/Ctrl inverts snapping. Automation view shows one curve per lane over its clips; the menu in each lane header picks which, and a clip's name strip still selects it. The host applies every edit.</small>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag clips or their edges; Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection. Drag lanes for a lane-bounded region or the ruler for all lanes; Shift-click extends it. Double-click empty space asks for a new clip; Escape clears selection. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel resizes lanes. Automation view shows one curve per lane, and Draw edits that curve. The host applies every edit.</small>
   </div>
 </template>
 
@@ -612,6 +622,11 @@
     if (el === 'compost-timeline') {
       const timeline = s.querySelector('compost-timeline');
       const play = s.querySelector('[data-timeline-play]');
+      const grid = s.querySelector('[data-timeline-grid]');
+      const snap = s.querySelector('[data-timeline-snap]');
+      const loop = s.querySelector('[data-timeline-loop]');
+      const draw = s.querySelector('[data-timeline-draw]');
+      let playing = false;
       let lanes = [
         { id: 'drums', name: 'Drums', color: 'var(--compost-accent, AccentColor)', automation:
           { id: 'gain', label: 'Gain', min: 0, max: 1, value: .72, state: 'playing', points: [
@@ -635,7 +650,15 @@
         synth: [['cutoff', 'Cutoff', 0, 1], ['pan', 'Pan', -1, 1]],
       };
       const automationView = s.querySelector('[data-timeline-automation]');
+      grid.addEventListener('change', () => timeline.setAttribute('grid', grid.value));
+      snap.addEventListener('change', () => timeline.setAttribute('snap', snap.checked ? 'grid' : 'off'));
+      loop.addEventListener('change', () => timeline.setLoop(timeline.loopStart, timeline.loopEnd, loop.checked));
+      draw.addEventListener('change', () => timeline.toggleAttribute('draw', draw.checked));
       automationView.addEventListener('change', () => timeline.toggleAttribute('automation', automationView.checked));
+      play.addEventListener('click', () => {
+        playing = !playing;
+        play.textContent = playing ? 'Stop' : 'Play';
+      });
       for (const lane of lanes) {
         const header = document.createElement('div');
         header.style.cssText = 'box-sizing: border-box; height: 100%; display: grid; gap: .25em; align-content: center; padding: 0 .75em';
@@ -671,8 +694,9 @@
       const laneOf = (clip) => lanes.find((lane) => lane.clips.includes(clip));
       const bar = () => timeline.beatsPerBar || 4;
       const apply = {
-        'loop-change': ({ start, end, enabled }) => timeline.setLoop(start, end, enabled),
-        'loop-toggle': ({ enabled }) => timeline.setLoop(timeline.loopStart, timeline.loopEnd, enabled),
+        'loop-change': ({ start, end, enabled }) => { loop.checked = enabled; timeline.setLoop(start, end, enabled); },
+        'loop-toggle': ({ enabled }) => { loop.checked = enabled; timeline.setLoop(timeline.loopStart, timeline.loopEnd, enabled); },
+        'draw-toggle': ({ enabled }) => { draw.checked = enabled; timeline.toggleAttribute('draw', enabled); },
         seek: ({ beat }) => timeline.setPlayhead(beat),
         'fit-request': () => timeline.zoomToFit?.(16),
         'automation-change': ({ laneId, automationId, points }) => {
@@ -779,7 +803,7 @@
       const advance = (now) => {
         const delta = Math.min(.05, (now - last) / 1000) * 2;
         last = now;
-        if (play.checked) {
+        if (playing) {
           const length = timeline.loopEnd - timeline.loopStart;
           const beat = timeline.loopStart + ((timeline.playhead + delta - timeline.loopStart) % length + length) % length;
           timeline.setPlayhead(beat);
