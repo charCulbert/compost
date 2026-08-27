@@ -974,6 +974,36 @@ test('timeline trims every selected clip together and grabs edges in em', async 
   ]);
 });
 
+test('timeline asks to join clips and insert time', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setLanes([
+      { id: 'a', name: 'A', clips: [
+        { id: 'late', name: 'late', start: 4, length: 2, duration: 2, loop: false },
+        { id: 'early', name: 'early', start: 0, length: 2, duration: 2, loop: false },
+      ] },
+    ]);
+    element.setPlayhead(3);
+    element.setTimeSelection(null, null);
+    element.testEvents = [];
+    for (const type of ['clip-join', 'time-insert']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.selected = ['late', 'early'];
+  });
+  await timeline.focus();
+  await page.keyboard.press('Meta+j');
+  await page.keyboard.press('Meta+i');
+  await timeline.evaluate((element) => element.setTimeSelection(1, 3, ['a']));
+  await page.keyboard.press('Meta+i');
+  expect(await timeline.evaluate((element) => element.testEvents)).toEqual([
+    { type: 'clip-join', detail: { ids: ['early', 'late'] } },
+    { type: 'time-insert', detail: { beat: 3, beats: 4, laneIds: ['a'] } },
+    { type: 'time-insert', detail: { beat: 1, beats: 2, laneIds: ['a'] } },
+  ]);
+});
+
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');

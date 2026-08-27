@@ -2779,6 +2779,24 @@ export class CompostTimeline extends HTMLElement {
       this.selectAllClips();
       return;
     }
+    if (!this.readonly && meta && key === 'i') {
+      // insert time: the region's span on its lanes, or one bar at the playhead on every lane
+      event.preventDefault();
+      this.dispatchEvent(eventOf('time-insert', selection
+        ? { beat: selection.start, beats: selection.end - selection.start, laneIds: [...selection.laneIds] }
+        : { beat: this._playhead, beats: this.beatsPerBar, laneIds: this._lanes.map((lane) => lane.id) }));
+      return;
+    }
+    if (!this.readonly && meta && key === 'j') {
+      const ids = this._selected.length ? this._selected : found ? [found.clip.id] : [];
+      const clips = ids.map((id) => this.findClip(id)).filter(Boolean)
+        .sort((a, b) => (Number(a.clip.start) || 0) - (Number(b.clip.start) || 0));
+      if (clips.length >= 2) {
+        event.preventDefault();
+        this.dispatchEvent(eventOf('clip-join', { ids: clips.map(({ clip }) => clip.id) }));
+      }
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       this._selected = [];
