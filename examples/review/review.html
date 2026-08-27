@@ -197,10 +197,13 @@
 <template id="compost-timeline">
   <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
     <span>Arrangement · 6/8</span>
-    <compost-timeline label="Arrangement" time-signature="6/8" grid="1/16" automation
+    <compost-timeline label="Arrangement" time-signature="6/8" grid="1/16"
       style="height: 24em"></compost-timeline>
-    <label><input type="checkbox" data-timeline-play checked> Run transport</label>
-    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag clips or their edges; Alt-drag copies. Drag the ruler or lanes to select time. Command/Ctrl inverts snapping. The host applies every edit.</small>
+    <div style="display: flex; gap: 1em; flex-wrap: wrap">
+      <label><input type="checkbox" data-timeline-play checked> Run transport</label>
+      <label><input type="checkbox" data-timeline-automation> Automation view</label>
+    </div>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag clips or their edges; Alt-drag copies. Drag the ruler or lanes to select time. Command/Ctrl inverts snapping. Automation view shows one curve per lane over its clips; the menu in each lane header picks which, and a clip's name strip still selects it. The host applies every edit.</small>
   </div>
 </template>
 
@@ -625,6 +628,34 @@
       ];
       const render = () => timeline.setLanes(lanes);
       render();
+      // The host owns the lane headers: a name and a menu choosing which curve the
+      // lane shows in automation view. None of that is timeline UI.
+      const parameters = {
+        drums: [['gain', 'Gain', 0, 1], ['pan', 'Pan', -1, 1]],
+        synth: [['cutoff', 'Cutoff', 0, 1], ['pan', 'Pan', -1, 1]],
+      };
+      const automationView = s.querySelector('[data-timeline-automation]');
+      automationView.addEventListener('change', () => timeline.toggleAttribute('automation', automationView.checked));
+      for (const lane of lanes) {
+        const header = document.createElement('div');
+        header.style.cssText = 'box-sizing: border-box; height: 100%; display: grid; gap: .25em; align-content: center; padding: 0 .75em';
+        const name = document.createElement('span');
+        name.textContent = lane.name;
+        const select = document.createElement('select');
+        select.setAttribute('aria-label', `${lane.name} automation`);
+        select.style.cssText = 'font: inherit; font-size: .85em; max-width: 100%';
+        for (const [id, label] of parameters[lane.id]) select.append(new Option(label, id, false, lane.automation?.id === id));
+        select.append(new Option('None', '', false, !lane.automation));
+        select.addEventListener('change', () => {
+          const chosen = parameters[lane.id].find(([id]) => id === select.value);
+          lane.automation = chosen ? { id: chosen[0], label: chosen[1], min: chosen[2], max: chosen[3], stepped: false, points: [
+            { beat: 0, value: (chosen[2] + chosen[3]) / 2 }, { beat: 6, value: chosen[3] }, { beat: 12, value: chosen[2] },
+          ] } : null;
+          timeline.setLaneAutomation(lane.id, lane.automation);
+        });
+        header.append(name, select);
+        timeline.setLaneHeader(lane.id, header);
+      }
       timeline.setLocators([
         { id: 'intro', beat: 0, name: 'Intro' },
         { id: 'verse', beat: 8, name: 'Verse' },
