@@ -407,7 +407,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-time-selection { position: absolute; display: none; z-index: 2; top: 1em; height: 1.1em; background: color-mix(in srgb, var(--compost-timeline-select) 10%, transparent); box-shadow: inset 1px 0 0 var(--compost-timeline-select), inset -1px 0 0 var(--compost-timeline-select); pointer-events: none; }
         .ruler-time-selection-readout { position: absolute; left: 100%; top: 0; padding-left: .3em; color: var(--compost-timeline-muted); font-size: .72em; line-height: 1.5; white-space: nowrap; }
         .ruler-band { position: absolute; top: 2.35em; height: .75em; border: 1px solid var(--compost-timeline-select); box-sizing: border-box; background: var(--compost-timeline-select); color: AccentColorText; cursor: grab; }
-        .ruler-band[data-off] { background: transparent; color: var(--compost-timeline-muted); border-color: currentColor; }
+        .ruler-band[hidden], .ruler-handle[hidden], .timeline-line[hidden] { display: none; }
         .ruler-handle { position: absolute; top: 2.22em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
         .ruler-handle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         .ruler-handle::before { content: ""; position: absolute; top: .12em; border-block: .25em solid transparent; }
@@ -441,7 +441,6 @@ export class CompostTimeline extends HTMLElement {
         .grid-line.pulse { background: color-mix(in srgb, currentColor 24%, transparent); }
         .grid-line.bar { background: var(--compost-timeline-bar-line); }
         .lane { position: relative; box-sizing: border-box; height: auto; border-bottom: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-bg); }
-        .lane[data-drop-target] { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
         .lane[data-dimmed] .clip { opacity: .4; }
         .lane-base { position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .lane[data-automation-view] .clip { opacity: .65; pointer-events: none; }
@@ -452,8 +451,7 @@ export class CompostTimeline extends HTMLElement {
         .lane-base[data-state="overridden"] .automation-editor::part(line) { stroke-dasharray: 3 3; }
         .lane-base[data-state="recording"] .lane-automation { color: var(--compost-timeline-select); }
         .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid var(--compost-timeline-text); border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: AccentColorText; cursor: grab; touch-action: none; }
-        .clip[data-selected], .clip:focus-visible { z-index: 3; border-width: 2px; }
-        .clip:focus-visible { outline: none; }
+        .clip[data-selected], .clip:focus-visible { z-index: 3; outline: 1px solid CanvasText; outline-offset: 0; }
         .clip[data-state="queued"]::after { content: "▷"; position: absolute; right: .25em; bottom: .1em; z-index: 3; font-size: .8em; line-height: 1; }
         .clip[data-state="recording"] { box-shadow: inset -.15em 0 var(--compost-timeline-select); }
         .clip[data-muted], .clip[data-state="muted"] { background: transparent; color: var(--clip-color, var(--compost-timeline-select)); }
@@ -467,6 +465,8 @@ export class CompostTimeline extends HTMLElement {
         .clip-note { position: absolute; bottom: .25em; height: .125em; min-width: .125em; background: currentColor; }
         .clip-extent { position: absolute; inset: auto 0 0 0; height: 1px; background: currentColor; opacity: .35; pointer-events: none; }
         .clip-extent::before { content: ""; position: absolute; left: 0; bottom: 0; width: 1px; height: 1000%; background: currentColor; }
+        .timeline-line { position: absolute; top: 0; bottom: 0; z-index: 5; width: 1px; background: CanvasText; pointer-events: none; }
+        .timeline-line.loop { width: 2px; background: var(--compost-timeline-select); }
         /* a loop point: a thin line the height of the clip and a small cap at the top, in the clip's colour */
         .clip-loop-line { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; opacity: .6; pointer-events: none; }
         .clip-loop-line::before { content: ""; position: absolute; top: 0; left: -.2em; border-left: .22em solid transparent; border-right: .22em solid transparent; border-top: .25em solid currentColor; }
@@ -479,7 +479,7 @@ export class CompostTimeline extends HTMLElement {
           <div class="ruler" part="ruler-content"><div class="ruler-world" part="ruler-grid"></div><div class="ruler-time-selection" part="time-selection"><span class="ruler-time-selection-readout" part="time-selection-readout"></span></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start" role="slider" tabindex="0" aria-label="Loop start"></div><div class="ruler-handle end" part="loop-handle loop-end" role="slider" tabindex="0" aria-label="Loop end"></div><div class="ruler-playhead" part="playhead"></div></div>
         </div>
         <div class="header-wrap" part="headers"><div class="headers" part="header-list" role="list"></div><div class="lane-drop-line" part="lane-drop-line"></div></div>
-        <div class="lanes-wrap" part="lanes"><div class="lanes-world" part="lane-list" role="list"></div><div class="playhead" part="playhead"></div></div>
+        <div class="lanes-wrap" part="lanes"><div class="lanes-world" part="lane-list" role="list"></div><div class="timeline-line loop loop-start-line" part="loop-start-line"></div><div class="timeline-line loop loop-end-line" part="loop-end-line"></div><div class="playhead" part="playhead"></div></div>
       </div>
       <div class="announce" aria-live="polite"></div>`;
 
@@ -500,6 +500,8 @@ export class CompostTimeline extends HTMLElement {
     this.laneDropLine = part('.lane-drop-line');
     this.lanesWrap = part('.lanes-wrap');
     this.lanesWorld = part('.lanes-world');
+    this.loopStartLine = part('.loop-start-line');
+    this.loopEndLine = part('.loop-end-line');
     this.playheadElement = part('.playhead');
     this.announce = part('.announce');
 
@@ -1650,21 +1652,12 @@ export class CompostTimeline extends HTMLElement {
     }
   }
 
-  /** Mark the lane under a clip drag without changing host state. */
-  paintClipDropTarget(laneId) {
-    for (const lane of this.lanesWorld.querySelectorAll('.lane[data-drop-target]')) lane.removeAttribute('data-drop-target');
-    if (!laneId) return;
-    const target = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(laneId)}"]`);
-    target?.setAttribute('data-drop-target', '');
-  }
-
   clearClipDragVisuals() {
     for (const clip of this.clipElements()) {
       clip.style.transform = '';
       clip.removeAttribute('data-dragging');
     }
     this.removeAttribute('data-drag-copy');
-    this.paintClipDropTarget(null);
   }
 
   /** A moved clip leaves a faded original behind; a copied one leaves it as it was. */
@@ -1705,9 +1698,17 @@ export class CompostTimeline extends HTMLElement {
     const width = Math.max(1, (end - start) * this._pxPerBeat);
     this.rulerBand.style.left = `${left}px`;
     this.rulerBand.style.width = `${width}px`;
-    this.rulerBand.toggleAttribute('data-off', !enabled);
+    this.rulerBand.hidden = !enabled;
+    this.rulerStart.hidden = !enabled;
+    this.rulerEnd.hidden = !enabled;
     this.rulerStart.style.left = `${left - 1}px`;
     this.rulerEnd.style.left = `${left + width - 5}px`;
+    const viewportWidth = this.lanesWrap.clientWidth;
+    for (const [line, beat] of [[this.loopStartLine, start], [this.loopEndLine, end]]) {
+      const x = (beat - this._scrollBeat) * this._pxPerBeat;
+      line.style.left = `${x}px`;
+      line.hidden = !enabled || x < 0 || x > viewportWidth;
+    }
     this.rulerStart.title = `Loop start, beat ${start}`;
     this.rulerEnd.title = `Loop end, beat ${end}`;
     for (const [handle, value] of [[this.rulerStart, start], [this.rulerEnd, end]]) {
@@ -1812,8 +1813,10 @@ export class CompostTimeline extends HTMLElement {
     if (!found) return;
     const rect = found.element.getBoundingClientRect();
     const edge = this.trimEdgePx(event.pointerType);
-    found.element.style.cursor = event.clientX - rect.left <= edge || rect.right - event.clientX <= edge
-      ? 'ew-resize' : 'grab';
+    const atLeft = event.clientX - rect.left <= edge;
+    const atRight = rect.right - event.clientX <= edge;
+    found.element.style.cursor = atRight && found.clip.loop !== false
+      ? 'e-resize' : atLeft || atRight ? 'ew-resize' : 'grab';
   }
 
   startPinch() {
@@ -2003,7 +2006,8 @@ export class CompostTimeline extends HTMLElement {
       const mode = this.readonly ? 'move'
         : event.clientX - rect.left <= edge ? 'trim-left'
           : rect.right - event.clientX <= edge ? 'trim-right' : 'move';
-      found.element.style.cursor = mode === 'move' ? 'grab' : 'ew-resize';
+      found.element.style.cursor = mode === 'trim-right' && found.clip.loop !== false
+        ? 'e-resize' : mode === 'move' ? 'grab' : 'ew-resize';
       const additive = event.shiftKey;
       if (!additive && !this._selected.includes(found.clip.id)) this.selectOne(found.clip.id);
       else if (additive) this.selectOne(found.clip.id, true);
@@ -2149,7 +2153,6 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'move') {
       if (!drag.moved || this.readonly) return;
       const targetLane = this.laneAtPoint(event.clientY);
-      this.paintClipDropTarget(targetLane);
       const raw = dx / this._pxPerBeat;
       const originStart = Number(drag.origin.start) || 0;
       const length = Math.max(0, Number(drag.origin.length) || 0);

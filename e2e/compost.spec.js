@@ -965,6 +965,43 @@ test('timeline ruler labels stop with the grid', async ({ page }) => {
   expect(Math.max(...geometry.labels)).toBeLessThan(geometry.width);
 });
 
+test('timeline clip selection and loop match the note-editor visual language', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [
+      { id: 'looped', name: 'Looped', start: 1, length: 3, duration: 1, loop: true },
+      { id: 'one-shot', name: 'One shot', start: 5, length: 2, duration: 2, loop: false },
+    ] }]);
+    element.setLoop(1, 6, true);
+    element.selectOne('looped');
+  });
+
+  const selected = timeline.locator('.clip[data-id="looped"]');
+  expect(await selected.evaluate((node) => ({
+    border: getComputedStyle(node).borderLeftWidth,
+    outline: getComputedStyle(node).outlineWidth,
+    outlineColor: getComputedStyle(node).outlineColor,
+  }))).toEqual({ border: '1px', outline: '1px', outlineColor: 'rgb(0, 0, 0)' });
+  await expect(timeline.locator('.timeline-line.loop')).toHaveCount(2);
+  const lanesHeight = await timeline.locator('.lanes-wrap').evaluate((node) => node.getBoundingClientRect().height);
+  for (const line of await timeline.locator('.timeline-line.loop').all()) {
+    expect(Math.abs((await line.boundingBox()).height - lanesHeight)).toBeLessThan(1);
+  }
+
+  let box = await selected.boundingBox();
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
+  expect(await selected.evaluate((node) => getComputedStyle(node).cursor)).toBe('e-resize');
+  const oneShot = timeline.locator('.clip[data-id="one-shot"]');
+  box = await oneShot.boundingBox();
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
+  expect(await oneShot.evaluate((node) => getComputedStyle(node).cursor)).toBe('ew-resize');
+
+  await timeline.evaluate((element) => element.setLoop(1, 6, false));
+  await expect(timeline.locator('.timeline-line.loop').first()).toBeHidden();
+  await expect(timeline.locator('.ruler-band')).toBeHidden();
+});
+
 test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
@@ -1541,6 +1578,7 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
       clipBorder: getComputedStyle(clip).borderStyle,
       clipRadius: getComputedStyle(clip).borderRadius,
       selectedBorder: getComputedStyle(clip).borderWidth,
+      selectedOutline: getComputedStyle(clip).outlineWidth,
       headerWidth: header.getBoundingClientRect().width,
       hasProgress: Boolean(clipProgress),
       hasNumber: Boolean(header.querySelector('.number')),
@@ -1549,7 +1587,8 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
   expect(measured.clipBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(measured.clipBorder).not.toBe('none');
   expect(measured.clipRadius).toBe('0px');
-  expect(measured.selectedBorder).toBe('2px');
+  expect(measured.selectedBorder).toBe('1px');
+  expect(measured.selectedOutline).toBe('1px');
   expect(measured.headerWidth).toBeLessThan(250);
   expect(measured.hasProgress).toBe(false);
   expect(measured.hasNumber).toBe(false);
@@ -1627,7 +1666,7 @@ test('timeline paints velocity dashes and clip drop targets', async ({ page }) =
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(targetBox.x + 40, targetBox.y + targetBox.height / 2, { steps: 3 });
-  await expect(target).toHaveAttribute('data-drop-target', '');
+  await expect(target).not.toHaveAttribute('data-drop-target', '');
   await page.mouse.up();
   await expect(target).not.toHaveAttribute('data-drop-target', '');
   await expect(source).not.toHaveAttribute('data-dragging', '');
