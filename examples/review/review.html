@@ -656,38 +656,125 @@
         header.append(name, select);
         timeline.setLaneHeader(lane.id, header);
       }
-      timeline.setLocators([
+      // A faux backend: the timeline only asks, this host applies every intent
+      // to its own lanes and locators and hands the result back.
+      let locators = [
         { id: 'intro', beat: 0, name: 'Intro' },
         { id: 'verse', beat: 8, name: 'Verse' },
-      ]);
+      ];
+      let created = 0;
+      const renderLocators = () => timeline.setLocators(locators);
+      renderLocators();
       timeline.setLoop(0, 8, true);
       timeline.setPlayhead(1);
-      timeline.addEventListener('loop-change', ({ detail }) => timeline.setLoop(detail.start, detail.end, detail.enabled));
-      timeline.addEventListener('loop-toggle', ({ detail }) => timeline.setLoop(timeline.loopStart, timeline.loopEnd, detail.enabled));
-      timeline.addEventListener('automation-change', ({ detail }) => {
-        const lane = lanes.find((entry) => entry.id === detail.laneId);
-        const automation = lane?.automation?.id === detail.automationId ? lane.automation : null;
-        if (!automation) return;
-        automation.points = detail.points.map((point) => ({ ...point }));
-        render();
-      });
-      timeline.addEventListener('clip-trim', ({ detail }) => {
-        const clip = lanes.flatMap((lane) => lane.clips).find((entry) => entry.id === detail.id);
-        if (!clip) return;
-        clip.start = detail.start;
-        clip.length = detail.end - detail.start;
-        render();
-      });
-      timeline.addEventListener('clip-move', ({ detail }) => {
-        const moving = lanes.flatMap((lane) => lane.clips.filter((clip) => detail.ids.includes(clip.id))
-          .map((clip) => ({ ...clip, id: detail.copy ? `${clip.id}-copy` : clip.id,
-            start: clip.start + detail.deltaBeats })));
-        if (!moving.length) return;
-        if (!detail.copy) lanes.forEach((lane) => { lane.clips = lane.clips.filter((clip) => !detail.ids.includes(clip.id)); });
-        (lanes.find((lane) => lane.id === detail.laneId) ?? lanes[0]).clips.push(...moving);
-        render();
-      });
-      timeline.addEventListener('seek', ({ detail }) => timeline.setPlayhead(detail.beat));
+      const allClips = () => lanes.flatMap((lane) => lane.clips);
+      const laneOf = (clip) => lanes.find((lane) => lane.clips.includes(clip));
+      const bar = () => timeline.beatsPerBar || 4;
+      const apply = {
+        'loop-change': ({ start, end, enabled }) => timeline.setLoop(start, end, enabled),
+        'loop-toggle': ({ enabled }) => timeline.setLoop(timeline.loopStart, timeline.loopEnd, enabled),
+        seek: ({ beat }) => timeline.setPlayhead(beat),
+        'fit-request': () => timeline.zoomToFit?.(16),
+        'automation-change': ({ laneId, automationId, points }) => {
+          const lane = lanes.find((entry) => entry.id === laneId);
+          if (lane?.automation?.id !== automationId) return;
+          lane.automation.points = points.map((point) => ({ ...point }));
+          render();
+        },
+        'locator-create': ({ beat }) => { created += 1; locators.push({ id: `marker-${created}`, beat, name: `Marker ${created}` }); renderLocators(); },
+        'locator-move': ({ id, beat }) => { const locator = locators.find((entry) => entry.id === id); if (locator) { locator.beat = beat; renderLocators(); } },
+        'locator-rename': ({ id, name }) => { const locator = locators.find((entry) => entry.id === id); if (locator) { locator.name = name; renderLocators(); } },
+        'locator-delete': ({ id }) => { locators = locators.filter((entry) => entry.id !== id); renderLocators(); },
+        'clip-trim': ({ id, start, end }) => {
+          const clip = allClips().find((entry) => entry.id === id);
+          if (!clip) return;
+          clip.start = start;
+          clip.length = end - start;
+          render();
+        },
+        'clip-move': ({ ids, deltaBeats, laneId, copy }) => {
+          const moving = allClips().filter((clip) => ids.includes(clip.id))
+            .map((clip) => ({ ...clip, id: copy ? `${clip.id}-copy-${created += 1}` : clip.id, start: clip.start + deltaBeats }));
+          if (!moving.length) return;
+          if (!copy) lanes.forEach((lane) => { lane.clips = lane.clips.filter((clip) => !ids.includes(clip.id)); });
+          (lanes.find((lane) => lane.id === laneId) ?? lanes[0]).clips.push(...moving);
+          render();
+        },
+        'clip-nudge': ({ ids, deltaBeats }) => { for (const clip of allClips()) if (ids.includes(clip.id)) clip.start = Math.max(0, clip.start + deltaBeats); render(); },
+        'clip-rename': ({ id, name }) => { const clip = allClips().find((entry) => entry.id === id); if (clip) { clip.name = name; render(); } },
+        'clip-delete': ({ ids }) => { lanes.forEach((lane) => { lane.clips = lane.clips.filter((clip) => !ids.includes(clip.id)); }); render(); },
+        'clip-duplicate': ({ ids }) => {
+          for (const clip of allClips().filter((entry) => ids.includes(entry.id))) {
+            created += 1;
+            laneOf(clip).clips.push({ ...clip, id: `${clip.id}-copy-${created}`, start: clip.start + clip.length });
+          }
+          render();
+        },
+        'clip-split': ({ ids, beat, beats }) => {
+          const cuts = beats ?? [beat];
+          for (const clip of allClips().filter((entry) => ids.includes(entry.id))) {
+            const lane = laneOf(clip);
+            let head = clip;
+            for (const cut of [...cuts].sort((a, b) => a - b)) {
+              if (!(cut > head.start && cut < head.start + head.length)) continue;
+              created += 1;
+              const tail = { ...head, id: `${clip.id}-${created}`, start: cut, length: head.start + head.length - cut, offset: (head.offset || 0) + (cut - head.start) };
+              head.length = cut - head.start;
+              lane.clips.push(tail);
+              head = tail;
+            }
+          }
+          render();
+        },
+        'clip-join': ({ ids }) => {
+          const joined = allClips().filter((clip) => ids.includes(clip.id));
+          const lane = joined.length ? laneOf(joined[0]) : null;
+          if (!lane || joined.some((clip) => laneOf(clip) !== lane)) return;
+          const start = Math.min(...joined.map((clip) => clip.start));
+          const end = Math.max(...joined.map((clip) => clip.start + clip.length));
+          lane.clips = lane.clips.filter((clip) => !ids.includes(clip.id));
+          lane.clips.push({ ...joined[0], start, length: end - start, duration: end - start, offset: 0 });
+          render();
+        },
+        'time-delete': ({ start, end, laneIds, removeTime }) => {
+          for (const lane of lanes.filter((entry) => laneIds.includes(entry.id))) {
+            const kept = [];
+            for (const clip of lane.clips) {
+              const clipEnd = clip.start + clip.length;
+              if (clipEnd <= start || clip.start >= end) kept.push(clip);
+              else {
+                if (clip.start < start) kept.push({ ...clip, length: start - clip.start });
+                if (clipEnd > end) { created += 1; kept.push({ ...clip, id: `${clip.id}-${created}`, start: end, length: clipEnd - end, offset: (clip.offset || 0) + (end - clip.start) }); }
+              }
+            }
+            lane.clips = removeTime ? kept.map((clip) => clip.start >= end ? { ...clip, start: clip.start - (end - start) } : clip) : kept;
+          }
+          render();
+        },
+        'time-insert': ({ beat, beats, laneIds }) => {
+          for (const lane of lanes.filter((entry) => laneIds.includes(entry.id))) {
+            for (const clip of lane.clips) if (clip.start >= beat) clip.start += beats;
+          }
+          render();
+        },
+        'lane-create': ({ laneId, beat }) => {
+          created += 1;
+          lanes.find((entry) => entry.id === laneId)?.clips.push({ id: `clip-${created}`, name: `Clip ${created}`, start: beat, length: bar(), duration: bar(), loop: false, state: 'stopped' });
+          render();
+        },
+        'lanes-create': () => { created += 1; lanes.push({ id: `lane-${created}`, name: `Lane ${created}`, clips: [] }); render(); },
+        'lane-move': ({ laneId, toIndex }) => {
+          const index = lanes.findIndex((entry) => entry.id === laneId);
+          if (index < 0) return;
+          const [lane] = lanes.splice(index, 1);
+          lanes.splice(toIndex, 0, lane);
+          render();
+        },
+        'lane-rename': ({ laneId, name }) => { const lane = lanes.find((entry) => entry.id === laneId); if (lane) { lane.name = name; render(); } },
+        'lane-resize': ({ laneId, height }) => { const lane = lanes.find((entry) => entry.id === laneId); if (lane) { lane.height = height ?? undefined; render(); } },
+        'lanes-resize': ({ height }) => { for (const lane of lanes) lane.height = height; render(); },
+      };
+      for (const [type, handler] of Object.entries(apply)) timeline.addEventListener(type, ({ detail }) => handler(detail));
       let last = performance.now();
       const advance = (now) => {
         const delta = Math.min(.05, (now - last) / 1000) * 2;
