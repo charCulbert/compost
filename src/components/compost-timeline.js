@@ -451,10 +451,9 @@ export class CompostTimeline extends HTMLElement {
         .lane-automation[data-draw]:hover .automation-draw-hint { display: block; }
         .lane-base[data-state="overridden"] .automation-editor::part(line) { stroke-dasharray: 3 3; }
         .lane-base[data-state="recording"] .lane-automation { color: var(--compost-timeline-select); }
-        .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid currentColor; border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: AccentColorText; cursor: grab; touch-action: none; }
-        .clip[data-selected] { z-index: 3; border-width: 2px; }
+        .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid var(--compost-timeline-text); border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: AccentColorText; cursor: grab; touch-action: none; }
+        .clip[data-selected], .clip:focus-visible { z-index: 3; border-width: 2px; }
         .clip:focus-visible { outline: none; }
-        .clip:focus-visible .clip-name { text-decoration: underline dotted currentColor; text-underline-offset: .125em; }
         .clip[data-state="queued"]::after { content: "▷"; position: absolute; right: .25em; bottom: .1em; z-index: 3; font-size: .8em; line-height: 1; }
         .clip[data-state="recording"] { box-shadow: inset -.15em 0 var(--compost-timeline-select); }
         .clip[data-muted], .clip[data-state="muted"] { background: transparent; color: var(--clip-color, var(--compost-timeline-select)); }
