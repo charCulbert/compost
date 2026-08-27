@@ -806,6 +806,40 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   expect(events.some((event) => event.type === 'seek' && event.detail.source === 'ruler')).toBe(true);
 });
 
+test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const clip = timeline.locator('.clip[data-id="beat"]');
+  await timeline.evaluate((element) => {
+    element.setAttribute('snap', 'grid');
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] }]);
+    element.testEvents = [];
+    element.addEventListener('clip-move', (event) => element.testEvents.push(event.detail));
+  });
+  const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
+
+  let box = await clip.boundingBox();
+  await page.keyboard.down('Alt');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  let move = await timeline.evaluate((element) => element.testEvents.at(-1));
+  expect(move).toEqual({ ids: ['beat'], laneId: 'lane', deltaBeats: 1, copy: true });
+
+  box = await clip.boundingBox();
+  await page.keyboard.down('Meta');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Meta');
+  move = await timeline.evaluate((element) => element.testEvents.at(-1));
+  expect(move.copy).toBe(false);
+  expect(move.deltaBeats).toBeCloseTo(.63, 5);
+});
+
 test('timeline rulers expose locators, time selections and measured row geometry', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');

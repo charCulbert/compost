@@ -2,7 +2,7 @@ import { createLongPress, DRAG_SLOP, MOUSE_TRIM_EDGE, TOUCH_TRIM_EDGE } from '..
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
-import { gridStepOf, snapTime } from '../time-grid.js';
+import { gridStepOf, snapModeWith, snapTime } from '../time-grid.js';
 import './compost-envelope-editor.js';
 import { parameterScaleBreakpoints } from '../parameter-scale.js';
 import { normalizeSelectionRegion } from '../selection-region.js';
@@ -1936,6 +1936,12 @@ export class CompostTimeline extends HTMLElement {
     return effectiveAutomationStep(Boolean(automation?.stepped), automation?.step ?? automation?.valueStep);
   }
 
+  /** The snap mode for one gesture: Cmd/Ctrl inverts whatever the host set. */
+  /** @param {{metaKey?: boolean, ctrlKey?: boolean}} event */
+  snapModeFor(event) {
+    return snapModeWith(this.snapMode, Boolean(event?.metaKey || event?.ctrlKey));
+  }
+
   automationSelectionFor(laneId) {
     const selection = this._timeSelection;
     return selection && selection.laneIds.includes(String(laneId)) ? selection : null;
@@ -2074,7 +2080,7 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'locator') {
       if (!drag.moved || this.readonly) return;
       const rawBeat = this.beatAtPoint(event.clientX);
-      const beat = snapBeat(rawBeat, this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+      const beat = snapBeat(rawBeat, this.beatsPerBar, this.grid, this.snapModeFor(event));
       drag.previewBeat = Math.min(beat, this.worldEnd());
       drag.element.style.left = `${drag.previewBeat * this._pxPerBeat}px`;
       return;
@@ -2112,8 +2118,8 @@ export class CompostTimeline extends HTMLElement {
       if (!drag.moved) return;
       const currentLane = this.laneAtOrNearestPoint(event.clientY) || drag.laneId;
       const laneIds = this.laneIdsForSpan(drag.laneId, currentLane);
-      const start = snapBeat(drag.startBeat, this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
-      const end = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+      const start = snapBeat(drag.startBeat, this.beatsPerBar, this.grid, this.snapModeFor(event));
+      const end = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
       drag.previewSelection = normalizeTimeSelection(start, end, laneIds, this.worldEnd());
       this._timeSelection = drag.previewSelection;
       this.paintTimeSelection();
@@ -2142,7 +2148,7 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'trim-left' || drag.type === 'trim-right') {
       const origin = drag.origin;
       const rawBeat = this._scrollBeat + (event.clientX - this.rulerWrap.getBoundingClientRect().left) / this._pxPerBeat;
-      const edgeBeat = snapBeat(rawBeat, this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+      const edgeBeat = snapBeat(rawBeat, this.beatsPerBar, this.grid, this.snapModeFor(event));
       const start = drag.type === 'trim-left' ? Math.min(edgeBeat, origin.start + origin.length - MIN_CLIP_LENGTH) : origin.start;
       const end = drag.type === 'trim-right' ? Math.max(edgeBeat, origin.start + MIN_CLIP_LENGTH) : origin.start + origin.length;
       drag.preview = { start, end };
@@ -2157,8 +2163,10 @@ export class CompostTimeline extends HTMLElement {
       const targetLane = this.laneAtPoint(event.clientY);
       this.paintClipDropTarget(targetLane);
       const raw = dx / this._pxPerBeat;
-      const delta = event.altKey || drag.copy || this.snapMode === 'off'
-        ? raw : Math.round(raw / gridStep(this.beatsPerBar, this.grid)) * gridStep(this.beatsPerBar, this.grid);
+      const originStart = Number(drag.origin.start) || 0;
+      const delta = snapTime(originStart + raw, {
+        step: gridStep(this.beatsPerBar, this.grid), mode: this.snapModeFor(event), origin: originStart,
+      }) - originStart;
       drag.previewDelta = delta;
       for (const item of drag.selected) {
         const element = this.clipElements().find((node) => node.dataset.id === item.clip.id);
@@ -2260,7 +2268,7 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'ruler-locator-row') return;
     if (drag.type === 'ruler-scroll') {
       if (!drag.moved) {
-        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
         this.dispatchEvent(eventOf('seek', { beat, source: 'ruler' }));
       }
       return;
@@ -2281,13 +2289,13 @@ export class CompostTimeline extends HTMLElement {
       } else {
         this.setTimeSelection(null, null);
         this.dispatchEvent(eventOf('time-select', { start: null }));
-        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
         this.dispatchEvent(eventOf('seek', { beat, source: 'lane' }));
       }
       return;
     }
     if (drag.type === 'seek-ruler') {
-      const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+      const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
       this.dispatchEvent(eventOf('seek', { beat, source: 'ruler' }));
       return;
     }
@@ -2324,13 +2332,14 @@ export class CompostTimeline extends HTMLElement {
     const drag = this.drag;
     if (!drag || drag.type !== 'loop' || event.pointerId !== drag.pointerId) return;
     const delta = (event.clientX - drag.startX) / drag.px;
-    const free = event.altKey || this.snapMode === 'off';
-    const snapValue = (value) => free ? Math.max(0, value) : snapBeat(value, this.beatsPerBar, this.grid, 'grid');
+    const mode = this.snapModeFor(event);
+    const step = gridStep(this.beatsPerBar, this.grid);
+    const snapValue = (value, origin) => snapTime(value, { step, mode, origin });
     let start = drag.start;
     let end = drag.end;
-    if (drag.kind === 'start') start = Math.min(snapValue(drag.start + delta), end - MIN_CLIP_LENGTH);
-    else if (drag.kind === 'end') end = Math.max(snapValue(drag.end + delta), start + MIN_CLIP_LENGTH);
-    else { start = snapValue(drag.start + delta); end = start + (drag.end - drag.start); }
+    if (drag.kind === 'start') start = Math.min(snapValue(drag.start + delta, drag.start), end - MIN_CLIP_LENGTH);
+    else if (drag.kind === 'end') end = Math.max(snapValue(drag.end + delta, drag.end), start + MIN_CLIP_LENGTH);
+    else { start = snapValue(drag.start + delta, drag.start); end = start + (drag.end - drag.start); }
     this.setLoop(start, end, this._loopEnabled);
     this.dispatchEvent(eventOf('loop-input', { start, end, enabled: this._loopEnabled }));
   }
@@ -2388,7 +2397,7 @@ export class CompostTimeline extends HTMLElement {
       if (this.rulerRowAtPoint(event.clientY) === 1) {
         if (this.readonly) return;
         event.preventDefault();
-        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
+        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
         this.dispatchEvent(eventOf('locator-create', { beat }));
       } else if (this.rulerRowAtPoint(event.clientY) === 2) {
         event.preventDefault();
@@ -2414,7 +2423,7 @@ export class CompostTimeline extends HTMLElement {
     if (this.readonly) return;
     const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
     if (lane instanceof HTMLElement) {
-      this.dispatchEvent(eventOf('lane-create', { laneId: lane.dataset.laneId, beat: snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode) }));
+      this.dispatchEvent(eventOf('lane-create', { laneId: lane.dataset.laneId, beat: snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event)) }));
     } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('header-wrap'))) {
       this.dispatchEvent(eventOf('lanes-create', { clientX: event.clientX, clientY: event.clientY }));
     }
