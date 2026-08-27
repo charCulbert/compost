@@ -2734,11 +2734,11 @@ test('note editor review host plays a one-beat pickup into a two-bar 6/8 loop', 
     loopEnd: element.loopEnd,
     beatLength: element.beatLength,
     pickup: element.notes[0].start,
-  }))).toEqual({ rangeStart: 1.5, loopStart: 2, loopEnd: 8, beatLength: .5, pickup: 1.5 });
+  }))).toEqual({ rangeStart: 2.5, loopStart: 3, loopEnd: 9, beatLength: .5, pickup: 2.5 });
   const play = scenario.locator('[data-note-playhead]');
   await play.click();
   await expect(play).toHaveText('Stop');
-  await expect.poll(async () => Number(await editor.getAttribute('playhead'))).toBeGreaterThan(1.5);
+  await expect.poll(async () => Number(await editor.getAttribute('playhead'))).toBeGreaterThan(2.5);
   await play.click();
   await expect(editor).not.toHaveAttribute('playhead');
 });
