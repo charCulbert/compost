@@ -12,35 +12,52 @@ export interface RollNote {
 export interface NotesChangeDetail { notes: RollNote[] }
 /** The detail on `loop-change`, `loop-input`, `range-change` and `range-input`. */
 export interface NoteRangeDetail { start: number, end: number }
+/** A persisted time region; a two-pitch extent makes it a grid box. */
+export interface NoteSelectionRegion { start: number, end: number, pitches?: number[] }
 /** The detail on `selection-change`. */
 export interface NoteSelectionDetail { ids: string[] }
-/** The detail on `note-preview`. */
+/** The host-owned quantize request. */
+export interface NoteQuantizeDetail { ids: string[], step: number, lengths: boolean }
+/** The detail on `note-preview` and `note-preview-end`. */
 export interface NotePreviewDetail { note: number, velocity: number, channel: number }
-/** The detail on `note-context`. */
+/** The detail on `note-context`; `id` is absent for the editor background. */
 export interface NoteContextDetail { id: string | undefined, clientX: number, clientY: number }
 
-/** The bar and beat labels a ruler shows, sparser when beats are tight. */
-export function rulerLabels(beats: number, beatsPerBar: number, pxPerBeat: number): {beat: number, text: string}[];
+/** Bar, beat and grid-cell labels, made sparser when space is tight. */
+export function rulerLabels(beats: number, beatsPerBar: number, pxPerBeat: number, gridStep?: number): {beat: number, text: string}[];
 
 /** A length in beats, written the way a musician reads it. */
 export function lengthText(duration: number): string;
+
+/** The musical name of a grid expressed as cells per bar. */
+export function gridText(division: number, beatsPerBar?: number): string;
 
 /**
  * `<compost-note-editor>`: a MIDI note editor. It edits a note list and
  * draws the playhead position it is given; it neither plays nor schedules
  * anything. Emits `notes-change`, `loop-input`/`loop-change`,
- * `range-input`/`range-change`, `selection-change`, `note-preview` and
- * `note-context` CustomEvents.
+ * `range-input`/`range-change`, `selection-change`, `note-preview`,
+ * `note-preview-end`, `note-context` and `note-quantize` CustomEvents.
  */
 export class CompostNoteEditor extends HTMLElement {
   label: string;
   beatsPerBar: number;
   grid: number;
+  /** Whether time-grid lines are drawn; set `grid-lines="off"` to hide them. */
+  gridLines: boolean;
   snapMode: 'grid' | 'off';
   rangeStart: number;
   rangeEnd: number;
   loopStart: number;
   loopEnd: number;
+  /** Whether the loop bar and boundaries are shown; reflected by the `loop` attribute. */
+  loopEnabled: boolean;
+  /** The last marquee's snapped time span, independently of its selected notes. */
+  selectionRegion: NoteSelectionRegion | null;
+  /** Pitch-class offsets displayed as in-scale when both `scale` and `root` are set. */
+  scale: number[];
+  /** Display-only root pitch class, or null when the `root` attribute is absent. */
+  scaleRoot: number | null;
   rootNote: number;
   noteCount: number;
   beatWidth: number;
@@ -74,11 +91,11 @@ export class CompostNoteEditor extends HTMLElement {
   get selectedIds(): string[];
   get pxPerBeat(): number;
 
-  /** Sets the non-destructive playback range, in beats. The loop remains nested. */
+  /** Sets the non-destructive playback range, independently of the loop. */
   setRange(start: number, end: number, shouldEmit?: boolean): void;
   /** Sets the loop region, in beats. */
   setLoop(start: number, end: number, shouldEmit?: boolean): void;
-  /** Snaps the selection, or everything when nothing is selected. */
+  /** Emits a quantize intent for the selection, or everything when none is selected. */
   quantize(options?: {lengths?: boolean, division?: number}): void;
   selectAll(): void;
   clearSelection(): void;

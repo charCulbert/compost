@@ -6,14 +6,15 @@ import {
   movedNotes,
   normaliseNotes,
   notesInBox,
-  quantizedNotes,
+  resolveOverlaps,
   resizedNotes,
   selectionSpan,
   snapBeats,
-  snapDuration,
+  snapWithOffset,
   trimmedNotes,
   velocityShiftedNotes,
 } from '../piano-roll-model.js';
+import { extendSelectionRegion, normalizeSelectionRegion } from '../selection-region.js';
 export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
 import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
@@ -21,16 +22,12 @@ import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextEditorID = 1;
-const HOLD_FOR_VELOCITY_MS = 300;
-const MIN_ROWS = 4;
-const MAX_ROWS = 72;
-const MIN_PX_PER_BEAT = 8;
+const MIN_ROWS = 13;
+const MAX_ROWS = 128;
 const MAX_PX_PER_BEAT = 600;
+const DOUBLE_CLICK_MS = 500;
 
 /** @typedef {import('../piano-roll-model.js').RollNote} RollNote */
-
-const TRIM_LEFT = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'17\' height=\'17\'><path d=\'M10.5 2.5h-4v12h4\' fill=\'none\' stroke=\'white\' stroke-width=\'3.4\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/><path d=\'M10.5 2.5h-4v12h4\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>") 8 8, col-resize';
-const TRIM_RIGHT = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'17\' height=\'17\'><path d=\'M6.5 2.5h4v12h-4\' fill=\'none\' stroke=\'white\' stroke-width=\'3.4\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/><path d=\'M6.5 2.5h4v12h-4\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>") 8 8, col-resize';
 
 /** A length in beats, written the way a musician reads it. */
 /** @param {number} duration */
@@ -43,11 +40,23 @@ export function lengthText(duration) {
   return `${Math.round(duration * 1000) / 1000} beat`;
 }
 
+/** The musical name of a grid expressed as cells per bar. */
+/** @param {number} division @param {number} [beatsPerBar] */
+export function gridText(division, beatsPerBar = 4) {
+  if (Math.abs(division - 1) < 1e-9) return '1 bar';
+  for (const denominator of [4, 8, 16, 32]) {
+    const straight = beatsPerBar * denominator / 4;
+    if (Math.abs(division - straight) < 1e-9) return `1/${denominator}`;
+    if (Math.abs(division - straight * 1.5) < 1e-9) return `1/${denominator}T`;
+  }
+  return `${division}/bar`;
+}
+
 /**
  * A MIDI note editor: pitch down the side on real piano keys, time across
- * the top under playback and loop regions with draggable ends, notes on a grid that
+ * the top under independent playback and loop ranges with draggable ends, notes on a grid that
  * snaps unless told not to. Notes move, trim from either edge, take
- * velocity from an Alt-drag or a press-and-hold, marquee-select, nudge from
+ * velocity from a Command/Ctrl-drag, marquee-select, nudge from
  * the keyboard, duplicate one span later and quantize. It edits a note list
  * and draws the playhead position it is given; it neither plays nor
  * schedules anything.
@@ -56,8 +65,8 @@ export class CompostNoteEditor extends HTMLElement {
   static get observedAttributes() {
     return [
       'label', 'beats', 'beats-per-bar', 'grid', 'snap', 'start', 'end', 'loop-start', 'loop-end',
-      'root-note', 'note-count', 'beat-width', 'fold', 'draw', 'playhead',
-      'velocity', 'channel', 'lock-loop-start', 'readonly', 'disabled',
+      'root-note', 'note-count', 'beat-width', 'fold', 'draw', 'playhead', 'scale', 'root',
+      'velocity', 'channel', 'grid-lines', 'loop', 'lock-loop-start', 'readonly', 'disabled',
     ];
   }
 
@@ -67,11 +76,15 @@ export class CompostNoteEditor extends HTMLElement {
     this.label = 'Notes';
     this.beatsPerBar = 4;
     this.grid = 16;
+    this.gridLines = true;
     this.snapMode = 'grid';
     this.rangeStart = 0;
     this.rangeEnd = 8;
     this.loopStart = 0;
     this.loopEnd = 8;
+    this.loopEnabled = false;
+    this.scale = [];
+    this.scaleRoot = null;
     this.rootNote = 48;
     this.noteCount = 25;
     this.beatWidth = 0;
@@ -85,14 +98,20 @@ export class CompostNoteEditor extends HTMLElement {
     this.offset = 0;
     this.zoomPxPerBeat = 0;
     /** @type {RollNote[]} */ this._notes = [];
+    /** @type {RollNote[]|null} */ this._preview = null;
     /** @type {Set<string>} */ this.selection = new Set();
     /** @type {number[]} */ this.visibleKeys = [];
     /** @type {any} */ this.drag = null;
     this.longPress = createLongPress();
-    /** The last marquee's beat extent, kept so a duplicate can space itself
-     * by the selected time. @type {{start: number, end: number}|null} */
-    this.selectionRange = null;
+    /** The last marquee's extent, kept so a duplicate can space itself by the
+     * selected time. Pitch bounds mean a box; their absence means time only.
+     * @type {{start: number, end: number, pitches?: number[]}|null} */
+    this.selectionRegion = null;
     /** @type {any} */ this.loopDrag = null;
+    /** @type {any} */ this.keyPan = null;
+    /** @type {{id: string, time: number}|null} */ this.modifiedClick = null;
+    /** @type {{beat: number, note: number, time: number}|null} */ this.pendingEmptyClick = null;
+    this.ignoreDoubleClick = false;
     this.editorID = `compost-note-editor-${nextEditorID++}`;
     this.handleModifierKey = this.handleModifierKey.bind(this);
     this.handleWindowBlur = () => { this.removeAttribute('data-velmod'); this.removeAttribute('data-copymod'); };
@@ -102,34 +121,23 @@ export class CompostNoteEditor extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-note-editor-bg: var(--compost-theme-bg, #1f1f1f);
-          --compost-note-editor-text: var(--compost-theme-text, #f2f2f2);
-          --compost-note-editor-muted: var(--compost-theme-muted, #aaaaaa);
-          --compost-note-editor-faint: color-mix(in srgb, var(--compost-note-editor-muted) 64%, transparent);
-          --compost-note-editor-line: var(--compost-theme-line, rgba(255,255,255,.18));
+          --compost-note-editor-bg: Canvas;
+          --compost-note-editor-text: currentColor;
+          --compost-note-editor-muted: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-note-editor-line: color-mix(in srgb, currentColor 18%, transparent);
           --compost-note-editor-bar-line: var(--compost-note-editor-muted);
-          --compost-note-editor-row: color-mix(in srgb, var(--compost-note-editor-text) 5%, transparent);
-          --compost-note-editor-signal: var(--compost-theme-accent, #8ea9c7);
+          --compost-note-editor-row: color-mix(in srgb, currentColor 5%, transparent);
+          --compost-note-editor-signal: var(--compost-accent, AccentColor);
           --compost-note-editor-range: var(--compost-note-editor-text);
           --compost-note-editor-loop: var(--compost-note-editor-signal);
-          --compost-note-editor-select: var(--compost-theme-learn, #6fa8eb);
+          --compost-note-editor-select: var(--compost-note-editor-signal);
           --compost-note-editor-marquee: color-mix(in srgb, var(--compost-note-editor-select) 14%, transparent);
-          --compost-note-editor-wash: color-mix(in srgb, var(--compost-note-editor-signal) 16%, transparent);
-          --compost-note-editor-past: color-mix(in srgb, var(--compost-note-editor-bg) 72%, transparent);
-          --compost-note-editor-keys-bg: var(--compost-theme-panel, #2c2c2c);
-          --compost-note-editor-white-key: color-mix(in srgb, var(--compost-note-editor-keys-bg) 88%, var(--compost-note-editor-text));
-          --compost-note-editor-white-key-text: var(--compost-note-editor-text);
-          --compost-note-editor-white-key-edge: var(--compost-note-editor-line);
-          --compost-note-editor-black-key: var(--compost-theme-control-bg, #151515);
-          --compost-note-editor-black-key-text: var(--compost-note-editor-muted);
+          --compost-note-editor-time-selection: color-mix(in srgb, var(--compost-note-editor-select) 10%, transparent);
+          --compost-note-editor-past: color-mix(in srgb, currentColor 13%, transparent);
           --compost-note-editor-playhead: var(--compost-note-editor-text);
-          --compost-note-editor-tip-bg: var(--compost-theme-panel, #2c2c2c);
-          --compost-note-editor-key-width: 5.3em;
-          --compost-note-editor-min-row: 1.1em;
-          --compost-note-editor-ruler-height: 2.36em;
-          --compost-note-editor-numeral-font: ui-monospace, SFMono-Regular, Menlo, monospace;
-          --compost-note-editor-color-scheme: var(--compost-theme-color-scheme, dark);
-          color-scheme: var(--compost-note-editor-color-scheme);
+          --compost-note-editor-tip-bg: Canvas;
+          --compost-note-editor-key-width: 3em;
+          --compost-note-editor-ruler-height: 3em;
           display: block;
           box-sizing: border-box;
           min-height: 0;
@@ -141,72 +149,99 @@ export class CompostNoteEditor extends HTMLElement {
           user-select: none;
         }
         :host([disabled]) { opacity: 0.55; pointer-events: none; }
-        :host(:focus-visible) { box-shadow: inset 0 0 0 1px var(--compost-note-editor-select); }
+        :host(:focus-visible) { outline: 2px solid currentColor; outline-offset: -2px; }
         .frame {
+          position: relative;
           display: grid;
           grid-template-columns: var(--compost-note-editor-key-width) minmax(0, 1fr);
           grid-template-rows: var(--compost-note-editor-ruler-height) minmax(0, 1fr);
           height: 100%;
           min-height: 0;
+          box-sizing: border-box;
+          border: 1px solid currentColor;
+          overflow: hidden;
         }
         .corner { grid-column: 1; grid-row: 1; }
         .rulerwrap { grid-column: 2; grid-row: 1; position: relative; overflow: hidden; }
         .ruler { position: absolute; top: 0; bottom: 0; left: 0; }
-        .ruler .bn {
+        .ruler::before {
+          content: "";
           position: absolute;
-          top: 1px;
-          height: 0.73em;
-          padding-left: 3px;
-          border-left: 1px solid var(--compost-note-editor-line);
-          font-family: var(--compost-note-editor-numeral-font);
-          font-size: 0.73em;
-          color: var(--compost-note-editor-muted);
-          line-height: 1;
-          white-space: nowrap;
-        }
-        .range-region {
-          position: absolute;
-          top: 0.89em;
-          height: 0.22em;
-          background: var(--compost-note-editor-range);
-          opacity: 0.5;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 1.15em;
+          background: color-mix(in srgb, currentColor 5%, Canvas);
+          border-bottom: 1px solid var(--compost-note-editor-line);
           pointer-events: none;
         }
+        .ruler .bn {
+          position: absolute;
+          top: 0.15em;
+          height: 0.73em;
+          padding: 0.05em 0.25em 0.05em 0.2em;
+          background: color-mix(in srgb, currentColor 5%, Canvas);
+          font-size: 0.73em;
+          color: var(--compost-note-editor-text);
+          line-height: 1;
+          white-space: nowrap;
+          z-index: 2;
+        }
+        .ruler .rt { position: absolute; top: 1.15em; bottom: 0; width: 1px; background: var(--compost-note-editor-line); pointer-events: none; }
+        .ruler .rt.beat { top: 0.9em; background: color-mix(in srgb, currentColor 50%, transparent); }
+        .ruler .rt.bar { top: 0.75em; background: color-mix(in srgb, currentColor 70%, transparent); }
         .region {
           position: absolute;
-          top: 1.09em;
-          height: 1em;
+          top: 1.35em;
+          height: 0.7em;
           left: 0;
-          background: var(--compost-note-editor-wash);
-          box-shadow: inset 0 0 0 1px var(--compost-note-editor-loop);
+          background: var(--compost-note-editor-loop);
+          box-shadow: inset 0 0 0 1px currentColor;
           cursor: grab;
           touch-action: none;
         }
+        .time-selection-ruler {
+          position: absolute;
+          bottom: 0.15em;
+          height: 0.45em;
+          box-sizing: border-box;
+          border: solid var(--compost-note-editor-select);
+          border-width: 0 1px 1px;
+          pointer-events: none;
+          display: none;
+          z-index: 3;
+        }
         .handle {
           position: absolute;
-          top: 1.09em;
-          height: 1em;
+          top: 1.25em;
+          height: 0.9em;
           width: 1em;
           cursor: col-resize;
           z-index: 3;
           touch-action: none;
         }
-        .handle::before { content: ""; position: absolute; top: 0; bottom: 0; width: 3px; background: var(--compost-note-editor-loop); }
-        .handle.start::before { left: 0; }
-        .handle.end::before { right: 0; }
-        .handle:hover::before, .handle[data-on]::before { width: 4px; }
-        .range-handle { top: 0.72em; height: 1.43em; z-index: 4; }
-        .range-handle::before { background: var(--compost-note-editor-range); }
+        .range-handle { top: 2em; height: 0.9em; z-index: 4; }
+        .range-handle::after { content: ""; position: absolute; top: 0.16em; width: 0; height: 0; border-top: 0.28em solid transparent; border-bottom: 0.28em solid transparent; }
+        .range-handle.start::after { left: 1px; border-left: 0.45em solid var(--compost-note-editor-range); }
+        .range-handle.end::after { right: 1px; border-right: 0.45em solid var(--compost-note-editor-range); }
         /* a host whose clips always start at zero keeps the start where it is */
         :host([lock-loop-start]) .loop-handle.start { display: none; }
         :host([lock-loop-start]) .region { cursor: default; }
+        :host(:not([loop])) .region, :host(:not([loop])) .loop-handle,
+        :host(:not([loop])) .timeline-line.loop { display: none; }
         .keys {
           grid-column: 1; grid-row: 2;
           position: relative;
           overflow: hidden;
-          background: var(--compost-note-editor-keys-bg);
-          cursor: ns-resize;
+          color-scheme: light;
+          background: Canvas;
+          color: CanvasText;
+          cursor: grab;
+          touch-action: none;
         }
+        .keys[data-pan] { cursor: grabbing; }
+        .keys[data-axis="scroll"] { cursor: ns-resize; }
+        .keys[data-axis="zoom"] { cursor: ew-resize; }
         .key {
           position: absolute;
           left: 0;
@@ -215,55 +250,70 @@ export class CompostNoteEditor extends HTMLElement {
           justify-content: flex-end;
           box-sizing: border-box;
           padding-right: 0.45em;
-          font-family: var(--compost-note-editor-numeral-font);
           font-size: 0.73em;
           letter-spacing: 0;
-          cursor: pointer;
+          cursor: inherit;
         }
-        .key.white { right: 0; background: var(--compost-note-editor-white-key); color: var(--compost-note-editor-white-key-text);
-          box-shadow: inset 0 -1px 0 var(--compost-note-editor-white-key-edge); }
-        .key.black { width: 62%; background: var(--compost-note-editor-black-key); color: var(--compost-note-editor-black-key-text); z-index: 2;
-          box-shadow: inset -1px 0 0 var(--compost-note-editor-line); }
-        .key[data-on] { background: var(--compost-note-editor-signal); color: var(--compost-note-editor-bg); }
-        .key.octave { box-shadow: inset 0 -1px 0 var(--compost-note-editor-muted); }
+        .key.white { right: 0; background-color: Canvas; color: CanvasText; }
+        .key.black { width: 100%; background: CanvasText; color: Canvas; z-index: 2; }
+        .key[data-on] { background: var(--compost-note-editor-signal); color: AccentColorText; }
+        .key[data-scale] { background-image: linear-gradient(color-mix(in srgb, currentColor 6%, transparent), color-mix(in srgb, currentColor 6%, transparent)); }
+        .key[data-root] { background-image: linear-gradient(color-mix(in srgb, currentColor 12%, transparent), color-mix(in srgb, currentColor 12%, transparent)); }
+        .key[data-hover] { background-image: linear-gradient(color-mix(in srgb, currentColor 18%, transparent), color-mix(in srgb, currentColor 18%, transparent)); }
+        .key::before { content: attr(data-name); display: none; }
+        .key[data-label]::before, .key[data-hover]::before { display: block; }
+        .key.octave { box-shadow: inset 0 1px 0 color-mix(in srgb, CanvasText 65%, transparent); }
         .gridwrap { grid-column: 2; grid-row: 2; position: relative; overflow: hidden; }
         .grid { position: absolute; top: 0; bottom: 0; left: 0; cursor: default; touch-action: none; }
         :host([draw]) .grid { cursor: crosshair; }
-        .gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-note-editor-line); opacity: 0.35; }
-        .gl.beat { opacity: 0.6; }
-        .gl.bar { opacity: 1; background: var(--compost-note-editor-bar-line); }
-        .rl { position: absolute; left: 0; right: 0; height: 1px; background: var(--compost-note-editor-line); opacity: 0.28; }
+        .gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-note-editor-line); }
+        .gl.beat { background: color-mix(in srgb, currentColor 30%, transparent); }
+        .gl.bar { background: var(--compost-note-editor-bar-line); }
+        .rl { position: absolute; left: 0; right: 0; height: 1px; background: var(--compost-note-editor-line); }
+        .rl.octave { background: color-mix(in srgb, currentColor 30%, transparent); }
         .rw { position: absolute; left: 0; right: 0; background: var(--compost-note-editor-row); }
-        .note { position: absolute; background: var(--compost-note-editor-signal); cursor: grab; box-sizing: border-box; }
-        .note[data-selected] { outline: 1px solid var(--compost-note-editor-select); outline-offset: 1px; }
-        .note[data-out] { opacity: 0.28 !important; }
-        /* velocity reads twice: the note's weight, and a line running across it */
-        .note .vl { position: absolute; left: 0; right: 0; height: 1px; background: var(--compost-note-editor-bg); opacity: 0.55; pointer-events: none; }
-        .note[data-hold] { cursor: ns-resize; outline: 1px solid var(--compost-note-editor-select); outline-offset: 1px; }
-        .note .ve { position: absolute; left: 6px; right: 6px; top: 0; bottom: 0; cursor: grab; }
-        .note .rs { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; cursor: ${TRIM_LEFT}; }
-        .note .re { position: absolute; right: 0; top: 0; bottom: 0; width: 6px; cursor: ${TRIM_RIGHT}; }
+        .note { position: absolute; z-index: 2; background: var(--note-fill, var(--compost-note-editor-signal)); color: var(--compost-note-editor-text); border: 1px solid currentColor; cursor: grab; box-sizing: border-box; }
+        .note[data-selected] { border-width: 2px; }
+        .note[data-out] { background: color-mix(in srgb, var(--note-fill) 28%, transparent); }
+        .note .nn { position: absolute; left: 0.3em; top: 50%; z-index: 1; color: AccentColorText; font-size: 0.73em; line-height: 1; transform: translateY(-50%); pointer-events: none; }
+        .note[data-vel] { cursor: ns-resize; }
+        .note .ve { position: absolute; left: 0.4em; right: 0.4em; top: 0; bottom: 0; cursor: grab; }
+        .note .rs { position: absolute; left: 0; top: 0; bottom: 0; width: 0.4em; cursor: col-resize; }
+        .note .re { position: absolute; right: 0; top: 0; bottom: 0; width: 0.4em; cursor: col-resize; }
         /* what the drag will do is always on the pointer: move, trim, or velocity */
         :host([data-drag="move"]) .note, :host([data-drag="move"]) .note .ve { cursor: grabbing; }
         :host([data-velmod]) .note, :host([data-velmod]) .note .rs, :host([data-velmod]) .note .re,
         :host([data-velmod]) .note .ve, :host([data-drag="vel"]) .note, :host([data-drag="vel"]) .note .ve { cursor: ns-resize; }
         :host([data-copymod]) .note .ve, :host([data-drag="copy"]) .note, :host([data-drag="copy"]) .note .ve { cursor: copy; }
         .outside { position: absolute; top: 0; bottom: 0; background: var(--compost-note-editor-past); pointer-events: none; z-index: 1; }
+        .timeline-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-note-editor-range); z-index: 5; pointer-events: none; }
+        .timeline-line.loop { width: 2px; background: var(--compost-note-editor-loop); }
         .marker-guide { position: absolute; top: 0; bottom: 0; width: 1px; z-index: 5; pointer-events: none; display: none; }
         .marker-guide[data-on] { display: block; }
         .marker-guide[data-scope="range"] { background: var(--compost-note-editor-range); }
         .marker-guide[data-scope="loop"] { background: var(--compost-note-editor-loop); }
         .playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-note-editor-playhead);
-          box-shadow: 0 0 0 0.5px var(--compost-note-editor-bg), 0 0 5px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 6; display: none; }
+          box-shadow: -1px 0 Canvas, 1px 0 Canvas; pointer-events: none; z-index: 6; display: none; }
         .marquee { position: absolute; border: 1px solid var(--compost-note-editor-select); background: var(--compost-note-editor-marquee); pointer-events: none; display: none; }
+        .time-selection {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          box-sizing: border-box;
+          border: solid var(--compost-note-editor-select);
+          border-width: 0 1px;
+          background: var(--compost-note-editor-time-selection);
+          pointer-events: none;
+          display: none;
+        }
+        .time-selection[data-box] { border-width: 1px; }
         .tip {
           position: fixed;
           z-index: 50;
-          padding: 2px 5px;
+          padding: 0.15em 0.35em;
           background: var(--compost-note-editor-tip-bg);
           box-shadow: 0 0 0 1px var(--compost-note-editor-line);
           color: var(--compost-note-editor-text);
-          font-family: var(--compost-note-editor-numeral-font);
           font-size: 0.82em;
           white-space: nowrap;
           pointer-events: none;
@@ -273,7 +323,6 @@ export class CompostNoteEditor extends HTMLElement {
           position: absolute;
           right: 0.55em;
           bottom: 0.36em;
-          font-family: var(--compost-note-editor-numeral-font);
           font-size: 0.82em;
           color: var(--compost-note-editor-muted);
           pointer-events: none;
@@ -283,18 +332,19 @@ export class CompostNoteEditor extends HTMLElement {
         <div class="corner" part="corner"></div>
         <div class="rulerwrap" part="ruler">
           <div class="ruler">
-            <div class="range-region" part="range"></div>
             <div class="handle start range-handle" part="range-start"></div>
             <div class="handle end range-handle" part="range-end"></div>
             <div class="region" part="loop"></div>
             <div class="handle start loop-handle" part="loop-start"></div>
             <div class="handle end loop-handle" part="loop-end"></div>
+            <div class="time-selection-ruler" part="time-selection-ruler"></div>
           </div>
         </div>
         <div class="keys" part="keys"></div>
         <div class="gridwrap" part="grid">
           <div class="grid">
             <div class="outside before" part="before"></div>
+            <div class="time-selection" part="time-selection"></div>
             <div class="outside past" part="past"></div>
             <div class="marker-guide" part="marker-guide"></div>
             <div class="playhead" part="playhead"></div>
@@ -302,6 +352,10 @@ export class CompostNoteEditor extends HTMLElement {
           </div>
           <div class="division" part="division"></div>
         </div>
+        <div class="timeline-line range-start-line" part="range-start-line"></div>
+        <div class="timeline-line range-end-line" part="range-end-line"></div>
+        <div class="timeline-line loop loop-start-line" part="loop-start-line"></div>
+        <div class="timeline-line loop loop-end-line" part="loop-end-line"></div>
       </div>
       <div class="tip" part="tip" hidden></div>`;
 
@@ -309,31 +363,52 @@ export class CompostNoteEditor extends HTMLElement {
     const part = (selector) => /** @type {HTMLElement} */ (this.root.querySelector(selector));
     this.rulerWrap = part('.rulerwrap');
     this.ruler = part('.ruler');
-    this.rangeRegion = part('.range-region');
     this.rangeStartHandle = part('.range-handle.start');
     this.rangeEndHandle = part('.range-handle.end');
     this.region = part('.region');
     this.startHandle = part('.loop-handle.start');
     this.endHandle = part('.loop-handle.end');
+    this.timeSelectionRuler = part('.time-selection-ruler');
     this.keys = part('.keys');
     this.gridWrap = part('.gridwrap');
     this.gridElement = part('.grid');
     this.before = part('.outside.before');
+    this.timeSelection = part('.time-selection');
     this.past = part('.past');
     this.markerGuide = part('.marker-guide');
     this.playheadElement = part('.playhead');
     this.marquee = part('.marquee');
     this.tip = part('.tip');
     this.division = part('.division');
+    this.rangeStartLine = part('.range-start-line');
+    this.rangeEndLine = part('.range-end-line');
+    this.loopStartLine = part('.loop-start-line');
+    this.loopEndLine = part('.loop-end-line');
 
-    this.gridElement.addEventListener('pointerdown', (event) => this.startPointer(event));
-    this.gridElement.addEventListener('pointermove', (event) => this.movePointer(event));
+    this.gridElement.addEventListener('pointerdown', (event) => {
+      this.updateHoverKey(event);
+      this.startPointer(event);
+    });
+    this.gridElement.addEventListener('pointermove', (event) => {
+      this.updateHoverKey(event);
+      this.movePointer(event);
+    });
     this.gridElement.addEventListener('pointerup', (event) => this.endPointer(event));
     this.gridElement.addEventListener('pointercancel', (event) => this.endPointer(event));
+    this.gridElement.addEventListener('pointerleave', () => {
+      if (!this.drag) this.clearHoverKey();
+    });
     this.gridElement.addEventListener('dblclick', (event) => this.handleDoubleClick(event));
     installTouchDoubleClick(this.gridElement);
     this.gridElement.addEventListener('contextmenu', (event) => this.handleContextMenu(event));
-    this.keys.addEventListener('pointerdown', (event) => this.previewFromKey(event));
+    this.ruler.addEventListener('pointerdown', (event) => this.startRulerSelection(event));
+    this.ruler.addEventListener('pointermove', (event) => this.movePointer(event));
+    this.ruler.addEventListener('pointerup', (event) => this.endPointer(event));
+    this.ruler.addEventListener('pointercancel', (event) => this.endPointer(event));
+    this.keys.addEventListener('pointerdown', (event) => this.startKeyPan(event));
+    this.keys.addEventListener('pointermove', (event) => this.moveKeyPan(event));
+    this.keys.addEventListener('pointerup', (event) => this.endKeyPan(event));
+    this.keys.addEventListener('pointercancel', (event) => this.endKeyPan(event));
     this.gridWrap.addEventListener('wheel', (event) => this.handleWheel(event), { passive: false });
     this.keys.addEventListener('wheel', (event) => this.handleKeysWheel(event), { passive: false });
     for (const [node, kind] of [[this.endHandle, 'end'], [this.startHandle, 'start'], [this.region, 'move']]) {
@@ -368,7 +443,6 @@ export class CompostNoteEditor extends HTMLElement {
     window.removeEventListener('keydown', this.handleModifierKey, true);
     window.removeEventListener('keyup', this.handleModifierKey, true);
     window.removeEventListener('blur', this.handleWindowBlur);
-    clearTimeout(this.drag?.hold);
   }
 
   attributeChangedCallback() {
@@ -382,16 +456,27 @@ export class CompostNoteEditor extends HTMLElement {
     this.setAttribute('aria-label', this.label);
     this.beatsPerBar = Math.max(1, Math.round(numberAttr(this, 'beats-per-bar', this.beatsPerBar)));
     this.grid = Math.max(1, numberAttr(this, 'grid', this.grid));
+    this.gridLines = this.getAttribute('grid-lines') !== 'off';
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     const rawStart = Math.max(0, numberAttr(this, 'start', this.rangeStart));
     const rawEnd = Math.max(rawStart + MIN_DURATION, numberAttr(this, 'end', this.rangeEnd));
+    const rawLoopStart = Math.max(0, numberAttr(this, 'loop-start', this.loopStart));
+    const rawLoopEnd = Math.max(rawLoopStart + MIN_DURATION, numberAttr(this, 'loop-end', this.loopEnd));
     this.rangeStart = rawStart;
     this.rangeEnd = rawEnd;
-    this.loopStart = clamp(numberAttr(this, 'loop-start', this.loopStart), rawStart, rawEnd - MIN_DURATION);
-    this.loopEnd = clamp(numberAttr(this, 'loop-end', this.loopEnd), this.loopStart + MIN_DURATION, rawEnd);
+    this.loopStart = rawLoopStart;
+    this.loopEnd = rawLoopEnd;
+    this.loopEnabled = this.hasAttribute('loop');
+    const scale = (this.getAttribute('scale') ?? '').split(/[\s,]+/)
+      .filter(Boolean).map(Number).filter(Number.isFinite)
+      .map((note) => ((Math.round(note) % 12) + 12) % 12);
+    this.scale = [...new Set(scale)];
+    this.scaleRoot = this.hasAttribute('root')
+      ? ((Math.round(numberAttr(this, 'root', 0)) % 12) + 12) % 12 : null;
     this.explicitBeats = this.hasAttribute('beats');
     this.beats = this.explicitBeats
-      ? Math.max(this.rangeEnd, numberAttr(this, 'beats', this.beats)) : Math.max(this.rangeEnd + 8, 16);
+      ? Math.max(this.rangeEnd, this.loopEnd, numberAttr(this, 'beats', this.beats))
+      : Math.max(Math.max(this.rangeEnd, this.loopEnd) + 8, 16);
     this.rootNote = clamp(Math.round(numberAttr(this, 'root-note', this.rootNote)), 0, 127);
     this.noteCount = clamp(Math.round(numberAttr(this, 'note-count', this.noteCount)), MIN_ROWS, 128);
     this.beatWidth = Math.max(0, numberAttr(this, 'beat-width', 0));
@@ -418,8 +503,10 @@ export class CompostNoteEditor extends HTMLElement {
       throw new TypeError('compost-note-editor notes need caller-owned ids');
     }
     this._notes = next;
+    this._preview = null;
     const ids = new Set(this._notes.map((note) => note.id));
     for (const id of [...this.selection]) if (!ids.has(id)) this.selection.delete(id);
+    this.expandSelectionRegionToNotes();
     this.refresh();
     if (shouldEmit) this.emitChange();
   }
@@ -444,11 +531,11 @@ export class CompostNoteEditor extends HTMLElement {
     return [...this.selection];
   }
 
-  /** Sets the non-destructive playback range, in beats. The loop remains nested. */
+  /** Sets the non-destructive playback range, in beats. */
   /** @param {number} start @param {number} end @param {boolean} [shouldEmit] */
   setRange(start, end, shouldEmit = false) {
-    const nextStart = clamp(Number(start) || 0, 0, this.loopStart);
-    const nextEnd = Math.max(this.loopEnd, Number(end) || 0, nextStart + MIN_DURATION);
+    const nextStart = Math.max(0, Number(start) || 0);
+    const nextEnd = Math.max(Number(end) || 0, nextStart + MIN_DURATION);
     if (nextStart === this.rangeStart && nextEnd === this.rangeEnd) return;
     this.setAttribute('start', String(nextStart));
     this.setAttribute('end', String(nextEnd));
@@ -458,41 +545,59 @@ export class CompostNoteEditor extends HTMLElement {
   /** Sets the loop region, in beats. */
   /** @param {number} start @param {number} end @param {boolean} [shouldEmit] */
   setLoop(start, end, shouldEmit = false) {
-    const nextStart = clamp(Number(start) || 0, this.rangeStart, this.rangeEnd - MIN_DURATION);
-    const nextEnd = clamp(Number(end) || 0, nextStart + MIN_DURATION, this.rangeEnd);
+    const nextStart = Math.max(0, Number(start) || 0);
+    const nextEnd = Math.max(Number(end) || 0, nextStart + MIN_DURATION);
     if (nextStart === this.loopStart && nextEnd === this.loopEnd) return;
     this.setAttribute('loop-start', String(nextStart));
     this.setAttribute('loop-end', String(nextEnd));
     if (shouldEmit) this.emitLoop();
   }
 
-  /** Snaps the selection, or everything when nothing is selected. */
+  /** Asks the host to quantize the selection, or everything when none is selected. */
   /** @param {{lengths?: boolean, division?: number}} [options] */
   quantize({ lengths = false, division = this.grid } = {}) {
     if (this.readonly) return;
-    const ids = this.selection.size > 0 ? [...this.selection] : null;
-    this.commit(quantizedNotes(this._notes, gridStep(division, this.beatsPerBar),
-      /** @type {any} */ ({ ids, lengths, beats: this.beats })));
+    this.dispatchEvent(new CustomEvent('note-quantize', {
+      bubbles: true, composed: true,
+      detail: {
+        ids: this.selection.size > 0 ? [...this.selection] : this._notes.map((note) => note.id),
+        step: gridStep(division, this.beatsPerBar), lengths,
+      },
+    }));
   }
 
   selectAll() {
-    this.selectionRange = null;
     this.selection = new Set(this._notes.map((note) => note.id));
-    this.renderNotes();
+    this.renderSelection();
     this.emitSelection();
   }
 
   clearSelection() {
-    this.selectionRange = null;
+    this.selectionRegion = null;
     this.selection.clear();
     this.renderNotes();
+    this.renderSelectionRegion();
     this.emitSelection();
+  }
+
+  /** In Fold, vertical arrows move through displayed pitches without hiding the selection. */
+  moveSelectionThroughVisiblePitches(direction) {
+    const selected = this._notes.filter((note) => this.selection.has(note.id));
+    const targets = new Map();
+    for (const note of selected) {
+      const index = this.visibleKeys.indexOf(note.note);
+      const target = this.visibleKeys[index - direction];
+      if (index < 0 || target === undefined) return;
+      targets.set(note.note, target);
+    }
+    this.commit(this._notes.map((note) => (this.selection.has(note.id)
+      ? { ...note, note: targets.get(note.note) }
+      : note)), [...this.selection]);
   }
 
   deleteSelection() {
     if (this.readonly || this.selection.size === 0) return;
     const next = this._notes.filter((note) => !this.selection.has(note.id));
-    this.selectionRange = null;
     this.selection.clear();
     this.commit(next);
   }
@@ -503,24 +608,27 @@ export class CompostNoteEditor extends HTMLElement {
     if (this.readonly || this.selection.size === 0) return;
     const originals = this._notes.filter((note) => this.selection.has(note.id));
     const copies = duplicatedNotes(this._notes, [...this.selection], this.step, this.beats,
-      () => this.newNoteId(), this.snapMode, this.selectionRange);
+      () => this.newNoteId(), this.snapMode, this.selectionRegion);
     if (!copies.length) return;
-    if (this.selectionRange) {
+    if (this.selectionRegion) {
       const shift = Math.max(...copies.map((copy, index) => copy.start - originals[index].start));
-      this.selectionRange = { start: this.selectionRange.start + shift, end: this.selectionRange.end + shift };
+      this.selectionRegion = {
+        ...this.selectionRegion,
+        start: this.selectionRegion.start + shift,
+        end: this.selectionRegion.end + shift,
+      };
     }
     this.selection = new Set(copies.map((note) => note.id));
-    this.commit([...this._notes, ...copies]);
+    this.commit([...this._notes, ...copies], copies.map((note) => note.id));
   }
 
   /** Adds one note without a pointer: at the loop start, or just after the
    * selection, on the middle visible row. Selects it and reports the change. */
   addNote() {
     if (this.readonly) return null;
-    this.selectionRange = null;
     const span = selectionSpan(this._notes, this.selection.size ? [...this.selection] : null);
     const raw = this.selection.size && span ? span.end : this.rangeStart;
-    const start = clamp(this.snapBeat(raw, false), 0, Math.max(0, this.beats - this.step));
+    const start = clamp(this.snapBeat(raw), 0, Math.max(0, this.beats - this.step));
     const created = {
       id: this.newNoteId(),
       note: this.visibleKeys[Math.floor(this.visibleKeys.length / 2)] ?? this.rootNote,
@@ -530,19 +638,21 @@ export class CompostNoteEditor extends HTMLElement {
       channel: this.defaultChannel,
     };
     this.selection = new Set([created.id]);
-    this.commit([...this._notes, created]);
+    this.commit([...this._notes, created], [created.id]);
     this.preview(created.note);
     return created;
   }
 
   /** Sets the loop to the selection's span. */
   loopToSelection() {
-    const span = selectionSpan(this._notes, this.selection.size ? [...this.selection] : null);
+    const span = this.selectionRegion
+      ?? selectionSpan(this._notes, this.selection.size ? [...this.selection] : null);
     if (!span) return;
     this.zoomPxPerBeat = 0;
     this.offset = 0;
     const locked = this.hasAttribute('lock-loop-start');
     this.setRange(Math.min(this.rangeStart, locked ? 0 : span.start), Math.max(this.rangeEnd, span.end), false);
+    this.setAttribute('loop', '');
     this.setLoop(locked ? 0 : span.start, span.end, true);
   }
 
@@ -556,10 +666,11 @@ export class CompostNoteEditor extends HTMLElement {
   // ---- Geometry -----------------------------------------------------------------
 
   get pxPerBeat() {
-    if (this.zoomPxPerBeat > 0) return this.zoomPxPerBeat;
-    if (this.beatWidth > 0) return this.beatWidth;
     const width = this.gridWrap?.clientWidth || 400;
-    return width / Math.max(8, this.rangeEnd + 4);
+    const fit = width / Math.max(1, this.beats);
+    if (this.zoomPxPerBeat > 0) return Math.max(fit, this.zoomPxPerBeat);
+    if (this.beatWidth > 0) return this.beatWidth;
+    return Math.max(fit, width / Math.max(8, this.rangeEnd + 4));
   }
 
   /** @param {number} beat */
@@ -570,25 +681,6 @@ export class CompostNoteEditor extends HTMLElement {
 
   get rowHeight() {
     return (this.gridWrap?.clientHeight || 300) / Math.max(1, this.visibleKeys.length);
-  }
-
-  /** The height a row will not go below, from `--compost-note-editor-min-row`.
-   * A landscape phone has too little height for 25 rows at a readable size, so
-   * the editor shows fewer of them rather than squeezing all of them. */
-  get minRowHeight() {
-    const style = getComputedStyle(this);
-    const fontSize = parseFloat(style.fontSize) || 12;
-    const raw = style.getPropertyValue('--compost-note-editor-min-row').trim();
-    const value = parseFloat(raw);
-    if (!Number.isFinite(value) || value <= 0) return fontSize * 1.1;
-    return raw.endsWith('em') ? value * fontSize : raw.endsWith('rem')
-      ? value * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) : value;
-  }
-
-  /** How many rows the height can hold without going under the floor. */
-  get rowCapacity() {
-    const height = this.gridWrap?.clientHeight || 300;
-    return clamp(Math.floor(height / Math.max(1, this.minRowHeight)), MIN_ROWS, 128);
   }
 
   /** @param {number} note */
@@ -604,18 +696,11 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   computeVisibleKeys() {
-    const capacity = this.rowCapacity;
     if (this.hasAttribute('fold')) {
       const used = [...new Set(this._notes.map((note) => note.note))].sort((a, b) => b - a);
-      if (used.length && used.length <= capacity) return used;
-      // too many pitches in use for the height: keep the ones around the middle
-      if (used.length) {
-        const from = clamp(Math.round((used.length - capacity) / 2), 0, used.length - capacity);
-        return used.slice(from, from + capacity);
-      }
+      if (used.length) return used;
     }
-    const count = Math.min(this.noteCount, capacity);
-    // fewer rows, still centred on the range the host asked for
+    const count = this.noteCount;
     const middle = this.rootNote + this.noteCount / 2;
     const lo = clamp(Math.round(middle - count / 2), 0, 128 - count);
     return Array.from({ length: count }, (_, index) => lo + count - 1 - index);
@@ -628,9 +713,20 @@ export class CompostNoteEditor extends HTMLElement {
     return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
   }
 
-  /** @param {number} beat @param {boolean} free */
-  snapBeat(beat, free) {
-    return free || this.snapMode === 'off' ? Math.max(0, beat) : snapBeats(beat, this.step, 'grid');
+  /** @param {number} beat @param {boolean} [free] */
+  snapBeat(beat, free = this.snapMode === 'off') {
+    return free ? Math.max(0, beat) : snapBeats(beat, this.step, 'grid');
+  }
+
+  /** Command/Ctrl temporarily uses the opposite of the configured time snapping mode. */
+  gestureIsFree(event) {
+    const modifier = event.metaKey || event.ctrlKey;
+    return this.snapMode === 'off' ? !modifier : modifier;
+  }
+
+  /** Shift uses the same quarter-speed precision as the envelope editor. */
+  gestureFactor(event) {
+    return event.shiftKey ? 0.25 : 1;
   }
 
   // ---- Rendering ----------------------------------------------------------------
@@ -650,15 +746,51 @@ export class CompostNoteEditor extends HTMLElement {
     this.renderNotes();
     this.renderPlayhead();
     this.renderMarkerGuide();
-    this.division.textContent = `1/${this.grid}`;
+    this.renderSelectionRegion();
+  }
+
+  renderSelectionRegion() {
+    if (!this.selectionRegion) {
+      this.timeSelection.style.display = 'none';
+      this.timeSelectionRuler.style.display = 'none';
+      this.division.textContent = this.gridLines ? gridText(this.grid, this.beatsPerBar) : 'off';
+      return;
+    }
+    const left = this.selectionRegion.start * this.pxPerBeat;
+    const width = (this.selectionRegion.end - this.selectionRegion.start) * this.pxPerBeat;
+    for (const element of [this.timeSelection, this.timeSelectionRuler]) {
+      element.style.display = 'block';
+      element.style.left = `${left}px`;
+      element.style.width = `${width}px`;
+    }
+    const box = Array.isArray(this.selectionRegion.pitches) && this.selectionRegion.pitches.length > 0;
+    this.timeSelection.toggleAttribute('data-box', box);
+    if (box) {
+      const rows = this.visibleKeys.map((note, index) => ({ note, index }))
+        .filter(({ note }) => note >= Math.min(...this.selectionRegion.pitches)
+          && note <= Math.max(...this.selectionRegion.pitches));
+      if (rows.length) {
+        const top = Math.min(...rows.map(({ index }) => index)) * this.rowHeight;
+        const bottom = (Math.max(...rows.map(({ index }) => index)) + 1) * this.rowHeight;
+        this.timeSelection.style.top = `${top}px`;
+        this.timeSelection.style.bottom = 'auto';
+        this.timeSelection.style.height = `${bottom - top}px`;
+      } else this.timeSelection.style.display = 'none';
+    } else {
+      this.timeSelection.style.top = '0px';
+      this.timeSelection.style.bottom = '0px';
+      this.timeSelection.style.height = 'auto';
+    }
+    const beats = this.selectionRegion.end - this.selectionRegion.start;
+    const bars = beats / this.beatsPerBar;
+    this.division.textContent = Math.abs(bars - Math.round(bars)) < 1e-9
+      ? `${Math.round(bars)} bar${Math.round(bars) === 1 ? '' : 's'}` : lengthText(beats);
   }
 
   renderRuler() {
     const px = this.pxPerBeat;
     this.ruler.style.width = `${this.beats * px}px`;
     this.ruler.style.transform = `translateX(${-this.offset}px)`;
-    this.rangeRegion.style.left = `${this.rangeStart * px}px`;
-    this.rangeRegion.style.width = `${(this.rangeEnd - this.rangeStart) * px}px`;
     const rangeHandle = this.rangeStartHandle.offsetWidth || 11;
     this.rangeStartHandle.style.left = `${this.rangeStart * px - 1}px`;
     this.rangeEndHandle.style.left = `${this.rangeEnd * px - rangeHandle + 1}px`;
@@ -667,9 +799,18 @@ export class CompostNoteEditor extends HTMLElement {
     const handle = this.startHandle.offsetWidth || 11;
     this.startHandle.style.left = `${this.loopStart * px - 1}px`;
     this.endHandle.style.left = `${this.loopEnd * px - handle + 1}px`;
-    for (const label of this.ruler.querySelectorAll('.bn')) label.remove();
+    for (const label of this.ruler.querySelectorAll('.bn,.rt')) label.remove();
     const fragment = document.createDocumentFragment();
-    for (const { beat, text } of rulerLabels(this.beats, this.beatsPerBar, px)) {
+    for (let beat = 0; beat <= this.beats + 1e-9; beat += this.step) {
+      const tick = document.createElement('div');
+      const isBar = Math.abs(beat % this.beatsPerBar) < 1e-9;
+      const isBeat = Math.abs(beat % 1) < 1e-9;
+      tick.className = `rt${isBar ? ' bar' : isBeat ? ' beat' : ''}`;
+      tick.part.add('ruler-tick');
+      tick.style.left = `${beat * px}px`;
+      fragment.append(tick);
+    }
+    for (const { beat, text } of rulerLabels(this.beats, this.beatsPerBar, px, this.step)) {
       const label = document.createElement('div');
       label.className = 'bn';
       label.part.add('ruler-label');
@@ -682,6 +823,16 @@ export class CompostNoteEditor extends HTMLElement {
     this.before.style.width = `${this.rangeStart * px}px`;
     this.past.style.left = `${this.rangeEnd * px}px`;
     this.past.style.width = `${Math.max(0, (this.beats - this.rangeEnd) * px)}px`;
+    const timelineLeft = this.gridWrap.offsetLeft;
+    const timelineWidth = this.gridWrap.clientWidth;
+    for (const [line, beat] of [
+      [this.rangeStartLine, this.rangeStart], [this.rangeEndLine, this.rangeEnd],
+      [this.loopStartLine, this.loopStart], [this.loopEndLine, this.loopEnd],
+    ]) {
+      const x = beat * px - this.offset;
+      line.hidden = x < 0 || x > timelineWidth;
+      line.style.left = `${timelineLeft + x}px`;
+    }
   }
 
   renderKeys() {
@@ -690,11 +841,29 @@ export class CompostNoteEditor extends HTMLElement {
     const markup = [];
     this.visibleKeys.forEach((note, index) => {
       const accidental = !isNaturalNote(note);
-      const classes = `key ${accidental ? 'black' : 'white'}${note % 12 === 11 ? ' octave' : ''}`;
-      const name = height >= 9 && (fold || note % 12 === 0) ? noteName(note) : '';
-      markup.push(`<div class="${classes}" part="key" data-note="${note}" style="top:${(index * height).toFixed(2)}px;height:${Math.max(2, height - (accidental ? 1 : 0)).toFixed(2)}px">${name}</div>`);
+      const classes = `key ${accidental ? 'black' : 'white'}${note % 12 === 0 ? ' octave' : ''}`;
+      const parts = `key ${accidental ? 'black-key' : 'white-key'}`;
+      const label = height >= 9 && (fold || note % 12 === 0) ? ' data-label' : '';
+      const relative = this.scaleRoot === null ? -1 : ((note - this.scaleRoot) % 12 + 12) % 12;
+      const inScale = this.scaleRoot !== null && this.scale.includes(relative);
+      const scaleState = inScale ? ' data-scale' : '';
+      const rootState = inScale && relative === 0 ? ' data-root' : '';
+      markup.push(`<div class="${classes}" part="${parts}" data-note="${note}" data-name="${noteName(note)}"${label}${scaleState}${rootState} style="top:${(index * height).toFixed(2)}px;height:${Math.max(2, height).toFixed(2)}px"></div>`);
     });
     this.keys.innerHTML = markup.join('');
+  }
+
+  clearHoverKey() {
+    this.keys.querySelector('[data-hover]')?.removeAttribute('data-hover');
+  }
+
+  /** Shows the grid row's pitch on the matching key without auditioning it. */
+  updateHoverKey(event) {
+    const note = this.yToNote(this.gridPoint(event).y);
+    const current = this.keys.querySelector('[data-hover]');
+    if (current?.dataset.note === String(note)) return;
+    current?.removeAttribute('data-hover');
+    this.keys.querySelector(`[data-note="${note}"]`)?.setAttribute('data-hover', '');
   }
 
   renderGrid() {
@@ -705,10 +874,10 @@ export class CompostNoteEditor extends HTMLElement {
     this.visibleKeys.forEach((note, index) => {
       const top = index * height;
       if (!isNaturalNote(note)) markup.push(`<div class="rw" part="row" style="top:${top.toFixed(2)}px;height:${height.toFixed(2)}px"></div>`);
-      markup.push(`<div class="rl" part="row-line" style="top:${(top + height).toFixed(2)}px"></div>`);
+      if (note % 12 === 0) markup.push(`<div class="rl octave" part="row-line octave-line" style="top:${top.toFixed(2)}px"></div>`);
     });
     const step = this.step;
-    if (step > 0) {
+    if (this.gridLines && step > 0) {
       for (let beat = 0; beat <= this.beats + 1e-9; beat += step) {
         const isBar = Math.abs(beat % this.beatsPerBar) < 1e-9;
         const isBeat = Math.abs(beat % 1) < 1e-9;
@@ -723,8 +892,8 @@ export class CompostNoteEditor extends HTMLElement {
     const height = this.rowHeight;
     const px = this.pxPerBeat;
     const fragment = document.createDocumentFragment();
-    const holdId = this.drag?.mode === 'vel' && this.drag.hold === null ? this.drag.note?.id : null;
-    for (const note of this._notes) {
+    const velocityId = this.drag?.mode === 'vel' ? this.drag.note?.id : null;
+    for (const note of this._preview ?? this._notes) {
       const y = this.noteToY(note.note);
       if (y < 0) continue;
       const element = document.createElement('div');
@@ -733,19 +902,26 @@ export class CompostNoteEditor extends HTMLElement {
       element.dataset.id = note.id;
       if (this.selection.has(note.id)) element.dataset.selected = '';
       if (note.start < this.rangeStart || note.start >= this.rangeEnd) element.dataset.out = '';
-      if (holdId === note.id) element.dataset.hold = '';
+      if (velocityId === note.id) element.dataset.vel = '';
       element.style.left = `${(note.start * px).toFixed(2)}px`;
       element.style.width = `${Math.max(3, note.duration * px).toFixed(2)}px`;
       element.style.top = `${(y + 1).toFixed(2)}px`;
       element.style.height = `${Math.max(3, height - 2).toFixed(2)}px`;
-      element.style.opacity = (0.3 + 0.7 * (note.velocity / 127)).toFixed(2);
+      const fill = Math.round((0.3 + 0.7 * (note.velocity / 127)) * 100);
+      element.style.setProperty('--note-fill', `color-mix(in srgb, var(--compost-note-editor-signal) ${fill}%, transparent)`);
       element.setAttribute('aria-label',
         `${noteName(note.note)}, beat ${(note.start + 1).toFixed(2)}, length ${note.duration.toFixed(2)}, velocity ${note.velocity}`);
-      element.innerHTML = `<div class="vl" style="bottom:${((note.velocity / 127) * (height - 3)).toFixed(1)}px"></div>`
-        + '<div class="ve"></div><div class="rs"></div><div class="re"></div>';
+      const name = height >= 9 ? `<span class="nn" part="note-label">${noteName(note.note)}</span>` : '';
+      element.innerHTML = `${name}<div class="ve" part="note-body"></div><div class="rs" part="note-start"></div><div class="re" part="note-end"></div>`;
       fragment.append(element);
     }
     this.gridElement.insertBefore(fragment, this.past);
+  }
+
+  renderSelection() {
+    for (const element of this.gridElement.querySelectorAll('.note')) {
+      element.toggleAttribute('data-selected', this.selection.has(element.dataset.id));
+    }
   }
 
   renderPlayhead() {
@@ -770,16 +946,20 @@ export class CompostNoteEditor extends HTMLElement {
 
   // ---- Emitting ----------------------------------------------------------------
 
-  /** @param {any[]} notes */
-  commit(notes) {
-    this._notes = normaliseNotes(notes, this.beats);
+  /** @param {any[]} notes @param {string[]|null} [activeIds] */
+  commit(notes, activeIds = null) {
+    let next = normaliseNotes(notes, this.beats);
+    if (activeIds?.length) next = resolveOverlaps(next, activeIds);
+    this._preview = null;
+    this.expandSelectionRegionToNotes(next);
+    this.emitChange(next);
     this.refresh();
-    this.emitChange();
   }
 
-  emitChange() {
+  emitChange(notes = this._notes) {
     this.dispatchEvent(new CustomEvent('notes-change', {
-      bubbles: true, composed: true, detail: { notes: this.notes },
+      bubbles: true, composed: true,
+      detail: { notes: notes.map((note) => ({ ...note })) },
     }));
   }
 
@@ -796,9 +976,23 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   emitSelection() {
+    this.expandSelectionRegionToNotes();
+    this.renderSelectionRegion();
     this.dispatchEvent(new CustomEvent('selection-change', {
       bubbles: true, composed: true, detail: { ids: this.selectedIds },
     }));
+  }
+
+  /** Duplication time always contains every selected note from start to end. */
+  expandSelectionRegionToNotes(notes = this._preview ?? this._notes) {
+    if (!this.selectionRegion || !this.selection.size) return;
+    const span = selectionSpan(notes, [...this.selection]);
+    if (!span) return;
+    this.selectionRegion = {
+      ...this.selectionRegion,
+      start: Math.min(this.selectionRegion.start, span.start),
+      end: Math.max(this.selectionRegion.end, span.end),
+    };
   }
 
   /** @param {number} note */
@@ -809,15 +1003,74 @@ export class CompostNoteEditor extends HTMLElement {
     }));
   }
 
+  /** Ends a held keybed preview. */
+  endPreview(note) {
+    this.dispatchEvent(new CustomEvent('note-preview-end', {
+      bubbles: true, composed: true,
+      detail: { note, velocity: this.defaultVelocity, channel: this.defaultChannel },
+    }));
+  }
+
   /** @param {PointerEvent} event */
-  previewFromKey(event) {
+  startKeyPan(event) {
+    if (event.button !== 0 || this.keyPan) return;
     const key = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('key'));
     if (!(key instanceof HTMLElement)) return;
     const note = Number(key.dataset.note);
     if (!Number.isInteger(note)) return;
+    event.preventDefault();
+    this.focus({ preventScroll: true });
+    this.keyPan = {
+      pointerId: event.pointerId, x: event.clientX, y: event.clientY,
+      root: this.rootNote, rows: this.noteCount, middle: this.rootNote + this.noteCount / 2,
+      note, shiftKey: event.shiftKey, moved: false, axis: null, previewing: true,
+      slop: event.pointerType === 'touch' ? DRAG_SLOP * 2 : DRAG_SLOP,
+    };
+    this.keys.setPointerCapture(event.pointerId);
+    this.keys.setAttribute('data-pan', '');
     key.setAttribute('data-on', '');
     setTimeout(() => key.removeAttribute('data-on'), 160);
     this.preview(note);
+  }
+
+  /** @param {PointerEvent} event */
+  moveKeyPan(event) {
+    const pan = this.keyPan;
+    if (!pan || event.pointerId !== pan.pointerId) return;
+    const dx = event.clientX - pan.x;
+    const dy = event.clientY - pan.y;
+    if (!pan.axis) {
+      if (Math.hypot(dx, dy) <= pan.slop) return;
+      pan.axis = Math.abs(dx) > Math.abs(dy) ? 'zoom' : 'scroll';
+      pan.moved = true;
+      this.keys.dataset.axis = pan.axis;
+      this.endPreview(pan.note);
+      pan.previewing = false;
+    }
+    if (pan.axis === 'zoom') {
+      const unit = parseFloat(getComputedStyle(this).fontSize) || 16;
+      const rows = clamp(pan.rows - Math.round(dx / unit), MIN_ROWS, MAX_ROWS);
+      this.setAttribute('note-count', String(rows));
+      this.setAttribute('root-note', String(clamp(Math.round(pan.middle - rows / 2), 0, 128 - rows)));
+    } else {
+      const root = clamp(pan.root + Math.round(dy / this.rowHeight), 0, 128 - this.noteCount);
+      this.setAttribute('root-note', String(root));
+    }
+  }
+
+  /** @param {PointerEvent} event */
+  endKeyPan(event) {
+    const pan = this.keyPan;
+    if (!pan || event.pointerId !== pan.pointerId) return;
+    this.keyPan = null;
+    this.keys.removeAttribute('data-pan');
+    delete this.keys.dataset.axis;
+    if (pan.previewing) this.endPreview(pan.note);
+    if (event.type === 'pointercancel' || pan.moved) return;
+    if (!pan.shiftKey) this.selection.clear();
+    for (const entry of this._notes) if (entry.note === pan.note) this.selection.add(entry.id);
+    this.renderNotes();
+    this.emitSelection();
   }
 
   /** @param {string} text @param {{clientX: number, clientY: number}} event */
@@ -826,6 +1079,33 @@ export class CompostNoteEditor extends HTMLElement {
     this.tip.textContent = text;
     this.tip.style.left = `${event.clientX + 12}px`;
     this.tip.style.top = `${event.clientY - 16}px`;
+  }
+
+  /** Starts a pending grid-box or ruler-time selection. */
+  startSelection(event, kind, point = this.gridPoint(event)) {
+    event.preventDefault();
+    this.focus({ preventScroll: true });
+    this.drag = {
+      pointerId: event.pointerId, mode: 'marq', kind,
+      x: event.clientX, y: event.clientY,
+      startBeat: clamp(this.snapBeat(this.xToBeat(point.x), this.gestureIsFree(event)), 0, this.beats),
+      note0: kind === 'box' ? this.yToNote(point.y) : undefined,
+      y0: point.y, moved: false, shiftKey: event.shiftKey,
+      base: new Set(this.selection),
+      regionBefore: this.selectionRegion ? { ...this.selectionRegion,
+        pitches: this.selectionRegion.pitches ? [...this.selectionRegion.pitches] : undefined } : null,
+      target: kind === 'box' ? this.gridElement : this.ruler,
+      slop: event.pointerType === 'touch' ? DRAG_SLOP * 2 : DRAG_SLOP,
+    };
+    this.drag.target.setPointerCapture(event.pointerId);
+  }
+
+  /** Ruler drags select time without pitch bounds. */
+  startRulerSelection(event) {
+    if (this.readonly || event.button !== 0 || this.drag || this.loopDrag) return;
+    if (event.composedPath().some((node) => node instanceof HTMLElement
+      && (node.classList.contains('handle') || node.classList.contains('region')))) return;
+    this.startSelection(event, 'time');
   }
 
   // ---- Note gestures ------------------------------------------------------------
@@ -837,19 +1117,56 @@ export class CompostNoteEditor extends HTMLElement {
     return found instanceof HTMLElement ? found : null;
   }
 
+  /** Switches an active note move between its originals and temporary copies. */
+  setCopyDrag(drag, copying) {
+    if (drag.copy === copying) return;
+    if (copying) {
+      const sources = this._notes.filter((note) => drag.sourceIds.includes(note.id));
+      if (!drag.copies) drag.copies = sources.map((note) => ({ ...note, id: this.newNoteId() }));
+      drag.ids = drag.copies.map((note) => note.id);
+      drag.note = drag.copies[sources.findIndex((note) => note.id === drag.sourceNoteId)] ?? drag.copies[0];
+      this.selection = new Set(drag.ids);
+    } else {
+      drag.ids = [...drag.sourceIds];
+      drag.note = this._notes.find((note) => note.id === drag.sourceNoteId);
+      this.selection = new Set(drag.sourceIds);
+    }
+    drag.copy = copying;
+  }
+
+  dragSource(drag) {
+    return drag.copy ? normaliseNotes([...this._notes, ...(drag.copies ?? [])], this.beats) : this._notes;
+  }
+
+  applyMoveDrag(drag, clientX, clientY, free) {
+    const deltaBeats = this.xToBeat(clientX - drag.x);
+    const deltaRows = Math.round((drag.y - clientY) / this.rowHeight);
+    const source = this.dragSource(drag);
+    const origin = source.find((note) => note.id === drag.note.id);
+    if (!origin) return;
+    const target = snapWithOffset(origin.start + deltaBeats, origin.start,
+      this.step, free ? 'off' : 'grid');
+    const shiftBeats = target - origin.start;
+    const originRow = this.visibleKeys.indexOf(origin.note);
+    const targetRow = clamp(originRow - deltaRows, 0, this.visibleKeys.length - 1);
+    const shiftNote = originRow >= 0 ? (this.visibleKeys[targetRow] ?? origin.note) - origin.note : 0;
+    this._preview = resolveOverlaps(movedNotes(source, drag.ids, shiftBeats, shiftNote,
+      this.beats, this.step, 'off'), drag.ids);
+  }
+
   /** @param {PointerEvent} event */
   startPointer(event) {
     if (this.readonly || event.button !== 0 || this.drag) return;
-    const selectionRangeBefore = this.selectionRange ? { ...this.selectionRange } : null;
-    this.selectionRange = null;   // a new gesture replaces the marquee's time span
+    const regionBefore = this.selectionRegion ? { ...this.selectionRegion,
+      pitches: this.selectionRegion.pitches ? [...this.selectionRegion.pitches] : undefined } : null;
     const element = this.noteElementFrom(event);
     const point = this.gridPoint(event);
     this.focus({ preventScroll: true });
     if (!element) {
+      this.modifiedClick = null;
       event.preventDefault();
       if (this.hasAttribute('draw')) {
-        const start = this.snapBeat(this.xToBeat(point.x), event.altKey);
-        const rollback = this._notes.map((entry) => ({ ...entry }));
+        const start = this.snapBeat(this.xToBeat(point.x), this.gestureIsFree(event));
         const selectionBefore = [...this.selection];
         const created = {
           id: this.newNoteId(), note: this.yToNote(point.y),
@@ -857,17 +1174,15 @@ export class CompostNoteEditor extends HTMLElement {
           duration: Math.max(this.step, MIN_DURATION),
           velocity: this.defaultVelocity, channel: this.defaultChannel,
         };
-        this._notes = normaliseNotes([...this._notes, created], this.beats);
+        this._preview = resolveOverlaps(normaliseNotes([...this._notes, created], this.beats), [created.id]);
         this.selection = new Set([created.id]);
-        this.drag = { pointerId: event.pointerId, mode: 'len', note: created, moved: true, hold: null,
-          origin: undefined, rollback, ids: [created.id], selectionBefore, selectionRangeBefore };
+        this.drag = { pointerId: event.pointerId, mode: 'len', note: created, moved: true, created: true,
+          x: event.clientX, y: event.clientY, grabBeat: this.xToBeat(point.x),
+          ids: [created.id], selectionBefore, regionBefore };
         this.preview(created.note);
       } else {
-        if (!event.shiftKey) this.selection.clear();
-        this.drag = { pointerId: event.pointerId, mode: 'marq', x0: point.x, y0: point.y,
-          base: new Set(this.selection), hold: null, selectionRangeBefore };
-        this.marquee.style.display = 'block';
-        Object.assign(this.marquee.style, { left: `${point.x}px`, top: `${point.y}px`, width: '0px', height: '0px' });
+        this.startSelection(event, 'box', point);
+        return;
       }
       this.gridElement.setPointerCapture(event.pointerId);
       this.renderNotes();
@@ -879,33 +1194,29 @@ export class CompostNoteEditor extends HTMLElement {
     if (!event.shiftKey && !this.selection.has(note.id)) this.selection = new Set([note.id]);
     else this.selection.add(note.id);
     const target = /** @type {HTMLElement} */ (event.composedPath()[0]);
-    const onEdge = target.classList.contains('re') || target.classList.contains('rs');
-    const copying = event.altKey && !onEdge;
+    const bounds = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const edgeWidth = Math.min(bounds.width / 3,
+      parseFloat(style.fontSize) * 0.4 + parseFloat(style.borderLeftWidth));
+    const onStartEdge = target.classList.contains('rs') || event.clientX <= bounds.left + edgeWidth;
+    const onEndEdge = target.classList.contains('re') || event.clientX >= bounds.right - edgeWidth;
     const selectionBefore = [...this.selection];
-    const rollback = this._notes.map((entry) => ({ ...entry }));
-    let grabbed = note;
-    if (copying) {
-      // Alt-drag moves copies of the whole selection, which become the selection
-      const copies = this._notes.filter((entry) => this.selection.has(entry.id))
-        .map((entry) => ({ ...entry, id: this.newNoteId() }));
-      const copyOfGrabbed = copies[this._notes.filter((entry) => this.selection.has(entry.id)).findIndex((entry) => entry.id === note.id)];
-      this._notes = normaliseNotes([...this._notes, ...copies], this.beats);
-      this.selection = new Set(copies.map((entry) => entry.id));
-      grabbed = copyOfGrabbed ?? copies[0];
-    }
-    const mode = target.classList.contains('re') ? 'len'
-      : target.classList.contains('rs') ? 'lenL'
+    const mode = onEndEdge ? 'len'
+      : onStartEdge ? 'lenL'
         : (event.metaKey || event.ctrlKey) ? 'vel' : 'move';
+    const copying = mode === 'move' && event.altKey;
+    if (mode !== 'vel') this.modifiedClick = null;
     this.drag = {
-      pointerId: event.pointerId, mode, note: grabbed, x: event.clientX, y: event.clientY,
-      origin: this._notes.map((entry) => ({ ...entry })), ids: [...this.selection],
-      rollback, moved: false, hold: null, copy: copying, selectionBefore, selectionRangeBefore,
+      pointerId: event.pointerId, mode, note, x: event.clientX, y: event.clientY,
+      currentX: event.clientX, currentY: event.clientY, free: false,
+      grabBeat: this.xToBeat(point.x), ids: [...this.selection],
+      sourceIds: [...this.selection], sourceNoteId: note.id,
+      moved: false, copy: false, selectionBefore, regionBefore,
     };
+    if (copying) this.setCopyDrag(this.drag, true);
     if (mode === 'move' && !copying) {
       this.preview(note.note);
       if (event.pointerType === 'touch') {
-        // on touch a still hold asks for context actions instead; velocity
-        // editing is a caller menu action there (README, Events)
         this.longPress.start(() => {
           if (!this.drag || this.drag.moved) return;
           this.endPointer({ pointerId: event.pointerId, type: 'pointercancel' });
@@ -914,18 +1225,10 @@ export class CompostNoteEditor extends HTMLElement {
             detail: { id: note.id, clientX: event.clientX, clientY: event.clientY },
           }));
         });
-      } else this.drag.hold = setTimeout(() => {
-        if (!this.drag || this.drag.moved) return;
-        this.drag.mode = 'vel';
-        this.drag.hold = null;
-        this.drag.y = event.clientY;
-        this.setAttribute('data-drag', 'vel');
-        this.showTip(`vel ${note.velocity}`, event);
-        this.renderNotes();
-      }, HOLD_FOR_VELOCITY_MS);
+      }
     }
     this.setAttribute('data-drag', copying ? 'copy' : mode);
-    this.gridElement.setPointerCapture(event.pointerId);
+    if (mode !== 'vel') this.gridElement.setPointerCapture(event.pointerId);
     this.renderNotes();
     this.emitSelection();
   }
@@ -934,19 +1237,36 @@ export class CompostNoteEditor extends HTMLElement {
   movePointer(event) {
     const drag = this.drag;
     if (!drag || event.pointerId !== drag.pointerId) return;
+    const target = drag.target ?? this.gridElement;
+    if (!target.hasPointerCapture(event.pointerId)) target.setPointerCapture(event.pointerId);
     const point = this.gridPoint(event);
     if (drag.mode === 'marq') {
-      const x = Math.min(drag.x0, point.x);
-      const y = Math.min(drag.y0, point.y);
-      const width = Math.abs(point.x - drag.x0);
-      const height = Math.abs(point.y - drag.y0);
+      if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= drag.slop) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        this.selectionRegion = null;
+        this.renderSelectionRegion();
+        this.marquee.style.display = 'block';
+      }
+      const free = this.gestureIsFree(event);
+      const first = drag.startBeat;
+      const last = clamp(this.snapBeat(this.xToBeat(point.x), free), 0, this.beats);
+      const start = Math.min(first, last);
+      const end = Math.max(first, last);
+      const x = start * this.pxPerBeat;
+      const currentY = clamp(point.y, 0, this.gridWrap.clientHeight);
+      const y = drag.kind === 'box' ? Math.min(drag.y0, currentY) : 0;
+      const width = (end - start) * this.pxPerBeat;
+      const height = drag.kind === 'box' ? Math.abs(currentY - drag.y0) : this.gridWrap.clientHeight;
       Object.assign(this.marquee.style, { left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px` });
       const rowHeight = this.rowHeight;
-      const fromNote = this.yToNote(y + height);
-      const toNote = this.yToNote(y);
-      const box = { fromBeat: this.xToBeat(x), toBeat: this.xToBeat(x + width), fromNote, toNote };
-      drag.range = { start: box.fromBeat, end: box.toBeat };
-      this.selection = new Set(drag.base);
+      const fromNote = drag.kind === 'box' ? this.yToNote(y + height) : 0;
+      const toNote = drag.kind === 'box' ? this.yToNote(y) : 127;
+      const box = { fromBeat: start, toBeat: end, fromNote, toNote };
+      drag.region = drag.kind === 'box'
+        ? { start, end, pitches: [Math.min(fromNote, toNote), Math.max(fromNote, toNote)] }
+        : { start, end };
+      this.selection = drag.shiftKey ? new Set(drag.base) : new Set();
       for (const note of notesInBox(this._notes, box)) {
         // a folded view has gaps between rows; only rows that are shown count
         const top = this.noteToY(note.note);
@@ -955,53 +1275,54 @@ export class CompostNoteEditor extends HTMLElement {
       this.renderNotes();
       return;
     }
-    if (drag.hold && drag.mode === 'move'
-      && (Math.abs(event.clientX - drag.x) > DRAG_SLOP || Math.abs(event.clientY - drag.y) > DRAG_SLOP)) {
-      clearTimeout(drag.hold);
-      drag.hold = null;
-      drag.moved = true;
-      this.longPress.cancel();
-    }
     this.setAttribute('data-drag', drag.mode);
-    const free = event.altKey;
+    const free = this.gestureIsFree(event);
+    const factor = this.gestureFactor(event);
     if (drag.mode === 'vel') {
-      const delta = (drag.y - event.clientY) * (event.shiftKey ? 0.25 : 1);
-      this._notes = velocityShiftedNotes(drag.origin, drag.ids, delta);
-      const current = this._notes.find((entry) => entry.id === drag.note.id);
+      const dx = event.clientX - drag.x;
+      const dy = drag.y - event.clientY;
+      const delta = (Math.abs(dx) > Math.abs(dy) ? dx : dy) * factor;
+      this._preview = velocityShiftedNotes(this._notes, drag.ids, delta);
+      const current = this._preview.find((entry) => entry.id === drag.note.id);
       if (current) this.showTip(`vel ${current.velocity}`, event);
     } else if (drag.mode === 'len') {
-      const origin = (drag.origin ?? this._notes).find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
+      const source = drag.created ? normaliseNotes([...this._notes, drag.note], this.beats) : this._notes;
+      const origin = source.find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
       if (!origin) return;
-      const raw = this.xToBeat(point.x) - origin.start;
-      const duration = free || this.snapMode === 'off' ? Math.max(MIN_DURATION, raw) : snapDuration(raw, this.step, 'grid');
+      const delta = (this.xToBeat(point.x) - drag.grabBeat) * factor;
+      const duration = snapWithOffset(origin.duration + delta, origin.duration,
+        this.step, free ? 'off' : 'grid');
       // every selected note takes the same change of length as the one being dragged
-      this._notes = resizedNotes(drag.origin ?? this._notes, drag.ids ?? [origin.id],
-        duration - origin.duration, this.beats, this.step, 'off');
-      this.showTip(lengthText(Math.min(duration, this.beats - origin.start)), event);
+      this._preview = resizedNotes(source, drag.ids, duration - origin.duration,
+        this.beats, this.step, 'off');
+      if (drag.created) {
+        this._preview = velocityShiftedNotes(this._preview, drag.ids, (drag.y - event.clientY) * factor);
+      }
+      const current = this._preview.find((entry) => entry.id === drag.note.id);
+      if (current) this.showTip(`${lengthText(current.duration)}${drag.created ? ` · vel ${current.velocity}` : ''}`, event);
     } else if (drag.mode === 'lenL') {
-      const origin = drag.origin.find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
+      const origin = this._notes.find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
       if (!origin) return;
-      let start = this.xToBeat(point.x);
-      if (!free && this.snapMode !== 'off') start = snapBeats(start, this.step, 'grid');
-      this._notes = trimmedNotes(drag.origin, drag.ids, start - origin.start, this.beats, this.step, free ? 'off' : this.snapMode);
-      const current = this._notes.find((entry) => entry.id === drag.note.id);
+      const delta = (this.xToBeat(point.x) - drag.grabBeat) * factor;
+      const start = snapWithOffset(origin.start + delta, origin.start,
+        this.step, free ? 'off' : 'grid');
+      this._preview = trimmedNotes(this._notes, drag.ids, start - origin.start,
+        this.beats, this.step, 'off');
+      const current = this._preview.find((entry) => entry.id === drag.note.id);
       if (current) this.showTip(lengthText(current.duration), event);
     } else {
       if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= DRAG_SLOP) return;
       drag.moved = true;
       this.longPress.cancel();
+      drag.currentX = event.clientX;
+      drag.currentY = event.clientY;
+      drag.free = free;
+      this.setCopyDrag(drag, event.altKey);
       this.setAttribute('data-drag', drag.copy ? 'copy' : 'move');
-      const deltaBeats = this.xToBeat(event.clientX - drag.x);
-      const deltaRows = Math.round((drag.y - event.clientY) / this.rowHeight);
-      const origin = drag.origin.find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
-      if (!origin) return;
-      const target = this.snapBeat(origin.start + deltaBeats, free && !drag.copy);
-      const shiftBeats = target - origin.start;
-      // pitch moves through the visible rows, so a folded view steps between used pitches
-      const originRow = this.visibleKeys.indexOf(origin.note);
-      const targetRow = clamp(originRow - deltaRows, 0, this.visibleKeys.length - 1);
-      const shiftNote = originRow >= 0 ? (this.visibleKeys[targetRow] ?? origin.note) - origin.note : 0;
-      this._notes = movedNotes(drag.origin, drag.ids, shiftBeats, shiftNote, this.beats, this.step, 'off');
+      this.applyMoveDrag(drag, event.clientX, event.clientY, free);
+    }
+    if (drag.mode === 'len' || drag.mode === 'lenL') {
+      this._preview = resolveOverlaps(this._preview, drag.ids);
     }
     this.renderNotes();
   }
@@ -1010,78 +1331,154 @@ export class CompostNoteEditor extends HTMLElement {
   endPointer(event) {
     const drag = this.drag;
     if (!drag || event.pointerId !== drag.pointerId) return;
-    clearTimeout(drag.hold);
     this.longPress.cancel();
     this.drag = null;
     this.tip.hidden = true;
     this.marquee.style.display = 'none';
+    this.clearHoverKey();
     this.removeAttribute('data-drag');
     if (event.type === 'pointercancel') {
-      if (Array.isArray(drag.rollback)) this._notes = drag.rollback;
-      this.selectionRange = drag.selectionRangeBefore ?? null;
+      this._preview = null;
+      this.selectionRegion = drag.regionBefore ?? this.selectionRegion;
       const selection = drag.mode === 'marq' ? drag.base : drag.selectionBefore ?? drag.ids ?? [];
       const noteIds = new Set(this._notes.map((entry) => entry.id));
       this.selection = new Set([...selection].filter((id) => noteIds.has(id)));
       this.renderNotes();
+      this.renderSelectionRegion();
       this.emitSelection();
       return;
     }
     if (drag.mode === 'marq') {
-      // the dragged extent survives the gesture, so a duplicate can space
-      // itself by the selected time rather than by the notes alone
-      this.selectionRange = this.selection.size && drag.range
-        && drag.range.end > drag.range.start ? drag.range : null;
+      if (drag.moved) {
+        const region = normalizeSelectionRegion(drag.region?.start, drag.region?.end,
+          drag.region?.pitches, this.beats);
+        this.selectionRegion = region ? { start: region.start, end: region.end,
+          ...(region.items ? { pitches: region.items } : {}) } : null;
+      } else if (drag.shiftKey && (drag.regionBefore || drag.base.size)) {
+        const free = this.gestureIsFree(event);
+        const point = this.gridPoint(event);
+        const clickedBeat = clamp(this.snapBeat(this.xToBeat(point.x), free), 0, this.beats);
+        const selected = this._notes.filter((note) => drag.base.has(note.id));
+        const span = selectionSpan(selected);
+        const existing = drag.regionBefore?.pitches ?? selected.map((note) => note.note);
+        const pitches = drag.kind === 'box'
+          ? [Math.min(...existing, this.yToNote(point.y)), Math.max(...existing, this.yToNote(point.y))]
+          : undefined;
+        const region = extendSelectionRegion(drag.regionBefore, clickedBeat,
+          drag.regionBefore?.start ?? span?.start ?? clickedBeat, pitches, this.beats);
+        this.selectionRegion = region ? { start: region.start, end: region.end,
+          ...(region.items ? { pitches: region.items } : {}) } : null;
+        if (this.selectionRegion) {
+          const box = {
+            fromBeat: this.selectionRegion.start, toBeat: this.selectionRegion.end,
+            fromNote: this.selectionRegion.pitches?.[0] ?? 0,
+            toNote: this.selectionRegion.pitches?.at(-1) ?? 127,
+          };
+          this.selection = new Set(drag.base);
+          for (const note of notesInBox(this._notes, box)) this.selection.add(note.id);
+        }
+      } else {
+        if (drag.kind === 'box') {
+          const time = Number(event.timeStamp) || performance.now();
+          if (!this.pendingEmptyClick || time - this.pendingEmptyClick.time > DOUBLE_CLICK_MS) {
+            this.pendingEmptyClick = { beat: drag.startBeat, note: drag.note0, time };
+          }
+        }
+        this.selectionRegion = null;
+        this.selection.clear();
+      }
       this.renderNotes();
+      this.renderSelectionRegion();
       this.emitSelection();
       return;
     }
     if (drag.copy && !drag.moved) {
-      // a press with Alt that went nowhere leaves nothing behind
-      const copies = new Set(drag.ids);
-      this._notes = this._notes.filter((entry) => !copies.has(entry.id));
+      this._preview = null;
       this.selection = new Set(drag.selectionBefore ?? []);
       this.renderNotes();
       this.emitSelection();
       return;
     }
-    const changed = JSON.stringify(this._notes) !== JSON.stringify(drag.origin ?? null);
-    if (changed || drag.mode === 'len' && drag.origin === undefined || drag.copy) this.commit(this._notes);
-    else this.renderNotes();
+    const changed = this._preview !== null;
+    if (drag.mode === 'vel' && !changed) {
+      const now = event.timeStamp;
+      if (this.modifiedClick?.id === drag.note.id && now - this.modifiedClick.time <= DOUBLE_CLICK_MS) {
+        this.modifiedClick = null;
+        this.ignoreDoubleClick = true;
+        setTimeout(() => { this.ignoreDoubleClick = false; }, 0);
+        this.commit(this._notes.map((note) => note.id === drag.note.id
+          ? { ...note, velocity: this.defaultVelocity } : note));
+      } else {
+        this.modifiedClick = { id: drag.note.id, time: now };
+        this.renderSelection();
+      }
+      return;
+    }
+    if (drag.mode === 'vel') this.modifiedClick = null;
+    if (changed || drag.created || drag.copy) {
+      const geometry = drag.mode === 'move' || drag.mode === 'len' || drag.mode === 'lenL';
+      this.commit(this._preview ?? this._notes, geometry || drag.created || drag.copy ? drag.ids : null);
+    }
+    else this.renderSelection();
   }
 
   /** @param {MouseEvent} event */
   handleDoubleClick(event) {
-    if (this.readonly || this.noteElementFrom(event)) return;
+    if (this.readonly) return;
+    if (this.ignoreDoubleClick) { this.ignoreDoubleClick = false; return; }
+    const noteElement = this.noteElementFrom(event);
+    if (noteElement) {
+      if (event.metaKey || event.ctrlKey) {
+        event.preventDefault();
+        this.commit(this._notes.map((note) => note.id === noteElement.dataset.id
+          ? { ...note, velocity: this.defaultVelocity } : note));
+      }
+      return;
+    }
     const point = this.gridPoint(event);
-    const start = this.snapBeat(this.xToBeat(point.x), event.altKey);
+    const pending = this.pendingEmptyClick;
+    this.pendingEmptyClick = null;
+    const start = pending?.beat ?? this.snapBeat(this.xToBeat(point.x), this.gestureIsFree(event));
     const created = {
-      id: this.newNoteId(), note: this.yToNote(point.y),
+      id: this.newNoteId(), note: pending?.note ?? this.yToNote(point.y),
       start: Math.min(start, Math.max(0, this.beats - this.step)),
       duration: Math.max(this.step, MIN_DURATION),
       velocity: this.defaultVelocity, channel: this.defaultChannel,
     };
     this.selection = new Set([created.id]);
-    this.commit([...this._notes, created]);
+    this.commit([...this._notes, created], [created.id]);
     this.preview(created.note);
   }
 
   /** @param {MouseEvent} event */
   handleContextMenu(event) {
     const element = this.noteElementFrom(event);
-    if (!element) return;
     event.preventDefault();
     event.stopPropagation();
     this.dispatchEvent(new CustomEvent('note-context', {
       bubbles: true, composed: true,
-      detail: { id: element.dataset.id, clientX: event.clientX, clientY: event.clientY },
+      detail: { id: element?.dataset.id, clientX: event.clientX, clientY: event.clientY },
     }));
   }
 
-  /** A held Alt (or Cmd/Ctrl) says the next drag sets velocity; the cursor says so too. */
+  /** Command/Ctrl says the next note-body drag sets velocity; the cursor says so too. */
   /** @param {KeyboardEvent} event */
   handleModifierKey(event) {
     this.toggleAttribute('data-velmod', event.metaKey || event.ctrlKey);
     this.toggleAttribute('data-copymod', event.altKey && !event.metaKey && !event.ctrlKey);
+    const drag = this.drag;
+    if (drag?.mode !== 'move') return;
+    const free = this.gestureIsFree(event);
+    if (!drag.moved) {
+      drag.free = free;
+      this.setAttribute('data-drag', event.altKey ? 'copy' : 'move');
+      return;
+    }
+    if (drag.copy !== event.altKey) this.setCopyDrag(drag, event.altKey);
+    drag.free = free;
+    this.applyMoveDrag(drag, drag.currentX, drag.currentY, free);
+    this.setAttribute('data-drag', drag.copy ? 'copy' : 'move');
+    this.renderNotes();
   }
 
   // ---- Playback and loop markers --------------------------------------------------
@@ -1106,10 +1503,11 @@ export class CompostNoteEditor extends HTMLElement {
   moveMarkerDrag(event) {
     const drag = this.loopDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
-    const free = event.altKey || this.snapMode === 'off';
+    const free = this.gestureIsFree(event);
+    const factor = this.gestureFactor(event);
     const step = this.step;
     const quantise = (/** @type {number} */ value) => (free ? Math.max(0, value) : Math.round(value / step) * step);
-    const deltaBeats = (event.clientX - drag.x) / drag.px;
+    const deltaBeats = ((event.clientX - drag.x) / drag.px) * factor;
     let start = drag.start;
     let end = drag.end;
     const minimum = free ? MIN_DURATION : step;
@@ -1162,6 +1560,11 @@ export class CompostNoteEditor extends HTMLElement {
       }));
       return;
     }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.clearSelection();
+      return;
+    }
     if (this.readonly) return;
     const meta = event.metaKey || event.ctrlKey;
     if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -1179,40 +1582,53 @@ export class CompostNoteEditor extends HTMLElement {
     } else if (meta && event.key.toLowerCase() === 'l') {
       event.preventDefault();
       this.loopToSelection();
-    } else if (meta && event.key.toLowerCase() === 'q') {
+    } else if (!meta && !event.altKey && event.key.toLowerCase() === 'q') {
       event.preventDefault();
       this.quantize({ lengths: event.shiftKey });
     } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
       if (!this.selection.size) return;
       event.preventDefault();
-      const delta = (event.key === 'ArrowUp' ? 1 : -1) * (event.altKey ? 12 : 1);
-      this.commit(movedNotes(this._notes, [...this.selection], 0, delta, this.beats, this.step, 'off'));
+      const direction = event.key === 'ArrowUp' ? 1 : -1;
+      if (this.hasAttribute('fold')) this.moveSelectionThroughVisiblePitches(direction);
+      else {
+        const delta = direction * (event.shiftKey ? 12 : 1);
+        this.commit(movedNotes(this._notes, [...this.selection], 0, delta, this.beats, this.step, 'off'),
+          [...this.selection]);
+      }
     } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       if (!this.selection.size) return;
       event.preventDefault();
-      const delta = (event.key === 'ArrowRight' ? 1 : -1) * (event.altKey ? this.step / 4 : this.step);
-      this.commit(movedNotes(this._notes, [...this.selection], delta, 0, this.beats, this.step, 'off'));
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      if (event.altKey) {
+        this.commit(resizedNotes(this._notes, [...this.selection], direction * this.step,
+          this.beats, this.step, 'off'), [...this.selection]);
+      } else {
+        const delta = direction * (event.shiftKey ? this.step / 16 : this.step);
+        this.commit(movedNotes(this._notes, [...this.selection], delta, 0, this.beats, this.step, 'off'),
+          [...this.selection]);
+      }
     }
   }
 
-  /** Wheel scrolls pitch; Shift (or a sideways wheel) scrolls time; Cmd/Ctrl zooms. */
+  /** Wheel scrolls pitch; Shift scrolls time; Cmd/Ctrl zooms time; Alt zooms pitch. */
   /** @param {WheelEvent} event */
   handleWheel(event) {
     event.preventDefault();
     const delta = event.deltaY;
     const width = this.gridWrap.clientWidth;
+    if (event.altKey) {
+      this.setAttribute('note-count', String(clamp(Math.round(this.noteCount + (delta > 0 ? 2 : -2)), MIN_ROWS, MAX_ROWS)));
+      return;
+    }
     if (event.metaKey || event.ctrlKey) {
-      if (event.shiftKey) {
-        this.setAttribute('note-count', String(clamp(Math.round(this.noteCount + (delta > 0 ? 2 : -2)), MIN_ROWS, MAX_ROWS)));
-        return;
-      }
       const at = (this.offset + width / 2) / this.pxPerBeat;
-      this.zoomPxPerBeat = clamp(this.pxPerBeat * (delta > 0 ? 0.86 : 1.16), MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
+      const fit = width / Math.max(1, this.beats);
+      this.zoomPxPerBeat = clamp(this.pxPerBeat * (delta > 0 ? 0.86 : 1.16), fit, MAX_PX_PER_BEAT);
       this.offset = clamp(at * this.pxPerBeat - width / 2, 0, Math.max(0, this.beats * this.pxPerBeat - width));
     } else if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(delta)) {
       this.offset = clamp(this.offset + (event.deltaX || delta), 0, Math.max(0, this.beats * this.pxPerBeat - width));
     } else {
-      const lo = clamp(this.rootNote + (delta > 0 ? -1 : 1) * (event.altKey ? 12 : 1), 0, 128 - this.noteCount);
+      const lo = clamp(this.rootNote + (delta > 0 ? -1 : 1), 0, 128 - this.noteCount);
       this.setAttribute('root-note', String(lo));
       return;
     }

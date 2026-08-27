@@ -28,6 +28,7 @@ const { CompostNumberBox } = await import('../src/components/compost-number-box.
 const { ScopeVisualizer } = await import('../src/components/compost-scope.js');
 const { CompostSelect } = await import('../src/components/compost-select.js');
 const { CompostEnvelopeEditor } = await import('../src/components/compost-envelope-editor.js');
+const { CompostNoteEditor } = await import('../src/components/compost-note-editor.js');
 const { PianoKeyboard } = await import('../src/components/compost-piano.js');
 const { ParameterSlider } = await import('../src/components/compost-slider.js');
 const { CompostDrawer } = await import('../src/components/compost-drawer.js');
@@ -292,25 +293,40 @@ test('scope keeps signal acquisition, policy, and palette choices outside the di
   assert.equal('generateDemoSamples' in ScopeVisualizer.prototype, false);
 });
 
-test('envelope Alt modifier inverts the configured time snapping mode', () => {
+test('envelope Cmd/Ctrl modifier inverts the configured time snapping mode', () => {
   const editor = Object.create(CompostEnvelopeEditor.prototype);
   Object.assign(editor, {
     duration: 4,
     grid: .25,
     surface: { getBoundingClientRect: () => ({ left: 0, width: 100 }) },
   });
-  const event = { clientX: 33, altKey: false };
+  const event = { clientX: 33, metaKey: false, ctrlKey: false };
 
   editor.snapMode = 'grid';
   assert.equal(editor.timeAtPointer(event, editor.freeTime(event)), 1.25);
-  event.altKey = true;
+  event.metaKey = true;
   assert.equal(editor.timeAtPointer(event, editor.freeTime(event)), 1.32);
 
   editor.snapMode = 'off';
-  event.altKey = false;
+  event.metaKey = false;
   assert.equal(editor.timeAtPointer(event, editor.freeTime(event)), 1.32);
-  event.altKey = true;
+  event.ctrlKey = true;
   assert.equal(editor.timeAtPointer(event, editor.freeTime(event)), 1.25);
+});
+
+test('note editor Cmd/Ctrl inverts snapping and Shift provides precise pointer travel', () => {
+  const editor = Object.create(CompostNoteEditor.prototype);
+  editor.snapMode = 'grid';
+  assert.equal(editor.gestureIsFree({ metaKey: false, ctrlKey: false }), false);
+  assert.equal(editor.gestureIsFree({ metaKey: true, ctrlKey: false }), true);
+  editor.snapMode = 'off';
+  assert.equal(editor.gestureIsFree({ metaKey: false, ctrlKey: false }), true);
+  assert.equal(editor.gestureIsFree({ metaKey: false, ctrlKey: true }), false);
+  editor.grid = 16;
+  editor.beatsPerBar = 4;
+  assert.equal(editor.snapBeat(1.13, editor.gestureIsFree({ ctrlKey: true, metaKey: false })), 1.25);
+  assert.equal(editor.gestureFactor({ shiftKey: false }), 1);
+  assert.equal(editor.gestureFactor({ shiftKey: true }), 0.25);
 });
 
 test('envelope curve hover distinguishes point insertion from the segment handle below it', () => {

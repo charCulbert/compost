@@ -2227,6 +2227,7 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
   box = await editor.locator('.note').first().boundingBox();
   await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
   await page.mouse.down();
+  expect(await editor.evaluate((element) => element.drag?.mode)).toBe('len');
   await page.mouse.move(box.x + box.width - 2 + pxPerBeat, box.y + box.height / 2, { steps: 6 });
   await page.mouse.up();
   expect((await firstNote()).duration).toBe(1.5);
@@ -2258,15 +2259,38 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
   await page.keyboard.down('Alt');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * 2, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * 2.13, box.y + box.height / 2, { steps: 6 });
   await page.mouse.up();
   await page.keyboard.up('Alt');
-  expect(await editor.evaluate((element) => element.notes.length)).toBe(countBefore * 2);
+  const countAfterCopy = await editor.evaluate((element) => element.notes.length);
+  expect(countAfterCopy).toBeGreaterThan(countBefore);
   expect(await editor.evaluate((element) => element.selectedIds.length)).toBe(selectedBefore);
+  expect(await editor.evaluate((element) => element.notes
+    .filter((note) => element.selectedIds.includes(note.id))
+    .every((note) => Math.abs(note.start / element.step - Math.round(note.start / element.step)) < 1e-9))).toBe(true);
   expect(await editor.evaluate((element) => element.notes.every((note) =>
     note.id.startsWith('demo-editor-note-')))).toBe(true);
+  expect(await editor.evaluate((element) => element.notes.every((note, index, notes) =>
+    notes.slice(index + 1).every((other) => note.note !== other.note
+      || note.start >= other.start + other.duration
+      || other.start >= note.start + note.duration)))).toBe(true);
   await page.keyboard.press('Backspace');
-  expect(await editor.evaluate((element) => element.notes.length)).toBe(countBefore);
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(countAfterCopy - selectedBefore);
+
+  // Shift extends selection but does not slow a note move
+  const shifted = await editor.evaluate((element) => {
+    element.clearSelection();
+    return { id: element.notes[0].id, start: element.notes[0].start };
+  });
+  box = await editor.locator(`.note[data-id="${shifted.id}"]`).boundingBox();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  expect(await editor.evaluate((element, id) => element.notes.find((note) => note.id === id).start, shifted.id))
+    .toBe(shifted.start + 1);
   await page.keyboard.press('Meta+a');
 
   // the loop end drags out by a beat
@@ -2293,34 +2317,36 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
   expect(await editor.evaluate((element) => element.notes)).toEqual(notesBeforeRange);
 
   // marquee everything, duplicate one span later, delete
+  const notesBeforeMarquee = await editor.evaluate((element) => element.notes.length);
   const grid = await editor.locator('.grid').boundingBox();
   await page.mouse.move(grid.x + 2, grid.y + 2);
   await page.mouse.down();
   await page.mouse.move(grid.x + 9 * pxPerBeat, grid.y + grid.height - 2, { steps: 5 });
   await page.mouse.up();
-  expect(await editor.evaluate((element) => element.selectedIds.length)).toBe(5);
+  expect(await editor.evaluate((element) => element.selectedIds.length)).toBe(notesBeforeMarquee);
   await page.keyboard.press('Meta+d');
-  expect(await editor.evaluate((element) => element.notes.length)).toBe(10);
+  expect(await editor.evaluate((element) => element.notes.length)).toBeGreaterThan(notesBeforeMarquee);
   await page.keyboard.press('Backspace');
-  expect(await editor.evaluate((element) => element.notes.length)).toBe(5);
-  expect(await editor.evaluate((element) => element.selectionRange)).toBe(null);
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(notesBeforeMarquee);
+  expect(await editor.evaluate((element) => element.selectionRegion)).not.toBe(null);
+  await page.keyboard.press('Escape');
+  expect(await editor.evaluate((element) => element.selectionRegion)).toBe(null);
   const events = await editor.evaluate((element) => element.testEvents);
-  expect(events.filter((entry) => entry === 'notes-change').length).toBe(8);
+  expect(events.filter((entry) => entry === 'notes-change').length).toBe(9);
   expect(events).toContainEqual(['loop-change', 9]);
   expect(events).toContainEqual(['range-change', 1.5]);
 
-  // a height too short for every row shows fewer of them rather than slivers
+  // explicit vertical zoom always shows every requested pitch row
   const rows = await editor.evaluate((element) => {
     element.style.height = '150px';
     element.style.fontSize = '13px';
     element.setAttribute('note-count', '48');
     element.refresh();
-    return { visible: element.visibleKeys.length, rowHeight: element.rowHeight,
-      floor: element.minRowHeight, asked: element.noteCount };
+    return { visible: element.visibleKeys.length, rowHeight: element.rowHeight, asked: element.noteCount };
   });
   console.log('U-22 rows', JSON.stringify(rows));
-  expect(rows.visible).toBeLessThan(rows.asked);
-  expect(rows.rowHeight).toBeGreaterThanOrEqual(rows.floor - 0.5);
+  expect(rows.visible).toBe(rows.asked);
+  expect(rows.rowHeight).toBeLessThan(4);
   await editor.evaluate((element) => {
     element.style.height = '';
     element.style.fontSize = '';
@@ -2341,6 +2367,522 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
   expect(added.note).toBe(added.middle);
   expect(added.start).toBe(added.rangeStart);
   expect(await editor.evaluate((element) => element.testEvents)).toContain('notes-change');
+});
+
+test('note editor playback and loop ranges are independent', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  expect(await editor.evaluate((element) => {
+    element.setRange(6, 10);
+    element.setLoop(2, 4);
+    return [element.rangeStart, element.rangeEnd, element.loopStart, element.loopEnd];
+  })).toEqual([6, 10, 2, 4]);
+  expect(await editor.evaluate((element) => {
+    element.setRange(1, 5);
+    element.setLoop(7, 11);
+    return [element.rangeStart, element.rangeEnd, element.loopStart, element.loopEnd];
+  })).toEqual([1, 5, 7, 11]);
+});
+
+test('note editor resets note velocity on Command-double-click', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => {
+    element.defaultVelocity = 91;
+    element.setNotes(element.notes.map((note, index) => index === 0
+      ? { ...note, velocity: 23 } : note));
+  });
+  await editor.locator('.note').first().dblclick({ modifiers: ['Meta'] });
+  expect(await editor.evaluate((element) => element.notes[0].velocity)).toBe(91);
+});
+
+test('note editor stops copying immediately when Alt is released during a drag', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  const before = await editor.evaluate((element) => ({
+    count: element.notes.length, id: element.notes[0].id, start: element.notes[0].start,
+    pxPerBeat: element.pxPerBeat,
+  }));
+  const box = await editor.locator(`.note[data-id="${before.id}"]`).boundingBox();
+  await page.keyboard.down('Alt');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + before.pxPerBeat * 1.13,
+    box.y + box.height / 2, { steps: 5 });
+  await expect(editor.locator('.note')).toHaveCount(before.count + 1);
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(before.count,
+    'drag previews do not mutate caller-owned notes');
+  await page.keyboard.up('Alt');
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(before.count);
+  await page.mouse.up();
+  expect(await editor.evaluate((element, id) => element.notes.find((note) => note.id === id).start, before.id))
+    .toBe(before.start + 1.25);
+});
+
+test('note editor reports context intent for notes and empty grid', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => {
+    element.testContexts = [];
+    element.addEventListener('note-context', (event) => element.testContexts.push(event.detail));
+  });
+  await editor.locator('.note').first().click({ button: 'right' });
+  const grid = await editor.locator('.grid').boundingBox();
+  await page.mouse.click(grid.x + grid.width - 4, grid.y + grid.height - 4, { button: 'right' });
+  expect(await editor.evaluate((element) => element.testContexts.map(({ id }) => id ?? null)))
+    .toEqual(['demo-editor-note-1', null]);
+});
+
+test('note editor pitch keys select a pitch and time-grid lines can be hidden', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.locator('.key[data-note="60"]').click();
+  expect(await editor.evaluate((element) => element.notes
+    .filter((note) => element.selectedIds.includes(note.id)).map((note) => note.note)))
+    .toEqual([60, 60]);
+  await editor.locator('.key[data-note="64"]').click({ modifiers: ['Shift'] });
+  expect(await editor.evaluate((element) => element.notes
+    .filter((note) => element.selectedIds.includes(note.id)).map((note) => note.note)))
+    .toEqual([60, 64, 60, 64]);
+
+  await editor.evaluate((element) => element.setAttribute('grid-lines', 'off'));
+  await expect(editor.locator('.gl')).toHaveCount(0);
+  await expect(editor.locator('.rl').first()).toBeVisible();
+  await expect(editor.locator('.division')).toHaveText('off');
+});
+
+test('note editor keeps a snapped time span separate from its selected pitches', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => element.setNotes([
+    { id: 'chosen', note: 60, start: 2, duration: 0.5, velocity: 100, channel: 0 },
+    { id: 'same-time-other-pitch', note: 64, start: 2, duration: 0.5, velocity: 100, channel: 0 },
+  ]));
+  const geometry = await editor.evaluate((element) => ({
+    px: element.pxPerBeat, y: element.noteToY(60), row: element.rowHeight,
+  }));
+  const grid = await editor.locator('.grid').boundingBox();
+  await page.mouse.move(grid.x + geometry.px * 1.12, grid.y + geometry.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(grid.x + geometry.px * 5.08,
+    grid.y + geometry.y + geometry.row - 2, { steps: 5 });
+  await page.mouse.up();
+
+  expect(await editor.evaluate((element) => ({
+    ids: element.selectedIds, range: element.selectionRegion,
+  }))).toEqual({ ids: ['chosen'], range: { start: 1, end: 5, pitches: [60] } });
+  const band = await editor.locator('.time-selection').boundingBox();
+  expect(Math.abs(band.height - geometry.row)).toBeLessThan(1);
+  await expect(editor.locator('.time-selection')).toHaveAttribute('data-box', '');
+  await expect(editor.locator('.time-selection-ruler')).toBeVisible();
+  await expect(editor.locator('.division')).toHaveText('1 bar');
+
+  await page.keyboard.press('Meta+l');
+  await expect(editor).toHaveAttribute('loop-start', '1');
+  await expect(editor).toHaveAttribute('loop-end', '5');
+  await page.keyboard.press('Meta+d');
+  const duplicated = await editor.evaluate((element) => ({
+    notes: element.notes.map(({ id, start }) => ({ id, start })),
+    ids: element.selectedIds,
+    range: element.selectionRegion,
+  }));
+  expect(duplicated.notes.slice(0, 2)).toEqual([
+    { id: 'chosen', start: 2 },
+    { id: 'same-time-other-pitch', start: 2 },
+  ]);
+  expect(duplicated.notes[2].start).toBe(6);
+  expect(duplicated.notes[2].id).toMatch(/^demo-editor-note-/);
+  expect(duplicated.ids).toEqual([duplicated.notes[2].id]);
+  expect(duplicated.range).toEqual({ start: 5, end: 9, pitches: [60] });
+  await page.keyboard.press('Escape');
+  expect(await editor.evaluate((element) => ({
+    ids: element.selectedIds, range: element.selectionRegion,
+  }))).toEqual({ ids: [], range: null });
+  await expect(editor.locator('.time-selection')).toBeHidden();
+
+  const rulerGeometry = await editor.evaluate((element) => ({ px: element.pxPerBeat }));
+  const ruler = await editor.locator('.ruler').boundingBox();
+  await page.mouse.move(ruler.x + rulerGeometry.px * 1.12, ruler.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(ruler.x + rulerGeometry.px * 5.08, ruler.y + 4, { steps: 5 });
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => ({
+    ids: element.selectedIds, range: element.selectionRegion,
+  }))).toEqual({ ids: ['chosen', 'same-time-other-pitch'], range: { start: 1, end: 5 } });
+  const timeBand = await editor.locator('.time-selection').boundingBox();
+  const currentGrid = await editor.locator('.grid').boundingBox();
+  expect(Math.abs(timeBand.height - currentGrid.height)).toBeLessThan(1);
+  await expect(editor.locator('.time-selection')).not.toHaveAttribute('data-box', '');
+});
+
+test('note editor defers empty-click semantics and Shift-click extends the prior box', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => element.setNotes([
+    { id: 'low', note: 60, start: 2, duration: 0.5, velocity: 100, channel: 0 },
+    { id: 'high', note: 64, start: 4, duration: 0.5, velocity: 100, channel: 0 },
+  ]));
+  const geometry = await editor.evaluate((element) => ({
+    px: element.pxPerBeat, lowY: element.noteToY(60), highY: element.noteToY(64),
+    emptyY: element.noteToY(67), row: element.rowHeight,
+  }));
+  const grid = await editor.locator('.grid').boundingBox();
+  await page.mouse.move(grid.x + geometry.px, grid.y + geometry.lowY + 2);
+  await page.mouse.down();
+  await page.mouse.move(grid.x + geometry.px * 3,
+    grid.y + geometry.lowY + geometry.row - 2, { steps: 4 });
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => element.selectionRegion))
+    .toEqual({ start: 1, end: 3, pitches: [60] });
+
+  await page.keyboard.down('Shift');
+  await page.mouse.move(grid.x + geometry.px * 5, grid.y + geometry.highY + geometry.row / 2);
+  await page.mouse.down();
+  await expect(editor.locator('.marquee')).toBeHidden();
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  expect(await editor.evaluate((element) => ({
+    ids: element.selectedIds, range: element.selectionRegion,
+  }))).toEqual({ ids: ['low', 'high'], range: { start: 1, end: 5, pitches: [60, 64] } });
+
+  const beforePress = await editor.evaluate((element) => ({
+    ids: element.selectedIds, range: element.selectionRegion,
+  }));
+  const empty = { x: grid.x + geometry.px * 8, y: grid.y + geometry.emptyY + geometry.row / 2 };
+  await page.mouse.move(empty.x, empty.y);
+  await page.mouse.down();
+  await expect(editor.locator('.marquee')).toBeHidden();
+  expect(await editor.evaluate((element) => ({ ids: element.selectedIds, range: element.selectionRegion })))
+    .toEqual(beforePress);
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => ({ ids: element.selectedIds, range: element.selectionRegion })))
+    .toEqual({ ids: [], range: null });
+
+  const beforeCreate = await editor.evaluate((element) => element.notes.length);
+  await page.mouse.dblclick(empty.x, empty.y, { delay: 60 });
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(beforeCreate + 1);
+});
+
+test('note editor duplication time contains the full span of every selected note', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => element.setNotes([
+    { id: 'e', note: 64, start: 2, duration: 1, velocity: 100, channel: 0 },
+    { id: 'g', note: 67, start: 4, duration: 1, velocity: 100, channel: 0 },
+  ]));
+  const geometry = await editor.evaluate((element) => ({
+    px: element.pxPerBeat, y: element.noteToY(64), row: element.rowHeight,
+  }));
+  const grid = await editor.locator('.grid').boundingBox();
+  await page.mouse.move(grid.x + geometry.px * 1.25, grid.y + geometry.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(grid.x + geometry.px * 2.25,
+    grid.y + geometry.y + geometry.row - 2, { steps: 4 });
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => element.selectionRegion))
+    .toEqual({ start: 1.25, end: 3, pitches: [64] });
+
+  await editor.locator('.note[data-id="g"] .ve').click({ modifiers: ['Shift'] });
+  expect(await editor.evaluate((element) => ({
+    ids: element.selectedIds, range: element.selectionRegion,
+  }))).toEqual({ ids: ['e', 'g'], range: { start: 1.25, end: 5, pitches: [64] } });
+
+  await page.keyboard.press('Meta+d');
+  const copies = await editor.evaluate((element) => element.notes
+    .filter((note) => element.selectedIds.includes(note.id))
+    .map(({ start }) => start));
+  expect(copies).toEqual([5.75, 7.75]);
+});
+
+test('note editor Shift-click grows a selected note into a visible row range', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => element.setNotes([
+    { id: 'e', note: 64, start: 2, duration: 1, velocity: 100, channel: 0 },
+  ]));
+  await editor.locator('.note[data-id="e"] .ve').click();
+  const geometry = await editor.evaluate((element) => ({
+    px: element.pxPerBeat, y: element.noteToY(64), row: element.rowHeight,
+  }));
+  const grid = await editor.locator('.grid').boundingBox();
+  await page.keyboard.down('Shift');
+  await page.mouse.click(grid.x + geometry.px * 5, grid.y + geometry.y + geometry.row / 2);
+  await page.keyboard.up('Shift');
+  expect(await editor.evaluate((element) => ({
+    ids: element.selectedIds, range: element.selectionRegion,
+  }))).toEqual({ ids: ['e'], range: { start: 2, end: 5, pitches: [64] } });
+  const box = await editor.locator('.time-selection').boundingBox();
+  expect(Math.abs(box.height - geometry.row)).toBeLessThan(1);
+  await page.keyboard.press('Meta+d');
+  expect(await editor.evaluate((element) => element.notes
+    .find((note) => element.selectedIds.includes(note.id)).start)).toBe(5);
+});
+
+test('note editor keeps the selection anchor fixed when Cmd changes mid-drag', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  const geometry = await editor.evaluate((element) => ({
+    px: element.pxPerBeat, y: element.noteToY(72), row: element.rowHeight,
+  }));
+  const grid = await editor.locator('.grid').boundingBox();
+  const y = grid.y + geometry.y + geometry.row / 2;
+  await page.mouse.move(grid.x + geometry.px * 1.12, y);
+  await page.mouse.down();
+  await page.mouse.move(grid.x + geometry.px * 1.5, y, { steps: 3 });
+  await page.keyboard.down('Meta');
+  await page.mouse.move(grid.x + geometry.px * 2.13, y, { steps: 3 });
+  await page.mouse.up();
+  await page.keyboard.up('Meta');
+  const range = await editor.evaluate((element) => element.selectionRegion);
+  expect(range.start).toBe(1);
+  expect(range.end).toBeCloseTo(2.13, 5);
+});
+
+test('note editor geometry edits trim earlier tails and replace covered starts by channel', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => {
+    element.setNotes([
+      { id: 'earlier', note: 60, start: 0.5, duration: 1, velocity: 100, channel: 0 },
+      { id: 'moving', note: 60, start: 1, duration: 0.25, velocity: 100, channel: 0 },
+      { id: 'covered', note: 60, start: 1.25, duration: 0.25, velocity: 100, channel: 0 },
+      { id: 'other-channel', note: 60, start: 1.25, duration: 0.25, velocity: 100, channel: 1 },
+    ]);
+    element.selection = new Set(['moving']);
+    element.focus();
+  });
+  await page.keyboard.press('ArrowRight');
+  expect(await editor.evaluate((element) => element.notes.map(({ id, start, duration, channel }) =>
+    ({ id, start, duration, channel })))).toEqual([
+    { id: 'earlier', start: 0.5, duration: 0.75, channel: 0 },
+    { id: 'moving', start: 1.25, duration: 0.25, channel: 0 },
+    { id: 'other-channel', start: 1.25, duration: 0.25, channel: 1 },
+  ]);
+});
+
+test('note editor vertical arrows stay on displayed pitches in Fold', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  const id = await editor.evaluate((element) => {
+    const note = element.notes.find((entry) => entry.note === 60);
+    element.selection = new Set([note.id]);
+    element.setAttribute('fold', '');
+    element.focus();
+    return note.id;
+  });
+  await page.keyboard.press('ArrowUp');
+  expect(await editor.evaluate((element, noteId) =>
+    element.notes.find((note) => note.id === noteId).note, id)).toBe(64);
+  await page.keyboard.press('ArrowDown');
+  expect(await editor.evaluate((element, noteId) =>
+    element.notes.find((note) => note.id === noteId).note, id)).toBe(60);
+});
+
+test('note editor creates velocity-shaped notes and applies keyboard edit modifiers', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+
+  const first = await editor.evaluate((element) => element.notes[0]);
+  let box = await editor.locator(`.note[data-id="${first.id}"]`).boundingBox();
+  await page.keyboard.down('Meta');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Meta');
+  expect(await editor.evaluate((element, id) => element.notes.find((note) => note.id === id).velocity, first.id))
+    .toBe(first.velocity + 12);
+
+  const beforeIds = await editor.evaluate((element) => element.notes.map((note) => note.id));
+  const geometry = await editor.evaluate((element) => ({ step: element.step, px: element.pxPerBeat }));
+  const grid = await editor.locator('.grid').boundingBox();
+  await editor.evaluate((element) => element.setAttribute('draw', ''));
+  await page.mouse.move(grid.x + geometry.px * 9, grid.y + grid.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(grid.x + geometry.px * 9.75, grid.y + grid.height * 0.3 - 18, { steps: 5 });
+  await page.mouse.up();
+  const created = await editor.evaluate((element, ids) => element.notes.find((note) => !ids.includes(note.id)), beforeIds);
+  expect(created.duration).toBeGreaterThan(geometry.step);
+  expect(created.velocity).toBeGreaterThan(100);
+
+  await editor.evaluate((element) => {
+    element.removeAttribute('draw');
+    element.selection = new Set([element.notes[0].id]);
+    element.renderSelection();
+    element.focus();
+  });
+  const selected = await editor.evaluate((element) => element.notes.find((note) => element.selectedIds.includes(note.id)));
+  await page.keyboard.press('Shift+ArrowUp');
+  expect(await editor.evaluate((element, id) => element.notes.find((note) => note.id === id).note, selected.id))
+    .toBe(selected.note + 12);
+  await page.keyboard.press('Shift+ArrowRight');
+  expect(await editor.evaluate((element, id) => element.notes.find((note) => note.id === id).start, selected.id))
+    .toBeCloseTo(selected.start + geometry.step / 16, 8);
+  const duration = await editor.evaluate((element, id) => element.notes.find((note) => note.id === id).duration, selected.id);
+  await page.keyboard.press('Alt+ArrowRight');
+  expect(await editor.evaluate((element, id) => element.notes.find((note) => note.id === id).duration, selected.id))
+    .toBeCloseTo(duration + geometry.step, 8);
+  await page.keyboard.press('Escape');
+  expect(await editor.evaluate((element) => element.selectedIds)).toEqual([]);
+});
+
+test('note editor loop visibility and keybed panning follow host state', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await expect(editor.locator('.region')).toBeVisible();
+  await editor.evaluate((element) => element.removeAttribute('loop'));
+  await expect(editor.locator('.region')).toBeHidden();
+  await expect(editor.locator('.timeline-line.loop').first()).toBeHidden();
+
+  const before = await editor.evaluate((element) => {
+    element.previewEvents = [];
+    element.addEventListener('note-preview', ({ detail }) => element.previewEvents.push(['start', detail.note]));
+    element.addEventListener('note-preview-end', ({ detail }) => element.previewEvents.push(['end', detail.note]));
+    return { root: element.rootNote, row: element.rowHeight, rows: element.noteCount };
+  });
+  const key = editor.locator('.key').nth(8);
+  const box = await key.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + before.row * 2, { steps: 4 });
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => element.rootNote)).toBe(before.root + 2);
+  expect(await editor.evaluate((element) => element.previewEvents.map(([type]) => type)))
+    .toEqual(['start', 'end']);
+
+  const zoomKey = editor.locator('.key').nth(8);
+  const zoomBox = await zoomKey.boundingBox();
+  await page.mouse.move(zoomBox.x + zoomBox.width / 2, zoomBox.y + zoomBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(zoomBox.x + zoomBox.width / 2 + 48, zoomBox.y + zoomBox.height / 2, { steps: 4 });
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => element.noteCount)).toBeLessThan(before.rows);
+
+  const hover = await editor.evaluate((element) => ({ y: element.noteToY(63), row: element.rowHeight }));
+  const hoverGrid = await editor.locator('.grid').boundingBox();
+  await page.mouse.move(hoverGrid.x + hoverGrid.width / 2, hoverGrid.y + hover.y + hover.row / 2);
+  await expect(editor.locator('.key[data-note="63"]')).toHaveAttribute('data-hover', '');
+  expect(await editor.locator('.key[data-note="63"]').evaluate((element) =>
+    getComputedStyle(element, '::before').content)).toContain('D#');
+});
+
+test('note editor keeps its visual hierarchy neutral and marks a supplied scale', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  expect(await editor.locator('.key[data-scale]').count()).toBeGreaterThan(0);
+  expect(await editor.locator('.key[data-root]').count()).toBeGreaterThan(0);
+  expect(await editor.locator('.rl.octave').count()).toBeGreaterThan(0);
+
+  const keyWidth = await editor.locator('.key').first().evaluate((element) => {
+    const host = element.getRootNode().host;
+    return element.getBoundingClientRect().width / parseFloat(getComputedStyle(host).fontSize);
+  });
+  expect(keyWidth).toBeCloseTo(3, 1);
+  const blackEdge = await editor.evaluate((element) => {
+    const keys = element.keys.getBoundingClientRect();
+    const black = element.keys.querySelector('.key.black').getBoundingClientRect();
+    return Math.abs(keys.right - black.right);
+  });
+  expect(blackEdge).toBeLessThan(0.1);
+
+  const noteId = await editor.locator('.note:not([data-out])').first().getAttribute('data-id');
+  const note = editor.locator(`.note[data-id="${noteId}"]`);
+  const inRange = await note.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, border: style.borderColor, opacity: style.opacity };
+  });
+  await editor.evaluate((element) => element.setRange(3, element.rangeEnd));
+  const outside = await note.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, border: style.borderColor, opacity: style.opacity };
+  });
+  expect(outside.background).not.toBe(inRange.background);
+  expect(outside.border).toBe(inRange.border);
+  expect(outside.opacity).toBe('1');
+});
+
+test('note editor horizontal zoom-out stops when the full range fits', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  const geometry = await editor.evaluate((element) => {
+    element.zoomPxPerBeat = 0.01;
+    element.refresh();
+    return {
+      grid: element.gridElement.getBoundingClientRect().width,
+      viewport: element.gridWrap.getBoundingClientRect().width,
+      pxPerBeat: element.pxPerBeat,
+    };
+  });
+  expect(Math.abs(geometry.grid - geometry.viewport)).toBeLessThan(1);
+  expect(geometry.pxPerBeat).toBeGreaterThan(0.01);
+});
+
+test('note editor emits quantize intent and leaves strength and swing to its host', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => {
+    element.setNotes([
+      { id: 'a', note: 60, start: 0.31, duration: 0.61, velocity: 100, channel: 0 },
+    ]);
+    element.selection = new Set(['a']);
+    element.quantizeEvents = [];
+    element.addEventListener('note-quantize', (event) => element.quantizeEvents.push(event.detail));
+    element.focus();
+  });
+  await page.keyboard.press('q');
+  expect(await editor.evaluate((element) => ({ notes: element.notes, events: element.quantizeEvents })))
+    .toEqual({
+      notes: [{ id: 'a', note: 60, start: 0.25, duration: 0.61, velocity: 100, channel: 0 }],
+      events: [{ ids: ['a'], step: 0.25, lengths: false }],
+    });
+  await editor.evaluate((element) => element.setNotes([
+    { id: 'a', note: 60, start: 0.31, duration: 0.61, velocity: 100, channel: 0 },
+  ]));
+  await page.keyboard.press('Shift+q');
+  expect(await editor.evaluate((element) => ({ note: element.notes[0], event: element.quantizeEvents.at(-1) })))
+    .toEqual({
+      note: { id: 'a', note: 60, start: 0.25, duration: 0.5, velocity: 100, channel: 0 },
+      event: { ids: ['a'], step: 0.25, lengths: true },
+    });
+  const count = await editor.evaluate((element) => element.quantizeEvents.length);
+  await editor.evaluate((element) => element.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'q', metaKey: true, bubbles: true, composed: true,
+  })));
+  expect(await editor.evaluate((element) => element.quantizeEvents.length)).toBe(count);
+});
+
+test('note editor previews edits without taking ownership of caller notes', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  const isolated = await page.evaluate(() => {
+    const source = document.querySelector('compost-note-editor');
+    const element = document.createElement('compost-note-editor');
+    for (const name of ['beats', 'grid', 'root-note', 'note-count']) {
+      if (source.hasAttribute(name)) element.setAttribute(name, source.getAttribute(name));
+    }
+    element.style.cssText = 'display:block;width:720px;height:360px';
+    element.noteIdFactory = () => 'new';
+    element.notes = [{ id: 'owned', note: 60, start: 1, duration: 1, velocity: 100, channel: 0 }];
+    element.changes = [];
+    element.addEventListener('notes-change', (event) => element.changes.push(event.detail.notes));
+    document.body.append(element);
+    element.refresh();
+    return { px: element.pxPerBeat };
+  });
+  const standalone = page.locator('body > compost-note-editor').last();
+  await standalone.scrollIntoViewIfNeeded();
+  const note = await standalone.locator('.note[data-id="owned"]').boundingBox();
+  await page.mouse.move(note.x + note.width / 2, note.y + note.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(note.x + note.width / 2 + isolated.px, note.y + note.height / 2, { steps: 4 });
+  expect(await standalone.evaluate((element) => element.notes[0].start)).toBe(1);
+  expect(await standalone.locator('.note[data-id="owned"]').evaluate((element) => parseFloat(element.style.left)))
+    .toBeCloseTo(isolated.px * 2, 1);
+  await page.mouse.up();
+  expect(await standalone.evaluate((element) => ({ start: element.notes[0].start,
+    emitted: element.changes[0][0].start }))).toEqual({ start: 1, emitted: 2 });
+  expect(await standalone.locator('.note[data-id="owned"]').evaluate((element) => parseFloat(element.style.left)))
+    .toBeCloseTo(isolated.px, 1);
 });
 
 test('window stays in the viewport, resizes in bounds, and asks before closing', async ({ page }) => {
