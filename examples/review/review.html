@@ -213,9 +213,10 @@
       <label><input type="checkbox" data-timeline-loop checked> Loop</label>
       <label><input type="checkbox" data-timeline-draw> Draw</label>
       <label><input type="checkbox" data-timeline-automation> Automation view</label>
+      <label><input type="checkbox" data-timeline-launch-quant checked> Launch quantization</label>
       <button type="button" data-timeline-play>Play</button>
     </div>
-    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. Automation supports point, range and Option-drag curve edits; this faux host applies them all.</small>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Click a locator to jump; while playing, Launch quantization waits for the next bar. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. In automation view the curve owns the full row and clips are display-only context; this faux host applies point, range and Option-drag curve edits.</small>
   </div>
 </template>
 
@@ -631,6 +632,7 @@
       const adaptive = s.querySelector('[data-timeline-adaptive]');
       const loop = s.querySelector('[data-timeline-loop]');
       const draw = s.querySelector('[data-timeline-draw]');
+      const launchQuant = s.querySelector('[data-timeline-launch-quant]');
       let playing = false;
       let lanes = [
         { id: 'drums', name: 'Drums', color: 'var(--compost-accent, AccentColor)', automation:
@@ -664,6 +666,7 @@
       play.addEventListener('click', () => {
         playing = !playing;
         play.textContent = playing ? 'Stop' : 'Play';
+        if (playing) transportBeat = timeline.playhead;
       });
       for (const lane of lanes) {
         const header = document.createElement('div');
@@ -692,12 +695,36 @@
         { id: 'verse', beat: 8, name: 'Verse' },
       ];
       let created = 0;
+      let transportBeat = 1;
+      let queuedLocator = null;
       const renderLocators = () => timeline.setLocators(locators);
       renderLocators();
       timeline.setLoop(0, 8, true);
       timeline.setPlayhead(1);
       const allClips = () => lanes.flatMap((lane) => lane.clips);
       const laneOf = (clip) => lanes.find((lane) => lane.clips.includes(clip));
+      const setPosition = (beat) => {
+        transportBeat = beat;
+        timeline.setPlayhead(beat);
+      };
+      const jumpToLocator = (id) => {
+        const locator = locators.find((entry) => entry.id === id);
+        if (!locator) return;
+        if (!playing || !launchQuant.checked) {
+          queuedLocator = null;
+          setPosition(locator.beat);
+          return;
+        }
+        const bar = timeline.beatsPerBar || 4;
+        queuedLocator = { beat: locator.beat, at: (Math.floor(transportBeat / bar) + 1) * bar };
+      };
+      launchQuant.addEventListener('change', () => {
+        if (!launchQuant.checked && queuedLocator) {
+          const { beat } = queuedLocator;
+          queuedLocator = null;
+          setPosition(beat);
+        }
+      });
       let clipboard = [];
       const copySelection = () => {
         const selection = timeline.timeSelection;
@@ -742,7 +769,7 @@
         'loop-change': ({ start, end, enabled }) => { loop.checked = enabled; timeline.setLoop(start, end, enabled); },
         'loop-toggle': ({ enabled }) => { loop.checked = enabled; timeline.setLoop(timeline.loopStart, timeline.loopEnd, enabled); },
         'draw-toggle': ({ enabled }) => { draw.checked = enabled; timeline.toggleAttribute('draw', enabled); },
-        seek: ({ beat }) => timeline.setPlayhead(beat),
+        seek: ({ beat }) => { queuedLocator = null; setPosition(beat); },
         'fit-request': () => timeline.zoomToFit?.(16),
         'automation-change': ({ laneId, automationId, points }) => {
           const lane = lanes.find((entry) => entry.id === laneId);
@@ -751,6 +778,7 @@
           render();
         },
         'locator-create': ({ beat }) => { created += 1; locators.push({ id: `marker-${created}`, beat, name: `Marker ${created}` }); renderLocators(); },
+        'locator-jump': ({ id }) => jumpToLocator(id),
         'locator-move': ({ id, beat }) => { const locator = locators.find((entry) => entry.id === id); if (locator) { locator.beat = beat; renderLocators(); } },
         'locator-rename': ({ id, name }) => { const locator = locators.find((entry) => entry.id === id); if (locator) { locator.name = name; renderLocators(); } },
         'locator-delete': ({ id }) => { locators = locators.filter((entry) => entry.id !== id); renderLocators(); },
@@ -875,8 +903,18 @@
         const delta = Math.min(.05, (now - last) / 1000) * 2;
         last = now;
         if (playing) {
+          transportBeat += delta;
+          if (queuedLocator && transportBeat >= queuedLocator.at) {
+            const { beat } = queuedLocator;
+            queuedLocator = null;
+            setPosition(beat);
+            requestAnimationFrame(advance);
+            return;
+          }
           const length = timeline.loopEnd - timeline.loopStart;
-          const beat = timeline.loopStart + ((timeline.playhead + delta - timeline.loopStart) % length + length) % length;
+          const beat = loop.checked
+            ? timeline.loopStart + ((transportBeat - timeline.loopStart) % length + length) % length
+            : transportBeat;
           timeline.setPlayhead(beat);
         }
         requestAnimationFrame(advance);

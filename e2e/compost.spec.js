@@ -1283,6 +1283,7 @@ test('timeline rulers expose locators, time selections and measured row geometry
       automationView: root.querySelector('.lane[data-lane-id="a"] .lane-automation').getBoundingClientRect().height,
       thinHeader: thinHeader.height,
       thinBody: thinBody.height,
+      locatorHeight: root.querySelector('.ruler-locator').getBoundingClientRect().height,
       locators: [...root.querySelectorAll('.ruler-locator')].map((node) => ({ id: node.dataset.locatorId, left: node.getBoundingClientRect().left })),
       rulerScrollbar: getComputedStyle(root.querySelector('.ruler-wrap')).scrollbarWidth,
       lanesScrollbar: getComputedStyle(root.querySelector('.lanes-wrap')).scrollbarWidth,
@@ -1293,17 +1294,19 @@ test('timeline rulers expose locators, time selections and measured row geometry
   expect(Math.abs(geometry.header - 44)).toBeLessThan(1);
   expect(Math.abs(geometry.body - 44)).toBeLessThan(1);
   expect(Math.abs(geometry.base - 44)).toBeLessThan(1);
-  expect(geometry.automationView).toBeGreaterThan(0);
-  expect(geometry.automationView).toBeLessThan(geometry.base);
+  expect(Math.abs(geometry.automationView - geometry.base)).toBeLessThan(1);
   expect(Math.abs(geometry.thinHeader - 27.5)).toBeLessThan(1);
   expect(Math.abs(geometry.thinBody - 27.5)).toBeLessThan(1);
+  expect(geometry.locatorHeight).toBeGreaterThanOrEqual(10.5);
   expect(geometry.locators.map(({ id }) => id)).toEqual(['intro', 'drop']);
   expect(geometry.rulerScrollbar).toBe('none');
   expect(geometry.lanesScrollbar).toBe('none');
   await timeline.evaluate((element) => element.removeAttribute('automation'));
   await expect(timeline.locator('.ruler-locator[data-locator-id="intro"]')).toHaveAttribute('tabindex', '0');
 
-  await timeline.locator('.ruler-locator[data-locator-id="drop"]').click();
+  const dropLocator = timeline.locator('.ruler-locator[data-locator-id="drop"]');
+  const dropBox = await dropLocator.boundingBox();
+  await page.mouse.click(dropBox.x + 2, dropBox.y + dropBox.height - 1);
   await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'locator-jump'))).toEqual({ type: 'locator-jump', detail: { id: 'drop' } });
   await timeline.locator('.ruler-locator[data-locator-id="intro"]').focus();
   await page.keyboard.press('Space');
@@ -1795,8 +1798,7 @@ test('timeline aligns regular and compact lanes with automation view', async ({ 
   expect(Math.abs(measured.regularBase - 44)).toBeLessThan(1);
   expect(Math.abs(measured.compactHeader - 27.5)).toBeLessThan(1);
   expect(Math.abs(measured.compactBase - 27.5)).toBeLessThan(1);
-  expect(measured.automationView).toBeGreaterThan(0);
-  expect(measured.automationView).toBeLessThan(measured.regularBase);
+  expect(Math.abs(measured.automationView - measured.regularBase)).toBeLessThan(1);
   expect(measured.pickedOutline).toBe('solid');
 });
 
@@ -1936,7 +1938,7 @@ test('timeline automation view draw and commit sorted edits without clip selecti
   expect(update).toEqual({ sameLane: true, sameClip: true, label: 'Pan', automationId: 'pan' });
 });
 
-test('timeline automation view keeps a clip reachable through its name strip', async ({ page }) => {
+test('timeline automation view makes background clips entirely inert', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
@@ -1959,23 +1961,22 @@ test('timeline automation view keeps a clip reachable through its name strip', a
       automation: { top: automation.top, height: automation.height },
     };
   });
-  expect(boxes.automation.top).toBeGreaterThanOrEqual(boxes.strip.bottom - 1);
+  expect(boxes.automation.top).toBeLessThanOrEqual(boxes.clip.y);
   const stripPoint = [boxes.clip.x + boxes.clip.width / 2, boxes.clip.y + boxes.strip.height / 2];
   const bodyPoint = [boxes.clip.x + boxes.clip.width / 2, boxes.clip.y + boxes.clip.height * .75];
   await page.mouse.click(stripPoint[0], stripPoint[1]);
-  await expect(timeline.locator('.clip[data-selected]')).toHaveCount(1);
   await page.mouse.dblclick(stripPoint[0], stripPoint[1]);
   await page.mouse.click(stripPoint[0], stripPoint[1], { button: 'right' });
   const beforeBody = await timeline.evaluate((element) => element.testEvents.map((event) => event.type));
-  expect(beforeBody).toContain('clip-select');
-  expect(beforeBody).toContain('clip-open');
-  expect(beforeBody).toContain('clip-context');
+  expect(beforeBody).not.toContain('clip-select');
+  expect(beforeBody).not.toContain('clip-open');
+  expect(beforeBody).not.toContain('clip-context');
   await timeline.evaluate((element) => { element.testEvents = []; });
   await page.mouse.click(bodyPoint[0], bodyPoint[1]);
   const afterBody = await timeline.evaluate((element) => element.testEvents.map((event) => event.type));
   expect(afterBody).not.toContain('clip-select');
   expect(afterBody).not.toContain('clip-open');
-  await expect(timeline.locator('.clip[data-selected]')).toHaveCount(1);
+  await expect(timeline.locator('.clip[data-selected]')).toHaveCount(0);
 
   const point = timeline.locator('.automation-editor .point').nth(1);
   const pointBox = await point.boundingBox();
@@ -2026,8 +2027,7 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
     event(editor.surface, 'pointerup', startY + 8);
     return { rowHeight: rowRect.height, expected, readout };
   });
-  expect(gainMove.rowHeight).toBeGreaterThan(0);
-  expect(gainMove.rowHeight).toBeLessThan(44);
+  expect(Math.abs(gainMove.rowHeight - 44)).toBeLessThan(1);
   expect(gainMove.readout).toMatch(/^-?\d/);
   const gainChange = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').at(-1));
   expect(gainChange.detail.points[0].value).toBeCloseTo(gainMove.expected, 8);

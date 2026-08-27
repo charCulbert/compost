@@ -401,7 +401,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-world { height: 100%; z-index: 1; }
         .ruler-label { position: absolute; top: 1.05em; border-left: 1px solid var(--compost-timeline-line); padding-left: .2em; color: var(--compost-timeline-muted); font-size: .72em; line-height: 1; white-space: nowrap; }
         .ruler-label[data-bar] { border-left-color: var(--compost-timeline-bar-line); }
-        .ruler-locator { position: absolute; top: .1em; height: .95em; z-index: 3; border-left: 1px solid currentColor; padding-left: .25em; color: currentColor; font-size: .8em; line-height: 1; white-space: nowrap; cursor: pointer; }
+        .ruler-locator { position: absolute; top: 0; box-sizing: border-box; height: 1.25em; z-index: 3; border-left: 1px solid currentColor; padding-left: .25em; color: currentColor; font-size: .8em; line-height: 1; white-space: nowrap; cursor: pointer; }
         .ruler-locator:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         .ruler-locator::before { content: ""; position: absolute; left: -.25em; top: 0; border: .22em solid transparent; border-top: .31em solid currentColor; }
         .ruler-locator-name { display: inline-block; min-width: 1px; }
@@ -445,7 +445,7 @@ export class CompostTimeline extends HTMLElement {
         .lane[data-dimmed] .clip { opacity: .4; }
         .lane-base { --clip-title-height: 1.35em; position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .lane[data-automation-view] .clip { opacity: .3; pointer-events: none; }
-        .lane-automation { position: absolute; inset: calc(.25em + var(--clip-title-height)) 0 .25em; z-index: 4; color: var(--lane-color, currentColor); pointer-events: auto; }
+        .lane-automation { position: absolute; inset: 0; z-index: 4; color: var(--lane-color, currentColor); pointer-events: auto; }
         .automation-editor { position: absolute; inset: 0; display: block; width: 100%; height: 100%; min-height: 0; border: 0; overflow: visible; background: transparent; }
         .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); color: var(--compost-timeline-muted); font-size: .78em; line-height: 1; pointer-events: none; }
         .lane-automation[data-draw]:hover .automation-draw-hint { display: block; }
@@ -523,6 +523,7 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('clip-open', { id: found.clip.id, altKey: event.altKey, clientX: event.clientX, clientY: event.clientY }));
     }, true);
     this.addEventListener('contextmenu', (event) => {
+      if (pathElement(event, 'lane-automation')) return;
       const found = this.hasAttribute('disabled') ? null : this.clipAtPoint(event);
       if (!found) return;
       event.__compostTimelineHandled = true;
@@ -1791,7 +1792,7 @@ export class CompostTimeline extends HTMLElement {
   }
 
   clipStripFromEvent(event) {
-    if (this.draw) return null;
+    if (this.draw || pathElement(event, 'lane-automation')) return null;
     return this.clipAtPoint(event, true);
   }
 
@@ -1850,7 +1851,7 @@ export class CompostTimeline extends HTMLElement {
   }
 
   updatePointerCursor(event) {
-    if (event.pointerType === 'touch') return;
+    if (event.pointerType === 'touch' || pathElement(event, 'lane-automation')) return;
     const found = this.clipAtPoint(event);
     if (!found) return;
     const rect = found.element.getBoundingClientRect();

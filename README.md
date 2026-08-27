@@ -77,9 +77,10 @@ and whether lengths were requested; the host applies its own strength and swing.
 shifts the lane's points when it applies `clip-move`.
 With the timeline's `automation` attribute present, each lane shows its one
 automation curve over dimmed clips when the host has chosen a parameter; lanes
-without one remain ordinary clip lanes. A clip's name strip selects, moves,
-opens and renames it, while its body selects time or belongs to the curve.
-Right-click still asks for the clip menu anywhere in its box. The host chooses that curve through
+without one remain ordinary clip lanes. In an automated lane the curve owns
+the whole row and dimmed clips are display-only context. Otherwise a clip's
+name strip selects, moves, opens and renames it while its body selects time;
+right-click asks for its menu anywhere in its box. The host chooses that curve through
 `lane.automation` or `setLaneAutomation()`, usually from a menu in the lane
 header it slots in.
 `time-duplicate` asks the host to copy the exact selected span, including partial
