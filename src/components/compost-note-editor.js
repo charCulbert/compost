@@ -1315,7 +1315,7 @@ export class CompostNoteEditor extends HTMLElement {
         this._preview = velocityShiftedNotes(this._preview, drag.ids, (drag.y - event.clientY) * factor);
       }
       const current = this._preview.find((entry) => entry.id === drag.note.id);
-      if (current) this.showTip(`${lengthText(current.duration, this.beatLength)}${drag.created ? ` · vel ${current.velocity}` : ''}`, event);
+      if (current && drag.created) this.showTip(`vel ${current.velocity}`, event);
     } else if (drag.mode === 'lenL') {
       const origin = this._notes.find((/** @type {RollNote} */ entry) => entry.id === drag.note.id);
       if (!origin) return;
@@ -1324,8 +1324,6 @@ export class CompostNoteEditor extends HTMLElement {
         this.step, free ? 'off' : 'grid');
       this._preview = trimmedNotes(this._notes, drag.ids, start - origin.start,
         this.beats, this.step, 'off');
-      const current = this._preview.find((entry) => entry.id === drag.note.id);
-      if (current) this.showTip(lengthText(current.duration, this.beatLength), event);
     } else {
       if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= DRAG_SLOP) return;
       drag.moved = true;

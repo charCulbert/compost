@@ -2543,6 +2543,7 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
   await page.mouse.down();
   expect(await editor.evaluate((element) => element.drag?.mode)).toBe('len');
   await page.mouse.move(box.x + box.width - 2 + pxPerBeat, box.y + box.height / 2, { steps: 6 });
+  await expect(editor.locator('.tip')).toBeHidden();
   await page.mouse.up();
   expect((await firstNote()).duration).toBe(1.5);
 
