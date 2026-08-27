@@ -2069,7 +2069,8 @@ export class CompostTimeline extends HTMLElement {
     }
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
-    if (!drag.moved && Math.hypot(dx, dy) > DRAG_SLOP) drag.moved = true;
+    const slop = event.pointerType === 'touch' ? DRAG_SLOP * 2 : DRAG_SLOP;
+    if (!drag.moved && Math.hypot(dx, dy) > slop) drag.moved = true;
     if (drag.type === 'locator') {
       if (!drag.moved || this.readonly) return;
       const rawBeat = drag.startBeat

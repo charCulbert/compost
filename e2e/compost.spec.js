@@ -1457,6 +1457,19 @@ test('timeline keeps lane headers aligned and touch drags scroll time', async ({
     return element.testEvents.find((event) => event.type === 'seek');
   });
   expect(touchTap.detail.source).toBe('lane');
+
+  const shakyTouchTap = await timeline.evaluate((element) => {
+    element.testEvents = [];
+    const lane = element.shadowRoot.querySelector('.lane[data-lane-id="lane-11"]');
+    const send = (type, clientX) => lane.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerId: 20, pointerType: 'touch', button: 0, clientX, clientY: 180,
+    }));
+    send('pointerdown', 320);
+    send('pointermove', 324);
+    send('pointerup', 324);
+    return element.testEvents.find((event) => event.type === 'seek');
+  });
+  expect(shakyTouchTap.detail.source).toBe('lane');
 });
 
 test('timeline defaults to bounded neutral clips with ordinary selection', async ({ page }) => {
