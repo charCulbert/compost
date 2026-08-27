@@ -1779,6 +1779,23 @@ test('timeline automation view draw and commit sorted edits without clip selecti
   expect(events.find((event) => event.type === 'automation-context')).toMatchObject({
     type: 'automation-context', detail: { laneId: 'lane', automationId: 'volume', pointIndex: 1 },
   });
+
+  const update = await timeline.evaluate((element) => {
+    const lane = element.shadowRoot.querySelector('.lane[data-lane-id="lane"]');
+    const clip = lane.querySelector('.clip');
+    element.setLaneAutomation('lane', {
+      id: 'pan', label: 'Pan', min: -1, max: 1, stepped: false,
+      points: [{ beat: 0, value: 0 }],
+    });
+    const updatedLane = element.shadowRoot.querySelector('.lane[data-lane-id="lane"]');
+    return {
+      sameLane: lane === updatedLane,
+      sameClip: clip === updatedLane.querySelector('.clip'),
+      label: element.shadowRoot.querySelector('.lane-automation-label').textContent,
+      automationId: updatedLane.querySelector('.lane-automation').dataset.automationId,
+    };
+  });
+  expect(update).toEqual({ sameLane: true, sameClip: true, label: 'Pan', automationId: 'pan' });
 });
 
 test('timeline automation edits use display space, lane-scoped ranges and draw arbitration', async ({ page }) => {

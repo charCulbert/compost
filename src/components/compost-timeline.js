@@ -744,7 +744,45 @@ export class CompostTimeline extends HTMLElement {
     const lane = this._lanes.find((entry) => entry.id === laneId);
     if (!lane) return;
     lane.automation = cloneAutomation(automation);
-    this.render();
+    const previousWidth = Number.parseFloat(this.lanesWorld.style.width);
+    const previousEnd = Number.isFinite(previousWidth) && this._pxPerBeat > 0 ? previousWidth / this._pxPerBeat : null;
+    const end = this.worldEnd();
+    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
+    const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(laneId)}"]`);
+    const shown = this.automationFor(lane);
+    if (header instanceof HTMLElement) {
+      header.querySelector('.lane-automation-label')?.remove();
+      if (shown) {
+        const label = this.renderAutomationLabel(lane);
+        const fallback = header.querySelector('.lane-header-fallback');
+        if (fallback) fallback.append(label);
+        else header.insertBefore(label, header.querySelector('.lane-resize'));
+      }
+    }
+    if (row instanceof HTMLElement) {
+      const base = row.querySelector('.lane-base');
+      if (base instanceof HTMLElement) {
+        base.querySelector('.lane-automation')?.remove();
+        delete base.dataset.state;
+        if (shown) {
+          base.dataset.state = shown.state || 'idle';
+          base.append(this.renderLaneAutomation(lane, shown, end));
+        }
+      }
+    }
+    const grid = this.lanesWorld.querySelector('.grid-world');
+    if (previousEnd === null || Math.abs(previousEnd - end) > MIN_CLIP_LENGTH) {
+      this.rulerWorld.style.width = `${end * this._pxPerBeat}px`;
+      this.lanesWorld.style.width = `${end * this._pxPerBeat}px`;
+      this.rulerWorld.replaceChildren(this.rulerGrid(end));
+      this.renderRulerLabels(end);
+      if (grid instanceof HTMLElement) {
+        grid.style.width = `${end * this._pxPerBeat}px`;
+        grid.replaceChildren(this.rulerGrid(end, true));
+      }
+    }
+    this.paintSelection();
+    this.paintTimeSelection();
   }
 
   get playhead() { return this._playhead; }
@@ -1356,6 +1394,12 @@ export class CompostTimeline extends HTMLElement {
     const automation = this.automationFor(lane);
     if (!automation) return base;
     base.dataset.state = automation.state || 'idle';
+    base.append(this.renderLaneAutomation(lane, automation, end));
+    return base;
+  }
+
+  /** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {number} end */
+  renderLaneAutomation(lane, automation, end) {
     const surface = document.createElement('div');
     surface.className = 'lane-automation';
     surface.dataset.laneId = lane.id;
@@ -1426,8 +1470,7 @@ export class CompostTimeline extends HTMLElement {
     hint.className = 'automation-draw-hint';
     hint.textContent = '✎ draw';
     surface.append(hint);
-    base.append(surface);
-    return base;
+    return surface;
   }
 
   /** @param {TimelineLane} lane @param {number} end */
