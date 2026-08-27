@@ -9,7 +9,7 @@ globalThis.customElements ??= {
 };
 
 const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
-const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
+const { gridText, lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
 const {
   snapBeat, sortLocators, normalizeTimeSelection, clipBox, loopPassLines, clipNoteOpacity, previewTrimmedClip, rulerStep,
   automationValueToY, automationValueFromY,
@@ -32,6 +32,9 @@ test('a pointer lands in the slot whose box contains it', () => {
 });
 
 test('note lengths and ruler labels read musically', () => {
+  assert.equal(gridText(1), '1 bar');
+  assert.equal(gridText(12), '1/8T');
+  assert.equal(gridText(18, 3), '1/16T');
   assert.equal(lengthText(1), '1 beat');
   assert.equal(lengthText(1.5), '1.2 beat');
   assert.equal(lengthText(2.5), '2.2 beats');
@@ -39,6 +42,12 @@ test('note lengths and ruler labels read musically', () => {
   assert.deepEqual(rulerLabels(8, 4, 20).map((label) => label.text), ['1', '2']);
   assert.deepEqual(rulerLabels(8, 4, 60).map((label) => label.text),
     ['1', '1.2', '1.3', '1.4', '2', '2.2', '2.3', '2.4']);
+  assert.deepEqual(rulerLabels(2, 4, 160, 0.25).map((label) => label.text),
+    ['1.1.1', '1.1.2', '1.1.3', '1.1.4', '1.2.1', '1.2.2', '1.2.3', '1.2.4']);
+  assert.deepEqual(rulerLabels(1, 4, 150, 1 / 3).map((label) => label.text),
+    ['1.1.1', '1.1.2', '1.1.3']);
+  assert.deepEqual(rulerLabels(1, 4, 320, 0.125).map((label) => label.text),
+    ['1.1.1', '1.1.2', '1.1.3', '1.1.4']);
 });
 
 test('timeline geometry snaps, scales and marks looping passes', () => {
