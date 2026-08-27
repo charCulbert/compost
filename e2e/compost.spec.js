@@ -662,6 +662,29 @@ test('clip grid reports launches, stops and drops between grids', async ({ page 
   await expect(log).toContainText('clip-open break.a');
 });
 
+test('clip grid slow mouse click renames without hijacking open or touch', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-clip-grid/');
+  const grid = page.locator('compost-clip-grid[data-grid="0"]');
+  const name = grid.getByRole('button', { name: /^break\.a/ });
+  const editor = grid.locator('.editor');
+
+  await name.click();
+  await name.click();
+  await expect(editor).toBeVisible();
+  await editor.press('Escape');
+
+  await name.dblclick();
+  await page.waitForTimeout(400);
+  await expect(editor).toHaveCount(0);
+  await expect(page.locator('[data-log]')).toContainText('clip-open break.a');
+
+  await name.evaluate((element) => element.dispatchEvent(new PointerEvent('click', {
+    bubbles: true, composed: true, pointerType: 'touch', pointerId: 1,
+  })));
+  await page.waitForTimeout(400);
+  await expect(editor).toHaveCount(0);
+});
+
 test('clip grid paints a noninteractive timeline provenance row below stop', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-clip-grid/');
   const timelineGrid = page.locator('compost-clip-grid[data-grid="0"]');

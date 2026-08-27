@@ -87,6 +87,8 @@ export class CompostClipGrid extends HTMLElement {
     this.drag = null;
     this.longPress = createLongPress();
     /** @type {number|null} */ this.renaming = null;
+    this.renameTimer = null;
+    this.clickPointerType = '';
     /** @type {{index: number, copy: boolean}|null} */ this.dropMark = null;
     this.handleWindowMove = this.handleWindowMove.bind(this);
     this.handleWindowUp = this.handleWindowUp.bind(this);
@@ -280,6 +282,7 @@ export class CompostClipGrid extends HTMLElement {
 
   disconnectedCallback() {
     this.resizeObserver?.disconnect();
+    clearTimeout(this.renameTimer);
     this.endDrag(true);
   }
 
@@ -393,6 +396,8 @@ export class CompostClipGrid extends HTMLElement {
   /** @param {number} index */
   beginRename(index) {
     if (!this._clips[index] || this.disabled) return;
+    clearTimeout(this.renameTimer);
+    this.renameTimer = null;
     this.renaming = index;
     this.render();
   }
@@ -657,10 +662,23 @@ export class CompostClipGrid extends HTMLElement {
     if (this.disabled) return;
     const hit = this.actionFrom(event);
     if (!hit) return;
+    const pointerType = event.pointerType || this.clickPointerType;
+    this.clickPointerType = '';
     if (hit.action === 'launch') this.emit('clip-launch', { index: hit.index });
     else if (hit.action === 'record') this.emit('clip-record', { index: hit.index });
     else if (hit.action === 'stop') this.emit('clip-stop', {});
-    else if (hit.action === 'clip') this.emit('clip-select', { index: hit.index });
+    else if (hit.action === 'clip') {
+      if (this.selected !== hit.index) {
+        this.emit('clip-select', { index: hit.index });
+        return;
+      }
+      clearTimeout(this.renameTimer);
+      if (pointerType && pointerType !== 'mouse') {
+        this.renameTimer = null;
+        return;
+      }
+      this.renameTimer = setTimeout(() => this.beginRename(hit.index), 350);
+    }
   }
 
   /** @param {MouseEvent} event */
@@ -668,6 +686,8 @@ export class CompostClipGrid extends HTMLElement {
     if (this.disabled) return;
     const hit = this.actionFrom(event);
     if (hit?.action === 'clip') {
+      clearTimeout(this.renameTimer);
+      this.renameTimer = null;
       event.stopPropagation();
       this.emit('clip-open', { index: hit.index, altKey: event.altKey,
         clientX: event.clientX, clientY: event.clientY });
@@ -727,6 +747,7 @@ export class CompostClipGrid extends HTMLElement {
     if (this.disabled || event.button !== 0) return;
     const hit = this.actionFrom(event);
     if (hit?.action !== 'clip') return;
+    this.clickPointerType = event.pointerType;
     const row = this.rowElements()[hit.index];
     if (!row) return;
     this.drag = {
