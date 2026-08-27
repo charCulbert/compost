@@ -19,6 +19,7 @@ export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
 import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP, TAP_MOVE_DISTANCE } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
+import { timeSignatureOf } from '../time-grid.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextEditorID = 1;
@@ -61,7 +62,7 @@ export function gridText(division, beatsPerBar = 4) {
 export class CompostNoteEditor extends HTMLElement {
   static get observedAttributes() {
     return [
-      'label', 'beats', 'beats-per-bar', 'grid', 'snap', 'start', 'end', 'loop-start', 'loop-end',
+      'label', 'beats', 'beats-per-bar', 'time-signature', 'grid', 'snap', 'start', 'end', 'loop-start', 'loop-end',
       'root-note', 'note-count', 'beat-width', 'fold', 'draw', 'playhead', 'scale', 'root',
       'velocity', 'channel', 'grid-lines', 'loop', 'lock-loop-start', 'readonly', 'disabled',
     ];
@@ -72,6 +73,8 @@ export class CompostNoteEditor extends HTMLElement {
 
     this.label = 'Notes';
     this.beatsPerBar = 4;
+    this.beatLength = 1;
+    this.timeSignature = '4/4';
     this.grid = 16;
     this.gridLines = true;
     this.snapMode = 'grid';
@@ -451,7 +454,10 @@ export class CompostNoteEditor extends HTMLElement {
   syncAttributes() {
     this.label = this.getAttribute('label') ?? this.label;
     this.setAttribute('aria-label', this.label);
-    this.beatsPerBar = Math.max(1, Math.round(numberAttr(this, 'beats-per-bar', this.beatsPerBar)));
+    const meter = timeSignatureOf(this.getAttribute('time-signature'), numberAttr(this, 'beats-per-bar', 4));
+    this.timeSignature = meter.text;
+    this.beatsPerBar = meter.barLength;
+    this.beatLength = meter.beatLength;
     this.grid = Math.max(1, numberAttr(this, 'grid', this.grid));
     this.gridLines = this.getAttribute('grid-lines') !== 'off';
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';

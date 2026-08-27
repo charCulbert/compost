@@ -41,7 +41,9 @@ export function gridText(division: number, beatsPerBar?: number): string;
  */
 export class CompostNoteEditor extends HTMLElement {
   label: string;
+  timeSignature: string;
   beatsPerBar: number;
+  beatLength: number;
   grid: number;
   /** Whether time-grid lines are drawn; set `grid-lines="off"` to hide them. */
   gridLines: boolean;

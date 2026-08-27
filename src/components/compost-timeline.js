@@ -2,7 +2,7 @@ import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
-import { gridStepOf, snapModeWith, snapTime } from '../time-grid.js';
+import { gridStepOf, snapModeWith, snapTime, timeSignatureOf } from '../time-grid.js';
 import { extendSelectionRegion } from '../selection-region.js';
 import './compost-envelope-editor.js';
 import { parameterScaleBreakpoints } from '../parameter-scale.js';
@@ -312,7 +312,7 @@ function eventOf(type, detail) {
 
 export class CompostTimeline extends HTMLElement {
   static get observedAttributes() {
-    return ['label', 'beats-per-bar', 'grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'readonly', 'lane-height', 'automation', 'draw'];
+    return ['label', 'beats-per-bar', 'time-signature', 'grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'readonly', 'lane-height', 'automation', 'draw'];
   }
 
   constructor() {
@@ -320,6 +320,8 @@ export class CompostTimeline extends HTMLElement {
 
     this.label = 'Timeline';
     this.beatsPerBar = DEFAULT_BEATS_PER_BAR;
+    this.beatLength = 1;
+    this.timeSignature = '4/4';
     this.grid = 4;
     this.snapMode = 'grid';
     this.follow = false;
@@ -584,7 +586,10 @@ export class CompostTimeline extends HTMLElement {
 
   syncAttributes() {
     this.label = this.getAttribute('label') || this.label;
-    this.beatsPerBar = Math.max(1, Math.round(numberAttr(this, 'beats-per-bar', this.beatsPerBar)));
+    const meter = timeSignatureOf(this.getAttribute('time-signature'), numberAttr(this, 'beats-per-bar', DEFAULT_BEATS_PER_BAR));
+    this.timeSignature = meter.text;
+    this.beatsPerBar = meter.barLength;
+    this.beatLength = meter.beatLength;
     this.grid = Math.max(1, numberAttr(this, 'grid', this.grid));
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     this.follow = this.hasAttribute('follow');

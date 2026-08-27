@@ -9,6 +9,29 @@
 /** A numerical guard, not a tick or musical resolution. */
 export const MIN_TIME = 1e-9;
 
+const TIME_SIGNATURE_DENOMINATORS = new Set([1, 2, 4, 8, 16]);
+
+/**
+ * Parse a time signature while keeping model time in quarter-note beats.
+ * `beatsPerBar` is the legacy N/4 alias used when no valid signature is given.
+ * @param {string|null|undefined} value @param {number} [beatsPerBar]
+ */
+export function timeSignatureOf(value, beatsPerBar = 4) {
+  const match = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(value ?? '');
+  const numerator = Number(match?.[1]);
+  const denominator = Number(match?.[2]);
+  if (Number.isInteger(numerator) && numerator > 0 && TIME_SIGNATURE_DENOMINATORS.has(denominator)) {
+    const beatLength = 4 / denominator;
+    return {
+      numerator, denominator, beatLength,
+      barLength: numerator * beatLength,
+      text: `${numerator}/${denominator}`,
+    };
+  }
+  const legacy = Math.max(1, Math.round(Number(beatsPerBar) || 4));
+  return { numerator: legacy, denominator: 4, beatLength: 1, barLength: legacy, text: `${legacy}/4` };
+}
+
 /** A grid step in beats: a bar divided into `division` cells. */
 /** @param {number} beatsPerBar @param {number} division */
 export function gridStepOf(beatsPerBar, division) {

@@ -172,7 +172,9 @@ export function moveAutomationRange(points: {beat: number, value: number}[], sta
  */
 export class CompostTimeline extends HTMLElement {
   label: string;
+  timeSignature: string;
   beatsPerBar: number;
+  beatLength: number;
   grid: number;
   snapMode: 'grid' | 'off';
   follow: boolean;
