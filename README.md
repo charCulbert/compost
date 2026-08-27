@@ -106,6 +106,10 @@ test for every visual decision. The elements bring behaviour, not a palette:
   scales a control the way it scales a native one.
 - Labels sit above a horizontal control and below a knob or vertical fader.
 
+Piano keys are the physical exception: their key bed uses light `Canvas` and
+`CanvasText` so natural and accidental keys remain white and black on any page.
+Active notes still use `--compost-accent`.
+
 With no CSS you get black on white, system font, OS accent. To change the
 look, set `color`, `font`, `color-scheme` and `--compost-accent` on the page;
 use `::part()` for anything finer.

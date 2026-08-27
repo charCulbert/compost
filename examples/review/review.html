@@ -158,6 +158,18 @@
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click a name to select, then click its name again to rename; double-click opens. Enter launches. Drag to another slot; Option-drag copies.</small>
   </div>
 </template>
+<template id="compost-piano">
+  <div style="width: calc(100vw - 64px); display: grid; gap: .5em">
+    <span>Keyboard</span>
+    <compost-piano inline root-note="60" note-count="25" aria-label="Keyboard"></compost-piano>
+    <div style="display: flex; gap: 1em; flex-wrap: wrap">
+      <label>Root note <input type="number" data-piano-root min="0" max="127" value="60" style="width: 5em"></label>
+      <label>Keys <input type="number" data-piano-count min="1" max="128" value="25" style="width: 5em"></label>
+      <label><input type="checkbox" data-piano-dock> Dock to viewport</label>
+    </div>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click the piano, then play with A W S E D F T G Y H U J K O L P ; — or use pointer or touch.</small>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -406,6 +418,28 @@
         requestAnimationFrame(advance);
       };
       requestAnimationFrame(advance);
+    }
+    if (el === 'compost-piano') {
+      const piano = s.querySelector('compost-piano');
+      const root = s.querySelector('[data-piano-root]');
+      const count = s.querySelector('[data-piano-count]');
+      const dock = s.querySelector('[data-piano-dock]');
+      const setRange = () => {
+        if (root.value === '' || count.value === '') return;
+        const rootNote = Math.max(0, Math.min(127, Number(root.value) || 0));
+        const maxCount = 128 - rootNote;
+        root.value = String(rootNote);
+        count.max = String(maxCount);
+        count.value = String(Math.max(1, Math.min(maxCount, Number(count.value) || 1)));
+        piano.setAttribute('root-note', root.value);
+        piano.setAttribute('note-count', count.value);
+      };
+      root.addEventListener('input', setRange);
+      count.addEventListener('input', setRange);
+      dock.addEventListener('change', () => {
+        piano.toggleAttribute('dock', dock.checked);
+        piano.toggleAttribute('inline', !dock.checked);
+      });
     }
     if (el === 'compost-envelope-editor') {
       const editor = s.querySelector('compost-envelope-editor');

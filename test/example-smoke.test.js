@@ -213,7 +213,6 @@ test('the signal generator is a drawer-based plain AudioWorklet integration', ()
   assert.doesNotMatch(html, /Preset:/u);
   assert.doesNotMatch(`${html}\n${main}`, /data-latency-hint|latencyHintStorageKey|location\.reload\(\)|Base latency|Output latency/u);
   assert.doesNotMatch(sharedStyles, /theme-piano/u);
-  assert.match(sharedStyles, /--piano-neutral-natural-bg/u);
   assert.equal((html.match(/data-theme-value=/gu) ?? []).length, 3);
   assert.equal((html.match(/data-wave-shape="/gu) ?? []).length, 3);
   assert.doesNotMatch(html, /Triangle/u);

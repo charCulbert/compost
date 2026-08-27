@@ -20,14 +20,12 @@ export class PianoKeyboard extends HTMLElement {
     naturalNoteWidth = 20,
     accidentalWidth = 12,
     accidentalPercentageHeight = 66,
-    pressedNoteColour = '#8ad',
   } = {}) {
     super();
 
     this.naturalWidth = naturalNoteWidth;
     this.accidentalWidth = accidentalWidth;
     this.accidentalPercentageHeight = accidentalPercentageHeight;
-    this.pressedColour = pressedNoteColour;
     this.root = this.attachShadow({ mode: 'open' });
 
     this.draggedNote = -1;
@@ -340,14 +338,14 @@ export class PianoKeyboard extends HTMLElement {
         const left = x + 1;
         rightEdge = Math.max(rightEdge, left + this.naturalWidth);
         naturals += `
-          <div class="natural-note note" part="key natural-key" id="note${note}" data-note="${note}" style="left: ${left}px">
-            <p>${this.getNoteLabel(note)}</p>
+          <div class="natural-note note" part="key natural-key" id="note${note}" data-note="${note}" style="left: ${left / 16}em">
+            <p part="label">${this.getNoteLabel(note)}</p>
           </div>`;
       } else {
         const left = x + this.getAccidentalOffset(note);
         rightEdge = Math.max(rightEdge, left + this.accidentalWidth);
         accidentals += `
-        <div class="accidental-note note" part="key accidental-key" id="note${note}" data-note="${note}" style="left: ${left}px"></div>`;
+        <div class="accidental-note note" part="key accidental-key" id="note${note}" data-note="${note}" style="left: ${left / 16}em"></div>`;
       }
 
       if (isNaturalNote(note + 1) || i === config.noteCount - 1) {
@@ -360,8 +358,8 @@ export class PianoKeyboard extends HTMLElement {
     this.toggleAttribute('data-docked', docked);
     this.style.width = docked ? 'max-content' : '100%';
     this.style.maxWidth = docked
-      ? 'calc(100% - 32px)'
-      : `${this.keyboardWidth}px`;
+      ? 'calc(100% - 2em)'
+      : `${this.keyboardWidth / 16}em`;
 
     return `
       <div
@@ -371,7 +369,7 @@ export class PianoKeyboard extends HTMLElement {
         role="group"
         aria-label="Piano keyboard"
         aria-describedby="keyboard-help"
-        style="width: ${this.keyboardWidth}px"
+        style="width: ${this.keyboardWidth / 16}em"
       >
         <span id="keyboard-help" class="sr-only">Use the mapped computer keyboard keys to play notes.</span>
         ${naturals}
@@ -391,19 +389,10 @@ export class PianoKeyboard extends HTMLElement {
 
       :host {
         --compost-piano-dock-offset: 0px;
-        --compost-piano-height: 126px;
-        --compost-piano-background: transparent;
-        --compost-piano-border: transparent;
-        --piano-natural-background: #fff;
-        --piano-natural-border: #333;
-        --piano-accidental-background: #333;
-        --piano-accidental-border: #333;
-        --piano-active-background: ${this.pressedColour};
-        --piano-active-border: var(--piano-active-background);
-        --piano-active-label: var(--piano-label);
-        --piano-label: grey;
-        --compost-piano-color-scheme: light;
-        color-scheme: var(--compost-piano-color-scheme);
+        --compost-piano-height: 7.875em;
+        --compost-piano-muted: color-mix(in srgb, CanvasText 65%, transparent);
+        --compost-piano-line: color-mix(in srgb, CanvasText 30%, transparent);
+        --compost-piano-accent: var(--compost-accent, AccentColor);
         display: block;
         width: 100%;
         height: var(--compost-piano-height);
@@ -411,9 +400,8 @@ export class PianoKeyboard extends HTMLElement {
         overflow-y: hidden;
         position: relative;
         text-align: center;
-        background: var(--compost-piano-background);
+        background: transparent;
         border: 0;
-        border-radius: 0;
       }
 
       :host([data-docked]) {
@@ -424,13 +412,10 @@ export class PianoKeyboard extends HTMLElement {
         z-index: 10;
         width: max-content;
         transform: translateX(-50%);
-        border-left: 0;
-        border-right: 0;
-        border-bottom: 0;
-        border-radius: 0;
       }
 
       .note-holder {
+        color-scheme: light;
         position: relative;
         display: inline-block;
         text-align: initial;
@@ -440,28 +425,17 @@ export class PianoKeyboard extends HTMLElement {
 
       .note-holder:focus-visible,
       :host(:focus-visible) .note-holder {
-        outline: 2px solid var(--piano-active-background);
-        outline-offset: -4px;
-      }
-
-      .note-holder:focus,
-      :host(:focus) .note-holder {
-        outline: 1px solid color-mix(in srgb, var(--piano-active-background) 45%, transparent);
-        outline-offset: -4px;
-      }
-
-      .note-holder:focus-visible,
-      :host(:focus-visible) .note-holder {
-        outline: 2px solid var(--piano-active-background);
+        outline: 2px solid CanvasText;
+        outline-offset: -2px;
       }
 
       .natural-note {
         position: absolute;
         bottom: 0;
-        width: ${this.naturalWidth}px;
+        width: ${this.naturalWidth / 16}em;
         height: 100%;
-        border: 2px solid var(--piano-natural-border);
-        background: var(--piano-natural-background);
+        border: 1px solid var(--compost-piano-line);
+        background: Canvas;
         display: flex;
         align-items: end;
         justify-content: center;
@@ -470,26 +444,26 @@ export class PianoKeyboard extends HTMLElement {
       .accidental-note {
         position: absolute;
         top: 0;
-        width: ${this.accidentalWidth}px;
+        width: ${this.accidentalWidth / 16}em;
         height: ${this.accidentalPercentageHeight}%;
-        border: 2px solid var(--piano-accidental-border);
-        background: var(--piano-accidental-background);
+        border: 1px solid CanvasText;
+        background: CanvasText;
       }
 
       .active {
-        background: var(--piano-active-background);
-        border-color: var(--piano-active-border);
+        background: var(--compost-piano-accent);
+        border-color: var(--compost-piano-accent);
       }
 
       p {
         pointer-events: none;
-        color: var(--piano-label);
-        font-size: 0.7rem;
+        color: var(--compost-piano-muted);
+        font-size: 0.7em;
         text-align: center;
       }
 
       .active p {
-        color: var(--piano-active-label);
+        color: AccentColorText;
       }
 
       .sr-only {

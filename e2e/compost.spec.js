@@ -538,6 +538,11 @@ test('piano keyboard emits notes and its dock option changes layout state', asyn
   expect(constructorName).toBe('PianoKeyboard');
   await expect(defaultPiano).toHaveAttribute('role', 'group');
   await expect(defaultPiano).toHaveAttribute('data-docked', '');
+  const dockedCenterOffset = await defaultPiano.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return box.left + box.width / 2 - innerWidth / 2;
+  });
+  expect(Math.abs(dockedCenterOffset)).toBeLessThan(1);
 });
 
 test('piano exposes wide key beds without clipping keys', async ({ page }) => {

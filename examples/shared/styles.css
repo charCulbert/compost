@@ -3,12 +3,6 @@
    page chrome below; those are unset now, so the examples look wrong until
    they're rebuilt on plain color/color-scheme/--compost-accent per README. */
 :root {
-  --piano-neutral-natural-bg: #d8d8d6;
-  --piano-neutral-natural-border: #151515;
-  --piano-neutral-accidental-bg: #151515;
-  --piano-neutral-accidental-border: #151515;
-  --piano-neutral-label: #555555;
-  --piano-neutral-active: #6d98cc;
   --compost-ui-font: ui-sans-serif, system-ui, sans-serif;
   font-family: var(--compost-ui-font);
 }

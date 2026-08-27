@@ -13,10 +13,9 @@ export class PianoKeyboard extends HTMLElement {
     naturalNoteWidth?: number;
     accidentalWidth?: number;
     accidentalPercentageHeight?: number;
-    pressedNoteColour?: string;
   });
 
-  /** The rendered keyboard's width in pixels, set after each render. */
+  /** The rendered keyboard's width in 16px reference units, set after each render. */
   keyboardWidth: number;
 
   get config(): {noteCount: number, rootNote: number, keyMap: string};
