@@ -816,6 +816,59 @@ test('timeline is a region holding a list of lanes and names unnamed lanes by id
   await expect(timeline.getByRole('separator', { name: 'Resize bus-7' })).toHaveCount(1);
 });
 
+test('timeline regions extend on Shift-click, span every lane from the ruler and clear on Escape', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('snap', 'grid');
+    element.setLanes([
+      { id: 'a', name: 'A', clips: [{ id: 'one', name: 'one', start: 2, length: 2, duration: 2, loop: false }] },
+      { id: 'b', name: 'B', clips: [{ id: 'two', name: 'two', start: 5, length: 1, duration: 1, loop: false }] },
+    ]);
+    element.setTimeSelection(null, null);
+    element.selected = ['one'];
+    element.testEvents = [];
+    for (const type of ['time-select', 'clip-select']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+  });
+  const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
+  const laneB = timeline.locator('.lane[data-lane-id="b"] .lane-base');
+  const laneBox = await laneB.boundingBox();
+  const ruler = await timeline.locator('.ruler-wrap').boundingBox();
+
+  // Shift-click on lane B at beat 8 stretches from the selected clip's start to the click
+  await page.keyboard.down('Shift');
+  await page.mouse.click(ruler.x + 8 * pxPerBeat, laneBox.y + laneBox.height / 2);
+  await page.keyboard.up('Shift');
+  let selection = await timeline.evaluate((element) => element.timeSelection);
+  expect(selection).toEqual({ start: 2, end: 8, laneIds: ['a', 'b'] });
+  expect(await timeline.evaluate((element) => element.selected)).toEqual(['one', 'two']);
+  await expect(timeline.locator('.ruler-time-selection-readout')).toHaveText('6 beats');
+
+  // Cmd-click a clip adds it to (here: removes it from) the selection
+  await timeline.locator('.clip[data-id="two"]').click({ modifiers: ['Meta'] });
+  expect(await timeline.evaluate((element) => element.selected)).toEqual(['one']);
+
+  // a drag along the ruler's loop row makes a region on every lane
+  await page.mouse.move(ruler.x + 1 * pxPerBeat, ruler.y + ruler.height - 4);
+  await page.mouse.down();
+  await page.mouse.move(ruler.x + 5 * pxPerBeat, ruler.y + ruler.height - 4, { steps: 4 });
+  await page.mouse.up();
+  selection = await timeline.evaluate((element) => element.timeSelection);
+  expect(selection).toEqual({ start: 1, end: 5, laneIds: ['a', 'b'] });
+  await expect(timeline.locator('.ruler-time-selection-readout')).toHaveText('1 bar');
+
+  await timeline.focus();
+  await page.keyboard.press('Meta+a');
+  expect(await timeline.evaluate((element) => element.selected)).toEqual(['one', 'two']);
+  await page.keyboard.press('Escape');
+  expect(await timeline.evaluate((element) => ({ selection: element.timeSelection, selected: element.selected })))
+    .toEqual({ selection: null, selected: [] });
+  const events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.at(-1)).toEqual({ type: 'time-select', detail: { start: null } });
+});
+
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');

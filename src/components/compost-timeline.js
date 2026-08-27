@@ -3,6 +3,7 @@ import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
 import { gridStepOf, snapModeWith, snapTime } from '../time-grid.js';
+import { extendSelectionRegion } from '../selection-region.js';
 import './compost-envelope-editor.js';
 import { parameterScaleBreakpoints } from '../parameter-scale.js';
 import { normalizeSelectionRegion } from '../selection-region.js';
@@ -418,6 +419,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-locator-name { display: inline-block; min-width: 1px; }
         .ruler-locator-editor { box-sizing: border-box; width: 7em; border: 0; outline: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-bg); color: var(--compost-timeline-value); font: inherit; padding: 0 2px; }
         .ruler-time-selection { position: absolute; display: none; z-index: 2; top: 1em; height: 1.1em; background: color-mix(in srgb, var(--compost-timeline-select) 10%, transparent); box-shadow: inset 1px 0 0 var(--compost-timeline-select), inset -1px 0 0 var(--compost-timeline-select); pointer-events: none; }
+        .ruler-time-selection-readout { position: absolute; left: 100%; top: 0; padding-left: .3em; color: var(--compost-timeline-muted); font: .72em/1.5 var(--compost-timeline-numeral-font); white-space: nowrap; }
         .ruler-band { position: absolute; top: 2.35em; height: .75em; background: color-mix(in srgb, var(--compost-timeline-loop) 24%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop); cursor: grab; }
         .ruler-band[data-off] { background: color-mix(in srgb, var(--compost-timeline-loop-off) 14%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop-off); opacity: .7; }
         .ruler-handle { position: absolute; top: 2.22em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
@@ -509,7 +511,7 @@ export class CompostTimeline extends HTMLElement {
       <div class="frame" part="frame">
         <div class="corner" part="corner"></div>
         <div class="ruler-wrap" part="ruler" role="group" tabindex="0" aria-label="Timeline ruler">
-          <div class="ruler"><div class="ruler-world"></div><div class="ruler-time-selection" part="time-selection"></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start"></div><div class="ruler-handle end" part="loop-handle loop-end"></div><div class="ruler-playhead" part="playhead"></div></div>
+          <div class="ruler"><div class="ruler-world"></div><div class="ruler-time-selection" part="time-selection"><span class="ruler-time-selection-readout" part="time-selection-readout"></span></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start"></div><div class="ruler-handle end" part="loop-handle loop-end"></div><div class="ruler-playhead" part="playhead"></div></div>
         </div>
         <div class="header-wrap" part="headers"><div class="headers" role="list"></div><div class="lane-drop-line"></div></div>
         <div class="lanes-wrap" part="lanes"><div class="lanes-world" role="list"></div><div class="playhead" part="playhead"></div></div>
@@ -523,6 +525,7 @@ export class CompostTimeline extends HTMLElement {
     this.ruler = part('.ruler');
     this.rulerWorld = part('.ruler-world');
     this.rulerTimeSelection = part('.ruler-time-selection');
+    this.rulerTimeSelectionReadout = part('.ruler-time-selection-readout');
     this.rulerBand = part('.ruler-band');
     this.rulerStart = part('.ruler-handle.start');
     this.rulerEnd = part('.ruler-handle.end');
@@ -1088,6 +1091,7 @@ export class CompostTimeline extends HTMLElement {
     this.rulerTimeSelection.style.left = `${left}px`;
     this.rulerTimeSelection.style.width = `${width}px`;
     this.rulerTimeSelection.style.display = 'block';
+    this.rulerTimeSelectionReadout.textContent = this.lengthLabel(selection.end - selection.start);
     const world = document.createElement('div');
     world.className = 'time-selection-world';
     world.style.width = `${this.lanesWorld.clientWidth || this.worldEnd() * this._pxPerBeat}px`;
@@ -1940,6 +1944,42 @@ export class CompostTimeline extends HTMLElement {
     return effectiveAutomationStep(Boolean(automation?.stepped), automation?.step ?? automation?.valueStep);
   }
 
+  /** A region's length the way a musician reads it. */
+  /** @param {number} beats */
+  lengthLabel(beats) {
+    const bars = beats / this.beatsPerBar;
+    if (Math.abs(bars - Math.round(bars)) < MIN_CLIP_LENGTH) return `${Math.round(bars)} bar${Math.round(bars) === 1 ? '' : 's'}`;
+    const rounded = Math.round(beats * 100) / 100;
+    return `${rounded} beat${rounded === 1 ? '' : 's'}`;
+  }
+
+  /** Shift-click stretches the region in kind: from its start, or from the earliest
+   * selected clip when there is none, to the clicked beat; a lane click adds its lane. */
+  /** @param {PointerEvent} event @param {any} drag @returns {boolean} */
+  extendTimeSelection(event, drag) {
+    const current = this._timeSelection;
+    const selectedClips = this._selected.map((id) => this.findClip(id)).filter(Boolean);
+    const anchor = current ? undefined
+      : selectedClips.length ? Math.min(...selectedClips.map(({ clip }) => Number(clip.start) || 0)) : null;
+    if (!current && anchor === null) return false;
+    const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
+    const laneIds = drag.allLanes ? this._lanes.map((lane) => lane.id)
+      : current ? [...new Set([...current.laneIds, ...this.laneIdsForSpan(current.laneIds[0] ?? drag.laneId, drag.laneId)])]
+        : [...new Set([...selectedClips.map(({ lane }) => lane.id), ...this.laneIdsForSpan(selectedClips[0].lane.id, drag.laneId)])];
+    const region = extendSelectionRegion(current, beat, anchor, laneIds, this.worldEnd());
+    if (!region) return false;
+    this.setTimeSelection(region.start, region.end, region.items ?? laneIds);
+    this._selected = this.clipsInsideTimeSelection(this._timeSelection);
+    this.emitSelection();
+    this.dispatchEvent(eventOf('time-select', this.timeSelection));
+    return true;
+  }
+
+  selectAllClips() {
+    this._selected = this._lanes.flatMap((lane) => lane.clips.map((clip) => clip.id));
+    this.emitSelection();
+  }
+
   /** The snap mode for one gesture: Cmd/Ctrl inverts whatever the host set. */
   /** @param {{metaKey?: boolean, ctrlKey?: boolean}} event */
   snapModeFor(event) {
@@ -2002,7 +2042,16 @@ export class CompostTimeline extends HTMLElement {
           moved: false,
         };
         if (event.isTrusted) this.rulerWrap.setPointerCapture?.(event.pointerId);
+        return;
       }
+      // the loop row: a drag makes a region on every lane, a click seeks
+      this.drag = {
+        pointerId: event.pointerId, type: 'time-selection', allLanes: true, laneId: this._lanes[0]?.id ?? null,
+        startX: event.clientX, startY: event.clientY, startBeat: beat,
+        startScrollBeat: this._scrollBeat, startScrollTop: this.lanesWrap.scrollTop,
+        originSelection: this.timeSelection, originSelected: [...this._selected], moved: false,
+      };
+      if (event.isTrusted) this.rulerWrap.setPointerCapture?.(event.pointerId);
       return;
     }
     const header = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane-header'));
@@ -2028,8 +2077,9 @@ export class CompostTimeline extends HTMLElement {
         : event.clientX - rect.left <= edge ? 'trim-left'
           : rect.right - event.clientX <= edge ? 'trim-right' : 'move';
       found.element.style.cursor = mode === 'move' ? 'grab' : 'ew-resize';
-      if (!event.shiftKey && !this._selected.includes(found.clip.id)) this.selectOne(found.clip.id);
-      else if (event.shiftKey) this.selectOne(found.clip.id, true);
+      const additive = event.shiftKey || event.metaKey || event.ctrlKey;
+      if (!additive && !this._selected.includes(found.clip.id)) this.selectOne(found.clip.id);
+      else if (additive) this.selectOne(found.clip.id, true);
       const ids = this._selected.length ? [...this._selected] : [found.clip.id];
       this.focusedClip = found.clip.id;
       this.drag = {
@@ -2044,10 +2094,6 @@ export class CompostTimeline extends HTMLElement {
         this.dispatchEvent(eventOf('clip-context', { id: found.clip.id, clientX: event.clientX, clientY: event.clientY }));
         this.endPointer({ pointerId: event.pointerId });
       });
-      return;
-    }
-    if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('ruler-wrap'))) {
-      this.drag = { pointerId: event.pointerId, type: 'seek-ruler', startX: event.clientX, startY: event.clientY, moved: false };
       return;
     }
     const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
@@ -2121,7 +2167,7 @@ export class CompostTimeline extends HTMLElement {
       }
       if (!drag.moved) return;
       const currentLane = this.laneAtOrNearestPoint(event.clientY) || drag.laneId;
-      const laneIds = this.laneIdsForSpan(drag.laneId, currentLane);
+      const laneIds = drag.allLanes ? this._lanes.map((lane) => lane.id) : this.laneIdsForSpan(drag.laneId, currentLane);
       const start = snapBeat(drag.startBeat, this.beatsPerBar, this.grid, this.snapModeFor(event));
       const end = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
       drag.previewSelection = normalizeTimeSelection(start, end, laneIds, this.worldEnd());
@@ -2130,7 +2176,6 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('time-select-input', drag.previewSelection || { start, end, laneIds }));
       return;
     }
-    if (drag.type === 'seek-ruler') return;
     if (drag.type === 'lane-header') {
       if (!drag.moved || this.readonly) return;
       drag.toIndex = this.laneIndexFromHeaderPoint(event.clientY);
@@ -2283,17 +2328,14 @@ export class CompostTimeline extends HTMLElement {
         this._selected = [];
         this.emitSelection();
         this.dispatchEvent(eventOf('time-select', { start: drag.startBeat, end: drag.startBeat, laneIds: [drag.laneId] }));
+      } else if (event.shiftKey && this.extendTimeSelection(event, drag)) {
+        return;
       } else {
         this.setTimeSelection(null, null);
         this.dispatchEvent(eventOf('time-select', { start: null }));
         const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
-        this.dispatchEvent(eventOf('seek', { beat, source: 'lane' }));
+        this.dispatchEvent(eventOf('seek', { beat, source: drag.allLanes ? 'ruler' : 'lane' }));
       }
-      return;
-    }
-    if (drag.type === 'seek-ruler') {
-      const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
-      this.dispatchEvent(eventOf('seek', { beat, source: 'ruler' }));
       return;
     }
     if (drag.type === 'scroll-time' || drag.type === 'scroll-lanes') return;
@@ -2650,12 +2692,21 @@ export class CompostTimeline extends HTMLElement {
       }
       return;
     }
+    if (meta && key === 'a') {
+      event.preventDefault();
+      this.selectAllClips();
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       this._selected = [];
       this.focusedClip = null;
       this.focusedLane = null;
       this.emitSelection();
+      if (this._timeSelection) {
+        this.setTimeSelection(null, null);
+        this.dispatchEvent(eventOf('time-select', { start: null }));
+      }
       return;
     }
     if (!found) {
