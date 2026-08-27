@@ -101,6 +101,29 @@ test('envelope points can be moved by a touch pointer', async ({ page }) => {
   expect(moved.value).toBeGreaterThan(before.value);
 });
 
+test('envelope value readout stays inside the lane at its upper edge', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  const point = editor.locator('.point').nth(1);
+  const pointBox = await point.boundingBox();
+  const editorBox = await editor.boundingBox();
+
+  await page.mouse.move(pointBox.x + pointBox.width / 2, pointBox.y + pointBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pointBox.x + pointBox.width / 2, editorBox.y + 1);
+
+  const geometry = await editor.evaluate((element) => {
+    const surface = element.shadowRoot.querySelector('.surface').getBoundingClientRect();
+    const readout = element.shadowRoot.querySelector('.readout').getBoundingClientRect();
+    return { surfaceTop: surface.top, surfaceBottom: surface.bottom,
+      readoutTop: readout.top, readoutBottom: readout.bottom };
+  });
+  await page.mouse.up();
+
+  expect(geometry.readoutTop).toBeGreaterThanOrEqual(geometry.surfaceTop);
+  expect(geometry.readoutBottom).toBeLessThanOrEqual(geometry.surfaceBottom);
+});
+
 test('a touch double-tap creates on the second press and continues as a drag', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-envelope-editor/');
   const editor = page.locator('compost-envelope-editor');

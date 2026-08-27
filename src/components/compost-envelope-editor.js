@@ -757,7 +757,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
       ? `${Number(time).toFixed(2)} · ${Number(value).toFixed(2)}`
       : Number(value).toFixed(2);
     this.readout.style.left = `${time / this.duration * 100}%`;
-    this.readout.style.top = `${this.y(value)}px`;
+    this.readout.style.top = `${Math.max(this.y(value), this.readout.offsetHeight)}px`;
   }
 
   dispatchSelection() {
