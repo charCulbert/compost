@@ -2,8 +2,8 @@
 <!--
   Style review page. Open ?el=compost-knob to load one element under three
   page contexts: unstyled, color-scheme: dark, and a branded serif page.
-  Serve the repository root without caching: python3 examples/review/serve.py 8931
-  then open http://127.0.0.1:8931/examples/review/review.html?el=compost-knob
+  Serve the repository root without caching: npm run dev
+  then open http://127.0.0.1:8000/examples/review/review.html?el=compost-knob
 -->
 <html lang="en"><head><meta charset="utf-8"><title>Compost review</title>
 <style>
@@ -172,10 +172,10 @@
 </template>
 <template id="compost-note-editor">
   <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
-    <span>Clip notes</span>
-    <compost-note-editor label="Clip notes" beats="12" start="1" end="10" loop loop-start="2" loop-end="8"
-      grid="1/16" root-note="48" note-count="25" scale="0 2 4 5 7 9 11" root="0"
-      playhead="3" style="height: 24em"></compost-note-editor>
+    <span>Clip notes · 6/8 · two-bar loop with pickup</span>
+    <compost-note-editor label="Clip notes" beats="12" start="1.5" end="8" loop loop-start="2" loop-end="8"
+      time-signature="6/8" grid="1/16" root-note="48" note-count="25" scale="0 2 4 5 7 9 11" root="0"
+      style="height: 24em"></compost-note-editor>
     <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
       <label>Grid <select data-note-grid>
         <option value="off">Off</option><option value="bar">1 bar</option>
@@ -188,7 +188,7 @@
       <label><input type="checkbox" data-note-loop checked> Loop</label>
       <label><input type="checkbox" data-note-draw> Draw</label>
       <label><input type="checkbox" data-note-fold> Fold</label>
-      <label><input type="checkbox" data-note-playhead checked> Run playhead</label>
+      <button type="button" data-note-playhead>Play</button>
       <button type="button" data-note-quantize>Quantize</button>
     </div>
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag notes to move; Alt-drag copies; Command/Ctrl inverts time snapping. Command/Ctrl-drag on a note changes velocity; Shift-click extends selection and Shift is precise for values and edges. In Draw mode, drag right for length and vertically for velocity. Drag empty grid for a note box or the ruler for time; Shift-click extends it. Drag the piano vertically to pan pitches or horizontally to zoom them. Double-click adds; Escape clears selection. Shift-arrows move an octave or fine in time; Alt-left/right changes length. In Fold, up/down steps through displayed pitches. Wheel scrolls pitch; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel zooms pitch.</small>
@@ -196,8 +196,8 @@
 </template>
 <template id="compost-timeline">
   <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
-    <span>Arrangement</span>
-    <compost-timeline label="Arrangement" beats-per-bar="4" grid="1/4" automation
+    <span>Arrangement · 6/8</span>
+    <compost-timeline label="Arrangement" time-signature="6/8" grid="1/16" automation
       style="height: 24em"></compost-timeline>
     <label><input type="checkbox" data-timeline-play checked> Run transport</label>
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag clips or their edges; Alt-drag copies. Drag the ruler or lanes to select time. Command/Ctrl inverts snapping. The host applies every edit.</small>
@@ -483,10 +483,13 @@
       const draw = s.querySelector('[data-note-draw]');
       const fold = s.querySelector('[data-note-fold]');
       const playhead = s.querySelector('[data-note-playhead]');
+      let audioContext = null;
+      let playing = false;
+      const voices = new Set();
       let nextNoteId = 1;
       editor.noteIdFactory = () => `${cls}-note-${nextNoteId++}`;
       editor.setNotes([
-        { note: 60, start: 1, duration: 1, velocity: 112, channel: 0 },
+        { note: 60, start: 1.5, duration: .5, velocity: 112, channel: 0 },
         { note: 64, start: 2.5, duration: .5, velocity: 82, channel: 0 },
         { note: 67, start: 3.5, duration: 1.5, velocity: 100, channel: 0 },
         { note: 62, start: 5.5, duration: .5, velocity: 68, channel: 0 },
@@ -516,16 +519,71 @@
       });
       fold.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
       s.querySelector('[data-note-quantize]').addEventListener('click', () => editor.quantize());
+      const stopVoices = () => {
+        for (const voice of voices) {
+          try { voice.stop(); } catch {}
+        }
+        voices.clear();
+      };
+      const playNote = (note) => {
+        if (!audioContext || audioContext.state !== 'running') return;
+        const oscillator = new OscillatorNode(audioContext, {
+          type: 'triangle', frequency: 440 * 2 ** ((note.note - 69) / 12),
+        });
+        const gain = new GainNode(audioContext, { gain: 0 });
+        const now = audioContext.currentTime;
+        const end = now + Math.max(.03, note.duration / 2);
+        const level = Math.max(.01, Math.min(1, note.velocity / 127)) * .14;
+        gain.gain.linearRampToValueAtTime(level, now + .005);
+        gain.gain.setValueAtTime(level, Math.max(now + .005, end - .025));
+        gain.gain.linearRampToValueAtTime(0, end);
+        oscillator.connect(gain).connect(audioContext.destination);
+        oscillator.addEventListener('ended', () => voices.delete(oscillator), { once: true });
+        voices.add(oscillator);
+        oscillator.start(now);
+        oscillator.stop(end + .01);
+      };
+      const playBetween = (from, to) => {
+        for (const note of editor.notes) {
+          if (note.start > from + 1e-9 && note.start <= to + 1e-9) playNote(note);
+        }
+      };
       let last = performance.now();
       let position = editor.rangeStart;
+      playhead.addEventListener('click', async () => {
+        playing = !playing;
+        playhead.textContent = playing ? 'Stop' : 'Play';
+        if (!playing) {
+          stopVoices();
+          editor.removeAttribute('playhead');
+          return;
+        }
+        audioContext ??= new AudioContext();
+        await audioContext.resume();
+        position = editor.rangeStart;
+        for (const note of editor.notes) {
+          if (Math.abs(note.start - position) < 1e-9) playNote(note);
+        }
+        last = performance.now();
+      });
       const advance = (now) => {
         const delta = Math.min(.05, (now - last) / 1000) * 2;
         last = now;
-        if (playhead.checked) {
-          position += delta;
+        if (playing) {
           const start = editor.hasAttribute('loop') ? editor.loopStart : editor.rangeStart;
           const end = editor.hasAttribute('loop') ? editor.loopEnd : editor.rangeEnd;
-          if (position < start || position >= end) position = start + ((position - start) % (end - start) + end - start) % (end - start);
+          const next = position + delta;
+          if (next >= end) {
+            playBetween(position, end);
+            position = start + ((next - start) % (end - start));
+            for (const note of editor.notes) {
+              if (Math.abs(note.start - start) < 1e-9) playNote(note);
+            }
+            playBetween(start, position);
+          } else {
+            playBetween(position, next);
+            position = next;
+          }
           editor.setAttribute('playhead', position.toFixed(3));
         } else {
           editor.removeAttribute('playhead');

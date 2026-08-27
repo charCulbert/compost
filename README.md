@@ -62,6 +62,14 @@ Events name what the user asked for, never which input did it. Elements show
 the state you give them; saving, undo, menus and what happens next are yours.
 Editors take IDs you own for the things they create, and snapping is a view
 mode over your full-precision values, never a stored grid.
+The note editor and timeline take a single `time-signature="N/D"` meter, with
+`D` equal to 1, 2, 4, 8 or 16. Model time remains quarter-note beats; the
+denominator only changes ruler counting and line placement. The legacy
+`beats-per-bar` attribute means N/4 and is ignored when `time-signature` is
+present. Grid values are meter-independent note values such as `1/8`, `1/16T`
+or `bar`; bare numbers remain supported as legacy cells per bar. Compound x/8
+meters show a pulse every three eighths. Meter changes within a song are host
+data and are not represented by either element.
 `compost-note-editor` emits `note-quantize` with the selected IDs, grid step
 and whether lengths were requested; the host applies its own strength and swing.
 `compost-timeline` never moves automation with a clip; a host that wants that

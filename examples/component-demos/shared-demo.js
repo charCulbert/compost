@@ -624,7 +624,6 @@ function setupNoteEditorDemo() {
   draw?.addEventListener('change', () => editor.toggleAttribute('draw', draw.checked));
   fold?.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
   document.querySelector('[data-editor-quantize]')?.addEventListener('click', () => editor.quantize());
-  document.querySelector('[data-editor-zoom]')?.addEventListener('click', () => editor.zoomReset());
   editor.addEventListener('notes-change', ({ detail }) => { editor.notes = detail.notes; report(); });
   editor.addEventListener('note-quantize', ({ detail }) => {
     editor.notes = quantizedNotes(editor.notes, detail.step,

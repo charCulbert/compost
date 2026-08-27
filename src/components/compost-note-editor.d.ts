@@ -29,7 +29,7 @@ export function rulerLabels(beats: number, meter: number | {barLength: number, b
 /** A length in the meter's denominator beats, written the way a musician reads it. */
 export function lengthText(duration: number, beatLength?: number): string;
 
-/** The musical name of a grid expressed as cells per bar. */
+/** The musical name of a note-value grid, or of a legacy cells-per-bar value. */
 export function gridText(division: string | number, beatsPerBar?: number): string;
 
 /**
@@ -41,10 +41,15 @@ export function gridText(division: string | number, beatsPerBar?: number): strin
  */
 export class CompostNoteEditor extends HTMLElement {
   label: string;
+  /** Effective meter. `time-signature` wins over the legacy N/4 `beats-per-bar`. */
   timeSignature: string;
+  /** Effective bar length in quarter-note beats. */
   beatsPerBar: number;
+  /** Effective denominator-beat length in quarter-note beats. */
   beatLength: number;
+  /** Derived compound pulse length, or null outside compound x/8 meters. */
   pulseLength: number | null;
+  /** A meter-independent note value such as `1/16`, `1/8T` or `bar`; numbers are legacy cells per bar. */
   grid: string | number;
   /** Whether time-grid lines are drawn; set `grid-lines="off"` to hide them. */
   gridLines: boolean;

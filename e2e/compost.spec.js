@@ -2684,6 +2684,65 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
   expect(await editor.evaluate((element) => element.testEvents)).toContain('notes-change');
 });
 
+test('note editor and timeline count a 6/8 meter on a note-value grid', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  const editorMeter = await editor.evaluate((element) => {
+    element.setAttribute('beats-per-bar', '9');
+    element.setAttribute('time-signature', '6/8');
+    element.setAttribute('grid', '1/16');
+    element.zoomPxPerBeat = 80;
+    element.refresh();
+    return {
+      signature: element.timeSignature,
+      barLength: element.beatsPerBar,
+      beatLength: element.beatLength,
+      step: element.step,
+      labels: [...element.shadowRoot.querySelectorAll('.bn')].map((label) => label.textContent),
+    };
+  });
+  expect(editorMeter).toMatchObject({ signature: '6/8', barLength: 3, beatLength: .5, step: .25 });
+  expect(editorMeter.labels).toContain('1.6');
+  await expect(editor.locator('.gl.pulse')).toHaveCount(4);
+
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const timelineMeter = await timeline.evaluate((element) => {
+    element.setAttribute('beats-per-bar', '9');
+    element.setAttribute('time-signature', '6/8');
+    element.setAttribute('grid', '1/16');
+    element.pxPerBeat = 80;
+    return {
+      signature: element.timeSignature,
+      barLength: element.beatsPerBar,
+      beatLength: element.beatLength,
+      labels: [...element.shadowRoot.querySelectorAll('.ruler-label')].map((label) => label.textContent),
+    };
+  });
+  expect(timelineMeter).toMatchObject({ signature: '6/8', barLength: 3, beatLength: .5 });
+  expect(timelineMeter.labels).toContain('1.6');
+  expect(await timeline.locator('.lanes-world .grid-line.pulse').count()).toBeGreaterThan(0);
+});
+
+test('note editor review host plays a one-beat pickup into a two-bar 6/8 loop', async ({ page }) => {
+  await page.goto('/examples/review/review.html?el=compost-note-editor');
+  const scenario = page.locator('section.plain');
+  const editor = scenario.locator('compost-note-editor');
+  expect(await editor.evaluate((element) => ({
+    rangeStart: element.rangeStart,
+    loopStart: element.loopStart,
+    loopEnd: element.loopEnd,
+    beatLength: element.beatLength,
+    pickup: element.notes[0].start,
+  }))).toEqual({ rangeStart: 1.5, loopStart: 2, loopEnd: 8, beatLength: .5, pickup: 1.5 });
+  const play = scenario.locator('[data-note-playhead]');
+  await play.click();
+  await expect(play).toHaveText('Stop');
+  await expect.poll(async () => Number(await editor.getAttribute('playhead'))).toBeGreaterThan(1.5);
+  await play.click();
+  await expect(editor).not.toHaveAttribute('playhead');
+});
+
 test('note editor playback and loop ranges are independent', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');

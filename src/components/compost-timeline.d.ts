@@ -82,7 +82,7 @@ export interface TimelineTimeDeleteDetail extends TimelineTimeSelection { remove
 // ---- Module helpers -------------------------------------------------------
 
 /** Snap a beat to the timeline grid, or leave it free when snapping is off. */
-export function snapBeat(beat: number, beatsPerBar: number, grid: number, snap: string): number;
+export function snapBeat(beat: number, beatsPerBar: number, grid: string | number, snap: string): number;
 
 /** Return stable, finite, beat-sorted locators without duplicate ids. */
 export function sortLocators(locators: TimelineLocator[]): TimelineLocator[];
@@ -172,10 +172,15 @@ export function moveAutomationRange(points: {beat: number, value: number}[], sta
  */
 export class CompostTimeline extends HTMLElement {
   label: string;
+  /** Effective meter. `time-signature` wins over the legacy N/4 `beats-per-bar`. */
   timeSignature: string;
+  /** Effective bar length in quarter-note beats. */
   beatsPerBar: number;
+  /** Effective denominator-beat length in quarter-note beats. */
   beatLength: number;
+  /** Derived compound pulse length, or null outside compound x/8 meters. */
   pulseLength: number | null;
+  /** A meter-independent note value such as `1/16`, `1/8T` or `bar`; numbers are legacy cells per bar. */
   grid: string | number;
   snapMode: 'grid' | 'off';
   follow: boolean;
