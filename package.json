@@ -44,6 +44,7 @@
     "./parameter-controller": "./src/parameter-controller.js",
     "./envelope-model": "./src/envelope-model.js",
     "./piano-roll-model": "./src/piano-roll-model.js",
+    "./selection-region": "./src/selection-region.js",
     "./parameter-scale": "./src/parameter-scale.js",
     "./utils": "./src/utils.js"
   },

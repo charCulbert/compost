@@ -86,6 +86,9 @@ commit in the same round.
 1. Interface pass: attribute↔property reflection, intent-event names and
    `detail` shapes, `disabled`, form association via `ElementInternals`; one
    conformance table and one shared test that runs against every element.
+   If the view fully determines a result it may produce it (duplicate,
+   delete); operations with parameters the view cannot see emit intent
+   instead (quantize, legato, fit).
 2. Examples: one minimal page per element showing one scenario, with the
    markup on the page, defaults only. The bigger showcases (signal generator,
    parameter sync) stay as the place several elements and a real backend meet.

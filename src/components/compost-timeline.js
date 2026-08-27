@@ -4,6 +4,7 @@ import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
 import './compost-envelope-editor.js';
 import { parameterScaleBreakpoints } from '../parameter-scale.js';
+import { normalizeSelectionRegion } from '../selection-region.js';
 import {
   addEnvelopePoint,
   deleteEnvelopePoint,
@@ -87,14 +88,9 @@ export function sortLocators(locators) {
 /** @param {number|null} start @param {number|null} end @param {string[]} laneIds @param {number} [maxBeat] */
 export function normalizeTimeSelection(start, end, laneIds = [], maxBeat = Number.POSITIVE_INFINITY) {
   if (start === null || start === undefined || end === null || end === undefined) return null;
-  const first = Number(start);
-  const last = Number(end);
-  if (!Number.isFinite(first) || !Number.isFinite(last)) return null;
-  const limit = Number.isFinite(Number(maxBeat)) ? Math.max(0, Number(maxBeat)) : Number.POSITIVE_INFINITY;
-  const low = clamp(Math.min(first, last), 0, limit);
-  const high = clamp(Math.max(first, last), 0, limit);
-  if (high <= low + MIN_CLIP_LENGTH) return null;
-  return { start: low, end: high, laneIds: [...new Set((Array.isArray(laneIds) ? laneIds : []).map(String))] };
+  const region = normalizeSelectionRegion(start, end,
+    (Array.isArray(laneIds) ? laneIds : []).map(String), maxBeat);
+  return region ? { start: region.start, end: region.end, laneIds: region.items ?? [] } : null;
 }
 
 /** Convert a clip's beat geometry into pixels relative to the visible left edge. */
