@@ -1319,11 +1319,14 @@ test('timeline rulers expose locators, time selections and measured row geometry
   const afterScroll = await timeline.evaluate((element) => element.shadowRoot.querySelector('.ruler-time-selection').getBoundingClientRect().width);
   expect(Math.abs(beforeScroll - afterScroll)).toBeLessThan(1);
   const row2Y = rulerBox.y + 2.0 * 11;
+  const beforeRulerDrag = await timeline.evaluate((element) => ({ scroll: element.scrollBeat, px: element.pxPerBeat }));
   await page.mouse.move(rulerBox.x + 180, row2Y);
   await page.mouse.down();
   await page.mouse.move(rulerBox.x + 120, row2Y, { steps: 4 });
   await page.mouse.up();
-  expect(await timeline.evaluate((element) => element.scrollBeat)).toBeGreaterThan(2);
+  expect(await timeline.evaluate((element) => ({ scroll: element.scrollBeat, px: element.pxPerBeat }))).toEqual(beforeRulerDrag);
+  expect(await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'seek').at(-1)))
+    .toMatchObject({ type: 'seek', detail: { source: 'ruler' } });
 
   await timeline.evaluate((element) => { element.scrollBeat = 0; element.pxPerBeat = 24; });
   await page.keyboard.down('Control');
@@ -1332,7 +1335,7 @@ test('timeline rulers expose locators, time selections and measured row geometry
   await page.mouse.move(rulerBox.x + 160, row2Y, { steps: 4 });
   await page.mouse.up();
   await page.keyboard.up('Control');
-  expect(await timeline.evaluate((element) => element.pxPerBeat)).toBeGreaterThan(24);
+  expect(await timeline.evaluate((element) => ({ scroll: element.scrollBeat, px: element.pxPerBeat }))).toEqual({ scroll: 0, px: 24 });
   await page.mouse.dblclick(rulerBox.x + 160, row2Y);
   await expect.poll(() => timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'fit-request'))).toMatchObject({ type: 'fit-request', detail: {} });
 

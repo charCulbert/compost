@@ -1973,16 +1973,10 @@ export class CompostTimeline extends HTMLElement {
         return;
       }
       if (row === 2) {
-        this.drag = {
-          pointerId: event.pointerId,
-          type: event.metaKey || event.ctrlKey ? 'ruler-zoom' : 'ruler-scroll',
-          startX: event.clientX,
-          startY: event.clientY,
-          startScrollBeat: this._scrollBeat,
-          startPxPerBeat: this._pxPerBeat,
-          anchorBeat: beat,
-          moved: false,
-        };
+        this.dispatchEvent(eventOf('seek', {
+          beat: snapBeat(beat, this.beatsPerBar, this.grid, this.snapModeFor(event)), source: 'ruler',
+        }));
+        this.drag = { pointerId: event.pointerId, type: 'ruler-seek', startX: event.clientX, startY: event.clientY, moved: false };
         if (event.isTrusted) this.rulerWrap.setPointerCapture?.(event.pointerId);
         return;
       }
@@ -2083,19 +2077,9 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (drag.type === 'ruler-locator-row') return;
-    if (drag.type === 'ruler-scroll') {
-      if (!drag.moved) return;
-      this.scrollBeat = Math.max(0, drag.startScrollBeat - dx / this._pxPerBeat);
-      return;
-    }
-    if (drag.type === 'ruler-zoom') {
-      if (!drag.moved) return;
-      const rect = this.rulerWrap.getBoundingClientRect();
-      const next = finiteClamp(drag.startPxPerBeat * Math.pow(1.01, dx), MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
-      this._pxPerBeat = next;
-      this._scrollBeat = Math.max(0, drag.anchorBeat - (event.clientX - rect.left) / next);
-      this.render();
-      this.scheduleViewChange();
+    if (drag.type === 'ruler-seek') {
+      const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
+      this.dispatchEvent(eventOf('seek', { beat, source: 'ruler' }));
       return;
     }
     if (drag.type === 'time-selection') {
@@ -2223,11 +2207,6 @@ export class CompostTimeline extends HTMLElement {
         this.scrollBeat = drag.startScrollBeat ?? this._scrollBeat;
       }
       if (drag.type === 'trim-left' || drag.type === 'trim-right') this.render();
-      if (drag.type === 'ruler-scroll' || drag.type === 'ruler-zoom') {
-        this._scrollBeat = drag.startScrollBeat ?? this._scrollBeat;
-        if (drag.type === 'ruler-zoom') this._pxPerBeat = drag.startPxPerBeat ?? this._pxPerBeat;
-        this.render();
-      }
       if (drag.type === 'loop') this.paintLoop();
       this.clearLaneDropLine();
     }
@@ -2278,14 +2257,7 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (drag.type === 'ruler-locator-row') return;
-    if (drag.type === 'ruler-scroll') {
-      if (!drag.moved) {
-        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
-        this.dispatchEvent(eventOf('seek', { beat, source: 'ruler' }));
-      }
-      return;
-    }
-    if (drag.type === 'ruler-zoom') return;
+    if (drag.type === 'ruler-seek') return;
     if (drag.type === 'time-selection') {
       if (drag.moved && drag.previewSelection) {
         const selection = drag.previewSelection;
