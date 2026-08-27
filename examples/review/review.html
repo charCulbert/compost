@@ -185,6 +185,7 @@
         <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
       </select></label>
       <label><input type="checkbox" data-note-snap checked> Snap</label>
+      <label><input type="checkbox" data-note-adaptive> Adaptive grid</label>
       <label><input type="checkbox" data-note-loop checked> Loop</label>
       <label><input type="checkbox" data-note-draw> Draw</label>
       <label><input type="checkbox" data-note-fold> Fold</label>
@@ -208,12 +209,18 @@
         <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
       </select></label>
       <label><input type="checkbox" data-timeline-snap checked> Snap</label>
+      <label><input type="checkbox" data-timeline-adaptive> Adaptive grid</label>
       <label><input type="checkbox" data-timeline-loop checked> Loop</label>
       <label><input type="checkbox" data-timeline-draw> Draw</label>
       <label><input type="checkbox" data-timeline-automation> Automation view</label>
       <button type="button" data-timeline-play>Play</button>
+      <button type="button" data-timeline-copy>Copy</button>
+      <button type="button" data-timeline-cut>Cut</button>
+      <button type="button" data-timeline-paste>Paste</button>
+      <button type="button" data-timeline-split>Split at playhead</button>
+      <button type="button" data-timeline-delete>Delete</button>
     </div>
-    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag clips or their edges; Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Drag lanes for a lane-bounded region or the ruler for all lanes; Shift-click extends it. Double-click empty space asks for a new clip; Escape clears selection. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel resizes lanes. Automation view shows one curve per lane, and Draw edits that curve. The host applies every edit.</small>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. Automation edits are also applied by this faux host.</small>
   </div>
 </template>
 
@@ -250,7 +257,7 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'clip-launch', 'clip-stop', 'clip-record', 'clip-select', 'clip-open', 'clip-context', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-split', 'clip-nudge', 'clip-join', 'clip-drag-start', 'clip-drag-end', 'clip-drop', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection', 'notes-change', 'note-quantize', 'loop-input', 'loop-change', 'loop-toggle', 'range-input', 'range-change', 'selection-change', 'note-preview', 'note-preview-end', 'note-context', 'seek', 'time-select-input', 'time-select', 'time-delete', 'time-insert', 'locator-jump', 'locator-move', 'locator-create', 'locator-rename', 'locator-delete', 'locator-context', 'lane-pick', 'lane-move', 'lane-resize', 'lanes-resize', 'lane-rename', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'automation-input', 'automation-change', 'automation-context', 'draw-toggle', 'fit-request', 'view-change'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'clip-launch', 'clip-stop', 'clip-record', 'clip-select', 'clip-open', 'clip-context', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-split', 'clip-nudge', 'clip-join', 'clip-drag-start', 'clip-drag-end', 'clip-drop', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection', 'notes-change', 'note-quantize', 'loop-input', 'loop-change', 'loop-toggle', 'range-input', 'range-change', 'selection-change', 'note-preview', 'note-preview-end', 'note-context', 'seek', 'time-select-input', 'time-select', 'time-delete', 'time-insert', 'time-duplicate', 'locator-jump', 'locator-move', 'locator-create', 'locator-rename', 'locator-delete', 'locator-context', 'lane-pick', 'lane-move', 'lane-resize', 'lanes-resize', 'lane-rename', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'automation-input', 'automation-change', 'automation-context', 'draw-toggle', 'fit-request', 'view-change'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-window') {
@@ -492,6 +499,7 @@
       const editor = s.querySelector('compost-note-editor');
       const grid = s.querySelector('[data-note-grid]');
       const snap = s.querySelector('[data-note-snap]');
+      const adaptive = s.querySelector('[data-note-adaptive]');
       const loop = s.querySelector('[data-note-loop]');
       const draw = s.querySelector('[data-note-draw]');
       const fold = s.querySelector('[data-note-fold]');
@@ -535,6 +543,7 @@
         }
       });
       snap.addEventListener('change', () => editor.setAttribute('snap', snap.checked ? 'grid' : 'off'));
+      adaptive.addEventListener('change', () => editor.toggleAttribute('adaptive-grid', adaptive.checked));
       loop.addEventListener('change', () => editor.toggleAttribute('loop', loop.checked));
       draw.addEventListener('change', () => editor.toggleAttribute('draw', draw.checked));
       s.addEventListener('keydown', (event) => {
@@ -624,6 +633,7 @@
       const play = s.querySelector('[data-timeline-play]');
       const grid = s.querySelector('[data-timeline-grid]');
       const snap = s.querySelector('[data-timeline-snap]');
+      const adaptive = s.querySelector('[data-timeline-adaptive]');
       const loop = s.querySelector('[data-timeline-loop]');
       const draw = s.querySelector('[data-timeline-draw]');
       let playing = false;
@@ -634,7 +644,7 @@
           ] }, clips: [
           { id: 'beat', name: 'Beat', start: 0, length: 8, duration: 2, loop: true, state: 'playing',
             notes: [{ start: 0, duration: .25, note: 36, velocity: 110 }, { start: .5, duration: .25, note: 42, velocity: 82 }] },
-          { id: 'fill', name: 'Fill', start: 10, length: 2, duration: 2, loop: false, state: 'queued' },
+          { id: 'fill', name: 'Fill', start: 10, length: 2, duration: 2, loop: false, state: 'stopped' },
         ] },
         { id: 'synth', name: 'Synth', clips: [
           { id: 'pad', name: 'Pad', start: 2, length: 4, duration: 4, loop: false, state: 'stopped' },
@@ -652,6 +662,7 @@
       const automationView = s.querySelector('[data-timeline-automation]');
       grid.addEventListener('change', () => timeline.setAttribute('grid', grid.value));
       snap.addEventListener('change', () => timeline.setAttribute('snap', snap.checked ? 'grid' : 'off'));
+      adaptive.addEventListener('change', () => timeline.toggleAttribute('adaptive-grid', adaptive.checked));
       loop.addEventListener('change', () => timeline.setLoop(timeline.loopStart, timeline.loopEnd, loop.checked));
       draw.addEventListener('change', () => timeline.toggleAttribute('draw', draw.checked));
       automationView.addEventListener('change', () => timeline.toggleAttribute('automation', automationView.checked));
@@ -692,7 +703,46 @@
       timeline.setPlayhead(1);
       const allClips = () => lanes.flatMap((lane) => lane.clips);
       const laneOf = (clip) => lanes.find((lane) => lane.clips.includes(clip));
-      const bar = () => timeline.beatsPerBar || 4;
+      let clipboard = [];
+      const copySelection = () => {
+        const selection = timeline.timeSelection;
+        const selected = new Set(timeline.selected);
+        const origin = selection?.start ?? Math.min(...allClips().filter((clip) => selected.has(clip.id)).map((clip) => clip.start));
+        if (!Number.isFinite(origin)) return false;
+        clipboard = [];
+        for (const lane of lanes) {
+          if (selection && !selection.laneIds.includes(lane.id)) continue;
+          for (const clip of lane.clips) {
+            if (!selection && !selected.has(clip.id)) continue;
+            const start = selection ? Math.max(selection.start, clip.start) : clip.start;
+            const end = selection ? Math.min(selection.end, clip.start + clip.length) : clip.start + clip.length;
+            if (end <= start) continue;
+            clipboard.push({ laneId: lane.id, offset: start - origin, clip: { ...clip,
+              start: 0, length: end - start, offset: (clip.offset || 0) + start - clip.start } });
+          }
+        }
+        return clipboard.length > 0;
+      };
+      const deleteSelection = () => {
+        const selection = timeline.timeSelection;
+        if (selection) return apply['time-delete']({ ...selection, removeTime: false });
+        const ids = timeline.selected;
+        if (ids.length) apply['clip-delete']({ ids });
+      };
+      const paste = () => {
+        if (!clipboard.length) return;
+        const ids = [];
+        for (const entry of clipboard) {
+          const lane = lanes.find((candidate) => candidate.id === entry.laneId) ?? lanes[0];
+          created += 1;
+          const clip = { ...entry.clip, id: `${entry.clip.id}-paste-${created}`, start: timeline.playhead + entry.offset };
+          lane.clips.push(clip);
+          ids.push(clip.id);
+        }
+        timeline.setTimeSelection(null, null);
+        render();
+        timeline.selected = ids;
+      };
       const apply = {
         'loop-change': ({ start, end, enabled }) => { loop.checked = enabled; timeline.setLoop(start, end, enabled); },
         'loop-toggle': ({ enabled }) => { loop.checked = enabled; timeline.setLoop(timeline.loopStart, timeline.loopEnd, enabled); },
@@ -781,9 +831,24 @@
           }
           render();
         },
-        'lane-create': ({ laneId, beat }) => {
+        'time-duplicate': ({ start, end, laneIds, to }) => {
+          for (const lane of lanes.filter((entry) => laneIds.includes(entry.id))) {
+            const copies = [];
+            for (const clip of lane.clips) {
+              const from = Math.max(start, clip.start);
+              const until = Math.min(end, clip.start + clip.length);
+              if (until <= from) continue;
+              created += 1;
+              copies.push({ ...clip, id: `${clip.id}-copy-${created}`, start: to + from - start,
+                length: until - from, offset: (clip.offset || 0) + from - clip.start });
+            }
+            lane.clips.push(...copies);
+          }
+          render();
+        },
+        'lane-create': ({ laneId, beat, length }) => {
           created += 1;
-          lanes.find((entry) => entry.id === laneId)?.clips.push({ id: `clip-${created}`, name: `Clip ${created}`, start: beat, length: bar(), duration: bar(), loop: false, state: 'stopped' });
+          lanes.find((entry) => entry.id === laneId)?.clips.push({ id: `clip-${created}`, name: `Clip ${created}`, start: beat, length, duration: length, loop: false, state: 'stopped' });
           render();
         },
         'lanes-create': () => { created += 1; lanes.push({ id: `lane-${created}`, name: `Lane ${created}`, clips: [] }); render(); },
@@ -799,6 +864,22 @@
         'lanes-resize': ({ height }) => { for (const lane of lanes) lane.height = height; render(); },
       };
       for (const [type, handler] of Object.entries(apply)) timeline.addEventListener(type, ({ detail }) => handler(detail));
+      const clipboardAction = (action) => {
+        if (action === 'copy') copySelection();
+        if (action === 'cut' && copySelection()) deleteSelection();
+        if (action === 'paste') paste();
+      };
+      timeline.addEventListener('keydown', (event) => {
+        if (!(event.metaKey || event.ctrlKey) || !['c', 'x', 'v'].includes(event.key.toLowerCase())) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        clipboardAction({ c: 'copy', x: 'cut', v: 'paste' }[event.key.toLowerCase()]);
+      }, true);
+      s.querySelector('[data-timeline-copy]').addEventListener('click', () => clipboardAction('copy'));
+      s.querySelector('[data-timeline-cut]').addEventListener('click', () => clipboardAction('cut'));
+      s.querySelector('[data-timeline-paste]').addEventListener('click', () => clipboardAction('paste'));
+      s.querySelector('[data-timeline-split]').addEventListener('click', () => apply['clip-split']({ ids: timeline.selected, beat: timeline.playhead }));
+      s.querySelector('[data-timeline-delete]').addEventListener('click', deleteSelection);
       let last = performance.now();
       const advance = (now) => {
         const delta = Math.min(.05, (now - last) / 1000) * 2;
