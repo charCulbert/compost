@@ -45,6 +45,7 @@
     "./envelope-model": "./src/envelope-model.js",
     "./piano-roll-model": "./src/piano-roll-model.js",
     "./selection-region": "./src/selection-region.js",
+    "./time-grid": "./src/time-grid.js",
     "./parameter-scale": "./src/parameter-scale.js",
     "./utils": "./src/utils.js"
   },

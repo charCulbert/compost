@@ -2,6 +2,7 @@ import { createLongPress, DRAG_SLOP, MOUSE_TRIM_EDGE, TOUCH_TRIM_EDGE } from '..
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
+import { gridStepOf, snapTime } from '../time-grid.js';
 import './compost-envelope-editor.js';
 import { parameterScaleBreakpoints } from '../parameter-scale.js';
 import { normalizeSelectionRegion } from '../selection-region.js';
@@ -57,17 +58,13 @@ const finiteClamp = (value, min, max) => clamp(Number.isFinite(value) ? value : 
 /** A timeline grid step, expressed in beats. */
 /** @param {number} beatsPerBar @param {number} grid */
 function gridStep(beatsPerBar, grid) {
-  return Math.max(MIN_CLIP_LENGTH, Math.max(1, Number(beatsPerBar) || DEFAULT_BEATS_PER_BAR)
-    / Math.max(1, Number(grid) || 4));
+  return gridStepOf(beatsPerBar || DEFAULT_BEATS_PER_BAR, grid);
 }
 
 /** Snap a beat to the timeline grid, or leave it free when snapping is off. */
 /** @param {number} beat @param {number} beatsPerBar @param {number} grid @param {string} snap */
 export function snapBeat(beat, beatsPerBar, grid, snap) {
-  const value = Math.max(0, Number(beat) || 0);
-  if (snap === 'off') return value;
-  const step = gridStep(beatsPerBar, grid);
-  return Math.max(0, Math.round(value / step) * step);
+  return snapTime(beat, { step: gridStep(beatsPerBar, grid), mode: snap === 'off' ? 'off' : 'grid' });
 }
 
 /** Return stable, finite, beat-sorted locators without duplicate ids. */
