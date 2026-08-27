@@ -31,6 +31,15 @@ export function snapDuration(value, step, mode = 'grid') {
   return Math.max(step, Math.round(value / step) * step);
 }
 
+/** Snaps to whichever is nearer: an absolute grid line or the origin's grid offset. */
+/** @param {number} value @param {number} origin @param {number} step @param {string} [mode] */
+export function snapWithOffset(value, origin, step, mode = 'grid') {
+  if (mode === 'off' || !(step > 0)) return Math.max(0, value);
+  const absolute = Math.round(value / step) * step;
+  const offset = origin + Math.round((value - origin) / step) * step;
+  return Math.max(0, Math.abs(value - offset) <= Math.abs(value - absolute) ? offset : absolute);
+}
+
 /** @param {any} note @param {number} beats @returns {RollNote} */
 export function normaliseNote(note, beats) {
   const start = clamp(Number(note.start) || 0, 0, Math.max(0, beats - MIN_DURATION));
@@ -60,7 +69,7 @@ export function movedNotes(notes, ids, deltaBeats, deltaNote, beats, step, mode 
   const moving = new Set(ids);
   return notes.map((note) => {
     if (!moving.has(note.id)) return note;
-    const start = snapBeats(note.start + deltaBeats, step, mode);
+    const start = snapWithOffset(note.start + deltaBeats, note.start, step, mode);
     return normaliseNote({
       ...note,
       note: note.note + deltaNote,
@@ -76,9 +85,11 @@ export function resizedNotes(notes, ids, deltaBeats, beats, step, mode = 'grid')
   const sizing = new Set(ids);
   return notes.map((note) => {
     if (!sizing.has(note.id)) return note;
+    const minimum = mode === 'off' || !(step > 0) ? MIN_DURATION : step;
     return normaliseNote({
       ...note,
-      duration: Math.min(snapDuration(note.duration + deltaBeats, step, mode), beats - note.start),
+      duration: Math.min(Math.max(minimum,
+        snapWithOffset(note.duration + deltaBeats, note.duration, step, mode)), beats - note.start),
     }, beats);
   });
 }
@@ -118,7 +129,7 @@ export function trimmedNotes(notes, ids, deltaBeats, beats, step, mode = 'grid')
     if (!trimming.has(note.id)) return note;
     const end = note.start + note.duration;
     const minimum = mode === 'off' || !(step > 0) ? MIN_DURATION : step;
-    const start = clamp(snapBeats(note.start + deltaBeats, step, mode), 0, end - minimum);
+    const start = clamp(snapWithOffset(note.start + deltaBeats, note.start, step, mode), 0, end - minimum);
     return normaliseNote({ ...note, start, duration: end - start }, beats);
   });
 }

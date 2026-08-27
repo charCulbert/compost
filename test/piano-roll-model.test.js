@@ -11,6 +11,7 @@ import {
   resizedNotes,
   snapBeats,
   snapDuration,
+  snapWithOffset,
 } from '../src/piano-roll-model.js';
 
 const note = (over = {}) => ({
@@ -32,6 +33,14 @@ test('snapping rounds to the grid and never goes negative', () => {
   assert.equal(snapBeats(0.4, 0.25), 0.5);
   assert.equal(snapBeats(-3, 0.25), 0);
   assert.equal(snapBeats(0.3, 0.25, 'off'), 0.3);
+});
+
+test('snapping preserves a note offset when that anchor is nearer', () => {
+  assert.equal(snapWithOffset(0.32, 0.1, 0.25), 0.35);
+  assert.equal(snapWithOffset(0.22, 0.1, 0.25), 0.25);
+  const offset = note({ start: 0.1, duration: 0.6 });
+  assert.equal(movedNotes([offset], ['a'], 0.22, 0, 4, 0.25)[0].start, 0.35);
+  assert.equal(resizedNotes([offset], ['a'], 0.22, 4, 0.25)[0].duration, 0.85);
 });
 
 test('a snapped duration keeps at least one cell', () => {
