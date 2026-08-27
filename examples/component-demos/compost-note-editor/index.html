@@ -27,13 +27,15 @@
             <label>
               Grid
               <compost-select data-option="editor-grid" aria-label="Grid division" value="16">
-                <option value="4">1/4</option>
-                <option value="8">1/8</option>
-                <option value="16">1/16</option>
-                <option value="32">1/32</option>
+                <option value="off">Off</option><option value="1">1 bar</option>
+                <option value="4">1/4</option><option value="6">1/4 triplet</option>
+                <option value="8">1/8</option><option value="12">1/8 triplet</option>
+                <option value="16">1/16</option><option value="24">1/16 triplet</option>
+                <option value="32">1/32</option><option value="48">1/32 triplet</option>
               </compost-select>
             </label>
             <label class="check"><input type="checkbox" data-option="editor-snap" checked> Snap</label>
+            <label class="check"><input type="checkbox" data-option="editor-loop" checked> Loop</label>
             <label class="check"><input type="checkbox" data-option="editor-draw"> Draw</label>
             <label class="check"><input type="checkbox" data-option="editor-fold"> Fold</label>
             <label class="check"><input type="checkbox" data-option="editor-playhead"> Run playhead</label>
@@ -41,20 +43,21 @@
             <button type="button" class="example-nav-button" data-editor-zoom>Reset zoom</button>
             <output data-option-state>1/16 · snapping · 2 bars</output>
             <p class="muted">
-              Drag a note to move it, its edges to trim either end, Alt-drag
-              (or press and hold) for velocity, drag on empty grid to
-              marquee-select, double-click to add, draw mode to paint. The
-              start/end and nested loop markers drag independently; the loop
+              Drag a note to move it, its edges to trim either end, Command-drag
+              for velocity, Alt-drag to copy, drag on empty grid to
+              box-select, drag the ruler to select time, Shift-click to extend, double-click to add; draw mode drags right for length and vertically for velocity. The
+              start/end and loop markers drag independently; the loop
               bar also moves from its middle. Delete, arrows
-              (Alt for more), Cmd-A, Cmd-D duplicates one span later, Cmd-L
-              loops to the selection, Cmd-Q quantizes. Wheel scrolls pitch,
-              Shift-wheel time, Cmd-wheel zooms. The playhead is a position
+              (Shift-up/down for octaves, Shift-left/right fine, Alt-left/right length; Fold up/down steps through visible pitches), Cmd-A, Cmd-D duplicates one span later, Cmd-L
+              loops to the selection, Q quantizes starts, Shift-Q includes lengths. Wheel scrolls pitch,
+              Shift-wheel time, Cmd-wheel zooms time, Alt-wheel zooms pitch; drag the keybed vertically to scroll or horizontally to zoom pitch. The playhead is a position
               the host supplies.
             </p>
           </fieldset>
           <div class="demo-showcase" style="display:block">
             <compost-note-editor data-option-target="editor" label="Clip notes" beats="12"
-              start="1" end="10" loop-start="2" loop-end="8" grid="16" root-note="48" note-count="25"
+              start="1" end="10" loop loop-start="2" loop-end="8" grid="16" root-note="48" note-count="25"
+              scale="0 2 4 5 7 9 11" root="0"
               style="height:340px"></compost-note-editor>
           </div>
         </div>

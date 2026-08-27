@@ -50,9 +50,11 @@ Right-click, long-press or Shift+F10 on anything fires a `<thing>-context`
 event with `clientX` / `clientY`; you decide what the menu contains.
 `compost-piano` sends `note-down` and `note-up`.
 
-The same modifiers everywhere: Shift is fine control on a value drag and
-extends the selection on an item drag; Alt ignores snapping, or copies on an
-item move. Double-click resets a control; a double-tap does the same on touch.
+The same modifiers work across editors: Command/Ctrl inverts time snapping,
+Shift provides fine control on value drags and extends selection on an item
+drag, and Alt copies item moves. `compost-note-editor` also uses Command/Ctrl
+on a note body to edit velocity.
+Double-click resets a control; a double-tap does the same on touch.
 `readonly` still shows live state and navigates but changes nothing;
 `disabled` is inert.
 
@@ -60,6 +62,8 @@ Events name what the user asked for, never which input did it. Elements show
 the state you give them; saving, undo, menus and what happens next are yours.
 Editors take IDs you own for the things they create, and snapping is a view
 mode over your full-precision values, never a stored grid.
+`compost-note-editor` emits `note-quantize` with the selected IDs, grid step
+and whether lengths were requested; the host applies its own strength and swing.
 
 ## Talking to a backend
 

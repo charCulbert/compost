@@ -1,5 +1,6 @@
 import { createParameterController } from '../../src/parameter-controller.js';
 import { createMIDIMappings } from '../../src/midi-mappings.js';
+import { quantizedNotes } from '../../src/piano-roll-model.js';
 import { getDemo } from './catalog.js';
 import '../shared/example-page.js';
 
@@ -597,6 +598,7 @@ function setupNoteEditorDemo() {
   const state = document.querySelector('[data-option-state]');
   const grid = option('editor-grid');
   const snap = option('editor-snap');
+  const loop = option('editor-loop');
   const draw = option('editor-draw');
   const fold = option('editor-fold');
   const playhead = option('editor-playhead');
@@ -610,33 +612,41 @@ function setupNoteEditorDemo() {
   const report = () => {
     if (!state) return;
     const bars = Math.round((editor.rangeEnd - editor.rangeStart) / editor.beatsPerBar * 1000) / 1000;
-    state.textContent = `1/${editor.grid} · ${snap?.checked ? 'snapping' : 'free'} · ${bars} bar${bars === 1 ? '' : 's'} playback · ${editor.notes.length} notes`;
+    state.textContent = `${grid?.selectedOptions?.[0]?.textContent ?? editor.grid} · ${snap?.checked ? 'snapping' : 'free'} · ${bars} bar${bars === 1 ? '' : 's'} playback · ${editor.notes.length} notes`;
   };
-  grid?.addEventListener('change', () => { editor.setAttribute('grid', grid.value); report(); });
+  grid?.addEventListener('change', () => {
+    if (grid.value === 'off') editor.setAttribute('grid-lines', 'off');
+    else { editor.removeAttribute('grid-lines'); editor.setAttribute('grid', grid.value); }
+    report();
+  });
   snap?.addEventListener('change', () => { editor.setAttribute('snap', snap.checked ? 'grid' : 'off'); report(); });
+  loop?.addEventListener('change', () => editor.toggleAttribute('loop', loop.checked));
   draw?.addEventListener('change', () => editor.toggleAttribute('draw', draw.checked));
   fold?.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
   document.querySelector('[data-editor-quantize]')?.addEventListener('click', () => editor.quantize());
   document.querySelector('[data-editor-zoom]')?.addEventListener('click', () => editor.zoomReset());
-  editor.addEventListener('notes-change', report);
+  editor.addEventListener('notes-change', ({ detail }) => { editor.notes = detail.notes; report(); });
+  editor.addEventListener('note-quantize', ({ detail }) => {
+    editor.notes = quantizedNotes(editor.notes, detail.step,
+      { ids: detail.ids, lengths: detail.lengths, beats: editor.beats });
+    report();
+  });
   editor.addEventListener('range-change', ({ detail }) => { report(); writeLog(`range-change ${detail.start}–${detail.end}`); });
   editor.addEventListener('loop-change', ({ detail }) => { report(); writeLog(`loop-change ${detail.start}–${detail.end}`); });
   editor.addEventListener('note-preview', ({ detail }) => writeLog(`note-preview ${detail.note}`));
+  editor.addEventListener('note-preview-end', ({ detail }) => writeLog(`note-preview-end ${detail.note}`));
   // a host supplies the playhead: here a clock running round the loop
   let last = performance.now();
   let position = editor.rangeStart;
-  let firstPass = true;
   const tick = (now) => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (playhead?.checked) {
       position += dt * 2;
-      if (firstPass && position >= editor.loopEnd) {
-        position = editor.loopStart + (position - editor.loopEnd); firstPass = false;
-      } else if (!firstPass && position >= editor.loopEnd) {
-        const span = Math.max(0.25, editor.loopEnd - editor.loopStart);
-        position = editor.loopStart + ((position - editor.loopStart) % span + span) % span;
-      }
+      const start = editor.hasAttribute('loop') ? editor.loopStart : editor.rangeStart;
+      const end = editor.hasAttribute('loop') ? editor.loopEnd : editor.rangeEnd;
+      const span = Math.max(0.25, end - start);
+      if (position < start || position >= end) position = start + ((position - start) % span + span) % span;
       editor.setAttribute('playhead', position.toFixed(3));
     } else if (editor.hasAttribute('playhead')) editor.removeAttribute('playhead');
     requestAnimationFrame(tick);

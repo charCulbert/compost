@@ -94,7 +94,7 @@
     </div>
     <compost-envelope-editor label="Gain automation over 4 beats" duration="4" grid="0.25"
       style="height: 11em"></compost-envelope-editor>
-    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click a line to add a point; double-click or Alt-click a point to remove it. Drag empty space to select, then drag a selected point or press Cmd+D. Option-drag a segment to curve it. Shift is fine movement; Option inverts snapping for point moves.</small>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click a line to add a point; double-click or Alt-click a point to remove it. Drag empty space to select, then drag a selected point or press Cmd+D. Option-drag a segment to curve it. Shift is fine movement; Command/Ctrl inverts snapping.</small>
   </div>
 </template>
 <template id="compost-drawer">
@@ -170,12 +170,40 @@
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click the piano, then play with A W S E D F T G Y H U J K O L P ; — or use pointer or touch.</small>
   </div>
 </template>
+<template id="compost-note-editor">
+  <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
+    <span>Clip notes</span>
+    <compost-note-editor label="Clip notes" beats="12" start="1" end="10" loop loop-start="2" loop-end="8"
+      grid="16" root-note="48" note-count="25" scale="0 2 4 5 7 9 11" root="0"
+      playhead="3" style="height: 24em"></compost-note-editor>
+    <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
+      <label>Grid <select data-note-grid>
+        <option value="off">Off</option><option value="1">1 bar</option>
+        <option value="4">1/4</option><option value="6">1/4 triplet</option>
+        <option value="8">1/8</option><option value="12">1/8 triplet</option>
+        <option value="16" selected>1/16</option><option value="24">1/16 triplet</option>
+        <option value="32">1/32</option><option value="48">1/32 triplet</option>
+      </select></label>
+      <label><input type="checkbox" data-note-snap checked> Snap</label>
+      <label><input type="checkbox" data-note-loop checked> Loop</label>
+      <label><input type="checkbox" data-note-draw> Draw</label>
+      <label><input type="checkbox" data-note-fold> Fold</label>
+      <label><input type="checkbox" data-note-playhead checked> Run playhead</label>
+      <label>Pitch rows <input type="number" data-note-rows min="13" max="128" value="25" style="width: 5em"></label>
+      <button type="button" data-note-fit-pitches>All pitches</button>
+      <button type="button" data-note-quantize>Quantize</button>
+      <button type="button" data-note-zoom>Reset zoom</button>
+    </div>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag notes to move; Alt-drag copies; Command/Ctrl inverts time snapping. Command/Ctrl-drag on a note changes velocity; Shift-click extends selection and Shift is precise for values and edges. In Draw mode, drag right for length and vertically for velocity. Drag empty grid for a note box or the ruler for time; Shift-click extends it. Drag the piano vertically to pan pitches or horizontally to zoom them. Double-click adds; Escape clears selection. Shift-arrows move an octave or fine in time; Alt-left/right changes length. In Fold, up/down steps through displayed pitches. Wheel scrolls pitch; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel zooms pitch.</small>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
 <pre id="markup"></pre>
 <nav id="nav"></nav>
 <script type="module">
+  import { quantizedNotes } from '../../src/piano-roll-model.js';
   const ELEMENTS = [
     'compost-knob', 'compost-slider', 'compost-button', 'compost-number-box', 'compost-select',
     'compost-meter', 'compost-scope', 'compost-envelope-editor',
@@ -203,7 +231,7 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'clip-launch', 'clip-stop', 'clip-record', 'clip-select', 'clip-open', 'clip-context', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-move', 'clip-drag-start', 'clip-drag-end', 'clip-drop', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'clip-launch', 'clip-stop', 'clip-record', 'clip-select', 'clip-open', 'clip-context', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-move', 'clip-drag-start', 'clip-drag-end', 'clip-drop', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection', 'notes-change', 'note-quantize', 'loop-input', 'loop-change', 'range-input', 'range-change', 'selection-change', 'note-preview', 'note-preview-end', 'note-context'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-window') {
@@ -440,6 +468,76 @@
         piano.toggleAttribute('dock', dock.checked);
         piano.toggleAttribute('inline', !dock.checked);
       });
+    }
+    if (el === 'compost-note-editor') {
+      const editor = s.querySelector('compost-note-editor');
+      const grid = s.querySelector('[data-note-grid]');
+      const snap = s.querySelector('[data-note-snap]');
+      const loop = s.querySelector('[data-note-loop]');
+      const draw = s.querySelector('[data-note-draw]');
+      const fold = s.querySelector('[data-note-fold]');
+      const playhead = s.querySelector('[data-note-playhead]');
+      const rows = s.querySelector('[data-note-rows]');
+      let nextNoteId = 1;
+      editor.noteIdFactory = () => `${cls}-note-${nextNoteId++}`;
+      editor.setNotes([
+        { note: 60, start: 1, duration: 1, velocity: 112, channel: 0 },
+        { note: 64, start: 2.5, duration: .5, velocity: 82, channel: 0 },
+        { note: 67, start: 3.5, duration: 1.5, velocity: 100, channel: 0 },
+        { note: 62, start: 5.5, duration: .5, velocity: 68, channel: 0 },
+        { note: 65, start: 6.5, duration: 1, velocity: 94, channel: 0 },
+      ].map((note) => ({ ...note, id: editor.noteIdFactory() })));
+      editor.addEventListener('notes-change', ({ detail }) => { editor.notes = detail.notes; });
+      editor.addEventListener('note-quantize', ({ detail }) => {
+        editor.notes = quantizedNotes(editor.notes, detail.step,
+          { ids: detail.ids, lengths: detail.lengths, beats: editor.beats });
+      });
+      grid.addEventListener('change', () => {
+        if (grid.value === 'off') editor.setAttribute('grid-lines', 'off');
+        else {
+          editor.removeAttribute('grid-lines');
+          editor.setAttribute('grid', grid.value);
+        }
+      });
+      snap.addEventListener('change', () => editor.setAttribute('snap', snap.checked ? 'grid' : 'off'));
+      loop.addEventListener('change', () => editor.toggleAttribute('loop', loop.checked));
+      draw.addEventListener('change', () => editor.toggleAttribute('draw', draw.checked));
+      s.addEventListener('keydown', (event) => {
+        if (event.key.toLowerCase() !== 'b' || event.metaKey || event.ctrlKey || event.altKey
+          || event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+        event.preventDefault();
+        draw.checked = !draw.checked;
+        draw.dispatchEvent(new Event('change'));
+      });
+      fold.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
+      rows.addEventListener('change', () => editor.setAttribute('note-count', rows.value));
+      s.querySelector('[data-note-fit-pitches]').addEventListener('click', () => {
+        rows.value = '128';
+        editor.setAttribute('root-note', '0');
+        editor.setAttribute('note-count', '128');
+      });
+      s.querySelector('[data-note-quantize]').addEventListener('click', () => editor.quantize());
+      s.querySelector('[data-note-zoom]').addEventListener('click', () => {
+        rows.value = '25';
+        editor.zoomReset();
+      });
+      let last = performance.now();
+      let position = editor.rangeStart;
+      const advance = (now) => {
+        const delta = Math.min(.05, (now - last) / 1000) * 2;
+        last = now;
+        if (playhead.checked) {
+          position += delta;
+          const start = editor.hasAttribute('loop') ? editor.loopStart : editor.rangeStart;
+          const end = editor.hasAttribute('loop') ? editor.loopEnd : editor.rangeEnd;
+          if (position < start || position >= end) position = start + ((position - start) % (end - start) + end - start) % (end - start);
+          editor.setAttribute('playhead', position.toFixed(3));
+        } else {
+          editor.removeAttribute('playhead');
+        }
+        requestAnimationFrame(advance);
+      };
+      requestAnimationFrame(advance);
     }
     if (el === 'compost-envelope-editor') {
       const editor = s.querySelector('compost-envelope-editor');
