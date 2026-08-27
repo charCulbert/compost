@@ -508,7 +508,7 @@ export class CompostTimeline extends HTMLElement {
       </style>
       <div class="frame" part="frame">
         <div class="corner" part="corner"></div>
-        <div class="ruler-wrap" part="ruler" role="button" tabindex="0" aria-label="Timeline ruler">
+        <div class="ruler-wrap" part="ruler" role="group" tabindex="0" aria-label="Timeline ruler">
           <div class="ruler"><div class="ruler-world"></div><div class="ruler-time-selection" part="time-selection"></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start"></div><div class="ruler-handle end" part="loop-handle loop-end"></div><div class="ruler-playhead" part="playhead"></div></div>
         </div>
         <div class="header-wrap" part="headers"><div class="headers" role="list"></div><div class="lane-drop-line"></div></div>
@@ -576,7 +576,7 @@ export class CompostTimeline extends HTMLElement {
 
   connectedCallback() {
     if (!this.hasAttribute('tabindex')) this.tabIndex = 0;
-    this.setAttribute('role', 'list');
+    this.setAttribute('role', 'region');
     this.syncAttributes();
     this.render();
     this.resizeObserver?.observe(this);
@@ -1371,7 +1371,7 @@ export class CompostTimeline extends HTMLElement {
     handle.part.add('lane-resize');
     handle.tabIndex = 0;
     handle.setAttribute('role', 'separator');
-    handle.setAttribute('aria-label', `Resize ${lane.name}`);
+    handle.setAttribute('aria-label', `Resize ${lane.name || lane.id}`);
     handle.setAttribute('aria-orientation', 'horizontal');
     handle.setAttribute('aria-valuemin', '24');
     handle.setAttribute('aria-valuemax', '400');

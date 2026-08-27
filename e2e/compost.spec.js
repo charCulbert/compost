@@ -806,6 +806,16 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   expect(events.some((event) => event.type === 'seek' && event.detail.source === 'ruler')).toBe(true);
 });
 
+test('timeline is a region holding a list of lanes and names unnamed lanes by id', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => element.setLanes([{ id: 'bus-7', clips: [] }]));
+  await expect(timeline).toHaveAttribute('role', 'region');
+  await expect(timeline.locator('.ruler-wrap')).toHaveAttribute('role', 'group');
+  await expect(timeline.locator('.lanes-world')).toHaveAttribute('role', 'list');
+  await expect(timeline.getByRole('separator', { name: 'Resize bus-7' })).toHaveCount(1);
+});
+
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
