@@ -2881,6 +2881,30 @@ test('note editor defers empty-click semantics and Shift-click extends the prior
   expect(await editor.evaluate((element) => element.notes.length)).toBe(beforeCreate + 1);
 });
 
+test('note editor double-click creates in the clicked grid cell every time', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => element.setNotes([]));
+  const geometry = await editor.evaluate((element) => ({
+    px: element.pxPerBeat, step: element.step, row: element.rowHeight,
+  }));
+  const grid = await editor.locator('.grid').boundingBox();
+  const cells = [5, 9, 13];
+  await page.mouse.click(
+    grid.x + 1.25 * geometry.step * geometry.px,
+    grid.y + 1.5 * geometry.row,
+  );
+  for (let index = 0; index < cells.length; index += 1) {
+    await page.mouse.dblclick(
+      grid.x + (cells[index] + .75) * geometry.step * geometry.px,
+      grid.y + (index + 3.5) * geometry.row,
+      { delay: 60 },
+    );
+  }
+  expect(await editor.evaluate((element) => element.notes.map((note) => note.start)))
+    .toEqual(cells.map((cell) => cell * geometry.step));
+});
+
 test('note editor duplication time contains the full span of every selected note', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');

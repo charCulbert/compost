@@ -17,7 +17,7 @@ import {
 import { extendSelectionRegion, normalizeSelectionRegion } from '../selection-region.js';
 export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
-import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
+import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
@@ -110,7 +110,7 @@ export class CompostNoteEditor extends HTMLElement {
     /** @type {any} */ this.loopDrag = null;
     /** @type {any} */ this.keyPan = null;
     /** @type {{id: string, time: number}|null} */ this.modifiedClick = null;
-    /** @type {{beat: number, note: number, time: number}|null} */ this.pendingEmptyClick = null;
+    /** @type {{beat: number, note: number, x: number, y: number, time: number}|null} */ this.pendingEmptyClick = null;
     this.ignoreDoubleClick = false;
     this.editorID = `compost-note-editor-${nextEditorID++}`;
     this.handleModifierKey = this.handleModifierKey.bind(this);
@@ -718,6 +718,12 @@ export class CompostNoteEditor extends HTMLElement {
     return free ? Math.max(0, beat) : snapBeats(beat, this.step, 'grid');
   }
 
+  /** A new note belongs to the grid cell under the pointer, not the nearest line. */
+  creationBeat(beat, free = this.snapMode === 'off') {
+    if (free) return Math.max(0, beat);
+    return Math.max(0, Math.floor((beat + Number.EPSILON) / this.step) * this.step);
+  }
+
   /** Command/Ctrl temporarily uses the opposite of the configured time snapping mode. */
   gestureIsFree(event) {
     const modifier = event.metaKey || event.ctrlKey;
@@ -1089,6 +1095,7 @@ export class CompostNoteEditor extends HTMLElement {
       pointerId: event.pointerId, mode: 'marq', kind,
       x: event.clientX, y: event.clientY,
       startBeat: clamp(this.snapBeat(this.xToBeat(point.x), this.gestureIsFree(event)), 0, this.beats),
+      createBeat: clamp(this.creationBeat(this.xToBeat(point.x), this.gestureIsFree(event)), 0, this.beats),
       note0: kind === 'box' ? this.yToNote(point.y) : undefined,
       y0: point.y, moved: false, shiftKey: event.shiftKey,
       base: new Set(this.selection),
@@ -1166,7 +1173,7 @@ export class CompostNoteEditor extends HTMLElement {
       this.modifiedClick = null;
       event.preventDefault();
       if (this.hasAttribute('draw')) {
-        const start = this.snapBeat(this.xToBeat(point.x), this.gestureIsFree(event));
+        const start = this.creationBeat(this.xToBeat(point.x), this.gestureIsFree(event));
         const selectionBefore = [...this.selection];
         const created = {
           id: this.newNoteId(), note: this.yToNote(point.y),
@@ -1380,8 +1387,12 @@ export class CompostNoteEditor extends HTMLElement {
       } else {
         if (drag.kind === 'box') {
           const time = Number(event.timeStamp) || performance.now();
-          if (!this.pendingEmptyClick || time - this.pendingEmptyClick.time > DOUBLE_CLICK_MS) {
-            this.pendingEmptyClick = { beat: drag.startBeat, note: drag.note0, time };
+          const pending = this.pendingEmptyClick;
+          if (!pending || time - pending.time > DOUBLE_CLICK_MS
+            || Math.hypot(drag.x - pending.x, drag.y - pending.y) > DOUBLE_TAP_DISTANCE) {
+            this.pendingEmptyClick = {
+              beat: drag.createBeat, note: drag.note0, x: drag.x, y: drag.y, time,
+            };
           }
         }
         this.selectionRegion = null;
@@ -1438,7 +1449,7 @@ export class CompostNoteEditor extends HTMLElement {
     const point = this.gridPoint(event);
     const pending = this.pendingEmptyClick;
     this.pendingEmptyClick = null;
-    const start = pending?.beat ?? this.snapBeat(this.xToBeat(point.x), this.gestureIsFree(event));
+    const start = pending?.beat ?? this.creationBeat(this.xToBeat(point.x), this.gestureIsFree(event));
     const created = {
       id: this.newNoteId(), note: pending?.note ?? this.yToNote(point.y),
       start: Math.min(start, Math.max(0, this.beats - this.step)),
