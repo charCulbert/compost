@@ -74,6 +74,9 @@ data and are not represented by either element.
 and whether lengths were requested; the host applies its own strength and swing.
 `compost-timeline` never moves automation with a clip; a host that wants that
 shifts the lane's points when it applies `clip-move`.
+With the timeline's `automation` attribute present, each lane shows its one
+automation curve over dimmed, inert clips; without it, the lane shows clips.
+The host chooses that curve through `lane.automation` or `setLaneAutomation()`.
 
 ## Talking to a backend
 
