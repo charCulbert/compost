@@ -8,6 +8,7 @@ import {
   normaliseNotes,
   notesInBox,
   quantizedNotes,
+  resolveOverlaps,
   resizedNotes,
   snapBeats,
   snapDuration,
@@ -89,6 +90,39 @@ test('resizing grows from the right edge and is capped by the clip', () => {
   assert.equal(resizedNotes(notes, ['a'], 99, 4, 0.25)[0].duration, 1);
   assert.equal(resizedNotes(notes, ['a'], -99, 4, 0.25)[0].duration, 0.25,
     'a note never collapses past one cell');
+});
+
+test('resolveOverlaps shortens an earlier stationary note', () => {
+  const active = note({ id: 'active', start: 1, duration: 1, channel: 2 });
+  const earlier = note({ id: 'earlier', start: 0, duration: 1.5, channel: 2 });
+  assert.deepEqual(resolveOverlaps([earlier, active], ['active']), [
+    { ...earlier, duration: 1 }, active,
+  ]);
+});
+
+test('resolveOverlaps removes covered starts only on the same pitch and channel', () => {
+  const active = note({ id: 'active', start: 1, duration: 1, channel: 2 });
+  const covered = note({ id: 'covered', start: 1.5, duration: 1, channel: 2 });
+  const touching = note({ id: 'touching', start: 2, duration: 1, channel: 2 });
+  const otherChannel = note({ id: 'channel', start: 1.5, duration: 1, channel: 3 });
+  const otherPitch = note({ id: 'pitch', note: 61, start: 1.5, duration: 1, channel: 2 });
+  assert.deepEqual(resolveOverlaps(
+    [active, covered, touching, otherChannel, otherPitch], ['active'],
+  ), [active, touching, otherChannel, otherPitch]);
+});
+
+test('resolveOverlaps removes a shortened note below the numerical minimum', () => {
+  const stationary = note({ id: 'stationary', start: 1, duration: 1 });
+  const active = note({ id: 'active', start: 1 + MIN_DURATION / 2, duration: 1 });
+  assert.deepEqual(resolveOverlaps([stationary, active], ['active']), [active]);
+});
+
+test('resolveOverlaps lets the later-starting edited note win', () => {
+  const earlier = note({ id: 'earlier', start: 1, duration: 2 });
+  const later = note({ id: 'later', start: 2, duration: 1 });
+  assert.deepEqual(resolveOverlaps([earlier, later], ['earlier', 'later']), [
+    { ...earlier, duration: 1 }, later,
+  ]);
 });
 
 test('quantize snaps starts, and lengths only when asked', () => {

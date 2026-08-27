@@ -143,6 +143,36 @@ export function velocityShiftedNotes(notes, ids, delta) {
     : note));
 }
 
+/** Edited notes replace a covered start, or trim the tail of an earlier note.
+ * Notes on another pitch or MIDI channel remain independent. */
+/** @param {RollNote[]} notes @param {string[]} activeIds */
+export function resolveOverlaps(notes, activeIds) {
+  const active = new Set(activeIds);
+  const overlaps = (note, other) => note.note === other.note
+      && note.channel === other.channel
+      && note.start < other.start + other.duration
+      && other.start < note.start + note.duration;
+  const edited = notes.filter((note) => active.has(note.id))
+    .sort((a, b) => b.start - a.start);
+  const winners = [];
+  for (const note of edited) {
+    const collisions = winners.filter((other) => overlaps(note, other));
+    if (collisions.some((other) => other.start <= note.start)) continue;
+    const end = collisions.length ? Math.min(...collisions.map((other) => other.start))
+      : note.start + note.duration;
+    if (end - note.start >= MIN_DURATION) winners.push({ ...note, duration: end - note.start });
+  }
+  const winnerById = new Map(winners.map((note) => [note.id, note]));
+  return notes.flatMap((note) => {
+    if (active.has(note.id)) return winnerById.has(note.id) ? [winnerById.get(note.id)] : [];
+    const collisions = winners.filter((other) => overlaps(note, other));
+    if (!collisions.length) return [note];
+    if (collisions.some((other) => other.start <= note.start)) return [];
+    const end = Math.min(...collisions.map((other) => other.start));
+    return end - note.start >= MIN_DURATION ? [{ ...note, duration: end - note.start }] : [];
+  });
+}
+
 /** The first start and last end of a set of notes, or null when empty. */
 /** @param {RollNote[]} notes @param {string[]|null} [ids] */
 export function selectionSpan(notes, ids = null) {
