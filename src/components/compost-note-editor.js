@@ -104,6 +104,7 @@ export class CompostNoteEditor extends HTMLElement {
     /** @type {any} */ this.keyPan = null;
     /** @type {{id: string, time: number}|null} */ this.modifiedClick = null;
     /** @type {{beat: number, note: number, x: number, y: number, time: number}|null} */ this.pendingEmptyClick = null;
+    /** @type {number|null} */ this.hoverNote = null;
     this.ignoreDoubleClick = false;
     this.editorID = `compost-note-editor-${nextEditorID++}`;
     this.handleModifierKey = this.handleModifierKey.bind(this);
@@ -858,15 +859,20 @@ export class CompostNoteEditor extends HTMLElement {
       markup.push(`<div class="${classes}" part="${parts}" data-note="${note}" data-name="${noteName(note)}"${label}${scaleState}${rootState} style="top:${(index * height).toFixed(2)}px;height:${Math.max(2, height).toFixed(2)}px"></div>`);
     });
     this.keys.innerHTML = markup.join('');
+    if (this.hoverNote !== null) {
+      this.keys.querySelector(`[data-note="${this.hoverNote}"]`)?.setAttribute('data-hover', '');
+    }
   }
 
   clearHoverKey() {
+    this.hoverNote = null;
     this.keys.querySelector('[data-hover]')?.removeAttribute('data-hover');
   }
 
   /** Shows the grid row's pitch on the matching key without auditioning it. */
   updateHoverKey(event) {
     const note = this.yToNote(this.gridPoint(event).y);
+    this.hoverNote = note;
     const current = this.keys.querySelector('[data-hover]');
     if (current?.dataset.note === String(note)) return;
     current?.removeAttribute('data-hover');
@@ -1345,7 +1351,10 @@ export class CompostNoteEditor extends HTMLElement {
     this.drag = null;
     this.tip.hidden = true;
     this.marquee.style.display = 'none';
-    this.clearHoverKey();
+    const bounds = this.gridWrap.getBoundingClientRect();
+    if (event.type === 'pointercancel' || event.clientX < bounds.left || event.clientX > bounds.right
+      || event.clientY < bounds.top || event.clientY > bounds.bottom) this.clearHoverKey();
+    else this.updateHoverKey(event);
     this.removeAttribute('data-drag');
     if (event.type === 'pointercancel') {
       this._preview = null;

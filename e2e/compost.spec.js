@@ -3123,6 +3123,9 @@ test('note editor loop visibility and keybed panning follow host state', async (
   await expect(editor.locator('.key[data-note="63"]')).toHaveAttribute('data-hover', '');
   expect(await editor.locator('.key[data-note="63"]').evaluate((element) =>
     getComputedStyle(element, '::before').content)).toContain('D#');
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(editor.locator('.key[data-note="63"]')).toHaveAttribute('data-hover', '');
 });
 
 test('note editor keeps its visual hierarchy neutral and marks a supplied scale', async ({ page }) => {
