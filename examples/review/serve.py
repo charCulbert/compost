@@ -1,6 +1,6 @@
 """Static server for the repository root with caching disabled.
 
-    python3 examples/review/serve.py 8931
+    python3 examples/review/serve.py 8000
 
 Element modules change on every style round; `Cache-Control: no-store`
 keeps the browser from showing the previous one.
@@ -21,5 +21,5 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-port = int(sys.argv[1]) if len(sys.argv) > 1 else 8931
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 http.server.ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()

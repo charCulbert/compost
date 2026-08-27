@@ -2,7 +2,7 @@
 // three page contexts, reports console errors, computed ink/font per context,
 // the focused element after Tab, and saves examples/review/review-<element>.png.
 //
-//   python3 examples/review/serve.py 8931 &
+//   npm run dev
 //   node examples/review/review-check.mjs compost-knob [port]
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -21,7 +21,7 @@ if (!playwrightPath) {
 const { chromium } = await import(pathToFileURL(playwrightPath).href);
 
 const el = process.argv[2] || 'compost-knob';
-const port = process.argv[3] || '8931';
+const port = process.argv[3] || '8000';
 const browser = await chromium.launch();
 const page = await (await browser.newContext({ viewport: { width: 1000, height: 900 } })).newPage();
 const errors = [];

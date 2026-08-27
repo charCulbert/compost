@@ -19,6 +19,14 @@ test('the repository root redirects to the examples page', () => {
   assert.doesNotMatch(html, /Small tools for audio apps|class="links"/u);
 });
 
+test('the no-cache review server and checker share port 8000 by default', () => {
+  const server = fs.readFileSync(path.join(root, 'examples/review/serve.py'), 'utf8');
+  const checker = fs.readFileSync(path.join(root, 'examples/review/review-check.mjs'), 'utf8');
+  assert.match(server, /else 8000/u);
+  assert.match(checker, /process\.argv\[3\] \|\| '8000'/u);
+  assert.doesNotMatch(`${server}\n${checker}`, /8931/u);
+});
+
 test('the retired theme surface stays out of the package and examples', () => {
   const packageJSON = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const sharedStyles = fs.readFileSync(path.join(root, 'examples/shared/styles.css'), 'utf8');
