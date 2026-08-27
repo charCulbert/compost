@@ -1548,7 +1548,7 @@ export class CompostTimeline extends HTMLElement {
     const start = Number(clip.start) || 0;
     const end = start + Math.max(0, Number(clip.length) || 0);
     element.setAttribute('aria-label', `${clip.name || 'clip'}, bar ${Math.floor(start / this.beatsPerBar) + 1} to ${Math.max(Math.floor((end - MIN_CLIP_LENGTH) / this.beatsPerBar) + 1, 1)}, lane ${lane.name || lane.id}`);
-    const box = clipBox(clip, this._pxPerBeat, this._scrollBeat);
+    const box = clipBox(clip, this._pxPerBeat, 0);
     element.style.left = `${box.left}px`;
     element.style.width = `${box.width}px`;
     if (element.dataset.state === 'playing' && Number.isFinite(Number(clip.progress))) {
@@ -2165,7 +2165,7 @@ export class CompostTimeline extends HTMLElement {
       for (const preview of drag.previews) {
         const element = this.clipElements().find((node) => node.dataset.id === preview.id);
         if (!element) continue;
-        element.style.left = `${(preview.start - this._scrollBeat) * this._pxPerBeat}px`;
+        element.style.left = `${preview.start * this._pxPerBeat}px`;
         element.style.width = `${Math.max(1, (preview.end - preview.start) * this._pxPerBeat)}px`;
         this.paintClipContent(element, previewTrimmedClip(preview.clip, preview.start, preview.end));
         this.dispatchEvent(eventOf('clip-trim-input', { id: preview.id, start: preview.start, end: preview.end }));

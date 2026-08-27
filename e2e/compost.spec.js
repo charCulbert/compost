@@ -919,6 +919,37 @@ test('timeline clips snap to their neighbours and locators', async ({ page }) =>
   expect(trim.detail.end).toBeCloseTo(6.3, 6);
 });
 
+test('timeline clips stay in the ruler coordinate system while scrolled and zoomed', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.pxPerBeat = 40;
+    element.scrollBeat = 2;
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [
+      { id: 'clip', name: 'clip', start: 4, length: 2, duration: 2, loop: false },
+    ] }]);
+  });
+
+  const beatAtClipStart = await timeline.evaluate((element) => {
+    const clip = element.shadowRoot.querySelector('.clip[data-id="clip"]');
+    return element.beatAtPoint(clip.getBoundingClientRect().left);
+  });
+  expect(beatAtClipStart).toBeCloseTo(4, 5);
+
+  const wrap = await timeline.locator('.lanes-wrap').boundingBox();
+  const clientX = wrap.x + 120;
+  const before = await timeline.evaluate((element, x) => element.beatAtPoint(x), clientX);
+  await timeline.locator('.lanes-wrap').dispatchEvent('wheel', {
+    clientX, clientY: wrap.y + 20, deltaY: -100, metaKey: true,
+  });
+  const after = await timeline.evaluate((element, x) => element.beatAtPoint(x), clientX);
+  expect(Math.abs(after - before)).toBeLessThan(.01);
+  expect(Math.abs(await timeline.evaluate((element) => {
+    const clip = element.shadowRoot.querySelector('.clip[data-id="clip"]');
+    return element.beatAtPoint(clip.getBoundingClientRect().left);
+  }) - 4)).toBeLessThan(.01);
+});
+
 test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
