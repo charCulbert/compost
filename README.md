@@ -69,17 +69,22 @@ denominator only changes ruler counting and line placement. The legacy
 present. Grid values are meter-independent note values such as `1/8`, `1/16T`
 or `bar`; bare numbers remain supported as legacy cells per bar. Compound x/8
 meters show a pulse every three eighths. Meter changes within a song are host
-data and are not represented by either element.
+data and are not represented by either element. Grid resolution stays fixed by
+default; `adaptive-grid` lets zoom choose the effective step in both editors.
 `compost-note-editor` emits `note-quantize` with the selected IDs, grid step
 and whether lengths were requested; the host applies its own strength and swing.
 `compost-timeline` never moves automation with a clip; a host that wants that
 shifts the lane's points when it applies `clip-move`.
 With the timeline's `automation` attribute present, each lane shows its one
-automation curve over dimmed clips; without it, the lane shows clips. A clip's
-name strip still selects, opens and asks for its menu under the curve; the
-rest of the clip belongs to the curve. The host chooses that curve through
+automation curve over dimmed clips when the host has chosen a parameter; lanes
+without one remain ordinary clip lanes. A clip's name strip selects, moves,
+opens and renames it, while its body selects time or belongs to the curve.
+Right-click still asks for the clip menu anywhere in its box. The host chooses that curve through
 `lane.automation` or `setLaneAutomation()`, usually from a menu in the lane
 header it slots in.
+`time-duplicate` asks the host to copy the exact selected span, including partial
+clips, immediately after itself. Clip overlap and audio-source trim limits are
+also host policy; the timeline draws the clip state handed back to it.
 
 ## Talking to a backend
 

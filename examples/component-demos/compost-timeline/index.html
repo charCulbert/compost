@@ -84,7 +84,7 @@
           timeline.setLaneAutomation(select.dataset.laneAutomation, choice ? structuredClone(choice) : null);
         });
       }
-      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-header-context', 'lane-pick', 'lane-move', 'automation-change', 'draw-toggle', 'automation-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
+      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'time-duplicate', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-header-context', 'lane-pick', 'lane-move', 'automation-change', 'draw-toggle', 'automation-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
         timeline.addEventListener(type, (event) => {
           const detail = { ...event.detail };
           delete detail.clientX;

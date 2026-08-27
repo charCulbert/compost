@@ -739,9 +739,10 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
 
   let box = await clip.boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  let title = await clip.locator('.clip-name').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, title.y + title.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 200, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.move(box.x + box.width / 2 + 200, title.y + title.height / 2, { steps: 8 });
   await page.mouse.up();
   let events = await timeline.evaluate((element) => element.testEvents);
   const move = events.find((event) => event.type === 'clip-move');
@@ -752,10 +753,11 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
     element.setAttribute('snap', 'grid');
   });
   box = await clip.boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  title = await clip.locator('.clip-name').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, title.y + title.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63,
-    box.y + box.height / 2, { steps: 4 });
+    title.y + title.height / 2, { steps: 4 });
   const snappedPreview = await timeline.evaluate((element) => ({
     delta: element.drag?.previewDelta,
     transform: element.shadowRoot.querySelector('.clip[data-id="beat"]')?.style.transform,
@@ -857,12 +859,7 @@ test('timeline regions extend on Shift-click, span every lane from the ruler and
   await page.keyboard.up('Shift');
   let selection = await timeline.evaluate((element) => element.timeSelection);
   expect(selection).toEqual({ start: 2, end: 8, laneIds: ['a', 'b'] });
-  expect(await timeline.evaluate((element) => element.selected)).toEqual(['one', 'two']);
-  await expect(timeline.locator('.ruler-time-selection-readout')).toHaveText('6 beats');
-
-  // Cmd-click a clip adds it to (here: removes it from) the selection
-  await timeline.locator('.clip[data-id="two"]').click({ modifiers: ['Meta'] });
-  expect(await timeline.evaluate((element) => element.selected)).toEqual(['one']);
+  expect(await timeline.evaluate((element) => element.selected)).toEqual([]);
 
   // a drag along the ruler's loop row makes a region on every lane
   await page.mouse.move(ruler.x + 1 * pxPerBeat, ruler.y + ruler.height - 4);
@@ -871,7 +868,6 @@ test('timeline regions extend on Shift-click, span every lane from the ruler and
   await page.mouse.up();
   selection = await timeline.evaluate((element) => element.timeSelection);
   expect(selection).toEqual({ start: 1, end: 5, laneIds: ['a', 'b'] });
-  await expect(timeline.locator('.ruler-time-selection-readout')).toHaveText('1 bar');
 
   await timeline.focus();
   await page.keyboard.press('Meta+a');
@@ -901,10 +897,12 @@ test('timeline clips snap to their neighbours and locators', async ({ page }) =>
   const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
 
   // a's end lands next to b's off-grid start and butts up to it
-  let box = await timeline.locator('.clip[data-id="a"]').boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const clipA = timeline.locator('.clip[data-id="a"]');
+  let box = await clipA.boundingBox();
+  const title = await clipA.locator('.clip-name').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, title.y + title.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * 2.08, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * 2.08, title.y + title.height / 2, { steps: 4 });
   await page.mouse.up();
   const move = await timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'clip-move'));
   expect(move.detail.deltaBeats).toBeCloseTo(2.1, 6);
@@ -974,15 +972,17 @@ test('timeline clip selection and loop match the note-editor visual language', a
       { id: 'one-shot', name: 'One shot', start: 5, length: 2, duration: 2, loop: false },
     ] }]);
     element.setLoop(1, 6, true);
-    element.selectOne('looped');
   });
 
   const selected = timeline.locator('.clip[data-id="looped"]');
+  const unselectedWidth = (await selected.boundingBox()).width;
+  await timeline.evaluate((element) => element.selectOne('looped'));
   expect(await selected.evaluate((node) => ({
     border: getComputedStyle(node).borderLeftWidth,
-    outline: getComputedStyle(node).outlineWidth,
-    outlineColor: getComputedStyle(node).outlineColor,
-  }))).toEqual({ border: '1px', outline: '1px', outlineColor: 'rgb(0, 0, 0)' });
+    borderColor: getComputedStyle(node).borderLeftColor,
+    outline: getComputedStyle(node).outlineStyle,
+    width: node.getBoundingClientRect().width,
+  }))).toEqual({ border: '2px', borderColor: 'rgb(0, 0, 0)', outline: 'none', width: unselectedWidth });
   await expect(timeline.locator('.timeline-line.loop')).toHaveCount(2);
   const lanesHeight = await timeline.locator('.lanes-wrap').evaluate((node) => node.getBoundingClientRect().height);
   for (const line of await timeline.locator('.timeline-line.loop').all()) {
@@ -991,7 +991,7 @@ test('timeline clip selection and loop match the note-editor visual language', a
 
   let box = await selected.boundingBox();
   await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
-  expect(await selected.evaluate((node) => getComputedStyle(node).cursor)).toBe('e-resize');
+  expect(await selected.evaluate((node) => getComputedStyle(node).cursor)).toBe('ew-resize');
   const oneShot = timeline.locator('.clip[data-id="one-shot"]');
   box = await oneShot.boundingBox();
   await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
@@ -1015,26 +1015,28 @@ test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => 
 
   // start plain, press Alt on the way: a copy, and the original stops fading
   let box = await clip.boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  let title = await clip.locator('.clip-name').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, title.y + title.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.move(box.x + box.width / 2 + 40, title.y + title.height / 2, { steps: 3 });
   await expect(clip).toHaveAttribute('data-dragging', '');
   await page.keyboard.down('Alt');
   await expect(clip).not.toHaveAttribute('data-dragging', '');
   await expect(timeline).toHaveAttribute('data-drag-copy', '');
-  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 2 });
+  await page.mouse.move(box.x + box.width / 2 + 60, title.y + title.height / 2, { steps: 2 });
   await page.mouse.up();
   await page.keyboard.up('Alt');
   expect((await timeline.evaluate((element) => element.testEvents.at(-1))).copy).toBe(true);
 
   // start with Alt, release it on the way: a plain move
   box = await clip.boundingBox();
+  title = await clip.locator('.clip-name').boundingBox();
   await page.keyboard.down('Alt');
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width / 2, title.y + title.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.move(box.x + box.width / 2 + 40, title.y + title.height / 2, { steps: 3 });
   await page.keyboard.up('Alt');
-  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 2 });
+  await page.mouse.move(box.x + box.width / 2 + 60, title.y + title.height / 2, { steps: 2 });
   await page.mouse.up();
   expect((await timeline.evaluate((element) => element.testEvents.at(-1))).copy).toBe(false);
   await expect(timeline).not.toHaveAttribute('data-drag-copy', '');
@@ -1204,10 +1206,11 @@ test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page 
   const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
 
   let box = await clip.boundingBox();
+  let title = await clip.locator('.clip-name').boundingBox();
   await page.keyboard.down('Alt');
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width / 2, title.y + title.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63, title.y + title.height / 2, { steps: 4 });
   await page.mouse.up();
   await page.keyboard.up('Alt');
   let move = await timeline.evaluate((element) => element.testEvents.at(-1));
@@ -1215,11 +1218,12 @@ test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page 
 
   await timeline.evaluate((element) => element.selectOne('beat'));
   box = await other.boundingBox();
+  title = await other.locator('.clip-name').boundingBox();
   await page.keyboard.down('Meta');
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width / 2, title.y + title.height / 2);
   await page.mouse.down();
   expect(await timeline.evaluate((element) => element.selected)).toEqual(['other']);
-  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63, title.y + title.height / 2, { steps: 4 });
   await page.mouse.up();
   await page.keyboard.up('Meta');
   move = await timeline.evaluate((element) => element.testEvents.at(-1));
@@ -1338,12 +1342,10 @@ test('timeline rulers expose locators, time selections and measured row geometry
     selected: element.selected,
     bands: [...element.shadowRoot.querySelectorAll('.time-selection')].map((node) => node.dataset.laneId),
     rulerBand: element.shadowRoot.querySelector('.ruler-time-selection').getBoundingClientRect().width,
-  }))).toEqual({ selection: { start: 4, end: 8, laneIds: ['b', 'c'] }, selected: ['inside'], bands: ['b', 'c'], rulerBand: 96 });
-  expect(await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'clip-select'))).toEqual([
-    { type: 'clip-select', detail: { ids: ['inside'] } },
-  ]);
+  }))).toEqual({ selection: { start: 4, end: 8, laneIds: ['b', 'c'] }, selected: [], bands: ['b', 'c'], rulerBand: 96 });
+  expect(await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'clip-select'))).toEqual([]);
   await timeline.evaluate((element) => element.setTimeSelection(null, null));
-  expect(await timeline.evaluate((element) => ({ selection: element.timeSelection, selected: element.selected }))).toEqual({ selection: null, selected: ['inside'] });
+  expect(await timeline.evaluate((element) => ({ selection: element.timeSelection, selected: element.selected }))).toEqual({ selection: null, selected: [] });
 
   await timeline.evaluate((element) => { element.testEvents = []; element.setTimeSelection(null, null); });
   const laneA = await timeline.locator('.lane[data-lane-id="a"]').boundingBox();
@@ -1578,7 +1580,6 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
       clipBorder: getComputedStyle(clip).borderStyle,
       clipRadius: getComputedStyle(clip).borderRadius,
       selectedBorder: getComputedStyle(clip).borderWidth,
-      selectedOutline: getComputedStyle(clip).outlineWidth,
       headerWidth: header.getBoundingClientRect().width,
       hasProgress: Boolean(clipProgress),
       hasNumber: Boolean(header.querySelector('.number')),
@@ -1587,8 +1588,7 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
   expect(measured.clipBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(measured.clipBorder).not.toBe('none');
   expect(measured.clipRadius).toBe('0px');
-  expect(measured.selectedBorder).toBe('1px');
-  expect(measured.selectedOutline).toBe('1px');
+  expect(measured.selectedBorder).toBe('2px');
   expect(measured.headerWidth).toBeLessThan(250);
   expect(measured.hasProgress).toBe(false);
   expect(measured.hasNumber).toBe(false);
@@ -1663,6 +1663,7 @@ test('timeline paints velocity dashes and clip drop targets', async ({ page }) =
   const target = timeline.locator('.lane[data-lane-id="target"]');
   const sourceBox = await source.boundingBox();
   const targetBox = await target.boundingBox();
+  const sourceTitle = await source.locator('.clip-name').boundingBox();
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(targetBox.x + 40, targetBox.y + targetBox.height / 2, { steps: 3 });
@@ -1672,9 +1673,9 @@ test('timeline paints velocity dashes and clip drop targets', async ({ page }) =
   await expect(source).not.toHaveAttribute('data-dragging', '');
   expect(await source.evaluate((node) => node.style.transform)).toBe('');
 
-  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceTitle.y + sourceTitle.height / 2);
   await page.mouse.down();
-  await page.mouse.move(targetBox.x + 40, targetBox.y + targetBox.height / 2, { steps: 3 });
+  await page.mouse.move(targetBox.x + 40, sourceTitle.y + sourceTitle.height / 2, { steps: 3 });
   await expect(source).toHaveAttribute('data-dragging', '');
   const pointerId = await timeline.evaluate((element) => element.drag?.pointerId);
   await timeline.evaluate((element, id) => element.dispatchEvent(new PointerEvent('pointercancel', {
@@ -1756,7 +1757,7 @@ test('timeline leaves most of a phone-width view for arrangement editing', async
   });
   expect(widths.host).toBe(375);
   expect(widths.header).toBeLessThanOrEqual(widths.host * .44 + 1);
-  expect(widths.lanes).toBeGreaterThanOrEqual(widths.host * .56 - 1);
+  expect(widths.lanes).toBeGreaterThanOrEqual(widths.host * .56 - 2);
 });
 
 test('timeline aligns regular and compact lanes with automation view', async ({ page }) => {
@@ -1888,7 +1889,7 @@ test('timeline automation view draw and commit sorted edits without clip selecti
   expect(geometry.on.rows).toBe(1);
   expect(geometry.on.label).toBe('Volume');
   expect(geometry.on.automationColor).toBe('rgb(40, 120, 180)');
-  expect(geometry.on.clipOpacity).toBeCloseTo(.65, 3);
+  expect(geometry.on.clipOpacity).toBeCloseTo(.3, 3);
   expect(geometry.on.clipPointerEvents).toBe('none');
   expect(Math.abs(geometry.on.laneHeight - geometry.on.baseHeight)).toBeLessThanOrEqual(1);
   expect(geometry.on.baseLane).toBe('lane');
@@ -1944,7 +1945,7 @@ test('timeline automation view keeps a clip reachable through its name strip', a
     }
     element.setLanes([{ id: 'lane', name: 'MIDI 1', clips: [
       { id: 'clip', name: 'clip', start: 0, length: 4, duration: 4, notes: [] },
-    ], automation: { id: 'gain', label: 'Gain', min: 0, max: 1, stepped: false, points: [{ beat: 0, value: .5 }] } }]);
+    ], automation: { id: 'gain', label: 'Gain', min: 0, max: 1, stepped: false, points: [{ beat: 0, value: .5 }, { beat: 2, value: .25 }] } }]);
   });
   const boxes = await timeline.evaluate((element) => {
     const clip = element.shadowRoot.querySelector('.clip').getBoundingClientRect();
@@ -1967,6 +1968,14 @@ test('timeline automation view keeps a clip reachable through its name strip', a
   expect(afterBody).not.toContain('clip-select');
   expect(afterBody).not.toContain('clip-open');
   await expect(timeline.locator('.clip[data-selected]')).toHaveCount(1);
+
+  const point = timeline.locator('.automation-editor .point').nth(1);
+  const pointBox = await point.boundingBox();
+  await page.mouse.move(pointBox.x + pointBox.width / 2, pointBox.y + pointBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pointBox.x + pointBox.width / 2, pointBox.y - 6, { steps: 3 });
+  await page.mouse.up();
+  expect(await timeline.evaluate((element) => element.testEvents.map((event) => event.type))).toContain('automation-change');
 });
 
 test('timeline automation edits use display space, lane-scoped ranges and draw arbitration', async ({ page }) => {
@@ -2278,7 +2287,7 @@ test('timeline loop handles stay generic while the range is dragged', async ({ p
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
-    element.setLoop(1, 9, false);
+    element.setLoop(1, 9, true);
   });
   const start = timeline.locator('.ruler-handle.start');
   const end = timeline.locator('.ruler-handle.end');

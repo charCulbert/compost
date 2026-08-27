@@ -9,6 +9,8 @@ export interface TimelineTimeSelection {
   end: number;
   laneIds: string[];
 }
+export interface TimelineTimeDuplicateDetail extends TimelineTimeSelection { to: number }
+export interface TimelineLaneCreateDetail { laneId: string, beat: number, length: number }
 
 /** One clip on a lane; geometry is in beats. */
 export interface TimelineClip {
@@ -162,7 +164,7 @@ export function moveAutomationRange(points: {beat: number, value: number}[], sta
  * `<compost-timeline>`: an arrangement view of lanes, clips, locators, a
  * loop brace and an optional automation view. The host owns all state; the element
  * draws it and reports intent as CustomEvents: `seek`, `loop-input`,
- * `loop-change`, `loop-toggle`, `locator-*`, `time-select`, `time-delete`,
+ * `loop-change`, `loop-toggle`, `locator-*`, `time-select`, `time-delete`, `time-duplicate`,
  * `clip-select`, `clip-open`, `clip-context`, `clip-move`, `clip-trim`,
  * `clip-rename`, `clip-delete`, `clip-duplicate`, `clip-split`,
  * `clip-nudge`, `lane-*`, `automation-*`, `draw-toggle`, `fit-request` and
@@ -180,6 +182,8 @@ export class CompostTimeline extends HTMLElement {
   pulseLength: number | null;
   /** A meter-independent note value such as `1/16`, `1/8T` or `bar`; numbers are legacy cells per bar. */
   grid: string | number;
+  /** Whether zoom chooses the effective grid step; absent `adaptive-grid` keeps the declared grid fixed. */
+  adaptiveGrid: boolean;
   snapMode: 'grid' | 'off';
   follow: boolean;
   laneHeight: number;
