@@ -154,6 +154,7 @@
   <div style="width: min(15em, calc(100vw - 64px)); display: grid; gap: .5em">
     <span>Drums</span>
     <compost-clip-grid label="Drums" slots="5" armed selected="4" stop="active" show-stop></compost-clip-grid>
+    <label><input type="checkbox" data-launch-quant checked> Launch quantization</label>
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click a name to select, then click its name again to rename; double-click opens. Enter launches. Drag to another slot; Option-drag copies.</small>
   </div>
 </template>
@@ -280,56 +281,85 @@
         { name: 'ride.d', state: 'stopped' },
       ];
       let take = 1;
+      let queuedRecord = null;
+      const launchQuant = s.querySelector('[data-launch-quant]');
       const render = () => {
         grid.setClips(clips);
-        if (clips.some((clip) => clip && clip.state !== 'stopped')) grid.setAttribute('stop', 'active');
+        grid.recordQueued = queuedRecord?.index ?? -1;
+        if (clips.some((clip) => clip && (clip.state !== 'stopped' || clip.queued))) grid.setAttribute('stop', 'active');
         else grid.removeAttribute('stop');
       };
-      const queuePlayback = (index, keepRecording = false) => {
-        const queued = { ...clips[index], state: 'queued', progress: 0 };
+      const startPlayback = (index) => {
+        clips = clips.map((clip, position) => {
+          if (!clip) return null;
+          return position === index
+            ? { ...clip, state: 'playing', queued: false, progress: 0 }
+            : { ...clip, state: 'stopped', queued: false };
+        });
+        queuedRecord = null;
+        render();
+      };
+      const queuePlayback = (index) => {
+        if (!launchQuant.checked) {
+          startPlayback(index);
+          return;
+        }
+        const queued = { ...clips[index], queued: true, progress: 0 };
         clips[index] = queued;
+        queuedRecord = null;
         render();
         setTimeout(() => {
           if (clips[index] !== queued) return;
-          clips = clips.map((clip, position) => {
-            if (!clip) return null;
-            if (position === index) return { ...clip, state: 'playing' };
-            if (keepRecording && clip.state === 'recording') return clip;
-            return clip.state !== 'stopped' ? { ...clip, state: 'stopped' } : clip;
-          });
-          render();
+          startPlayback(index);
         }, 750);
+      };
+      const startRecording = (index) => {
+        clips = clips.map((clip) => clip ? { ...clip, state: 'stopped', queued: false } : null);
+        clips[index] = { name: `take.${take++}`, state: 'recording' };
+        queuedRecord = null;
+        render();
       };
       grid.addEventListener('clip-select', ({ detail }) => { grid.selected = detail.index; });
       grid.addEventListener('clip-launch', ({ detail }) => {
         const clip = clips[detail.index];
         if (!clip) return;
-        if (clip.state === 'recording') {
+        if (clip.queued) {
+          clips[detail.index] = { ...clip, queued: false };
+        } else if (clip.state === 'recording') {
           queuePlayback(detail.index);
           return;
-        } else if (clip.state === 'playing' || clip.state === 'queued') {
+        } else if (clip.state === 'playing') {
           clips[detail.index] = { ...clip, state: 'stopped' };
         } else {
-          clips = clips.map((other) => other?.state === 'queued'
-            ? { ...other, state: 'stopped' } : other);
+          clips = clips.map((other) => other?.queued
+            ? { ...other, queued: false } : other);
           queuePlayback(detail.index);
           return;
         }
         render();
       });
       grid.addEventListener('clip-record', ({ detail }) => {
-        const previousRecording = clips.findIndex((clip) => clip?.state === 'recording');
-        clips = clips.map((clip) => {
-          if (!clip) return null;
-          if (clip.state === 'playing' || clip.state === 'queued') return { ...clip, state: 'stopped' };
-          return clip;
-        });
-        clips[detail.index] = { name: `take.${take++}`, state: 'recording' };
-        if (previousRecording >= 0) queuePlayback(previousRecording, true);
-        else render();
+        if (queuedRecord?.index === detail.index) {
+          queuedRecord = null;
+          render();
+          return;
+        }
+        if (!launchQuant.checked) {
+          startRecording(detail.index);
+          return;
+        }
+        clips = clips.map((clip) => clip?.queued ? { ...clip, queued: false } : clip);
+        const pending = { index: detail.index };
+        queuedRecord = pending;
+        render();
+        setTimeout(() => {
+          if (queuedRecord !== pending) return;
+          startRecording(detail.index);
+        }, 750);
       });
       grid.addEventListener('clip-stop', () => {
-        clips = clips.map((clip) => clip ? { ...clip, state: 'stopped' } : null);
+        clips = clips.map((clip) => clip ? { ...clip, state: 'stopped', queued: false } : null);
+        queuedRecord = null;
         render();
       });
       grid.addEventListener('clip-rename', ({ detail }) => {
@@ -345,7 +375,7 @@
       grid.addEventListener('clip-duplicate', ({ detail }) => {
         const to = clips.findIndex((clip) => !clip);
         if (!clips[detail.index] || to < 0) return;
-        clips[to] = { ...clips[detail.index], state: 'stopped' };
+        clips[to] = { ...clips[detail.index], state: 'stopped', queued: false };
         render();
       });
       grid.addEventListener('clip-move', ({ detail }) => {
@@ -356,7 +386,7 @@
       grid.addEventListener('clip-drop', ({ detail }) => {
         if (detail.source !== grid || !clips[detail.fromIndex]) return;
         if (detail.copy) {
-          clips[detail.toIndex] = { ...clips[detail.fromIndex], state: 'stopped' };
+          clips[detail.toIndex] = { ...clips[detail.fromIndex], state: 'stopped', queued: false };
         } else {
           clips[detail.toIndex] = clips[detail.fromIndex];
           clips[detail.fromIndex] = null;

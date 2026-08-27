@@ -627,6 +627,7 @@ test('clip grid reports launches, stops and drops between grids', async ({ page 
   await expect(bass.getByRole('button', { name: /^ride\.c on Bass, stopped/u })).toHaveCount(0);
   await drums.getByRole('button', { name: 'Launch fill.b on Drums' }).click();
   await expect(state).toHaveText('fill.b queued · stopped');
+  await expect(drums.locator('.row[data-state="stopped"][data-queued] .queue')).toHaveCount(1);
   await expect(state).toHaveText('fill.b playing · stopped', { timeout: 3000 });
   await expect(drums.locator('.row[data-state="playing"] .progress')).toHaveCount(1);
   await drums.getByRole('button', { name: 'Stop Drums' }).click();
@@ -648,6 +649,10 @@ test('clip grid reports launches, stops and drops between grids', async ({ page 
 
   // an armed track offers a record ring in an empty slot
   await page.locator('[data-option="grid-armed"]').check();
+  await drums.evaluate((grid) => { grid.recordQueued = 4; });
+  await expect(drums.getByRole('button', { name: 'Cancel queued recording in Drums slot 5' })).toHaveCount(1);
+  await expect(drums.locator('.row[data-record-queued] .queue')).toHaveCount(1);
+  await drums.evaluate((grid) => { grid.recordQueued = -1; });
   await drums.getByRole('button', { name: 'Record into Drums slot 5' }).click();
   await expect(drums.getByRole('button', { name: /^take 5/ })).toHaveCount(1);
 
@@ -660,6 +665,12 @@ test('clip grid reports launches, stops and drops between grids', async ({ page 
   await drums.getByRole('button', { name: /^break\.a/ }).focus();
   await page.keyboard.press('e');
   await expect(log).toContainText('clip-open break.a');
+
+  await drums.evaluate((grid) => grid.setClips([
+    { name: 'take.a', state: 'recording', queued: true }, null, null, null, null,
+  ]));
+  await expect(drums.locator('.row[data-state="recording"][data-queued] .tri svg circle[fill]')).toHaveCount(1);
+  await expect(drums.locator('.row[data-state="recording"][data-queued] .queue')).toHaveCount(1);
 });
 
 test('clip grid slow mouse click renames without hijacking open or touch', async ({ page }) => {

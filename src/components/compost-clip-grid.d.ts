@@ -1,9 +1,11 @@
-export type ClipState = 'stopped' | 'playing' | 'queued' | 'recording';
+export type ClipState = 'stopped' | 'playing' | 'recording';
 
 /** One slot's clip; a null slot is empty. */
 export interface ClipSpec {
   name: string;
   state?: ClipState;
+  /** Whether this clip is waiting to launch while `state` remains current. */
+  queued?: boolean;
   loop?: boolean;
   /** 0..1, washed behind a playing clip's name. */
   progress?: number;
@@ -60,6 +62,9 @@ export class CompostClipGrid extends HTMLElement {
   /** The selected slot index, or -1. */
   get selected(): number;
   set selected(index: number | null);
+  /** The empty slot waiting to begin recording, or -1. */
+  get recordQueued(): number;
+  set recordQueued(index: number | null);
   get armed(): boolean;
   get disabled(): boolean;
   /** The stop slot's state: '' (idle), 'active' or 'queued'. */

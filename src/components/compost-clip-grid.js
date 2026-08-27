@@ -6,8 +6,8 @@ let nextGridID = 1;
 /** An ellipsis costs about a character, a poor trade when only a few show. */
 const ELLIPSIS_MIN_CHARS = 7;
 
-/** @typedef {'stopped'|'playing'|'queued'|'recording'} ClipState */
-/** @typedef {{name: string, state?: ClipState, loop?: boolean, progress?: number}} ClipSpec */
+/** @typedef {'stopped'|'playing'|'recording'} ClipState */
+/** @typedef {{name: string, state?: ClipState, queued?: boolean, loop?: boolean, progress?: number}} ClipSpec */
 
 /** @param {string} fill @param {string} [stroke] */
 const triangle = (fill, stroke = 'none') => `<svg viewBox="0 0 7 8" aria-hidden="true"><path d="M1 .5 6 4 1 7.5Z" fill="${fill}" stroke="${stroke}" stroke-linejoin="round"/></svg>`;
@@ -32,10 +32,11 @@ export function slotIndexAt(y, rows) {
 
 /**
  * One track's column of clip slots: each slot renders a clip's name and
- * state — stopped, playing with its progress washed behind the name,
- * queued for the next launch point, or recording — and an empty slot shows
- * a record ring when the track is armed. A stop slot underneath takes the
- * whole track out at the next launch point the way a clip is brought in.
+ * state — stopped, playing with its progress washed behind the name, or
+ * recording. A separate queued mark shows a pending launch without hiding
+ * that current state, and an empty slot shows a record ring when the track is
+ * armed. A stop slot underneath takes the whole track out at the next launch
+ * point the way a clip is brought in.
  *
  * The grid only draws states and reports intent: `clip-launch`,
  * `clip-stop`, `clip-record`, `clip-select`, `clip-open`, `clip-context`,
@@ -45,7 +46,7 @@ export function slotIndexAt(y, rows) {
  */
 export class CompostClipGrid extends HTMLElement {
   static get observedAttributes() {
-    return ['slots', 'label', 'armed', 'selected', 'stop', 'disabled', 'show-stop'];
+    return ['slots', 'label', 'armed', 'selected', 'record-queued', 'stop', 'disabled', 'show-stop'];
   }
 
   constructor() {
@@ -153,6 +154,16 @@ export class CompostClipGrid extends HTMLElement {
         .tri svg { display: block; width: 0.64em; height: 0.73em; }
         .tri.record svg, .tri.rec svg { width: 0.73em; height: 0.73em; }
         .tri:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+        .queue {
+          flex: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 0.8em;
+          margin-left: auto;
+          color: var(--compost-clip-grid-accent);
+        }
+        .queue svg { display: block; width: 0.48em; height: 0.55em; }
         .name {
           flex: 1 1 auto;
           min-width: 0;
@@ -167,7 +178,7 @@ export class CompostClipGrid extends HTMLElement {
         }
         .name:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         .row[data-state="playing"] .name,
-        .row[data-state="queued"] .name,
+        .row[data-queued] .name,
         .row[data-state="recording"] .name { color: var(--compost-clip-grid-accent); }
         .preview { flex: none; width: 2.27em; height: 1.27em; color: var(--compost-clip-grid-muted); }
         .row[data-state="playing"] .preview { color: var(--compost-clip-grid-accent); }
@@ -252,6 +263,15 @@ export class CompostClipGrid extends HTMLElement {
     else this.setAttribute('selected', String(index));
   }
 
+  get recordQueued() {
+    return this.hasAttribute('record-queued') ? numberAttr(this, 'record-queued', -1) : -1;
+  }
+
+  set recordQueued(index) {
+    if (index === null || index === undefined || index < 0) this.removeAttribute('record-queued');
+    else this.setAttribute('record-queued', String(index));
+  }
+
   get armed() { return this.hasAttribute('armed'); }
 
   get disabled() { return this.hasAttribute('disabled'); }
@@ -324,6 +344,10 @@ export class CompostClipGrid extends HTMLElement {
         const state = clip.state ?? 'stopped';
         row.dataset.state = state;
         row.part.add(state);
+        if (clip.queued) {
+          row.dataset.queued = '';
+          row.part.add('queued');
+        }
         if (state === 'playing') {
           const progress = document.createElement('span');
           progress.className = 'progress';
@@ -343,14 +367,14 @@ export class CompostClipGrid extends HTMLElement {
         tri.dataset.action = 'launch';
         // every button says which track it belongs to, so a screen reader walking
         // a row of columns never hears "Launch take 1" four times over
-        tri.setAttribute('aria-label', `${state === 'playing' || state === 'queued' ? 'Stop' : 'Launch'} ${clip.name} on ${this.label}`);
-        tri.title = state === 'recording' ? 'finish take · launch'
-          : state === 'playing' || state === 'queued' ? 'stop' : 'launch  ↵';
+        tri.setAttribute('aria-label', `${clip.queued ? 'Cancel queued launch of' : state === 'playing' ? 'Stop' : state === 'recording' ? 'Finish recording and queue' : 'Launch'} ${clip.name} on ${this.label}`);
+        tri.title = clip.queued ? 'cancel queued launch'
+          : state === 'recording' ? 'finish take · queue launch'
+            : state === 'playing' ? 'stop' : 'launch  ↵';
         tri.part.add('launch');
         tri.innerHTML = state === 'recording' ? dot('var(--compost-clip-grid-accent)')
-          : state === 'queued' ? triangle('none', 'var(--compost-clip-grid-accent)')
-            : triangle(state === 'playing'
-              ? 'var(--compost-clip-grid-accent)' : 'var(--compost-clip-grid-muted)');
+          : triangle(state === 'playing'
+            ? 'var(--compost-clip-grid-accent)' : 'var(--compost-clip-grid-muted)');
         row.append(tri);
         row.insertAdjacentHTML('beforeend', PREVIEW);
         row.querySelector('.preview')?.part.add('preview');
@@ -389,22 +413,46 @@ export class CompostClipGrid extends HTMLElement {
           name.dataset.action = 'clip';
           name.tabIndex = 0;
           name.setAttribute('role', 'button');
-          name.setAttribute('aria-label', `${clip.name} on ${this.label}, ${state}${clip.loop === false ? ', one shot' : ''}`);
+          name.setAttribute('aria-label', `${clip.name} on ${this.label}, ${state}${clip.queued ? ', queued to play' : ''}${clip.loop === false ? ', one shot' : ''}`);
           name.textContent = clip.name;
           row.append(name);
         }
+        if (clip.queued) {
+          const queue = document.createElement('span');
+          queue.className = 'queue';
+          queue.part.add('queue');
+          queue.setAttribute('aria-hidden', 'true');
+          queue.innerHTML = triangle('none', 'var(--compost-clip-grid-accent)');
+          row.append(queue);
+        }
       } else {
+        const recordQueued = index === this.recordQueued;
+        if (recordQueued) {
+          row.dataset.recordQueued = '';
+          row.part.add('queued-record');
+        }
         const tri = document.createElement(this.armed ? 'button' : 'span');
         tri.className = `tri${this.armed ? ' record' : ''}`;
         if (this.armed) {
           /** @type {HTMLButtonElement} */ (tri).type = 'button';
           tri.dataset.action = 'record';
           tri.part.add('record');
-          tri.setAttribute('aria-label', `Record into ${this.label} slot ${index + 1}`);
-          tri.title = 'record into this slot';
-          tri.innerHTML = ring('var(--compost-clip-grid-rail)');
+          tri.setAttribute('aria-label', recordQueued
+            ? `Cancel queued recording in ${this.label} slot ${index + 1}`
+            : `Record into ${this.label} slot ${index + 1}`);
+          tri.title = recordQueued ? 'cancel queued recording' : 'record into this slot';
+          tri.innerHTML = ring(recordQueued
+            ? 'var(--compost-clip-grid-accent)' : 'var(--compost-clip-grid-rail)');
         }
         row.append(tri);
+        if (recordQueued) {
+          const queue = document.createElement('span');
+          queue.className = 'queue';
+          queue.part.add('queue');
+          queue.setAttribute('aria-hidden', 'true');
+          queue.innerHTML = ring('var(--compost-clip-grid-accent)');
+          row.append(queue);
+        }
       }
       rows.push(row);
     }

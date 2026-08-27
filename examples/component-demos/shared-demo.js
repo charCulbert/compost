@@ -510,7 +510,8 @@ function setupClipGridDemo() {
     const live = playing[track];
     grid.setClips(tracks[track].map((clip, index) => clip && {
       name: clip.name,
-      state: live.index === index ? 'playing' : live.queued === index ? 'queued' : 'stopped',
+      state: live.index === index ? 'playing' : 'stopped',
+      queued: live.queued === index,
       progress: live.index === index ? (((beat - live.start) / (clip.bars * 4)) % 1 + 1) % 1 : 0,
     }));
     grid.setAttribute('stop', live.stopQueued ? 'queued' : live.index >= 0 || live.queued >= 0 ? 'active' : '');
