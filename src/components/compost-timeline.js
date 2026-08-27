@@ -37,6 +37,8 @@ const DEFAULT_LOOP_END = 8;
 const DEFAULT_LANE_HEIGHT_EM = 4;
 const DEFAULT_THIN_LANE_HEIGHT_EM = 2.5;
 const DEFAULT_AUTOMATION_ROW_HEIGHT_EM = 2.36;
+/** How close, in px, a drag has to come to another clip's edge, a locator or the loop to snap to it. */
+const ANCHOR_REACH_PX = 8;
 
 /** @typedef {{id: string, beat: number, name: string}} TimelineLocator */
 /** @typedef {{start: number, end: number, laneIds: string[]}} TimelineTimeSelection */
@@ -1980,6 +1982,24 @@ export class CompostTimeline extends HTMLElement {
     this.emitSelection();
   }
 
+  /** How far, in beats, an anchor pulls: a few pixels at the current zoom. */
+  snapReach() {
+    return ANCHOR_REACH_PX / this._pxPerBeat;
+  }
+
+  /** The times a drag also snaps to: other clips' edges, locators and the loop bounds. */
+  /** @param {{laneIds?: string[]|null, excludeIds?: string[]}} [options] */
+  snapAnchors({ laneIds = null, excludeIds = [] } = {}) {
+    const skip = new Set(excludeIds);
+    const lanes = laneIds ? this._lanes.filter((lane) => laneIds.includes(lane.id)) : this._lanes;
+    const edges = lanes.flatMap((lane) => lane.clips.filter((clip) => !skip.has(clip.id)).flatMap((clip) => {
+      const start = Number(clip.start) || 0;
+      return [start, start + Math.max(0, Number(clip.length) || 0)];
+    }));
+    const locators = this._locators.map((locator) => locator.beat);
+    return [...edges, ...locators, this._loopStart, this._loopEnd];
+  }
+
   /** The snap mode for one gesture: Cmd/Ctrl inverts whatever the host set. */
   /** @param {{metaKey?: boolean, ctrlKey?: boolean}} event */
   snapModeFor(event) {
@@ -2130,7 +2150,10 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'locator') {
       if (!drag.moved || this.readonly) return;
       const rawBeat = this.beatAtPoint(event.clientX);
-      const beat = snapBeat(rawBeat, this.beatsPerBar, this.grid, this.snapModeFor(event));
+      const beat = snapTime(rawBeat, {
+        step: gridStep(this.beatsPerBar, this.grid), mode: this.snapModeFor(event), origin: drag.startBeat,
+        anchors: this.snapAnchors().filter((anchor) => anchor !== drag.startBeat), reach: this.snapReach(),
+      });
       drag.previewBeat = Math.min(beat, this.worldEnd());
       drag.element.style.left = `${drag.previewBeat * this._pxPerBeat}px`;
       return;
@@ -2168,8 +2191,12 @@ export class CompostTimeline extends HTMLElement {
       if (!drag.moved) return;
       const currentLane = this.laneAtOrNearestPoint(event.clientY) || drag.laneId;
       const laneIds = drag.allLanes ? this._lanes.map((lane) => lane.id) : this.laneIdsForSpan(drag.laneId, currentLane);
-      const start = snapBeat(drag.startBeat, this.beatsPerBar, this.grid, this.snapModeFor(event));
-      const end = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
+      const snapOptions = {
+        step: gridStep(this.beatsPerBar, this.grid), mode: this.snapModeFor(event),
+        anchors: this.snapAnchors({ laneIds }), reach: this.snapReach(),
+      };
+      const start = snapTime(drag.startBeat, snapOptions);
+      const end = snapTime(this.beatAtPoint(event.clientX), snapOptions);
       drag.previewSelection = normalizeTimeSelection(start, end, laneIds, this.worldEnd());
       this.paintTimeSelection(drag.previewSelection);
       this.paintSelection(drag.previewSelection ? this.clipsInsideTimeSelection(drag.previewSelection) : []);
@@ -2195,7 +2222,11 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'trim-left' || drag.type === 'trim-right') {
       const origin = drag.origin;
       const rawBeat = this._scrollBeat + (event.clientX - this.rulerWrap.getBoundingClientRect().left) / this._pxPerBeat;
-      const edgeBeat = snapBeat(rawBeat, this.beatsPerBar, this.grid, this.snapModeFor(event));
+      const originEdge = drag.type === 'trim-left' ? origin.start : origin.start + origin.length;
+      const edgeBeat = snapTime(rawBeat, {
+        step: gridStep(this.beatsPerBar, this.grid), mode: this.snapModeFor(event), origin: originEdge,
+        anchors: this.snapAnchors({ laneIds: [drag.laneId], excludeIds: [drag.clipId] }), reach: this.snapReach(),
+      });
       const start = drag.type === 'trim-left' ? Math.min(edgeBeat, origin.start + origin.length - MIN_CLIP_LENGTH) : origin.start;
       const end = drag.type === 'trim-right' ? Math.max(edgeBeat, origin.start + MIN_CLIP_LENGTH) : origin.start + origin.length;
       drag.preview = { start, end };
@@ -2211,8 +2242,11 @@ export class CompostTimeline extends HTMLElement {
       this.paintClipDropTarget(targetLane);
       const raw = dx / this._pxPerBeat;
       const originStart = Number(drag.origin.start) || 0;
+      const length = Math.max(0, Number(drag.origin.length) || 0);
+      const edges = this.snapAnchors({ laneIds: [targetLane || drag.laneId], excludeIds: drag.ids });
       const delta = snapTime(originStart + raw, {
         step: gridStep(this.beatsPerBar, this.grid), mode: this.snapModeFor(event), origin: originStart,
+        anchors: [...edges, ...edges.map((edge) => edge - length)], reach: this.snapReach(),
       }) - originStart;
       drag.previewDelta = delta;
       for (const item of drag.selected) {
@@ -2373,7 +2407,8 @@ export class CompostTimeline extends HTMLElement {
     const delta = (event.clientX - drag.startX) / drag.px;
     const mode = this.snapModeFor(event);
     const step = gridStep(this.beatsPerBar, this.grid);
-    const snapValue = (value, origin) => snapTime(value, { step, mode, origin });
+    const anchors = this.snapAnchors().filter((anchor) => anchor !== drag.start && anchor !== drag.end);
+    const snapValue = (value, origin) => snapTime(value, { step, mode, origin, anchors, reach: this.snapReach() });
     let start = drag.start;
     let end = drag.end;
     if (drag.kind === 'start') start = Math.min(snapValue(drag.start + delta, drag.start), end - MIN_CLIP_LENGTH);

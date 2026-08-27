@@ -869,6 +869,42 @@ test('timeline regions extend on Shift-click, span every lane from the ruler and
   expect(events.at(-1)).toEqual({ type: 'time-select', detail: { start: null } });
 });
 
+test('timeline clips snap to their neighbours and locators', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('snap', 'grid');
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [
+      { id: 'a', name: 'a', start: 0, length: 2, duration: 2, loop: false },
+      { id: 'b', name: 'b', start: 4.1, length: 2, duration: 2, loop: false },
+    ] }]);
+    element.setLocators([{ id: 'drop', beat: 6.3, name: 'drop' }]);
+    element.testEvents = [];
+    for (const type of ['clip-move', 'clip-trim']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+  });
+  const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
+
+  // a's end lands next to b's off-grid start and butts up to it
+  let box = await timeline.locator('.clip[data-id="a"]').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + pxPerBeat * 2.08, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const move = await timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'clip-move'));
+  expect(move.detail.deltaBeats).toBeCloseTo(2.1, 6);
+
+  // b's right edge, dragged near the locator, lands on it
+  box = await timeline.locator('.clip[data-id="b"]').boundingBox();
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 1 + pxPerBeat * .15, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const trim = await timeline.evaluate((element) => element.testEvents.find((event) => event.type === 'clip-trim'));
+  expect(trim.detail.end).toBeCloseTo(6.3, 6);
+});
+
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
