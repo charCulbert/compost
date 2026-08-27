@@ -943,6 +943,37 @@ test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => 
   await expect(timeline).not.toHaveAttribute('data-drag-copy', '');
 });
 
+test('timeline trims every selected clip together and grabs edges in em', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('snap', 'grid');
+    element.style.fontSize = '32px';
+    element.setLanes([
+      { id: 'a', name: 'A', clips: [{ id: 'one', name: 'one', start: 0, length: 2, duration: 2, loop: false }] },
+      { id: 'b', name: 'B', clips: [{ id: 'two', name: 'two', start: 4, length: 4, duration: 4, loop: false }] },
+    ]);
+    element.selected = ['one', 'two'];
+    element.testEvents = [];
+    element.addEventListener('clip-trim', (event) => element.testEvents.push(event.detail));
+  });
+  const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
+  const one = timeline.locator('.clip[data-id="one"]');
+  const box = await one.boundingBox();
+
+  // at 32px the grab zone is .4em = 12.8px: 10px in from the edge is still a trim
+  await page.mouse.move(box.x + box.width - 10, box.y + box.height / 2);
+  await expect(one).toHaveCSS('cursor', 'ew-resize');
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 10 + pxPerBeat, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const trims = await timeline.evaluate((element) => element.testEvents);
+  expect(trims).toEqual([
+    { id: 'one', start: 0, end: 3 },
+    { id: 'two', start: 4, end: 9 },
+  ]);
+});
+
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');

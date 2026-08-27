@@ -1,4 +1,4 @@
-import { createLongPress, DRAG_SLOP, MOUSE_TRIM_EDGE, TOUCH_TRIM_EDGE } from '../internal/gestures.js';
+import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
@@ -39,6 +39,9 @@ const DEFAULT_THIN_LANE_HEIGHT_EM = 2.5;
 const DEFAULT_AUTOMATION_ROW_HEIGHT_EM = 2.36;
 /** How close, in px, a drag has to come to another clip's edge, a locator or the loop to snap to it. */
 const ANCHOR_REACH_PX = 8;
+/** The grab zone at a clip's edge, in em of the element's font, by pointer type. */
+const MOUSE_TRIM_EDGE_EM = .4;
+const TOUCH_TRIM_EDGE_EM = .75;
 
 /** @typedef {{id: string, beat: number, name: string}} TimelineLocator */
 /** @typedef {{start: number, end: number, laneIds: string[]}} TimelineTimeSelection */
@@ -320,6 +323,7 @@ export class CompostTimeline extends HTMLElement {
     this.grid = 4;
     this.snapMode = 'grid';
     this.follow = false;
+    this.fontSize = 16;
     this.laneHeight = 64;
     this.thinLaneHeight = 32;
     this.automationRowHeight = 32;
@@ -622,6 +626,7 @@ export class CompostTimeline extends HTMLElement {
     this.draw = this.hasAttribute('draw');
     const style = getComputedStyle(this);
     const fontSize = Number.parseFloat(style.fontSize) || 16;
+    this.fontSize = fontSize;
     const rawLaneHeight = style.getPropertyValue('--compost-timeline-lane-height').trim();
     const parsedLaneHeight = Number.parseFloat(rawLaneHeight);
     const cssLaneHeight = rawLaneHeight.endsWith('em') ? parsedLaneHeight * fontSize
@@ -1931,7 +1936,7 @@ export class CompostTimeline extends HTMLElement {
     const found = this.clipFromEvent(event);
     if (!found) return;
     const rect = found.element.getBoundingClientRect();
-    const edge = event.pointerType === 'touch' ? TOUCH_TRIM_EDGE : MOUSE_TRIM_EDGE;
+    const edge = this.trimEdgePx(event.pointerType);
     found.element.style.cursor = event.clientX - rect.left <= edge || rect.right - event.clientX <= edge
       ? 'ew-resize' : 'grab';
   }
@@ -2003,6 +2008,13 @@ export class CompostTimeline extends HTMLElement {
   selectAllClips() {
     this._selected = this._lanes.flatMap((lane) => lane.clips.map((clip) => clip.id));
     this.emitSelection();
+  }
+
+  /** The grab zone at a clip's edge, in px, scaled with the element's font. */
+  /** @param {string} [pointerType] */
+  trimEdgePx(pointerType) {
+    const fontSize = Number.parseFloat(getComputedStyle(this).fontSize) || this.fontSize;
+    return fontSize * (pointerType === 'touch' ? TOUCH_TRIM_EDGE_EM : MOUSE_TRIM_EDGE_EM);
   }
 
   /** How far, in beats, an anchor pulls: a few pixels at the current zoom. */
@@ -2115,7 +2127,7 @@ export class CompostTimeline extends HTMLElement {
     if (found) {
       event.preventDefault();
       const rect = found.element.getBoundingClientRect();
-      const edge = event.pointerType === 'touch' ? TOUCH_TRIM_EDGE : MOUSE_TRIM_EDGE;
+      const edge = this.trimEdgePx(event.pointerType);
       const mode = this.readonly ? 'move'
         : event.clientX - rect.left <= edge ? 'trim-left'
           : rect.right - event.clientX <= edge ? 'trim-right' : 'move';
@@ -2250,13 +2262,23 @@ export class CompostTimeline extends HTMLElement {
         step: gridStep(this.beatsPerBar, this.grid), mode: this.snapModeFor(event), origin: originEdge,
         anchors: this.snapAnchors({ laneIds: [drag.laneId], excludeIds: [drag.clipId] }), reach: this.snapReach(),
       });
-      const start = drag.type === 'trim-left' ? Math.min(edgeBeat, origin.start + origin.length - MIN_CLIP_LENGTH) : origin.start;
-      const end = drag.type === 'trim-right' ? Math.max(edgeBeat, origin.start + MIN_CLIP_LENGTH) : origin.start + origin.length;
-      drag.preview = { start, end };
-      drag.element.style.left = `${(start - this._scrollBeat) * this._pxPerBeat}px`;
-      drag.element.style.width = `${Math.max(1, (end - start) * this._pxPerBeat)}px`;
-      this.paintClipContent(drag.element, previewTrimmedClip(origin, start, end));
-      this.dispatchEvent(eventOf('clip-trim-input', { id: drag.clipId, start, end }));
+      const delta = edgeBeat - originEdge;
+      // every selected clip takes the same change of edge as the one being dragged
+      drag.previews = drag.selected.map((item) => {
+        const clipStart = Number(item.clip.start) || 0;
+        const clipEnd = clipStart + Math.max(0, Number(item.clip.length) || 0);
+        const start = drag.type === 'trim-left' ? clamp(clipStart + delta, 0, clipEnd - MIN_CLIP_LENGTH) : clipStart;
+        const end = drag.type === 'trim-right' ? Math.max(clipEnd + delta, clipStart + MIN_CLIP_LENGTH) : clipEnd;
+        return { id: item.clip.id, start, end, clip: item.clip };
+      });
+      for (const preview of drag.previews) {
+        const element = this.clipElements().find((node) => node.dataset.id === preview.id);
+        if (!element) continue;
+        element.style.left = `${(preview.start - this._scrollBeat) * this._pxPerBeat}px`;
+        element.style.width = `${Math.max(1, (preview.end - preview.start) * this._pxPerBeat)}px`;
+        this.paintClipContent(element, previewTrimmedClip(preview.clip, preview.start, preview.end));
+        this.dispatchEvent(eventOf('clip-trim-input', { id: preview.id, start: preview.start, end: preview.end }));
+      }
       return;
     }
     if (drag.type === 'move') {
@@ -2400,8 +2422,9 @@ export class CompostTimeline extends HTMLElement {
     this.clearClipDragVisuals();
     if (drag.element) drag.element.style.cursor = 'grab';
     if (drag.type === 'trim-left' || drag.type === 'trim-right') {
-      if (drag.preview) this.dispatchEvent(eventOf('clip-trim', { id: drag.clipId, ...drag.preview }));
-      else this.render();
+      if (drag.previews) {
+        for (const { id, start, end } of drag.previews) this.dispatchEvent(eventOf('clip-trim', { id, start, end }));
+      } else this.render();
       return;
     }
     if (drag.type === 'move' && drag.moved && !this.readonly) {
