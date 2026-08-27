@@ -1443,10 +1443,9 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
     return {
       laneBackground: getComputedStyle(lane).backgroundColor,
       clipBackground: getComputedStyle(clip).backgroundColor,
-      clipBorder: getComputedStyle(clip).boxShadow,
+      clipBorder: getComputedStyle(clip).borderStyle,
       clipRadius: getComputedStyle(clip).borderRadius,
-      selectedOutline: getComputedStyle(clip).outlineStyle,
-      cornerOpacity: getComputedStyle(clip, '::before').opacity,
+      selectedBorder: getComputedStyle(clip).borderWidth,
       headerWidth: header.getBoundingClientRect().width,
       progressWidth: clipProgress?.getBoundingClientRect().width ?? 0,
       hasNumber: Boolean(header.querySelector('.number')),
@@ -1454,9 +1453,8 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
   });
   expect(measured.clipBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(measured.clipBorder).not.toBe('none');
-  expect(measured.clipRadius).toBe('2px');
-  expect(measured.selectedOutline).toBe('solid');
-  expect(measured.cornerOpacity).toBe('0');
+  expect(measured.clipRadius).toBe('0px');
+  expect(measured.selectedBorder).toBe('2px');
   expect(measured.headerWidth).toBeLessThan(250);
   expect(measured.progressWidth).toBeGreaterThan(0);
   expect(measured.hasNumber).toBe(false);
@@ -1673,7 +1671,6 @@ test('timeline aligns regular and compact lanes with automation rows', async ({ 
       compactBase: bounds('.lane[data-lane-id="compact"] .lane-base').height,
       automationHeader: bounds('.lane-header[data-lane-id="regular"] .automation-header').height,
       automationRow: bounds('.lane[data-lane-id="regular"] .automation-row').height,
-      pickedCornerOpacity: getComputedStyle(root.querySelector('.lane-name[data-picked]'), '::before').opacity,
       pickedOutline: getComputedStyle(root.querySelector('.lane-name[data-picked]')).outlineStyle,
     };
   });
@@ -1685,7 +1682,6 @@ test('timeline aligns regular and compact lanes with automation rows', async ({ 
   expect(Math.abs(measured.compactBase - 27.5)).toBeLessThan(1);
   expect(Math.abs(measured.automationHeader - 26)).toBeLessThan(1);
   expect(Math.abs(measured.automationRow - 26)).toBeLessThan(1);
-  expect(measured.pickedCornerOpacity).toBe('0');
   expect(measured.pickedOutline).toBe('solid');
 });
 

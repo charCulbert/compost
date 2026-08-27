@@ -64,6 +64,8 @@ Editors take IDs you own for the things they create, and snapping is a view
 mode over your full-precision values, never a stored grid.
 `compost-note-editor` emits `note-quantize` with the selected IDs, grid step
 and whether lengths were requested; the host applies its own strength and swing.
+`compost-timeline` never moves automation with a clip; a host that wants that
+shifts the lane's points when it applies `clip-move`.
 
 ## Talking to a backend
 
@@ -113,6 +115,9 @@ test for every visual decision. The elements bring behaviour, not a palette:
 Piano keys are the physical exception: their key bed uses light `Canvas` and
 `CanvasText` so natural and accidental keys remain white and black on any page.
 Active notes still use `--compost-accent`.
+
+Timeline clips use their own colour, then their lane's colour, and otherwise
+the accent supplied by the page.
 
 With no CSS you get black on white, system font, OS accent. To change the
 look, set `color`, `font`, `color-scheme` and `--compost-accent` on the page;

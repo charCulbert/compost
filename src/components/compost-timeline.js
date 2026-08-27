@@ -366,170 +366,134 @@ export class CompostTimeline extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-timeline-bg: var(--compost-theme-bg, #1f1f1f);
-          --compost-timeline-text: var(--compost-theme-text, #f2f2f2);
-          --compost-timeline-muted: var(--compost-theme-muted, #aaaaaa);
-          --compost-timeline-faint: color-mix(in srgb, var(--compost-timeline-muted) 64%, transparent);
-          --compost-timeline-line: var(--compost-theme-line, rgba(255,255,255,.18));
-          --compost-timeline-bar-line: var(--compost-timeline-muted);
-          --compost-timeline-lane: var(--compost-timeline-bg);
-          --compost-timeline-lane-alt: var(--compost-timeline-bg);
-          --compost-timeline-header-bg: var(--compost-timeline-bg);
-          --compost-timeline-clip-text: var(--compost-timeline-text);
-          --compost-timeline-signal-hi: var(--compost-timeline-select, #6fa8eb);
-          --compost-timeline-wash: color-mix(in srgb, var(--compost-timeline-text) 12%, transparent);
-          --compost-timeline-over: #d98a4a;
-          --compost-timeline-highlight: color-mix(in srgb, var(--compost-timeline-text) 8%, transparent);
-          --compost-timeline-select: var(--compost-theme-learn, #6fa8eb);
-          --compost-timeline-playhead: var(--compost-timeline-text);
-          --compost-timeline-loop: var(--compost-theme-accent, #8ea9c7);
-          --compost-timeline-loop-off: color-mix(in srgb, var(--compost-timeline-muted) 60%, transparent);
-          --compost-timeline-header-width: 11rem;
+          --compost-timeline-bg: Canvas;
+          --compost-timeline-text: currentColor;
+          --compost-timeline-muted: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-timeline-line: color-mix(in srgb, currentColor 18%, transparent);
+          --compost-timeline-beat-line: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-timeline-bar-line: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-timeline-select: var(--compost-accent, AccentColor);
+          --compost-timeline-header-width: 11em;
           --compost-timeline-lane-height: 4em;
           --compost-timeline-thin-lane-height: 2.5em;
           --compost-timeline-row-height: var(--compost-timeline-lane-height);
           --compost-timeline-automation-row-height: 2.36em;
-          --compost-timeline-value: var(--compost-timeline-signal-hi);
-          --compost-timeline-clip-font-size: var(--compost-clip-grid-font-size, .91em);
+          --compost-timeline-clip-font-size: .91em;
           --compost-timeline-lane-font-size: .91em;
-          --compost-timeline-clip-bg: color-mix(in srgb, var(--clip-color, var(--compost-timeline-select)) 16%, var(--compost-timeline-lane));
-          --compost-timeline-clip-border: inset 0 0 0 1px color-mix(in srgb, var(--clip-color, var(--compost-timeline-select)) 55%, var(--compost-timeline-line));
-          --compost-timeline-clip-radius: 2px;
-          --compost-timeline-selected-outline: 2px solid var(--compost-timeline-select);
-          --compost-timeline-selection-corners: 0;
-          --compost-timeline-lane-selected-bg: color-mix(in srgb, var(--compost-timeline-select) 12%, transparent);
-          --compost-timeline-lane-selected-outline: 1px solid var(--compost-timeline-select);
-          --compost-timeline-lane-selection-corners: 0;
-          --compost-timeline-font: inherit;
-          --compost-timeline-numeral-font: ui-monospace, SFMono-Regular, Menlo, monospace;
-          --compost-timeline-color-scheme: var(--compost-theme-color-scheme, dark);
-          color-scheme: var(--compost-timeline-color-scheme);
           display: block;
           box-sizing: border-box;
           min-height: 0;
           overflow: hidden;
           background: var(--compost-timeline-bg);
           color: var(--compost-timeline-text);
-          font: var(--compost-timeline-font);
+          font: inherit;
           -webkit-user-select: none;
           user-select: none;
           outline: none;
         }
-        :host(:focus-visible) { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
+        :host(:focus-visible) { outline: 2px solid currentColor; outline-offset: -2px; }
         :host([disabled]) { opacity: .55; pointer-events: none; }
         .frame { display: grid; grid-template-columns: min(var(--compost-timeline-header-width), 44%) minmax(0, 1fr); grid-template-rows: 3.3em minmax(0, 1fr); height: 100%; min-height: 0; }
-        .corner, .header-wrap { background: var(--compost-timeline-header-bg); border-right: 1px solid var(--compost-timeline-line); }
+        .corner, .header-wrap { background: var(--compost-timeline-bg); border-right: 1px solid var(--compost-timeline-line); }
         .corner { border-bottom: 1px solid var(--compost-timeline-line); }
         .ruler-wrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--compost-timeline-line); touch-action: none; scrollbar-width: none; }
         .ruler-wrap::-webkit-scrollbar { display: none; }
         .ruler, .ruler-world { position: absolute; inset: 0 auto 0 0; }
         .ruler-world { height: 100%; z-index: 1; }
-        .ruler-label { position: absolute; top: 1.05em; border-left: 1px solid var(--compost-timeline-line); padding-left: 3px; color: var(--compost-timeline-muted); font: .72em/1 var(--compost-timeline-numeral-font); white-space: nowrap; }
+        .ruler-label { position: absolute; top: 1.05em; border-left: 1px solid var(--compost-timeline-line); padding-left: .2em; color: var(--compost-timeline-muted); font-size: .72em; line-height: 1; white-space: nowrap; }
         .ruler-label[data-bar] { border-left-color: var(--compost-timeline-bar-line); }
-        .ruler-locator { position: absolute; top: .1em; height: .95em; z-index: 3; border-left: 1px solid var(--compost-timeline-value); padding-left: 4px; color: var(--compost-timeline-value); font: .8em/1 var(--compost-timeline-font); white-space: nowrap; cursor: pointer; }
-        .ruler-locator:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 1px; }
-        .ruler-locator::before { content: ""; position: absolute; left: -4px; top: 0; border: 3.5px solid transparent; border-top: 5px solid var(--compost-timeline-value); }
+        .ruler-locator { position: absolute; top: .1em; height: .95em; z-index: 3; border-left: 1px solid currentColor; padding-left: .25em; color: currentColor; font-size: .8em; line-height: 1; white-space: nowrap; cursor: pointer; }
+        .ruler-locator:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+        .ruler-locator::before { content: ""; position: absolute; left: -.25em; top: 0; border: .22em solid transparent; border-top: .31em solid currentColor; }
         .ruler-locator-name { display: inline-block; min-width: 1px; }
-        .ruler-locator-editor { box-sizing: border-box; width: 7em; border: 0; outline: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-bg); color: var(--compost-timeline-value); font: inherit; padding: 0 2px; }
+        .ruler-locator-editor { box-sizing: border-box; width: 7em; border: 1px solid currentColor; outline: 2px solid currentColor; outline-offset: -2px; background: var(--compost-timeline-bg); color: currentColor; font: inherit; padding: 0 .125em; }
         .ruler-time-selection { position: absolute; display: none; z-index: 2; top: 1em; height: 1.1em; background: color-mix(in srgb, var(--compost-timeline-select) 10%, transparent); box-shadow: inset 1px 0 0 var(--compost-timeline-select), inset -1px 0 0 var(--compost-timeline-select); pointer-events: none; }
-        .ruler-time-selection-readout { position: absolute; left: 100%; top: 0; padding-left: .3em; color: var(--compost-timeline-muted); font: .72em/1.5 var(--compost-timeline-numeral-font); white-space: nowrap; }
-        .ruler-band { position: absolute; top: 2.35em; height: .75em; background: color-mix(in srgb, var(--compost-timeline-loop) 24%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop); cursor: grab; }
-        .ruler-band[data-off] { background: color-mix(in srgb, var(--compost-timeline-loop-off) 14%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop-off); opacity: .7; }
+        .ruler-time-selection-readout { position: absolute; left: 100%; top: 0; padding-left: .3em; color: var(--compost-timeline-muted); font-size: .72em; line-height: 1.5; white-space: nowrap; }
+        .ruler-band { position: absolute; top: 2.35em; height: .75em; border: 1px solid var(--compost-timeline-select); box-sizing: border-box; background: var(--compost-timeline-select); color: AccentColorText; cursor: grab; }
+        .ruler-band[data-off] { background: transparent; color: var(--compost-timeline-muted); border-color: currentColor; }
         .ruler-handle { position: absolute; top: 2.22em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
         .ruler-handle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-        .ruler-handle::before { content: ""; position: absolute; inset-block: 0; width: 2px; background: var(--compost-timeline-loop); }
-        .ruler-handle.start::before { left: 0; }
-        .ruler-handle.end::before { right: 0; }
-        .ruler-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-playhead); pointer-events: none; z-index: 4; }
-        .ruler-playhead::before { content: ""; position: absolute; top: .08em; left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--compost-timeline-playhead); }
+        .ruler-handle::before { content: ""; position: absolute; top: .12em; border-block: .25em solid transparent; }
+        .ruler-handle.start::before { left: 0; border-left: .4em solid AccentColorText; }
+        .ruler-handle.end::before { right: 0; border-right: .4em solid AccentColorText; }
+        .ruler-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; box-shadow: -1px 0 Canvas, 1px 0 Canvas; pointer-events: none; z-index: 4; }
+        .ruler-playhead::before { content: ""; position: absolute; top: .08em; left: -.25em; border-left: .25em solid transparent; border-right: .25em solid transparent; border-top: .31em solid currentColor; }
         .header-wrap, .lanes-wrap { min-height: 0; overflow: hidden; }
         .header-wrap { position: relative; overflow: hidden; }
         .headers { position: relative; width: 100%; }
-        .lane-header { position: relative; box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, var(--compost-timeline-text)); font-size: var(--compost-timeline-lane-font-size); }
+        .lane-header { position: relative; box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, currentColor); font-size: var(--compost-timeline-lane-font-size); }
         .lane-header-content { display: block; width: 100%; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .lane-header-fallback { box-sizing: border-box; display: flex; align-items: center; padding: 0 1em; }
         .lane-header .lane-name, .lane-name-editor { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; cursor: default; }
-        .lane-header .lane-name[data-picked] { background: var(--compost-timeline-lane-selected-bg); outline: var(--compost-timeline-lane-selected-outline); outline-offset: 2px; }
-        .lane-name-editor { box-sizing: border-box; width: 100%; border: 0; outline: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-bg); color: var(--lane-color); font: inherit; padding: 1px 3px; }
-        .lane-header .lane-name[data-picked]::before, .lane-header .lane-name[data-picked]::after { content: ""; position: absolute; inset: -2px -3px; pointer-events: none; opacity: var(--compost-timeline-lane-selection-corners); background-repeat: no-repeat; background-size: 5px 1px, 1px 5px, 5px 1px, 1px 5px; }
-        .lane-header .lane-name[data-picked]::before { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: left top, left top, right top, right top; }
-        .lane-header .lane-name[data-picked]::after { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: left bottom, left bottom, right bottom, right bottom; }
-        .lane-header .lane-name:focus-visible { outline: none; text-decoration: underline dotted var(--compost-timeline-select); text-underline-offset: 3px; }
+        .lane-header .lane-name[data-picked] { background: color-mix(in srgb, var(--compost-timeline-select) 12%, transparent); outline: 1px solid var(--compost-timeline-select); outline-offset: .125em; }
+        .lane-name-editor { box-sizing: border-box; width: 100%; border: 1px solid currentColor; outline: 2px solid currentColor; outline-offset: -2px; background: var(--compost-timeline-bg); color: var(--lane-color, currentColor); font: inherit; padding: .0625em .1875em; }
+        .lane-header .lane-name:focus-visible { outline: none; text-decoration: underline dotted currentColor; text-underline-offset: .2em; }
         .lane-drop-line { position: absolute; left: 0; right: 0; z-index: 8; display: none; height: 1px; background: var(--compost-timeline-select); pointer-events: none; }
-        .lane-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; z-index: 6; cursor: row-resize; touch-action: none; }
+        .lane-resize { position: absolute; left: 0; right: 0; bottom: 0; height: .4em; z-index: 6; cursor: row-resize; touch-action: none; }
         .lane-resize:hover::after, .lane-resize:active::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--compost-timeline-select); }
         .automation-header { box-sizing: border-box; height: var(--compost-timeline-automation-row-height); display: flex; align-items: center; gap: .3em; padding: 0 .6em 0 1.5em; border-top: 1px solid color-mix(in srgb, var(--compost-timeline-line) 50%, transparent); color: var(--compost-timeline-muted); font-size: .82em; }
         .automation-chooser { appearance: none; min-width: 0; max-width: 16em; display: inline-flex; align-items: center; gap: .35em; overflow: hidden; border: 0; padding: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
         .automation-chooser-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .automation-chooser::after { content: ""; flex: none; width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 4px solid currentColor; transform: translateY(1px); }
+        .automation-chooser::after { content: ""; flex: none; width: 0; height: 0; border-left: .2em solid transparent; border-right: .2em solid transparent; border-top: .25em solid currentColor; transform: translateY(.0625em); }
         .automation-chooser:hover, .automation-chooser:focus-visible, .automation-chooser[aria-expanded="true"] { color: var(--compost-timeline-select); }
-        .automation-chooser:focus-visible, .automation-header button:focus-visible { outline: 1px solid var(--compost-timeline-select); outline-offset: 2px; }
+        .automation-chooser:focus-visible, .automation-header button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         .automation-header-buttons { display: inline-flex; align-items: center; gap: .08em; }
         .automation-header-button { appearance: none; width: 1.25em; height: 1.25em; border: 0; padding: 0; background: none; color: inherit; font: inherit; line-height: 1; cursor: pointer; }
         .automation-header-button:hover, .automation-header-button:focus-visible { color: var(--compost-timeline-select); }
-        .automation-header-value { margin-left: auto; color: var(--compost-timeline-value); font: .86em/1 var(--compost-timeline-numeral-font); }
-        .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); margin: 0; color: var(--compost-timeline-muted); font: .78em/1 var(--compost-timeline-numeral-font); opacity: .8; pointer-events: none; }
+        .automation-header-value { margin-left: auto; color: currentColor; font-size: .86em; line-height: 1; }
+        .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); margin: 0; color: var(--compost-timeline-muted); font-size: .78em; line-height: 1; pointer-events: none; }
         .lanes-wrap { position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: none; }
         .lanes-wrap::-webkit-scrollbar { display: none; }
         .lanes-world { position: relative; min-height: 100%; }
         .time-selection-world { position: absolute; inset: 0 auto auto 0; z-index: 3; pointer-events: none; }
         .time-selection { position: absolute; background: color-mix(in srgb, var(--compost-timeline-select) 10%, transparent); box-shadow: inset 1px 0 0 var(--compost-timeline-select), inset -1px 0 0 var(--compost-timeline-select); pointer-events: none; }
         .grid-world { position: absolute; inset: 0 auto auto 0; z-index: 1; pointer-events: none; }
-        .grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-line); opacity: .5; }
-        .grid-line.bar { background: var(--compost-timeline-bar-line); opacity: 1; }
-        .lane { position: relative; box-sizing: border-box; height: auto; border-bottom: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-lane); }
+        .grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-line); }
+        .grid-line.beat { background: var(--compost-timeline-beat-line); }
+        .grid-line.bar { background: var(--compost-timeline-bar-line); }
+        .lane { position: relative; box-sizing: border-box; height: auto; border-bottom: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-bg); }
         .lane[data-drop-target] { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
         .lane[data-dimmed] .clip { opacity: .4; }
         .lane-base { position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .lane-envelope-overlay { position: absolute; inset: 0 auto auto 0; z-index: 4; overflow: visible; pointer-events: none; }
-        .lane-envelope-line { fill: none; stroke: var(--lane-color, var(--compost-timeline-text)); stroke-width: 1; opacity: .3; vector-effect: non-scaling-stroke; }
-        .automation-row { position: relative; box-sizing: border-box; height: var(--compost-timeline-automation-row-height); overflow: visible; border-top: 1px solid color-mix(in srgb, var(--compost-timeline-line) 50%, transparent); background: var(--compost-timeline-lane); touch-action: none; }
-        .automation-editor { width: 100%; height: 100%; min-height: 0; border: 0; overflow: visible; --compost-envelope-bg: transparent; --compost-envelope-line: transparent; --compost-envelope-signal: var(--lane-color, var(--compost-timeline-text)); --compost-envelope-point-bg: var(--compost-envelope-signal); --compost-envelope-point-border: var(--compost-timeline-bg); --compost-envelope-preview: var(--compost-timeline-over); --compost-envelope-grid-size: 100000px 100000px; }
-        .automation-row[data-state="overridden"] .automation-editor { --compost-envelope-signal: var(--compost-timeline-muted); }
+        .lane-envelope-line { fill: none; stroke: var(--lane-color, currentColor); stroke-width: 1; opacity: .3; vector-effect: non-scaling-stroke; }
+        .automation-row { position: relative; box-sizing: border-box; height: var(--compost-timeline-automation-row-height); overflow: visible; border-top: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-bg); touch-action: none; }
+        .automation-editor { width: 100%; height: 100%; min-height: 0; border: 0; overflow: visible; }
+        .automation-row[data-state="overridden"] .automation-editor { color: var(--compost-timeline-muted); }
         .automation-row[data-state="overridden"] .automation-editor::part(line) { stroke-dasharray: 3 3; }
-        .automation-row[data-state="recording"] .automation-editor { --compost-envelope-signal: var(--compost-timeline-over); }
-        .automation-row[data-state="playing"] .automation-editor { --compost-envelope-signal: var(--compost-timeline-signal-hi); }
+        .automation-row[data-state="recording"] .automation-editor { color: var(--compost-timeline-select); }
         .automation-row[data-draw]:hover .automation-draw-hint { display: block; }
-        .clip { position: absolute; top: 4px; bottom: 4px; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 0; border-radius: var(--compost-timeline-clip-radius); background: var(--compost-timeline-clip-bg); box-shadow: var(--compost-timeline-clip-border); color: var(--clip-color, var(--compost-timeline-clip-text)); cursor: grab; touch-action: none; }
-        .clip::before, .clip::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; border: 1px solid transparent; }
-        .clip[data-selected] { z-index: 3; outline: var(--compost-timeline-selected-outline); outline-offset: -2px; }
-        .clip[data-selected]::before, .clip[data-selected]::after { opacity: var(--compost-timeline-selection-corners); background-repeat: no-repeat; background-size: 6px 1px, 1px 6px, 6px 1px, 1px 6px; }
-        .clip[data-selected]::before { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: left top, left top, right bottom, right bottom; }
-        .clip[data-selected]::after { background-image: linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)), linear-gradient(var(--compost-timeline-select), var(--compost-timeline-select)); background-position: right top, right top, left bottom, left bottom; }
+        .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid currentColor; border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: AccentColorText; cursor: grab; touch-action: none; }
+        .clip[data-selected] { z-index: 3; border-width: 2px; }
         .clip:focus-visible { outline: none; }
-        .clip:focus-visible .clip-name { text-decoration: underline dotted var(--compost-timeline-muted); text-underline-offset: 2px; }
-        .clip[data-state="playing"] { background: var(--compost-timeline-wash); }
-        .clip[data-state="recording"] { border-right: 1px dashed var(--compost-timeline-over); }
-        .clip[data-state="open"] .clip-name { color: var(--compost-timeline-select); }
-        .clip[data-state="playing"] .clip-name { color: var(--compost-timeline-signal-hi); }
-        .clip[data-state="queued"] .clip-name { color: var(--compost-timeline-select); animation: compost-timeline-breath 1s ease-in-out infinite; }
-        .clip[data-state="recording"] .clip-name { color: var(--compost-timeline-over); }
+        .clip:focus-visible .clip-name { text-decoration: underline dotted currentColor; text-underline-offset: .125em; }
+        .clip[data-state="queued"]::after { content: "▷"; position: absolute; right: .25em; bottom: .1em; z-index: 3; font-size: .8em; line-height: 1; }
+        .clip[data-state="recording"] { box-shadow: inset -.15em 0 var(--compost-timeline-select); }
+        .clip[data-muted], .clip[data-state="muted"] { background: transparent; color: var(--clip-color, var(--compost-timeline-select)); }
         .clip[data-state="playing"] .clip-notes, .clip[data-state="recording"] .clip-notes { opacity: 1; }
         .clip[data-dragging] { opacity: .35 !important; }
         :host([data-drag-copy]) .clip { cursor: copy; }
-        .clip-name { position: relative; z-index: 2; display: block; padding: 3px 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--compost-timeline-clip-font-size); color: var(--clip-color, var(--compost-timeline-clip-text)); }
+        .clip-name { position: relative; z-index: 2; display: block; padding: .1875em .25em 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--compost-timeline-clip-font-size); color: inherit; }
         .clip-notes { position: absolute; inset: 0; opacity: 1; pointer-events: none; }
         .clip-preview { position: absolute; inset: 0; display: block; pointer-events: none; }
         .clip-preview::slotted(*) { display: block; width: 100%; height: 100%; pointer-events: none; }
-        .clip-note { position: absolute; bottom: 4px; height: 2px; min-width: 2px; background: currentColor; }
+        .clip-note { position: absolute; bottom: .25em; height: .125em; min-width: .125em; background: currentColor; }
         .clip-extent { position: absolute; inset: auto 0 0 0; height: 1px; background: currentColor; opacity: .35; pointer-events: none; }
         .clip-extent::before { content: ""; position: absolute; left: 0; bottom: 0; width: 1px; height: 1000%; background: currentColor; }
-        .clip-progress { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--compost-timeline-wash); filter: brightness(1.5); pointer-events: none; }
+        .clip-progress { position: absolute; inset: 0 auto 0 0; width: 0; background: color-mix(in srgb, currentColor 18%, transparent); pointer-events: none; }
         /* a loop point: a thin line the height of the clip and a small cap at the top, in the clip's colour */
         .clip-loop-line { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; opacity: .6; pointer-events: none; }
-        .clip-loop-line::before { content: ""; position: absolute; top: 0; left: -3px; border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 4px solid currentColor; }
-        .clip-editor { position: relative; z-index: 4; width: calc(100% - 5px); margin: 2px; border: 0; outline: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-bg); color: var(--compost-timeline-text); font: inherit; font-size: .78em; }
+        .clip-loop-line::before { content: ""; position: absolute; top: 0; left: -.2em; border-left: .22em solid transparent; border-right: .22em solid transparent; border-top: .25em solid currentColor; }
+        .clip-editor { position: relative; z-index: 4; box-sizing: border-box; width: calc(100% - .25em); margin: .125em; border: 1px solid currentColor; outline: 2px solid currentColor; outline-offset: -2px; background: Canvas; color: CanvasText; font: inherit; font-size: .78em; }
         .announce { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-        @keyframes compost-timeline-breath { 50% { opacity: .3; } }
-        @media (prefers-reduced-motion: reduce) { .clip { transition: none; } .clip[data-state="queued"] .clip-name, .lane-session[data-state="queued"] .lane-session-name { animation: none; } }
       </style>
       <div class="frame" part="frame">
         <div class="corner" part="corner"></div>
         <div class="ruler-wrap" part="ruler" role="group" tabindex="0" aria-label="Timeline ruler">
-          <div class="ruler"><div class="ruler-world"></div><div class="ruler-time-selection" part="time-selection"><span class="ruler-time-selection-readout" part="time-selection-readout"></span></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start" role="slider" tabindex="0" aria-label="Loop start"></div><div class="ruler-handle end" part="loop-handle loop-end" role="slider" tabindex="0" aria-label="Loop end"></div><div class="ruler-playhead" part="playhead"></div></div>
+          <div class="ruler" part="ruler-content"><div class="ruler-world" part="ruler-grid"></div><div class="ruler-time-selection" part="time-selection"><span class="ruler-time-selection-readout" part="time-selection-readout"></span></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start" role="slider" tabindex="0" aria-label="Loop start"></div><div class="ruler-handle end" part="loop-handle loop-end" role="slider" tabindex="0" aria-label="Loop end"></div><div class="ruler-playhead" part="playhead"></div></div>
         </div>
-        <div class="header-wrap" part="headers"><div class="headers" role="list"></div><div class="lane-drop-line"></div></div>
-        <div class="lanes-wrap" part="lanes"><div class="lanes-world" role="list"></div><div class="playhead" part="playhead"></div></div>
+        <div class="header-wrap" part="headers"><div class="headers" part="header-list" role="list"></div><div class="lane-drop-line" part="lane-drop-line"></div></div>
+        <div class="lanes-wrap" part="lanes"><div class="lanes-world" part="lane-list" role="list"></div><div class="playhead" part="playhead"></div></div>
       </div>
       <div class="announce" aria-live="polite"></div>`;
 
@@ -1214,8 +1178,9 @@ export class CompostTimeline extends HTMLElement {
       if (lanes && beat < MIN_CLIP_LENGTH) continue;
       const line = document.createElement('div');
       const inBar = Math.abs(beat % this.beatsPerBar) < MIN_CLIP_LENGTH;
-      line.className = `grid-line${inBar ? ' bar' : ' beat'}`;
-      line.part.add('grid-line', inBar ? 'bar-line' : 'beat-line');
+      const inBeat = Math.abs(beat % 1) < MIN_CLIP_LENGTH;
+      line.className = `grid-line ${inBar ? 'bar' : inBeat ? 'beat' : 'cell'}`;
+      line.part.add('grid-line', inBar ? 'bar-line' : inBeat ? 'beat-line' : 'cell-line');
       line.style.left = `${beat * this._pxPerBeat}px`;
       fragment.append(line);
     }
@@ -1288,6 +1253,7 @@ export class CompostTimeline extends HTMLElement {
   renderAutomationHeader(lane, automation) {
     const header = document.createElement('div');
     header.className = 'automation-header';
+    header.part.add('automation-header');
     header.dataset.laneId = lane.id;
     header.dataset.automationId = automation.id;
     header.setAttribute('role', 'listitem');
@@ -1297,6 +1263,7 @@ export class CompostTimeline extends HTMLElement {
     const chooser = document.createElement('button');
     chooser.type = 'button';
     chooser.className = 'automation-chooser';
+    chooser.part.add('automation-chooser');
     chooser.dataset.laneId = lane.id;
     chooser.dataset.automationId = automation.id;
     chooser.setAttribute('aria-haspopup', 'menu');
@@ -1321,6 +1288,7 @@ export class CompostTimeline extends HTMLElement {
     const add = document.createElement('button');
     add.type = 'button';
     add.className = 'automation-header-button automation-add';
+    add.part.add('automation-add');
     add.textContent = '+';
     add.title = 'Add automation';
     add.setAttribute('aria-label', `Add automation to ${lane.name || lane.id}`);
@@ -1333,6 +1301,7 @@ export class CompostTimeline extends HTMLElement {
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'automation-header-button automation-remove';
+    remove.part.add('automation-remove');
     remove.textContent = '−';
     remove.title = 'Remove automation';
     remove.setAttribute('aria-label', `Remove ${automation.label || automation.id} automation from ${lane.name || lane.id}`);
@@ -1589,6 +1558,7 @@ export class CompostTimeline extends HTMLElement {
   renderAutomationRow(lane, automation, end) {
     const row = document.createElement('div');
     row.className = 'automation-row';
+    row.part.add('automation-row');
     row.dataset.laneId = lane.id;
     row.dataset.automationId = automation.id;
     row.dataset.state = automation.state || 'idle';
@@ -1601,6 +1571,8 @@ export class CompostTimeline extends HTMLElement {
 
     const editor = document.createElement('compost-envelope-editor');
     editor.className = 'automation-editor';
+    editor.part.add('automation-editor');
+    editor.setAttribute('grid-lines', 'off');
     editor.setAttribute('label', `${automation.label || automation.id} automation for ${lane.name || lane.id}`);
     editor.setAttribute('duration', String(end));
     editor.setAttribute('min', String(automation.min));
@@ -1708,7 +1680,8 @@ export class CompostTimeline extends HTMLElement {
     element.dataset.state = clip.state || 'stopped';
     element.tabIndex = this.focusedClip === clip.id ? 0 : -1;
     element.setAttribute('role', 'button');
-    element.style.setProperty('--clip-color', clip.color || lane.color || 'var(--compost-timeline-clip-text)');
+    element.style.setProperty('--clip-color', clip.color || lane.color || 'var(--compost-timeline-select)');
+    element.toggleAttribute('data-muted', Boolean(clip.muted));
     const start = Number(clip.start) || 0;
     const end = start + Math.max(0, Number(clip.length) || 0);
     element.setAttribute('aria-label', `${clip.name || 'clip'}, bar ${Math.floor(start / this.beatsPerBar) + 1} to ${Math.max(Math.floor((end - MIN_CLIP_LENGTH) / this.beatsPerBar) + 1, 1)}, lane ${lane.name || lane.id}`);
@@ -1810,7 +1783,7 @@ export class CompostTimeline extends HTMLElement {
       mark.className = 'clip-loop-line';
       mark.part.add('clip-loop');
       mark.title = 'loop point';
-      mark.style.left = `${(line / length) * 100}%`;
+      mark.style.left = `${line * this._pxPerBeat - 1}px`;
       place(mark);
     }
   }

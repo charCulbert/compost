@@ -46,6 +46,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
   step: number;
   snapMode: 'grid' | 'off';
   grid: number;
+  /** Which grid lines are visible: all, time divisions only, or none. */
+  gridLines: 'all' | 'time' | 'off';
   draw: boolean;
   /** The painted time section, or null. */
   selection: {start: number, end: number} | null;

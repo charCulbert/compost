@@ -197,6 +197,15 @@
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag notes to move; Alt-drag copies; Command/Ctrl inverts time snapping. Command/Ctrl-drag on a note changes velocity; Shift-click extends selection and Shift is precise for values and edges. In Draw mode, drag right for length and vertically for velocity. Drag empty grid for a note box or the ruler for time; Shift-click extends it. Drag the piano vertically to pan pitches or horizontally to zoom them. Double-click adds; Escape clears selection. Shift-arrows move an octave or fine in time; Alt-left/right changes length. In Fold, up/down steps through displayed pitches. Wheel scrolls pitch; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel zooms pitch.</small>
   </div>
 </template>
+<template id="compost-timeline">
+  <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
+    <span>Arrangement</span>
+    <compost-timeline label="Arrangement" beats-per-bar="4" grid="4" automation
+      style="height: 24em"></compost-timeline>
+    <label><input type="checkbox" data-timeline-play checked> Run transport</label>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag clips or their edges; Alt-drag copies. Drag the ruler or lanes to select time. Command/Ctrl inverts snapping. The host applies every edit.</small>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -231,7 +240,7 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'clip-launch', 'clip-stop', 'clip-record', 'clip-select', 'clip-open', 'clip-context', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-move', 'clip-drag-start', 'clip-drag-end', 'clip-drop', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection', 'notes-change', 'note-quantize', 'loop-input', 'loop-change', 'range-input', 'range-change', 'selection-change', 'note-preview', 'note-preview-end', 'note-context'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'clip-launch', 'clip-stop', 'clip-record', 'clip-select', 'clip-open', 'clip-context', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-split', 'clip-nudge', 'clip-join', 'clip-drag-start', 'clip-drag-end', 'clip-drop', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection', 'notes-change', 'note-quantize', 'loop-input', 'loop-change', 'loop-toggle', 'range-input', 'range-change', 'selection-change', 'note-preview', 'note-preview-end', 'note-context', 'seek', 'time-select-input', 'time-select', 'time-delete', 'time-insert', 'locator-jump', 'locator-move', 'locator-create', 'locator-rename', 'locator-delete', 'locator-context', 'lane-pick', 'lane-move', 'lane-resize', 'lanes-resize', 'lane-rename', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'automation-input', 'automation-change', 'automation-choose', 'automation-add', 'automation-remove', 'automation-context', 'draw-toggle', 'fit-request', 'view-change'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-window') {
@@ -534,6 +543,71 @@
           editor.setAttribute('playhead', position.toFixed(3));
         } else {
           editor.removeAttribute('playhead');
+        }
+        requestAnimationFrame(advance);
+      };
+      requestAnimationFrame(advance);
+    }
+    if (el === 'compost-timeline') {
+      const timeline = s.querySelector('compost-timeline');
+      const play = s.querySelector('[data-timeline-play]');
+      let lanes = [
+        { id: 'drums', name: 'Drums', color: 'var(--compost-accent, AccentColor)', automation: [
+          { id: 'gain', label: 'Gain', min: 0, max: 1, value: .72, state: 'playing', points: [
+            { beat: 0, value: .5 }, { beat: 4, value: .8 }, { beat: 8, value: .65 },
+          ] },
+        ], clips: [
+          { id: 'beat', name: 'Beat', start: 0, length: 8, duration: 2, loop: true, state: 'playing', progress: .35,
+            notes: [{ start: 0, duration: .25, note: 36, velocity: 110 }, { start: .5, duration: .25, note: 42, velocity: 82 }] },
+          { id: 'fill', name: 'Fill', start: 10, length: 2, duration: 2, loop: false, state: 'queued' },
+        ] },
+        { id: 'synth', name: 'Synth', clips: [
+          { id: 'pad', name: 'Pad', start: 2, length: 4, duration: 4, loop: false, state: 'stopped' },
+          { id: 'take', name: 'Recording', start: 8, length: 3, duration: 3, loop: false, state: 'recording' },
+        ] },
+      ];
+      const render = () => timeline.setLanes(lanes);
+      render();
+      timeline.setLocators([
+        { id: 'intro', beat: 0, name: 'Intro' },
+        { id: 'verse', beat: 8, name: 'Verse' },
+      ]);
+      timeline.setLoop(0, 8, true);
+      timeline.setPlayhead(1);
+      timeline.addEventListener('loop-change', ({ detail }) => timeline.setLoop(detail.start, detail.end, detail.enabled));
+      timeline.addEventListener('loop-toggle', ({ detail }) => timeline.setLoop(timeline.loopStart, timeline.loopEnd, detail.enabled));
+      timeline.addEventListener('automation-change', ({ detail }) => {
+        const lane = lanes.find((entry) => entry.id === detail.laneId);
+        const automation = lane?.automation?.find((entry) => entry.id === detail.automationId);
+        if (!automation) return;
+        automation.points = detail.points.map((point) => ({ ...point }));
+        render();
+      });
+      timeline.addEventListener('clip-trim', ({ detail }) => {
+        const clip = lanes.flatMap((lane) => lane.clips).find((entry) => entry.id === detail.id);
+        if (!clip) return;
+        clip.start = detail.start;
+        clip.length = detail.end - detail.start;
+        render();
+      });
+      timeline.addEventListener('clip-move', ({ detail }) => {
+        const moving = lanes.flatMap((lane) => lane.clips.filter((clip) => detail.ids.includes(clip.id))
+          .map((clip) => ({ ...clip, id: detail.copy ? `${clip.id}-copy` : clip.id,
+            start: clip.start + detail.deltaBeats })));
+        if (!moving.length) return;
+        if (!detail.copy) lanes.forEach((lane) => { lane.clips = lane.clips.filter((clip) => !detail.ids.includes(clip.id)); });
+        (lanes.find((lane) => lane.id === detail.laneId) ?? lanes[0]).clips.push(...moving);
+        render();
+      });
+      timeline.addEventListener('seek', ({ detail }) => timeline.setPlayhead(detail.beat));
+      let last = performance.now();
+      const advance = (now) => {
+        const delta = Math.min(.05, (now - last) / 1000) * 2;
+        last = now;
+        if (play.checked) {
+          const length = timeline.loopEnd - timeline.loopStart;
+          const beat = timeline.loopStart + ((timeline.playhead + delta - timeline.loopStart) % length + length) % length;
+          timeline.setPlayhead(beat);
         }
         requestAnimationFrame(advance);
       };

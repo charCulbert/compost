@@ -34,7 +34,7 @@ const SEGMENT_HANDLE_DISTANCE = 10;
  */
 export class CompostEnvelopeEditor extends HTMLElement {
   static get observedAttributes() {
-    return ['label', 'duration', 'min', 'max', 'scale', 'stepped', 'step', 'snap', 'grid', 'draw', 'readonly', 'disabled'];
+    return ['label', 'duration', 'min', 'max', 'scale', 'stepped', 'step', 'snap', 'grid', 'grid-lines', 'draw', 'readonly', 'disabled'];
   }
 
   constructor() {
@@ -92,6 +92,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
         :host(:focus-visible) { outline: 2px solid currentColor; outline-offset: -2px; }
         .surface { position: relative; width: 100%; height: 100%; min-height: inherit; touch-action: none; overflow: hidden; }
         .grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(to right, var(--compost-envelope-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--compost-envelope-grid) 1px, transparent 1px); background-size: var(--compost-envelope-grid-size); }
+        :host([grid-lines="time"]) .grid { background-image: linear-gradient(to right, var(--compost-envelope-grid) 1px, transparent 1px); }
+        :host([grid-lines="off"]) .grid { background-image: none; }
         .selection-marquee { position: absolute; z-index: 1; display: none; box-sizing: border-box; border: 1px solid var(--compost-envelope-signal); background: var(--compost-envelope-selection); pointer-events: none; }
         svg { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; }
         .line-hit, .line, .selection-highlight, .segment-highlight { fill: none; vector-effect: non-scaling-stroke; }
@@ -210,6 +212,16 @@ export class CompostEnvelopeEditor extends HTMLElement {
   }
 
   setPoints(points) { this.points = points; }
+
+  get gridLines() {
+    const value = this.getAttribute('grid-lines');
+    return value === 'off' || value === 'time' ? value : 'all';
+  }
+
+  set gridLines(value) {
+    if (value === 'off' || value === 'time') this.setAttribute('grid-lines', value);
+    else this.removeAttribute('grid-lines');
+  }
 
   setSelection(start, end) {
     const low = Math.max(0, Math.min(Number(start), Number(end)));
