@@ -175,7 +175,7 @@ export class CompostTimeline extends HTMLElement {
   timeSignature: string;
   beatsPerBar: number;
   beatLength: number;
-  grid: number;
+  grid: string | number;
   snapMode: 'grid' | 'off';
   follow: boolean;
   laneHeight: number;

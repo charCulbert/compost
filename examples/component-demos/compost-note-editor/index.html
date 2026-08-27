@@ -26,12 +26,12 @@
             <legend>Editor</legend>
             <label>
               Grid
-              <compost-select data-option="editor-grid" aria-label="Grid division" value="16">
-                <option value="off">Off</option><option value="1">1 bar</option>
-                <option value="4">1/4</option><option value="6">1/4 triplet</option>
-                <option value="8">1/8</option><option value="12">1/8 triplet</option>
-                <option value="16">1/16</option><option value="24">1/16 triplet</option>
-                <option value="32">1/32</option><option value="48">1/32 triplet</option>
+              <compost-select data-option="editor-grid" aria-label="Grid division" value="1/16">
+                <option value="off">Off</option><option value="bar">1 bar</option>
+                <option value="1/4">1/4</option><option value="1/4T">1/4 triplet</option>
+                <option value="1/8">1/8</option><option value="1/8T">1/8 triplet</option>
+                <option value="1/16">1/16</option><option value="1/16T">1/16 triplet</option>
+                <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
               </compost-select>
             </label>
             <label class="check"><input type="checkbox" data-option="editor-snap" checked> Snap</label>
@@ -56,7 +56,7 @@
           </fieldset>
           <div class="demo-showcase" style="display:block">
             <compost-note-editor data-option-target="editor" label="Clip notes" beats="12"
-              start="1" end="10" loop loop-start="2" loop-end="8" grid="16" root-note="48" note-count="25"
+              start="1" end="10" loop loop-start="2" loop-end="8" grid="1/16" root-note="48" note-count="25"
               scale="0 2 4 5 7 9 11" root="0"
               style="height:340px"></compost-note-editor>
           </div>

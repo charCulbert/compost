@@ -62,13 +62,13 @@ const TOUCH_TRIM_EDGE_EM = .75;
 const finiteClamp = (value, min, max) => clamp(Number.isFinite(value) ? value : min, min, max);
 
 /** A timeline grid step, expressed in beats. */
-/** @param {number} beatsPerBar @param {number} grid */
+/** @param {number} beatsPerBar @param {string|number} grid */
 function gridStep(beatsPerBar, grid) {
   return gridStepOf(beatsPerBar || DEFAULT_BEATS_PER_BAR, grid);
 }
 
 /** Snap a beat to the timeline grid, or leave it free when snapping is off. */
-/** @param {number} beat @param {number} beatsPerBar @param {number} grid @param {string} snap */
+/** @param {number} beat @param {number} beatsPerBar @param {string|number} grid @param {string} snap */
 export function snapBeat(beat, beatsPerBar, grid, snap) {
   return snapTime(beat, { step: gridStep(beatsPerBar, grid), mode: snap === 'off' ? 'off' : 'grid' });
 }
@@ -322,7 +322,7 @@ export class CompostTimeline extends HTMLElement {
     this.beatsPerBar = DEFAULT_BEATS_PER_BAR;
     this.beatLength = 1;
     this.timeSignature = '4/4';
-    this.grid = 4;
+    this.grid = '1/4';
     this.snapMode = 'grid';
     this.follow = false;
     this.fontSize = 16;
@@ -590,7 +590,7 @@ export class CompostTimeline extends HTMLElement {
     this.timeSignature = meter.text;
     this.beatsPerBar = meter.barLength;
     this.beatLength = meter.beatLength;
-    this.grid = Math.max(1, numberAttr(this, 'grid', this.grid));
+    this.grid = this.getAttribute('grid')?.trim() || this.grid;
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     this.follow = this.hasAttribute('follow');
     this.automation = this.hasAttribute('automation');
@@ -1178,7 +1178,7 @@ export class CompostTimeline extends HTMLElement {
   rulerGrid(end, lanes = false) {
     const fragment = document.createDocumentFragment();
     const stepBars = rulerStep(this._pxPerBeat, this.beatsPerBar);
-    const step = lanes && this._pxPerBeat < 48 ? 1 : this.beatsPerBar / Math.max(1, this.grid);
+    const step = lanes && this._pxPerBeat < 48 ? this.beatLength : gridStep(this.beatsPerBar, this.grid);
     for (let beat = 0; beat <= end + MIN_CLIP_LENGTH; beat += step) {
       if (lanes && beat < MIN_CLIP_LENGTH) continue;
       const line = document.createElement('div');

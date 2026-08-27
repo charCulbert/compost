@@ -32,11 +32,36 @@ export function timeSignatureOf(value, beatsPerBar = 4) {
   return { numerator: legacy, denominator: 4, beatLength: 1, barLength: legacy, text: `${legacy}/4` };
 }
 
-/** A grid step in beats: a bar divided into `division` cells. */
-/** @param {number} beatsPerBar @param {number} division */
-export function gridStepOf(beatsPerBar, division) {
+/** A grid step in quarter-note beats. Note values are meter-independent;
+ * bare numbers remain the legacy number of cells per bar. */
+/** @param {number} beatsPerBar @param {string|number} grid */
+export function gridStepOf(beatsPerBar, grid) {
   const bar = Math.max(1, Number(beatsPerBar) || 4);
-  return Math.max(MIN_TIME, bar / Math.max(1, Number(division) || 4));
+  const text = String(grid ?? '').trim();
+  if (text.toLowerCase() === 'bar') return bar;
+  const noteValue = /^1\/(1|2|4|8|16|32|64)(t)?$/i.exec(text);
+  if (noteValue) {
+    const straight = 4 / Number(noteValue[1]);
+    return Math.max(MIN_TIME, noteValue[2] ? straight * 2 / 3 : straight);
+  }
+  return Math.max(MIN_TIME, bar / Math.max(1, Number(grid) || 4));
+}
+
+/** The displayed name of a note-value or legacy cells-per-bar grid. */
+/** @param {string|number} grid @param {number} [beatsPerBar] */
+export function gridTextOf(grid, beatsPerBar = 4) {
+  const text = String(grid ?? '').trim();
+  if (text.toLowerCase() === 'bar') return '1 bar';
+  const noteValue = /^1\/(1|2|4|8|16|32|64)(t)?$/i.exec(text);
+  if (noteValue) return `1/${noteValue[1]}${noteValue[2] ? 'T' : ''}`;
+  const division = Number(grid);
+  if (division === 1) return '1 bar';
+  for (const denominator of [4, 8, 16, 32, 64]) {
+    const straight = beatsPerBar * denominator / 4;
+    if (Math.abs(division - straight) < 1e-9) return `1/${denominator}`;
+    if (Math.abs(division - straight * 1.5) < 1e-9) return `1/${denominator}T`;
+  }
+  return `${grid}/bar`;
 }
 
 /** The snap mode a gesture uses: the modifier inverts whatever the host set. */

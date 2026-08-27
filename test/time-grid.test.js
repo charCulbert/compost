@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { gridStepOf, snapModeWith, snapTime, timeSignatureOf } from '../src/time-grid.js';
+import { gridStepOf, gridTextOf, snapModeWith, snapTime, timeSignatureOf } from '../src/time-grid.js';
 
 test('time signatures expose bar and denominator-beat lengths in quarter-note beats', () => {
   assert.deepEqual(timeSignatureOf('6/8'), {
@@ -20,6 +20,17 @@ test('a grid step is a bar divided into cells', () => {
   assert.equal(gridStepOf(4, 16), 0.25);
   assert.equal(gridStepOf(3, 8), 0.375);
   assert.equal(gridStepOf(4, 1), 4);
+});
+
+test('note-value grids are independent of meter and numeric grids stay legacy', () => {
+  assert.equal(gridStepOf(3, '1/16'), 0.25);
+  assert.equal(gridStepOf(3, '1/8T'), 1 / 3);
+  assert.equal(gridStepOf(6, '1/16'), 0.25);
+  assert.equal(gridStepOf(3, 'bar'), 3);
+  assert.equal(gridStepOf(3, 16), 3 / 16);
+  assert.equal(gridTextOf('1/16'), '1/16');
+  assert.equal(gridTextOf('1/8t'), '1/8T');
+  assert.equal(gridTextOf('bar'), '1 bar');
 });
 
 test('the snap modifier inverts whatever the host set', () => {

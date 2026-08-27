@@ -174,15 +174,15 @@
   <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
     <span>Clip notes</span>
     <compost-note-editor label="Clip notes" beats="12" start="1" end="10" loop loop-start="2" loop-end="8"
-      grid="16" root-note="48" note-count="25" scale="0 2 4 5 7 9 11" root="0"
+      grid="1/16" root-note="48" note-count="25" scale="0 2 4 5 7 9 11" root="0"
       playhead="3" style="height: 24em"></compost-note-editor>
     <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
       <label>Grid <select data-note-grid>
-        <option value="off">Off</option><option value="1">1 bar</option>
-        <option value="4">1/4</option><option value="6">1/4 triplet</option>
-        <option value="8">1/8</option><option value="12">1/8 triplet</option>
-        <option value="16" selected>1/16</option><option value="24">1/16 triplet</option>
-        <option value="32">1/32</option><option value="48">1/32 triplet</option>
+        <option value="off">Off</option><option value="bar">1 bar</option>
+        <option value="1/4">1/4</option><option value="1/4T">1/4 triplet</option>
+        <option value="1/8">1/8</option><option value="1/8T">1/8 triplet</option>
+        <option value="1/16" selected>1/16</option><option value="1/16T">1/16 triplet</option>
+        <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
       </select></label>
       <label><input type="checkbox" data-note-snap checked> Snap</label>
       <label><input type="checkbox" data-note-loop checked> Loop</label>
@@ -197,7 +197,7 @@
 <template id="compost-timeline">
   <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
     <span>Arrangement</span>
-    <compost-timeline label="Arrangement" beats-per-bar="4" grid="4" automation
+    <compost-timeline label="Arrangement" beats-per-bar="4" grid="1/4" automation
       style="height: 24em"></compost-timeline>
     <label><input type="checkbox" data-timeline-play checked> Run transport</label>
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag clips or their edges; Alt-drag copies. Drag the ruler or lanes to select time. Command/Ctrl inverts snapping. The host applies every edit.</small>

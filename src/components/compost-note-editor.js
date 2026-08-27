@@ -2,7 +2,6 @@ import { isNaturalNote, noteName } from '../midi.js';
 import {
   MIN_DURATION,
   duplicatedNotes,
-  gridStep,
   movedNotes,
   normaliseNotes,
   notesInBox,
@@ -19,7 +18,7 @@ export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
 import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP, TAP_MOVE_DISTANCE } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
-import { timeSignatureOf } from '../time-grid.js';
+import { gridStepOf, gridTextOf, timeSignatureOf } from '../time-grid.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextEditorID = 1;
@@ -40,15 +39,7 @@ export function lengthText(duration) {
 
 /** The musical name of a grid expressed as cells per bar. */
 /** @param {number} division @param {number} [beatsPerBar] */
-export function gridText(division, beatsPerBar = 4) {
-  if (Math.abs(division - 1) < 1e-9) return '1 bar';
-  for (const denominator of [4, 8, 16, 32]) {
-    const straight = beatsPerBar * denominator / 4;
-    if (Math.abs(division - straight) < 1e-9) return `1/${denominator}`;
-    if (Math.abs(division - straight * 1.5) < 1e-9) return `1/${denominator}T`;
-  }
-  return `${division}/bar`;
-}
+export const gridText = gridTextOf;
 
 /**
  * A MIDI note editor: pitch down the side on real piano keys, time across
@@ -75,7 +66,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.beatsPerBar = 4;
     this.beatLength = 1;
     this.timeSignature = '4/4';
-    this.grid = 16;
+    this.grid = '1/16';
     this.gridLines = true;
     this.snapMode = 'grid';
     this.rangeStart = 0;
@@ -458,7 +449,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.timeSignature = meter.text;
     this.beatsPerBar = meter.barLength;
     this.beatLength = meter.beatLength;
-    this.grid = Math.max(1, numberAttr(this, 'grid', this.grid));
+    this.grid = this.getAttribute('grid')?.trim() || this.grid;
     this.gridLines = this.getAttribute('grid-lines') !== 'off';
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     const rawStart = Math.max(0, numberAttr(this, 'start', this.rangeStart));
@@ -515,7 +506,7 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   get step() {
-    return gridStep(this.grid, this.beatsPerBar);
+    return gridStepOf(this.beatsPerBar, this.grid);
   }
 
   newNoteId() {
@@ -564,7 +555,7 @@ export class CompostNoteEditor extends HTMLElement {
       bubbles: true, composed: true,
       detail: {
         ids: this.selection.size > 0 ? [...this.selection] : this._notes.map((note) => note.id),
-        step: gridStep(division, this.beatsPerBar), lengths,
+        step: gridStepOf(this.beatsPerBar, division), lengths,
       },
     }));
   }

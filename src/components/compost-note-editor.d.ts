@@ -30,7 +30,7 @@ export function rulerLabels(beats: number, beatsPerBar: number, pxPerBeat: numbe
 export function lengthText(duration: number): string;
 
 /** The musical name of a grid expressed as cells per bar. */
-export function gridText(division: number, beatsPerBar?: number): string;
+export function gridText(division: string | number, beatsPerBar?: number): string;
 
 /**
  * `<compost-note-editor>`: a MIDI note editor. It edits a note list and
@@ -44,7 +44,7 @@ export class CompostNoteEditor extends HTMLElement {
   timeSignature: string;
   beatsPerBar: number;
   beatLength: number;
-  grid: number;
+  grid: string | number;
   /** Whether time-grid lines are drawn; set `grid-lines="off"` to hide them. */
   gridLines: boolean;
   snapMode: 'grid' | 'off';
@@ -98,7 +98,7 @@ export class CompostNoteEditor extends HTMLElement {
   /** Sets the loop region, in beats. */
   setLoop(start: number, end: number, shouldEmit?: boolean): void;
   /** Emits a quantize intent for the selection, or everything when none is selected. */
-  quantize(options?: {lengths?: boolean, division?: number}): void;
+  quantize(options?: {lengths?: boolean, division?: string | number}): void;
   selectAll(): void;
   clearSelection(): void;
   deleteSelection(): void;
