@@ -1796,7 +1796,7 @@ export class CompostTimeline extends HTMLElement {
     if (!found) return;
     event.stopPropagation();
     event.preventDefault();
-    const additive = event.shiftKey || event.metaKey || event.ctrlKey;
+    const additive = event.shiftKey;
     if (additive || !this._selected.includes(found.clip.id)) this.selectOne(found.clip.id, additive);
   }
 
@@ -2012,7 +2012,7 @@ export class CompostTimeline extends HTMLElement {
         : event.clientX - rect.left <= edge ? 'trim-left'
           : rect.right - event.clientX <= edge ? 'trim-right' : 'move';
       found.element.style.cursor = mode === 'move' ? 'grab' : 'ew-resize';
-      const additive = event.shiftKey || event.metaKey || event.ctrlKey;
+      const additive = event.shiftKey;
       if (!additive && !this._selected.includes(found.clip.id)) this.selectOne(found.clip.id);
       else if (additive) this.selectOne(found.clip.id, true);
       const ids = this._selected.length ? [...this._selected] : [found.clip.id];

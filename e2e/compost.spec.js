@@ -1094,9 +1094,13 @@ test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page 
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   const clip = timeline.locator('.clip[data-id="beat"]');
+  const other = timeline.locator('.clip[data-id="other"]');
   await timeline.evaluate((element) => {
     element.setAttribute('snap', 'grid');
-    element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] }]);
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [
+      { id: 'beat', name: 'beat', start: 0, length: 2, duration: 2, loop: true },
+      { id: 'other', name: 'other', start: 4, length: 2, duration: 2 },
+    ] }]);
     element.testEvents = [];
     element.addEventListener('clip-move', (event) => element.testEvents.push(event.detail));
   });
@@ -1112,16 +1116,32 @@ test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page 
   let move = await timeline.evaluate((element) => element.testEvents.at(-1));
   expect(move).toEqual({ ids: ['beat'], laneId: 'lane', deltaBeats: 1, copy: true });
 
-  box = await clip.boundingBox();
+  await timeline.evaluate((element) => element.selectOne('beat'));
+  box = await other.boundingBox();
   await page.keyboard.down('Meta');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
+  expect(await timeline.evaluate((element) => element.selected)).toEqual(['other']);
   await page.mouse.move(box.x + box.width / 2 + pxPerBeat * .63, box.y + box.height / 2, { steps: 4 });
   await page.mouse.up();
   await page.keyboard.up('Meta');
   move = await timeline.evaluate((element) => element.testEvents.at(-1));
+  expect(move.ids).toEqual(['other']);
   expect(move.copy).toBe(false);
   expect(move.deltaBeats).toBeCloseTo(.63, 5);
+
+  await timeline.evaluate((element) => {
+    element.setAttribute('automation', '');
+    element.setLaneAutomation('lane', {
+      id: 'gain', label: 'Gain', min: 0, max: 1, stepped: false, points: [],
+    });
+    element.selectOne('beat');
+  });
+  const name = await other.locator('.clip-name').boundingBox();
+  await page.keyboard.down('Meta');
+  await page.mouse.click(name.x + name.width / 2, name.y + name.height / 2);
+  await page.keyboard.up('Meta');
+  expect(await timeline.evaluate((element) => element.selected)).toEqual(['other']);
 });
 
 test('timeline rulers expose locators, time selections and measured row geometry', async ({ page }) => {
