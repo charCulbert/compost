@@ -489,11 +489,25 @@
       let nextNoteId = 1;
       editor.noteIdFactory = () => `${cls}-note-${nextNoteId++}`;
       editor.setNotes([
-        { note: 60, start: 2.5, duration: .5, velocity: 112, channel: 0 },
-        { note: 64, start: 3.5, duration: .5, velocity: 82, channel: 0 },
-        { note: 67, start: 4.5, duration: 1.5, velocity: 100, channel: 0 },
-        { note: 62, start: 6.5, duration: .5, velocity: 68, channel: 0 },
-        { note: 65, start: 7.5, duration: 1, velocity: 94, channel: 0 },
+        { note: 56, start: 2.5, duration: .25, velocity: 88, channel: 0 },
+        { note: 58, start: 2.75, duration: .25, velocity: 96, channel: 0 },
+        { note: 60, start: 3, duration: .25, velocity: 112, channel: 0 },
+        { note: 60, start: 3.5, duration: .25, velocity: 94, channel: 0 },
+        { note: 60, start: 4, duration: .25, velocity: 108, channel: 0 },
+        { note: 55, start: 4.25, duration: .25, velocity: 82, channel: 0 },
+        { note: 48, start: 4.5, duration: .25, velocity: 86, channel: 0 },
+        { note: 67, start: 4.75, duration: .25, velocity: 104, channel: 0 },
+        { note: 67, start: 5.25, duration: .25, velocity: 92, channel: 0 },
+        { note: 58, start: 5.75, duration: .25, velocity: 88, channel: 0 },
+        { note: 60, start: 6, duration: .25, velocity: 112, channel: 0 },
+        { note: 60, start: 6.5, duration: .25, velocity: 94, channel: 0 },
+        { note: 60, start: 7, duration: .25, velocity: 108, channel: 0 },
+        { note: 53, start: 7.25, duration: .25, velocity: 82, channel: 0 },
+        { note: 50, start: 7.5, duration: .25, velocity: 86, channel: 0 },
+        { note: 65, start: 7.75, duration: .25, velocity: 104, channel: 0 },
+        { note: 65, start: 8.25, duration: .25, velocity: 92, channel: 0 },
+        { note: 63, start: 8.5, duration: .25, velocity: 96, channel: 0 },
+        { note: 58, start: 8.75, duration: .25, velocity: 88, channel: 0 },
       ].map((note) => ({ ...note, id: editor.noteIdFactory() })));
       editor.addEventListener('notes-change', ({ detail }) => { editor.notes = detail.notes; });
       editor.addEventListener('note-quantize', ({ detail }) => {
