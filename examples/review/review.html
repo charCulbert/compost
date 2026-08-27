@@ -214,11 +214,6 @@
       <label><input type="checkbox" data-timeline-draw> Draw</label>
       <label><input type="checkbox" data-timeline-automation> Automation view</label>
       <button type="button" data-timeline-play>Play</button>
-      <button type="button" data-timeline-copy>Copy</button>
-      <button type="button" data-timeline-cut>Cut</button>
-      <button type="button" data-timeline-paste>Paste</button>
-      <button type="button" data-timeline-split>Split at playhead</button>
-      <button type="button" data-timeline-delete>Delete</button>
     </div>
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. Automation supports point, range and Option-drag curve edits; this faux host applies them all.</small>
   </div>
@@ -875,11 +870,6 @@
         event.stopImmediatePropagation();
         clipboardAction({ c: 'copy', x: 'cut', v: 'paste' }[event.key.toLowerCase()]);
       }, true);
-      s.querySelector('[data-timeline-copy]').addEventListener('click', () => clipboardAction('copy'));
-      s.querySelector('[data-timeline-cut]').addEventListener('click', () => clipboardAction('cut'));
-      s.querySelector('[data-timeline-paste]').addEventListener('click', () => clipboardAction('paste'));
-      s.querySelector('[data-timeline-split]').addEventListener('click', () => apply['clip-split']({ ids: timeline.selected, beat: timeline.playhead }));
-      s.querySelector('[data-timeline-delete]').addEventListener('click', deleteSelection);
       let last = performance.now();
       const advance = (now) => {
         const delta = Math.min(.05, (now - last) / 1000) * 2;
