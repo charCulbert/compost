@@ -767,6 +767,20 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
   expect(events.find((event) => event.type === 'clip-move').detail.deltaBeats).toBe(1);
   await timeline.evaluate((element) => element.setAttribute('snap', 'off'));
 
+  await timeline.evaluate((element) => {
+    element.testEvents = [];
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] }]);
+  });
+  box = await clip.boundingBox();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 1 + 40, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.find((event) => event.type === 'clip-trim').detail.end).toBeCloseTo(8 + 9.75 / pxPerBeat, 5);
+
   box = await clip.boundingBox();
   await page.mouse.move(box.x + 1, box.y + box.height / 2);
   await page.mouse.down();

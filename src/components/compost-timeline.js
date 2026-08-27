@@ -1307,7 +1307,8 @@ export class CompostTimeline extends HTMLElement {
     handle.addEventListener('pointermove', (event) => {
       if (!drag || event.pointerId !== drag.pointerId) return;
       drag.all ||= Boolean(event.altKey);
-      apply(clamp(drag.startHeight + event.clientY - drag.startY, 24, 400), drag.all);
+      const delta = (event.clientY - drag.startY) * this.gestureFactor(event);
+      apply(clamp(drag.startHeight + delta, 24, 400), drag.all);
     });
     const end = (/** @type {PointerEvent} */ event) => {
       if (!drag || event.pointerId !== drag.pointerId) return;
@@ -1925,6 +1926,11 @@ export class CompostTimeline extends HTMLElement {
     return snapModeWith(this.snapMode, Boolean(event?.metaKey || event?.ctrlKey));
   }
 
+  /** Shift uses the same quarter-speed precision as the other editors. */
+  gestureFactor(event) {
+    return event?.shiftKey ? .25 : 1;
+  }
+
   automationSelectionFor(laneId) {
     const selection = this._timeSelection;
     return selection && selection.laneIds.includes(String(laneId)) ? selection : null;
@@ -2066,7 +2072,8 @@ export class CompostTimeline extends HTMLElement {
     if (!drag.moved && Math.hypot(dx, dy) > DRAG_SLOP) drag.moved = true;
     if (drag.type === 'locator') {
       if (!drag.moved || this.readonly) return;
-      const rawBeat = this.beatAtPoint(event.clientX);
+      const rawBeat = drag.startBeat
+        + (this.beatAtPoint(event.clientX) - drag.startBeat) * this.gestureFactor(event);
       const beat = snapTime(rawBeat, {
         step: gridStep(this.beatsPerBar, this.grid), mode: this.snapModeFor(event), origin: drag.startBeat,
         anchors: this.snapAnchors().filter((anchor) => anchor !== drag.startBeat), reach: this.snapReach(),
@@ -2138,8 +2145,9 @@ export class CompostTimeline extends HTMLElement {
     }
     if (drag.type === 'trim-left' || drag.type === 'trim-right') {
       const origin = drag.origin;
-      const rawBeat = this._scrollBeat + (event.clientX - this.rulerWrap.getBoundingClientRect().left) / this._pxPerBeat;
       const originEdge = drag.type === 'trim-left' ? origin.start : origin.start + origin.length;
+      const pointerBeat = this._scrollBeat + (event.clientX - this.rulerWrap.getBoundingClientRect().left) / this._pxPerBeat;
+      const rawBeat = originEdge + (pointerBeat - originEdge) * this.gestureFactor(event);
       const edgeBeat = snapTime(rawBeat, {
         step: gridStep(this.beatsPerBar, this.grid), mode: this.snapModeFor(event), origin: originEdge,
         anchors: this.snapAnchors({ laneIds: [drag.laneId], excludeIds: [drag.clipId] }), reach: this.snapReach(),
@@ -2333,7 +2341,7 @@ export class CompostTimeline extends HTMLElement {
   moveLoopDrag(event) {
     const drag = this.drag;
     if (!drag || drag.type !== 'loop' || event.pointerId !== drag.pointerId) return;
-    const delta = (event.clientX - drag.startX) / drag.px;
+    const delta = (event.clientX - drag.startX) / drag.px * this.gestureFactor(event);
     const mode = this.snapModeFor(event);
     const step = gridStep(this.beatsPerBar, this.grid);
     const anchors = this.snapAnchors().filter((anchor) => anchor !== drag.start && anchor !== drag.end);
