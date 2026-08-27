@@ -69,6 +69,31 @@ export function gridStepOf(beatsPerBar, grid) {
   return Math.max(MIN_TIME, bar / Math.max(1, Number(grid) || 4));
 }
 
+/** Pick the finest ordinary note grid that still leaves a usable gap on screen. */
+/** @param {number} pxPerBeat @param {number} [beatsPerBar] @param {number} [minimumPixels] */
+export function adaptiveGridStep(pxPerBeat, beatsPerBar = 4, minimumPixels = 12) {
+  const px = Math.max(MIN_TIME, Number(pxPerBeat) || 1);
+  const bar = Math.max(MIN_TIME, Number(beatsPerBar) || 4);
+  const steps = [...new Set([bar, 4, 2, 1, .5, .25, .125, .0625])]
+    .filter((step) => step <= bar + MIN_TIME)
+    .sort((a, b) => a - b);
+  return steps.find((step) => step * px >= minimumPixels) ?? bar;
+}
+
+/** Resolve a fixed or zoom-adaptive grid to quarter-note beats. */
+export function gridStepForView(beatsPerBar, grid, pxPerBeat, adaptive = false) {
+  return adaptive ? adaptiveGridStep(pxPerBeat, beatsPerBar) : gridStepOf(beatsPerBar, grid);
+}
+
+/** Display a resolved straight grid step. */
+export function gridTextForStep(step, beatsPerBar = 4) {
+  if (Math.abs(step - beatsPerBar) < MIN_TIME) return '1 bar';
+  for (const denominator of [1, 2, 4, 8, 16, 32, 64]) {
+    if (Math.abs(step - 4 / denominator) < MIN_TIME) return `1/${denominator}`;
+  }
+  return `${step} beats`;
+}
+
 /** The displayed name of a note-value or legacy cells-per-bar grid. */
 /** @param {string|number} grid @param {number} [beatsPerBar] */
 export function gridTextOf(grid, beatsPerBar = 4) {

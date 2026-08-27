@@ -31,6 +31,9 @@ export function timeGridLines(end: number, geometry: {
   pulseLength?: number | null;
 }): TimeGridLine[];
 export function gridStepOf(beatsPerBar: number, grid: GridValue): number;
+export function adaptiveGridStep(pxPerBeat: number, beatsPerBar?: number, minimumPixels?: number): number;
+export function gridStepForView(beatsPerBar: number, grid: GridValue, pxPerBeat: number, adaptive?: boolean): number;
+export function gridTextForStep(step: number, beatsPerBar?: number): string;
 export function gridTextOf(grid: GridValue, beatsPerBar?: number): string;
 export function snapModeWith(mode: 'grid' | 'off', modifierHeld: boolean): 'grid' | 'off';
 export function snapTime(value: number, options?: SnapTimeOptions): number;

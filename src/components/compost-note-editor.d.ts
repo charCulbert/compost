@@ -51,6 +51,8 @@ export class CompostNoteEditor extends HTMLElement {
   pulseLength: number | null;
   /** A meter-independent note value such as `1/16`, `1/8T` or `bar`; numbers are legacy cells per bar. */
   grid: string | number;
+  /** Whether zoom chooses the effective grid step; absent `adaptive-grid` keeps the declared grid fixed. */
+  adaptiveGrid: boolean;
   /** Whether time-grid lines are drawn; set `grid-lines="off"` to hide them. */
   gridLines: boolean;
   snapMode: 'grid' | 'off';

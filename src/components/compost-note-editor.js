@@ -18,7 +18,7 @@ export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
 import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP, TAP_MOVE_DISTANCE } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
-import { gridStepOf, gridTextOf, timeGridLines, timeSignatureOf } from '../time-grid.js';
+import { gridStepForView, gridStepOf, gridTextForStep, gridTextOf, timeGridLines, timeSignatureOf } from '../time-grid.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextEditorID = 1;
@@ -54,7 +54,7 @@ export const gridText = gridTextOf;
 export class CompostNoteEditor extends HTMLElement {
   static get observedAttributes() {
     return [
-      'label', 'beats', 'beats-per-bar', 'time-signature', 'grid', 'snap', 'start', 'end', 'loop-start', 'loop-end',
+      'label', 'beats', 'beats-per-bar', 'time-signature', 'grid', 'adaptive-grid', 'snap', 'start', 'end', 'loop-start', 'loop-end',
       'root-note', 'note-count', 'beat-width', 'fold', 'draw', 'playhead', 'scale', 'root',
       'velocity', 'channel', 'grid-lines', 'loop', 'lock-loop-start', 'readonly', 'disabled',
     ];
@@ -69,6 +69,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.pulseLength = null;
     this.timeSignature = '4/4';
     this.grid = '1/16';
+    this.adaptiveGrid = false;
     this.gridLines = true;
     this.snapMode = 'grid';
     this.rangeStart = 0;
@@ -456,6 +457,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.beatLength = meter.beatLength;
     this.pulseLength = meter.pulseLength;
     this.grid = this.getAttribute('grid')?.trim() || this.grid;
+    this.adaptiveGrid = this.hasAttribute('adaptive-grid');
     this.gridLines = this.getAttribute('grid-lines') !== 'off';
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     const rawStart = Math.max(0, numberAttr(this, 'start', this.rangeStart));
@@ -512,7 +514,11 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   get step() {
-    return gridStepOf(this.beatsPerBar, this.grid);
+    return gridStepForView(this.beatsPerBar, this.grid, this.pxPerBeat, this.adaptiveGrid);
+  }
+
+  currentGridText() {
+    return this.adaptiveGrid ? gridTextForStep(this.step, this.beatsPerBar) : gridText(this.grid, this.beatsPerBar);
   }
 
   newNoteId() {
@@ -561,7 +567,7 @@ export class CompostNoteEditor extends HTMLElement {
       bubbles: true, composed: true,
       detail: {
         ids: this.selection.size > 0 ? [...this.selection] : this._notes.map((note) => note.id),
-        step: gridStepOf(this.beatsPerBar, division), lengths,
+        step: division === this.grid ? this.step : gridStepOf(this.beatsPerBar, division), lengths,
       },
     }));
   }
@@ -759,7 +765,7 @@ export class CompostNoteEditor extends HTMLElement {
     if (!this.selectionRegion) {
       this.timeSelection.style.display = 'none';
       this.timeSelectionRuler.style.display = 'none';
-      this.division.textContent = this.gridLines ? gridText(this.grid, this.beatsPerBar) : 'off';
+      this.division.textContent = this.gridLines ? this.currentGridText() : 'off';
       return;
     }
     const left = this.selectionRegion.start * this.pxPerBeat;
