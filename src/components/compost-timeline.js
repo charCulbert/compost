@@ -350,6 +350,12 @@ export class CompostTimeline extends HTMLElement {
     this.viewChangeTimer = null;
     this.longPress = createLongPress();
     this.resizeObserver = null;
+    // Alt can be pressed or released while a clip is in flight: it decides copy or move
+    this.handleModifierKey = (event) => {
+      if (this.drag?.type !== 'move' || !this.drag.moved) return;
+      this.drag.copy = Boolean(event.altKey);
+      this.paintCopyState();
+    };
 
     this.root = this.attachShadow({ mode: 'open' });
     this.root.innerHTML = `
@@ -494,6 +500,7 @@ export class CompostTimeline extends HTMLElement {
         .clip[data-state="recording"] .clip-name { color: var(--compost-timeline-over); }
         .clip[data-state="playing"] .clip-notes, .clip[data-state="recording"] .clip-notes { opacity: 1; }
         .clip[data-dragging] { opacity: .35 !important; }
+        :host([data-drag-copy]) .clip { cursor: copy; }
         .clip-name { position: relative; z-index: 2; display: block; padding: 3px 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--compost-timeline-clip-font-size); color: var(--clip-color, var(--compost-timeline-clip-text)); }
         .clip-notes { position: absolute; inset: 0; opacity: 1; pointer-events: none; }
         .clip-preview { position: absolute; inset: 0; display: block; pointer-events: none; }
@@ -585,9 +592,13 @@ export class CompostTimeline extends HTMLElement {
     this.syncAttributes();
     this.render();
     this.resizeObserver?.observe(this);
+    window.addEventListener('keydown', this.handleModifierKey, true);
+    window.addEventListener('keyup', this.handleModifierKey, true);
   }
 
   disconnectedCallback() {
+    window.removeEventListener('keydown', this.handleModifierKey, true);
+    window.removeEventListener('keyup', this.handleModifierKey, true);
     this.resizeObserver?.disconnect();
     this.cancelActiveDrag({ clearPointers: true });
     this.longPress.cancel();
@@ -1799,7 +1810,19 @@ export class CompostTimeline extends HTMLElement {
       clip.style.transform = '';
       clip.removeAttribute('data-dragging');
     }
+    this.removeAttribute('data-drag-copy');
     this.paintClipDropTarget(null);
+  }
+
+  /** A moved clip leaves a faded original behind; a copied one leaves it as it was. */
+  paintCopyState() {
+    const drag = this.drag;
+    if (!drag || drag.type !== 'move') return;
+    this.toggleAttribute('data-drag-copy', Boolean(drag.copy));
+    for (const item of drag.selected) {
+      const element = this.clipElements().find((node) => node.dataset.id === item.clip.id);
+      element?.toggleAttribute('data-dragging', !drag.copy);
+    }
   }
 
   paintScroll() {
@@ -2249,10 +2272,11 @@ export class CompostTimeline extends HTMLElement {
         anchors: [...edges, ...edges.map((edge) => edge - length)], reach: this.snapReach(),
       }) - originStart;
       drag.previewDelta = delta;
+      drag.copy = Boolean(event.altKey);
+      this.paintCopyState();
       for (const item of drag.selected) {
         const element = this.clipElements().find((node) => node.dataset.id === item.clip.id);
         if (!element) continue;
-        element.dataset.dragging = '';
         element.style.transform = `translate(${delta * this._pxPerBeat}px, ${this.laneOffsetForPoint(event.clientY, item.lane.id)}px)`;
       }
     }
@@ -2383,7 +2407,7 @@ export class CompostTimeline extends HTMLElement {
     if (drag.type === 'move' && drag.moved && !this.readonly) {
       const targetLane = this.laneAtPoint(event.clientY) || drag.laneId;
       const deltaBeats = drag.previewDelta ?? 0;
-      this.dispatchEvent(eventOf('clip-move', { ids: drag.ids, laneId: targetLane, deltaBeats, copy: Boolean(event.altKey || drag.copy) }));
+      this.dispatchEvent(eventOf('clip-move', { ids: drag.ids, laneId: targetLane, deltaBeats, copy: Boolean(drag.copy) }));
       return;
     }
     if (drag.type === 'move') this.paintSelection();

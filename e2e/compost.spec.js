@@ -905,6 +905,44 @@ test('timeline clips snap to their neighbours and locators', async ({ page }) =>
   expect(trim.detail.end).toBeCloseTo(6.3, 6);
 });
 
+test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const clip = timeline.locator('.clip[data-id="beat"]');
+  await timeline.evaluate((element) => {
+    element.setAttribute('snap', 'off');
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] }]);
+    element.testEvents = [];
+    element.addEventListener('clip-move', (event) => element.testEvents.push(event.detail));
+  });
+
+  // start plain, press Alt on the way: a copy, and the original stops fading
+  let box = await clip.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 3 });
+  await expect(clip).toHaveAttribute('data-dragging', '');
+  await page.keyboard.down('Alt');
+  await expect(clip).not.toHaveAttribute('data-dragging', '');
+  await expect(timeline).toHaveAttribute('data-drag-copy', '');
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 2 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  expect((await timeline.evaluate((element) => element.testEvents.at(-1))).copy).toBe(true);
+
+  // start with Alt, release it on the way: a plain move
+  box = await clip.boundingBox();
+  await page.keyboard.down('Alt');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 3 });
+  await page.keyboard.up('Alt');
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 2 });
+  await page.mouse.up();
+  expect((await timeline.evaluate((element) => element.testEvents.at(-1))).copy).toBe(false);
+  await expect(timeline).not.toHaveAttribute('data-drag-copy', '');
+});
+
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
