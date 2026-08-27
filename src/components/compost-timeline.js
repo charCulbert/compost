@@ -2,7 +2,7 @@ import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import { rulerLabels } from '../time-ruler.js';
-import { gridStepOf, snapModeWith, snapTime, timeSignatureOf } from '../time-grid.js';
+import { gridStepOf, snapModeWith, snapTime, timeGridLines, timeSignatureOf } from '../time-grid.js';
 import { extendSelectionRegion } from '../selection-region.js';
 import './compost-envelope-editor.js';
 import { parameterScaleBreakpoints } from '../parameter-scale.js';
@@ -321,6 +321,7 @@ export class CompostTimeline extends HTMLElement {
     this.label = 'Timeline';
     this.beatsPerBar = DEFAULT_BEATS_PER_BAR;
     this.beatLength = 1;
+    this.pulseLength = null;
     this.timeSignature = '4/4';
     this.grid = '1/4';
     this.snapMode = 'grid';
@@ -371,9 +372,9 @@ export class CompostTimeline extends HTMLElement {
           --compost-timeline-bg: Canvas;
           --compost-timeline-text: currentColor;
           --compost-timeline-muted: color-mix(in srgb, currentColor 65%, transparent);
-          --compost-timeline-line: color-mix(in srgb, currentColor 18%, transparent);
-          --compost-timeline-beat-line: color-mix(in srgb, currentColor 30%, transparent);
-          --compost-timeline-bar-line: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-timeline-line: color-mix(in srgb, currentColor 8%, transparent);
+          --compost-timeline-beat-line: color-mix(in srgb, currentColor 18%, transparent);
+          --compost-timeline-bar-line: color-mix(in srgb, currentColor 30%, transparent);
           --compost-timeline-select: var(--compost-accent, AccentColor);
           --compost-timeline-header-width: 11em;
           --compost-timeline-lane-height: 4em;
@@ -452,6 +453,7 @@ export class CompostTimeline extends HTMLElement {
         .grid-world { position: absolute; inset: 0 auto auto 0; z-index: 1; pointer-events: none; }
         .grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-line); }
         .grid-line.beat { background: var(--compost-timeline-beat-line); }
+        .grid-line.pulse { background: color-mix(in srgb, currentColor 24%, transparent); }
         .grid-line.bar { background: var(--compost-timeline-bar-line); }
         .lane { position: relative; box-sizing: border-box; height: auto; border-bottom: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-bg); }
         .lane[data-drop-target] { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
@@ -590,6 +592,7 @@ export class CompostTimeline extends HTMLElement {
     this.timeSignature = meter.text;
     this.beatsPerBar = meter.barLength;
     this.beatLength = meter.beatLength;
+    this.pulseLength = meter.pulseLength;
     this.grid = this.getAttribute('grid')?.trim() || this.grid;
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     this.follow = this.hasAttribute('follow');
@@ -1179,13 +1182,14 @@ export class CompostTimeline extends HTMLElement {
     const fragment = document.createDocumentFragment();
     const stepBars = rulerStep(this._pxPerBeat, this.beatsPerBar);
     const step = lanes && this._pxPerBeat < 48 ? this.beatLength : gridStep(this.beatsPerBar, this.grid);
-    for (let beat = 0; beat <= end + MIN_CLIP_LENGTH; beat += step) {
+    for (const { time: beat, kind } of timeGridLines(end, {
+      gridStep: step, beatLength: this.beatLength,
+      pulseLength: this.pulseLength, barLength: this.beatsPerBar,
+    })) {
       if (lanes && beat < MIN_CLIP_LENGTH) continue;
       const line = document.createElement('div');
-      const inBar = Math.abs(beat % this.beatsPerBar) < MIN_CLIP_LENGTH;
-      const inBeat = Math.abs(beat % this.beatLength) < MIN_CLIP_LENGTH;
-      line.className = `grid-line ${inBar ? 'bar' : inBeat ? 'beat' : 'cell'}`;
-      line.part.add('grid-line', inBar ? 'bar-line' : inBeat ? 'beat-line' : 'cell-line');
+      line.className = `grid-line ${kind}`;
+      line.part.add('grid-line', `${kind}-line`);
       line.style.left = `${beat * this._pxPerBeat}px`;
       fragment.append(line);
     }

@@ -18,7 +18,7 @@ export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
 import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP, TAP_MOVE_DISTANCE } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
-import { gridStepOf, gridTextOf, timeSignatureOf } from '../time-grid.js';
+import { gridStepOf, gridTextOf, timeGridLines, timeSignatureOf } from '../time-grid.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
 let nextEditorID = 1;
@@ -65,6 +65,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.label = 'Notes';
     this.beatsPerBar = 4;
     this.beatLength = 1;
+    this.pulseLength = null;
     this.timeSignature = '4/4';
     this.grid = '1/16';
     this.gridLines = true;
@@ -115,8 +116,8 @@ export class CompostNoteEditor extends HTMLElement {
           --compost-note-editor-bg: Canvas;
           --compost-note-editor-text: currentColor;
           --compost-note-editor-muted: color-mix(in srgb, currentColor 65%, transparent);
-          --compost-note-editor-line: color-mix(in srgb, currentColor 18%, transparent);
-          --compost-note-editor-bar-line: var(--compost-note-editor-muted);
+          --compost-note-editor-line: color-mix(in srgb, currentColor 8%, transparent);
+          --compost-note-editor-bar-line: color-mix(in srgb, currentColor 30%, transparent);
           --compost-note-editor-row: transparent;
           --compost-note-editor-signal: var(--compost-accent, AccentColor);
           --compost-note-editor-range: var(--compost-note-editor-text);
@@ -179,8 +180,9 @@ export class CompostNoteEditor extends HTMLElement {
           z-index: 2;
         }
         .ruler .rt { position: absolute; top: 1.15em; bottom: 0; width: 1px; background: var(--compost-note-editor-line); pointer-events: none; }
-        .ruler .rt.beat { top: 0.9em; background: color-mix(in srgb, currentColor 50%, transparent); }
-        .ruler .rt.bar { top: 0.75em; background: color-mix(in srgb, currentColor 70%, transparent); }
+        .ruler .rt.beat { top: 0.9em; background: color-mix(in srgb, currentColor 18%, transparent); }
+        .ruler .rt.pulse { top: 0.82em; background: color-mix(in srgb, currentColor 24%, transparent); }
+        .ruler .rt.bar { top: 0.75em; background: var(--compost-note-editor-bar-line); }
         .region {
           position: absolute;
           top: 1.35em;
@@ -258,7 +260,8 @@ export class CompostNoteEditor extends HTMLElement {
         .grid { position: absolute; top: 0; bottom: 0; left: 0; cursor: default; touch-action: none; }
         :host([draw]) .grid { cursor: crosshair; }
         .gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-note-editor-line); }
-        .gl.beat { background: color-mix(in srgb, currentColor 30%, transparent); }
+        .gl.beat { background: color-mix(in srgb, currentColor 18%, transparent); }
+        .gl.pulse { background: color-mix(in srgb, currentColor 24%, transparent); }
         .gl.bar { background: var(--compost-note-editor-bar-line); }
         .rl { position: absolute; left: 0; right: 0; height: 1px; background: var(--compost-note-editor-line); }
         .rl.octave { background: color-mix(in srgb, currentColor 30%, transparent); }
@@ -449,6 +452,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.timeSignature = meter.text;
     this.beatsPerBar = meter.barLength;
     this.beatLength = meter.beatLength;
+    this.pulseLength = meter.pulseLength;
     this.grid = this.getAttribute('grid')?.trim() || this.grid;
     this.gridLines = this.getAttribute('grid-lines') !== 'off';
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
@@ -801,11 +805,12 @@ export class CompostNoteEditor extends HTMLElement {
     this.endHandle.style.left = `${this.loopEnd * px - handle + 1}px`;
     for (const label of this.ruler.querySelectorAll('.bn,.rt')) label.remove();
     const fragment = document.createDocumentFragment();
-    for (let beat = 0; beat <= this.beats + 1e-9; beat += this.step) {
+    for (const { time: beat, kind } of timeGridLines(this.beats, {
+      gridStep: this.step, beatLength: this.beatLength,
+      pulseLength: this.pulseLength, barLength: this.beatsPerBar,
+    })) {
       const tick = document.createElement('div');
-      const isBar = Math.abs(beat % this.beatsPerBar) < 1e-9;
-      const isBeat = Math.abs(beat % this.beatLength) < 1e-9;
-      tick.className = `rt${isBar ? ' bar' : isBeat ? ' beat' : ''}`;
+      tick.className = `rt ${kind}`;
       tick.part.add('ruler-tick');
       tick.style.left = `${beat * px}px`;
       fragment.append(tick);
@@ -879,10 +884,11 @@ export class CompostNoteEditor extends HTMLElement {
     });
     const step = this.step;
     if (this.gridLines && step > 0) {
-      for (let beat = 0; beat <= this.beats + 1e-9; beat += step) {
-        const isBar = Math.abs(beat % this.beatsPerBar) < 1e-9;
-        const isBeat = Math.abs(beat % this.beatLength) < 1e-9;
-        markup.push(`<div class="gl${isBar ? ' bar' : isBeat ? ' beat' : ''}" part="grid-line${isBar ? ' bar-line' : isBeat ? ' beat-line' : ''}" style="left:${(beat * px).toFixed(2)}px"></div>`);
+      for (const { time: beat, kind } of timeGridLines(this.beats, {
+        gridStep: step, beatLength: this.beatLength,
+        pulseLength: this.pulseLength, barLength: this.beatsPerBar,
+      })) {
+        markup.push(`<div class="gl ${kind}" part="grid-line ${kind}-line" style="left:${(beat * px).toFixed(2)}px"></div>`);
       }
     }
     this.past.insertAdjacentHTML('beforebegin', markup.join(''));

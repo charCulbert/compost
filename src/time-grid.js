@@ -25,11 +25,33 @@ export function timeSignatureOf(value, beatsPerBar = 4) {
     return {
       numerator, denominator, beatLength,
       barLength: numerator * beatLength,
+      pulseLength: denominator === 8 && numerator > 3 && numerator % 3 === 0 ? beatLength * 3 : null,
       text: `${numerator}/${denominator}`,
     };
   }
   const legacy = Math.max(1, Math.round(Number(beatsPerBar) || 4));
-  return { numerator: legacy, denominator: 4, beatLength: 1, barLength: legacy, text: `${legacy}/4` };
+  return { numerator: legacy, denominator: 4, beatLength: 1, barLength: legacy,
+    pulseLength: null, text: `${legacy}/4` };
+}
+
+/** All distinct grid, denominator-beat, compound-pulse and bar lines. */
+/** @param {number} end @param {{gridStep: number, beatLength: number, barLength: number, pulseLength?: number|null}} geometry */
+export function timeGridLines(end, { gridStep, beatLength, barLength, pulseLength = null }) {
+  const priorities = { cell: 0, beat: 1, pulse: 2, bar: 3 };
+  const lines = new Map();
+  const add = (step, kind) => {
+    if (!(step > 0)) return;
+    for (let time = 0; time <= end + MIN_TIME; time += step) {
+      const key = Math.round(time / MIN_TIME);
+      const previous = lines.get(key);
+      if (!previous || priorities[kind] > priorities[previous.kind]) lines.set(key, { time, kind });
+    }
+  };
+  add(gridStep, 'cell');
+  add(beatLength, 'beat');
+  add(pulseLength, 'pulse');
+  add(barLength, 'bar');
+  return [...lines.values()].sort((a, b) => a.time - b.time);
 }
 
 /** A grid step in quarter-note beats. Note values are meter-independent;

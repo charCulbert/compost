@@ -1,19 +1,29 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { gridStepOf, gridTextOf, snapModeWith, snapTime, timeSignatureOf } from '../src/time-grid.js';
+import { gridStepOf, gridTextOf, snapModeWith, snapTime, timeGridLines, timeSignatureOf } from '../src/time-grid.js';
 
 test('time signatures expose bar and denominator-beat lengths in quarter-note beats', () => {
   assert.deepEqual(timeSignatureOf('6/8'), {
-    numerator: 6, denominator: 8, beatLength: 0.5, barLength: 3, text: '6/8',
+    numerator: 6, denominator: 8, beatLength: 0.5, barLength: 3, pulseLength: 1.5, text: '6/8',
   });
   assert.deepEqual(timeSignatureOf('12/8'), {
-    numerator: 12, denominator: 8, beatLength: 0.5, barLength: 6, text: '12/8',
+    numerator: 12, denominator: 8, beatLength: 0.5, barLength: 6, pulseLength: 1.5, text: '12/8',
   });
   assert.deepEqual(timeSignatureOf(null, 5), {
-    numerator: 5, denominator: 4, beatLength: 1, barLength: 5, text: '5/4',
+    numerator: 5, denominator: 4, beatLength: 1, barLength: 5, pulseLength: null, text: '5/4',
   });
   assert.equal(timeSignatureOf('7/3', 3).text, '3/4');
+});
+
+test('compound meters add pulse lines without losing beats or note-value cells', () => {
+  assert.deepEqual(timeGridLines(3, {
+    gridStep: 0.25, beatLength: 0.5, pulseLength: 1.5, barLength: 3,
+  }).map(({ time, kind }) => [time, kind]), [
+    [0, 'bar'], [.25, 'cell'], [.5, 'beat'], [.75, 'cell'], [1, 'beat'], [1.25, 'cell'],
+    [1.5, 'pulse'], [1.75, 'cell'], [2, 'beat'], [2.25, 'cell'], [2.5, 'beat'],
+    [2.75, 'cell'], [3, 'bar'],
+  ]);
 });
 
 test('a grid step is a bar divided into cells', () => {

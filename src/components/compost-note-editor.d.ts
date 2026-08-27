@@ -44,6 +44,7 @@ export class CompostNoteEditor extends HTMLElement {
   timeSignature: string;
   beatsPerBar: number;
   beatLength: number;
+  pulseLength: number | null;
   grid: string | number;
   /** Whether time-grid lines are drawn; set `grid-lines="off"` to hide them. */
   gridLines: boolean;
