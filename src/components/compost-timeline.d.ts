@@ -28,6 +28,14 @@ export interface TimelineClip {
 }
 
 /** The automation curve shown in a lane's automation view. */
+export interface TimelineAutomationPoint {
+  beat: number;
+  value: number;
+  /** Curvature from -1 to 1 for the segment beginning here; zero is linear. */
+  curve?: number;
+  [key: string]: unknown;
+}
+
 export interface AutomationLaneView {
   id: string;
   label: string;
@@ -37,7 +45,7 @@ export interface AutomationLaneView {
   stepped: boolean;
   step?: number;
   scale?: 'linear' | 'gain';
-  points: {beat: number, value: number}[];
+  points: TimelineAutomationPoint[];
   state?: 'idle' | 'recording' | 'overridden' | 'playing';
   value?: number;
   [key: string]: unknown;
@@ -74,7 +82,7 @@ export interface TimelineClipTrimDetail { id: string, start: number, end: number
 export interface TimelineAutomationChangeDetail {
   laneId: string;
   automationId: string;
-  points: {beat: number, value: number}[];
+  points: TimelineAutomationPoint[];
 }
 /** `time-delete`: Delete with a time selection. */
 export interface TimelineTimeDeleteDetail extends TimelineTimeSelection { removeTime: boolean }
@@ -132,33 +140,33 @@ export function automationValueToY(value: number, min: number | {min: number, ma
 /** Convert a y coordinate in a sub-row to an automation value. */
 export function automationValueFromY(y: number, min: number | {min: number, max: number}, max: number, height: number, scale?: 'linear' | 'gain'): number;
 /** Add a point and return a new beat-sorted, range-clamped array. */
-export function addAutomationPoint(points: {beat: number, value: number}[], point: {beat: number, value: number}, min?: number | {min: number, max: number}, max?: number): {beat: number, value: number}[];
+export function addAutomationPoint(points: TimelineAutomationPoint[], point: TimelineAutomationPoint, min?: number | {min: number, max: number}, max?: number): TimelineAutomationPoint[];
 /** Move one point without allowing it to cross its neighbours. */
-export function moveAutomationPoint(points: {beat: number, value: number}[], index: number, point: {beat: number, value: number}, min?: number | {min: number, max: number}, max?: number): {beat: number, value: number}[];
+export function moveAutomationPoint(points: TimelineAutomationPoint[], index: number, point: TimelineAutomationPoint, min?: number | {min: number, max: number}, max?: number): TimelineAutomationPoint[];
 /** Keep a synthetic original edge point when an endpoint moves inward. */
-export function preserveAutomationEdgePoints(originPoints: {beat: number, value: number}[], movedPoints: {beat: number, value: number}[], index: number): {beat: number, value: number}[];
+export function preserveAutomationEdgePoints(originPoints: TimelineAutomationPoint[], movedPoints: TimelineAutomationPoint[], index: number): TimelineAutomationPoint[];
 /** Delete one point and return a new array. */
-export function deleteAutomationPoint(points: {beat: number, value: number}[], index: number): {beat: number, value: number}[];
+export function deleteAutomationPoint(points: TimelineAutomationPoint[], index: number): TimelineAutomationPoint[];
 /** Snap an automation value when a lane supplies a discrete step. */
 export function snapAutomationValue(value: number, min?: number | {min: number, max: number}, max?: number, step?: number): number;
 /** Return the effective value step, including the integer default for stepped lanes. */
 export function effectiveAutomationStep(stepped?: boolean, step?: number | string | null): number;
 /** Return the value on an envelope at a beat, including flat stepped segments. */
-export function automationValueAtBeat(points: {beat: number, value: number}[], beat: number, min?: number | {min: number, max: number}, max?: number, scale?: 'linear' | 'gain', stepped?: boolean): number;
+export function automationValueAtBeat(points: TimelineAutomationPoint[], beat: number, min?: number | {min: number, max: number}, max?: number, scale?: 'linear' | 'gain', stepped?: boolean): number;
 /** Sample both sides of a range using the lane's actual interpolation semantics. */
-export function automationRangeEdgeValues(points: {beat: number, value: number}[], start: number, end: number, options?: AutomationEditOptions): {start: number, end: number};
+export function automationRangeEdgeValues(points: TimelineAutomationPoint[], start: number, end: number, options?: AutomationEditOptions): {start: number, end: number};
 /** Move selected automation values in display space, preserving their beats. */
-export function moveAutomationPointsByY(points: {beat: number, value: number}[], indexes: number[], deltaY: number, options?: AutomationEditOptions): {beat: number, value: number}[];
+export function moveAutomationPointsByY(points: TimelineAutomationPoint[], indexes: number[], deltaY: number, options?: AutomationEditOptions): TimelineAutomationPoint[];
 /** Move a selected range in display space while preserving independently sampled edges. */
-export function moveAutomationRangeByY(points: {beat: number, value: number}[], start: number, end: number, deltaY: number, options?: AutomationEditOptions): {beat: number, value: number}[];
+export function moveAutomationRangeByY(points: TimelineAutomationPoint[], start: number, end: number, deltaY: number, options?: AutomationEditOptions): TimelineAutomationPoint[];
 /** Thin freehand automation samples once, preserving endpoints and corners. */
-export function thinAutomationPoints(points: {beat: number, value: number}[], tolerance?: number): {beat: number, value: number}[];
+export function thinAutomationPoints(points: TimelineAutomationPoint[], tolerance?: number): TimelineAutomationPoint[];
 /** Build one complete automation write from grid cells or freehand samples. */
-export function drawAutomationPoints(originPoints: {beat: number, value: number}[], samples: {beat: number, value: number}[], options?: AutomationEditOptions & {gridStep?: number, snap?: string, freehand?: boolean, tolerance?: number}): {beat: number, value: number}[];
+export function drawAutomationPoints(originPoints: TimelineAutomationPoint[], samples: TimelineAutomationPoint[], options?: AutomationEditOptions & {gridStep?: number, snap?: string, freehand?: boolean, tolerance?: number}): TimelineAutomationPoint[];
 /** Flatten an automation range while retaining points outside the selection. */
-export function flattenAutomationRange(points: {beat: number, value: number}[], start: number, end: number, value: number, min?: number | {min: number, max: number}, max?: number, step?: number): {beat: number, value: number}[];
+export function flattenAutomationRange(points: TimelineAutomationPoint[], start: number, end: number, value: number, min?: number | {min: number, max: number}, max?: number, step?: number): TimelineAutomationPoint[];
 /** Move only the points and edge values inside a selected automation range. */
-export function moveAutomationRange(points: {beat: number, value: number}[], start: number, end: number, delta: number, min?: number | {min: number, max: number}, max?: number, step?: number): {beat: number, value: number}[];
+export function moveAutomationRange(points: TimelineAutomationPoint[], start: number, end: number, delta: number, min?: number | {min: number, max: number}, max?: number, step?: number): TimelineAutomationPoint[];
 
 /**
  * `<compost-timeline>`: an arrangement view of lanes, clips, locators, a

@@ -220,7 +220,7 @@
       <button type="button" data-timeline-split>Split at playhead</button>
       <button type="button" data-timeline-delete>Delete</button>
     </div>
-    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. Automation edits are also applied by this faux host.</small>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. Automation supports point, range and Option-drag curve edits; this faux host applies them all.</small>
   </div>
 </template>
 
@@ -640,7 +640,7 @@
       let lanes = [
         { id: 'drums', name: 'Drums', color: 'var(--compost-accent, AccentColor)', automation:
           { id: 'gain', label: 'Gain', min: 0, max: 1, value: .72, state: 'playing', points: [
-            { beat: 0, value: .5 }, { beat: 4, value: .8 }, { beat: 8, value: .65 },
+            { beat: 0, value: .5, curve: .35 }, { beat: 4, value: .8 }, { beat: 8, value: .65 },
           ] }, clips: [
           { id: 'beat', name: 'Beat', start: 0, length: 8, duration: 2, loop: true, state: 'playing',
             notes: [{ start: 0, duration: .25, note: 36, velocity: 110 }, { start: .5, duration: .25, note: 42, velocity: 82 }] },

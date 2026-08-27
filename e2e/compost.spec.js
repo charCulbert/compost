@@ -1293,7 +1293,8 @@ test('timeline rulers expose locators, time selections and measured row geometry
   expect(Math.abs(geometry.header - 44)).toBeLessThan(1);
   expect(Math.abs(geometry.body - 44)).toBeLessThan(1);
   expect(Math.abs(geometry.base - 44)).toBeLessThan(1);
-  expect(Math.abs(geometry.automationView - geometry.base)).toBeLessThan(1);
+  expect(geometry.automationView).toBeGreaterThan(0);
+  expect(geometry.automationView).toBeLessThan(geometry.base);
   expect(Math.abs(geometry.thinHeader - 27.5)).toBeLessThan(1);
   expect(Math.abs(geometry.thinBody - 27.5)).toBeLessThan(1);
   expect(geometry.locators.map(({ id }) => id)).toEqual(['intro', 'drop']);
@@ -1794,7 +1795,8 @@ test('timeline aligns regular and compact lanes with automation view', async ({ 
   expect(Math.abs(measured.regularBase - 44)).toBeLessThan(1);
   expect(Math.abs(measured.compactHeader - 27.5)).toBeLessThan(1);
   expect(Math.abs(measured.compactBase - 27.5)).toBeLessThan(1);
-  expect(Math.abs(measured.automationView - measured.regularBase)).toBeLessThan(1);
+  expect(measured.automationView).toBeGreaterThan(0);
+  expect(measured.automationView).toBeLessThan(measured.regularBase);
   expect(measured.pickedOutline).toBe('solid');
 });
 
@@ -1900,7 +1902,7 @@ test('timeline automation view draw and commit sorted edits without clip selecti
   await timeline.evaluate((element) => {
     const editor = element.shadowRoot.querySelector('compost-envelope-editor');
     editor.dispatchEvent(new CustomEvent('envelope-change', { bubbles: true, composed: true, detail: {
-      points: [{ time: 0, value: .2 }, { time: 4, value: .8 }],
+      points: [{ time: 0, value: .2, curve: .4 }, { time: 4, value: .8 }],
     } }));
     editor.dispatchEvent(new CustomEvent('envelope-context', { bubbles: true, composed: true, detail: {
       pointIndex: 1, time: 4, value: .8, clientX: 12, clientY: 24,
@@ -1909,7 +1911,7 @@ test('timeline automation view draw and commit sorted edits without clip selecti
   const events = await timeline.evaluate((element) => element.testEvents);
   expect(events.find((event) => event.type === 'automation-change')).toEqual({
     type: 'automation-change', detail: { laneId: 'lane', automationId: 'volume', points: [
-      { beat: 0, value: .2 }, { beat: 4, value: .8 },
+      { beat: 0, value: .2, curve: .4 }, { beat: 4, value: .8 },
     ] },
   });
   expect(events.find((event) => event.type === 'automation-context')).toMatchObject({
@@ -1950,9 +1952,15 @@ test('timeline automation view keeps a clip reachable through its name strip', a
   const boxes = await timeline.evaluate((element) => {
     const clip = element.shadowRoot.querySelector('.clip').getBoundingClientRect();
     const strip = element.shadowRoot.querySelector('.clip-name').getBoundingClientRect();
-    return { clip: { x: clip.x, y: clip.y, width: clip.width, height: clip.height }, strip: strip.height };
+    const automation = element.shadowRoot.querySelector('.lane-automation').getBoundingClientRect();
+    return {
+      clip: { x: clip.x, y: clip.y, width: clip.width, height: clip.height },
+      strip: { top: strip.top, bottom: strip.bottom, height: strip.height },
+      automation: { top: automation.top, height: automation.height },
+    };
   });
-  const stripPoint = [boxes.clip.x + boxes.clip.width / 2, boxes.clip.y + boxes.strip / 2];
+  expect(boxes.automation.top).toBeGreaterThanOrEqual(boxes.strip.bottom - 1);
+  const stripPoint = [boxes.clip.x + boxes.clip.width / 2, boxes.clip.y + boxes.strip.height / 2];
   const bodyPoint = [boxes.clip.x + boxes.clip.width / 2, boxes.clip.y + boxes.clip.height * .75];
   await page.mouse.click(stripPoint[0], stripPoint[1]);
   await expect(timeline.locator('.clip[data-selected]')).toHaveCount(1);
@@ -2018,7 +2026,8 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
     event(editor.surface, 'pointerup', startY + 8);
     return { rowHeight: rowRect.height, expected, readout };
   });
-  expect(Math.abs(gainMove.rowHeight - 44)).toBeLessThan(1);
+  expect(gainMove.rowHeight).toBeGreaterThan(0);
+  expect(gainMove.rowHeight).toBeLessThan(44);
   expect(gainMove.readout).toMatch(/^-?\d/);
   const gainChange = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').at(-1));
   expect(gainChange.detail.points[0].value).toBeCloseTo(gainMove.expected, 8);

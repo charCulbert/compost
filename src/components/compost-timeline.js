@@ -52,7 +52,7 @@ const TOUCH_TRIM_EDGE_EM = .75;
  * automation?: AutomationLaneView|null,
  * clips: TimelineClip[]}} TimelineLane */
 /** @typedef {{id: string, label: string, color?: string, min: number, max: number,
- * stepped: boolean, step?: number, scale?: 'linear'|'gain', points: {beat: number, value: number}[],
+ * stepped: boolean, step?: number, scale?: 'linear'|'gain', points: {beat: number, value: number, curve?: number}[],
  * state?: 'idle'|'recording'|'overridden'|'playing', value?: number}} AutomationLaneView */
 
 /** @param {number} value @param {number} min @param {number} max */
@@ -443,15 +443,15 @@ export class CompostTimeline extends HTMLElement {
         .grid-line.bar { background: var(--compost-timeline-bar-line); }
         .lane { position: relative; box-sizing: border-box; height: auto; border-bottom: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-bg); }
         .lane[data-dimmed] .clip { opacity: .4; }
-        .lane-base { position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
+        .lane-base { --clip-title-height: 1.35em; position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .lane[data-automation-view] .clip { opacity: .3; pointer-events: none; }
-        .lane-automation { position: absolute; inset: 0; z-index: 4; color: var(--lane-color, currentColor); pointer-events: auto; }
+        .lane-automation { position: absolute; inset: calc(.25em + var(--clip-title-height)) 0 .25em; z-index: 4; color: var(--lane-color, currentColor); pointer-events: auto; }
         .automation-editor { position: absolute; inset: 0; display: block; width: 100%; height: 100%; min-height: 0; border: 0; overflow: visible; background: transparent; }
         .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); color: var(--compost-timeline-muted); font-size: .78em; line-height: 1; pointer-events: none; }
         .lane-automation[data-draw]:hover .automation-draw-hint { display: block; }
         .lane-base[data-state="overridden"] .automation-editor::part(line) { stroke-dasharray: 3 3; }
         .lane-base[data-state="recording"] .lane-automation { color: var(--compost-timeline-select); }
-        .clip { --clip-title-height: 1.35em; position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid var(--compost-timeline-text); border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: AccentColorText; cursor: default; touch-action: none; }
+        .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid var(--compost-timeline-text); border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: AccentColorText; cursor: default; touch-action: none; }
         .clip[data-selected], .clip:focus-visible { z-index: 3; border-width: 2px; border-color: CanvasText; outline: none; }
         .clip[data-state="queued"]::after { content: "▷"; position: absolute; right: .25em; bottom: .1em; z-index: 3; font-size: .8em; line-height: 1; }
         .clip[data-state="recording"] { box-shadow: inset -.15em 0 var(--compost-timeline-select); }
@@ -1461,10 +1461,7 @@ export class CompostTimeline extends HTMLElement {
     editor.snapMode = this.snapMode;
     editor.grid = this.currentGridStep();
     editor.draw = this.draw;
-    editor.points = (Array.isArray(automation.points) ? automation.points : []).map((point) => ({
-      time: Number(point.beat),
-      value: Number(point.value),
-    }));
+    editor.points = toEnvelopePoints(automation.points);
     const selection = this.automationSelectionFor(lane.id);
     editor.setSelection(selection?.start, selection?.end);
     editor.addEventListener('envelope-input', (event) => {
@@ -1472,13 +1469,12 @@ export class CompostTimeline extends HTMLElement {
       this.dispatchEvent(eventOf('automation-input', {
         laneId: lane.id,
         automationId: automation.id,
-        points: event.detail.points.map((point) => ({ beat: point.time, value: point.value })),
+        points: fromEnvelopePoints(event.detail.points),
       }));
     });
     editor.addEventListener('envelope-change', (event) => {
       event.stopPropagation();
-      this.commitAutomationChange(lane, automation,
-        event.detail.points.map((point) => ({ beat: point.time, value: point.value })));
+      this.commitAutomationChange(lane, automation, fromEnvelopePoints(event.detail.points));
     });
     editor.addEventListener('envelope-context', (event) => {
       event.stopPropagation();
