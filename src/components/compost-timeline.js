@@ -352,6 +352,7 @@ export class CompostTimeline extends HTMLElement {
     /** @type {Map<number, {x: number, y: number}>} */ this.pointers = new Map();
     /** @type {any} */ this.pinch = null;
     this.viewChangeTimer = null;
+    /** @type {{pxPerBeat: number, scrollBeat: number}[]} */ this.zoomHistory = [];
     this.longPress = createLongPress();
     this.resizeObserver = null;
     // Alt can be pressed or released while a clip is in flight: it decides copy or move
@@ -1399,42 +1400,43 @@ export class CompostTimeline extends HTMLElement {
     handle.setAttribute('aria-valuemin', '24');
     handle.setAttribute('aria-valuemax', '400');
     handle.title = 'Drag or use Arrow keys to resize; double-click or Home resets';
-    /** @type {{pointerId:number,startY:number,startHeight:number,startCustomHeight:number|null}|null} */ let drag = null;
-    const apply = (/** @type {number|undefined} */ height) => {
-      if (height === undefined) delete lane.height;
-      else lane.height = height;
+    /** @type {{pointerId:number,startY:number,startHeight:number,startCustomHeight:number|null,all:boolean,startHeights:Map<string,number|null>}|null} */ let drag = null;
+    const apply = (/** @type {number|undefined} */ height, all = false) => {
+      for (const target of all ? this._lanes : [lane]) this.previewLaneHeight(target, height);
       handle.setAttribute('aria-valuenow', String(this.laneRowHeightFor(lane)));
-      const header = handle.closest('.lane-header');
-      const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(lane.id)}"]`);
-      for (const element of [header, row]) {
-        if (!(element instanceof HTMLElement)) continue;
-        element.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
-        element.style.height = `${this.laneHeightFor(lane)}px`;
-      }
-      this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
-      const grid = this.lanesWorld.querySelector('.grid-world');
-      if (grid instanceof HTMLElement) grid.style.height = `${this.totalLaneHeight()}px`;
+    };
+    const customHeightOf = (/** @type {TimelineLane} */ target) => {
+      const custom = Number(target.height);
+      return Number.isFinite(custom) && custom > 0 ? custom : null;
     };
     handle.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
       event.stopPropagation();
-      const customHeight = Number(lane.height);
+      // Alt sizes every lane from this one, as Ableton and Pro Tools do
       drag = { pointerId: event.pointerId, startY: event.clientY, startHeight: this.laneRowHeightFor(lane),
-        startCustomHeight: Number.isFinite(customHeight) && customHeight > 0 ? customHeight : null };
+        startCustomHeight: customHeightOf(lane), all: Boolean(event.altKey),
+        startHeights: new Map(this._lanes.map((target) => [target.id, customHeightOf(target)])) };
       handle.setPointerCapture?.(event.pointerId);
     });
     handle.addEventListener('pointermove', (event) => {
       if (!drag || event.pointerId !== drag.pointerId) return;
-      apply(clamp(drag.startHeight + event.clientY - drag.startY, 24, 400));
+      drag.all ||= Boolean(event.altKey);
+      apply(clamp(drag.startHeight + event.clientY - drag.startY, 24, 400), drag.all);
     });
     const end = (/** @type {PointerEvent} */ event) => {
       if (!drag || event.pointerId !== drag.pointerId) return;
       const finished = drag;
       drag = null;
-      if (event.type === 'pointercancel') { apply(finished.startCustomHeight ?? undefined); return; }
+      if (event.type === 'pointercancel') {
+        for (const target of this._lanes) this.previewLaneHeight(target, finished.startHeights.get(target.id) ?? undefined);
+        return;
+      }
       if (this.laneRowHeightFor(lane) !== finished.startHeight) {
-        this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: this.laneRowHeightFor(lane) }));
+        const height = this.laneRowHeightFor(lane);
+        for (const target of finished.all ? this._lanes : [lane]) {
+          this.dispatchEvent(eventOf('lane-resize', { laneId: target.id, height }));
+        }
         this.render();
       }
     };
@@ -1462,6 +1464,25 @@ export class CompostTimeline extends HTMLElement {
     });
     apply(lane.height);
     return handle;
+  }
+
+  /** Size one lane's row in place, without rebuilding it. */
+  /** @param {TimelineLane} lane @param {number|undefined} height */
+  previewLaneHeight(lane, height) {
+    if (height === undefined) delete lane.height;
+    else lane.height = height;
+    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(lane.id)}"]`);
+    const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(lane.id)}"]`);
+    for (const element of [header, row]) {
+      if (!(element instanceof HTMLElement)) continue;
+      element.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
+      element.style.height = `${this.laneHeightFor(lane)}px`;
+    }
+    const handle = header?.querySelector('.lane-resize');
+    handle?.setAttribute('aria-valuenow', String(this.laneRowHeightFor(lane)));
+    this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
+    const grid = this.lanesWorld.querySelector('.grid-world');
+    if (grid instanceof HTMLElement) grid.style.height = `${this.totalLaneHeight()}px`;
   }
 
   /** @param {TimelineLane} lane */
@@ -2808,6 +2829,11 @@ export class CompostTimeline extends HTMLElement {
       this.selectAllClips();
       return;
     }
+    if (!meta && !event.altKey && (key === 'z' || key === 'x')) {
+      event.preventDefault();
+      this.zoomToFocus(key);
+      return;
+    }
     if (!this.readonly && meta && key === 'i') {
       // insert time: the region's span on its lanes, or one bar at the playhead on every lane
       event.preventDefault();
@@ -2915,6 +2941,37 @@ export class CompostTimeline extends HTMLElement {
     return null;
   }
 
+  /** z: zoom to the region, else the selected clips, else ask the host to fit; x: back. */
+  /** @param {string} key */
+  zoomToFocus(key) {
+    if (key === 'x') {
+      const previous = this.zoomHistory.pop();
+      if (!previous) return;
+      this._pxPerBeat = previous.pxPerBeat;
+      this._scrollBeat = previous.scrollBeat;
+      this.render();
+      this.scheduleViewChange();
+      return;
+    }
+    const selection = this._timeSelection;
+    const clips = this._selected.map((id) => this.findClip(id)?.clip).filter(Boolean);
+    const range = selection ? { start: selection.start, end: selection.end }
+      : clips.length ? {
+        start: Math.min(...clips.map((clip) => Number(clip.start) || 0)),
+        end: Math.max(...clips.map((clip) => (Number(clip.start) || 0) + (Number(clip.length) || 0))),
+      } : null;
+    if (!range || !(range.end > range.start + MIN_CLIP_LENGTH)) {
+      this.dispatchEvent(eventOf('fit-request', {}));
+      return;
+    }
+    this.zoomHistory.push({ pxPerBeat: this._pxPerBeat, scrollBeat: this._scrollBeat });
+    const width = Math.max(1, this.lanesWrap.clientWidth || this.clientWidth || 1);
+    this._pxPerBeat = finiteClamp(width / (range.end - range.start), MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
+    this._scrollBeat = range.start;
+    this.render();
+    this.scheduleViewChange();
+  }
+
   zoomBy(multiplier) {
     const at = this._playhead;
     const old = this._pxPerBeat;
@@ -2926,6 +2983,14 @@ export class CompostTimeline extends HTMLElement {
 
   handleWheel(event) {
     event.preventDefault();
+    if (event.altKey) {
+      const current = this._lanes.length ? this.laneRowHeightFor(this._lanes[0]) : this.laneHeight;
+      const height = clamp(Math.round(current * (event.deltaY > 0 ? .86 : 1.16)), 24, 400);
+      for (const lane of this._lanes) this.previewLaneHeight(lane, height);
+      this.paintTimeSelection();
+      this.dispatchEvent(eventOf('lanes-resize', { height }));
+      return;
+    }
     if (event.metaKey || event.ctrlKey) {
       const old = this._pxPerBeat;
       const rect = this.rulerWrap.getBoundingClientRect();

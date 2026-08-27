@@ -1043,6 +1043,53 @@ test('timeline keyboard reaches fine nudges, other lanes, loop handles and locat
   await expect(timeline.locator('.ruler-handle.start')).toHaveAttribute('aria-valuenow', '3');
 });
 
+test('timeline sizes every lane with Alt and zooms to the region on z', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setLanes([
+      { id: 'a', name: 'A', clips: [{ id: 'one', name: 'one', start: 0, length: 2, duration: 2, loop: false }] },
+      { id: 'b', name: 'B', clips: [] },
+    ]);
+    element.setTimeSelection(null, null);
+    element.testEvents = [];
+    for (const type of ['lane-resize', 'lanes-resize']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+  });
+  const handle = timeline.locator('.lane-header[data-lane-id="a"] .lane-resize');
+  const box = await handle.boundingBox();
+  await page.keyboard.down('Alt');
+  await page.mouse.move(box.x + 40, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 40, box.y + box.height / 2 + 30, { steps: 3 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  let events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.map((event) => event.type)).toEqual(['lane-resize', 'lane-resize']);
+  expect(events[0].detail.height).toBe(events[1].detail.height);
+  expect(await timeline.evaluate((element) => element.lanes.map((lane) => lane.height))).toEqual([events[0].detail.height, events[0].detail.height]);
+
+  const lanes = await timeline.locator('.lanes-wrap').boundingBox();
+  await page.mouse.move(lanes.x + lanes.width / 2, lanes.y + 10);
+  await page.keyboard.down('Alt');
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up('Alt');
+  events = await timeline.evaluate((element) => element.testEvents);
+  expect(events.at(-1).type).toBe('lanes-resize');
+  expect(events.at(-1).detail.height).toBeGreaterThan(events[0].detail.height);
+
+  await timeline.evaluate((element) => element.setTimeSelection(2, 6, ['a']));
+  await timeline.focus();
+  const before = await timeline.evaluate((element) => ({ px: element.pxPerBeat, scroll: element.scrollBeat }));
+  await page.keyboard.press('z');
+  const zoomed = await timeline.evaluate((element) => ({ px: element.pxPerBeat, scroll: element.scrollBeat, width: element.lanesWrap.clientWidth }));
+  expect(zoomed.scroll).toBe(2);
+  expect(zoomed.px).toBeCloseTo(zoomed.width / 4, 3);
+  await page.keyboard.press('x');
+  expect(await timeline.evaluate((element) => ({ px: element.pxPerBeat, scroll: element.scrollBeat }))).toEqual(before);
+});
+
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
