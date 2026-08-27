@@ -1636,7 +1636,7 @@ test('timeline automation chooser and draw gestures stay host-owned', async ({ p
     return { x: rect.left + point.x / box.width * rect.width, y: rect.top + point.y / box.height * rect.height };
   });
   await page.mouse.move(hoverPoint.x, hoverPoint.y);
-  await expect(row.locator('compost-envelope-editor').locator('.readout')).toContainText('·');
+  await expect(row.locator('compost-envelope-editor').locator('.readout')).toHaveText(/^-?\d/);
   await timeline.evaluate((element) => {
     const editor = element.shadowRoot.querySelector('compost-envelope-editor');
     const line = editor.shadowRoot.querySelector('.line');
@@ -1796,7 +1796,7 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
     return { rowHeight: rowRect.height, expected, readout };
   });
   expect(Math.abs(gainMove.rowHeight - 26)).toBeLessThan(1);
-  expect(gainMove.readout).toContain('·');
+  expect(gainMove.readout).toMatch(/^-?\d/);
   const gainChange = await timeline.evaluate((element) => element.testEvents.filter((event) => event.type === 'automation-change').at(-1));
   expect(gainChange.detail.points[0].value).toBeCloseTo(gainMove.expected, 8);
   expect(gainChange.detail.points[0].value).not.toBeCloseTo(-12 + 8 * (102 / 26), 2);
@@ -3085,8 +3085,14 @@ test('timeline loops the selected clips on l and Cmd/Ctrl-L', async ({ page }) =
     element.selected = ['c1', 'c2'];
     element.focusClip('c1');
   });
+  // the element asks and the demo page, as host, applies: setLoop runs exactly once, from the page
+  await timeline.evaluate((element) => {
+    const original = element.setLoop.bind(element);
+    element.testSetLoopCalls = 0;
+    element.setLoop = (...args) => { element.testSetLoopCalls += 1; return original(...args); };
+  });
   await timeline.locator('.clip[data-id="c1"]').press('l');
   const events = await timeline.evaluate((element) => element.testEvents);
   expect(events.at(-1)).toEqual({ start: 2, end: 9, enabled: true });
-  expect(await timeline.evaluate((element) => [element.loopStart, element.loopEnd])).toEqual([2, 9]);
+  expect(await timeline.evaluate((element) => [element.loopStart, element.loopEnd, element.testSetLoopCalls])).toEqual([2, 9, 1]);
 });

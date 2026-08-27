@@ -77,13 +77,29 @@
       timeline.setPlayhead(0);
       automation.addEventListener('change', () => timeline.toggleAttribute('automation', automation.checked));
       draw.addEventListener('change', () => timeline.toggleAttribute('draw', draw.checked));
-      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-header-context', 'lane-pick', 'lane-move', 'automation-change', 'automation-choose', 'automation-add', 'automation-remove', 'draw-toggle', 'automation-context', 'automation-header-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
+      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-header-context', 'lane-pick', 'lane-move', 'automation-change', 'automation-choose', 'automation-add', 'automation-remove', 'draw-toggle', 'automation-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
         timeline.addEventListener(type, (event) => {
           const detail = { ...event.detail };
           delete detail.clientX;
           delete detail.clientY;
           log.textContent = `${type} ${JSON.stringify(detail)}\n${log.textContent}`.slice(0, 5000);
-          if (type === 'loop-change' || type === 'loop-toggle') loop.checked = detail.enabled;
+          // the element only asks; this page is the host that applies loop and automation edits
+          if (type === 'loop-change') {
+            loop.checked = detail.enabled;
+            timeline.setLoop(detail.start, detail.end, detail.enabled);
+          }
+          if (type === 'loop-toggle') {
+            loop.checked = detail.enabled;
+            timeline.setLoop(timeline.loopStart, timeline.loopEnd, detail.enabled);
+          }
+          if (type === 'automation-change') {
+            const lane = timeline.lanes.find((entry) => entry.id === detail.laneId);
+            const row = lane?.automation?.find((entry) => entry.id === detail.automationId);
+            if (row) {
+              row.points = detail.points.map((point) => ({ ...point }));
+              timeline.setLaneAutomation(lane.id, lane.automation);
+            }
+          }
           if (type === 'seek') timeline.setPlayhead(detail.beat);
           if (type === 'fit-request') timeline.zoomToFit(16);
           if (type === 'draw-toggle') {

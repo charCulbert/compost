@@ -1067,10 +1067,11 @@ export class CompostTimeline extends HTMLElement {
     });
   }
 
-  paintTimeSelection() {
+  /** Paint the time selection; a gesture passes its preview instead of the host's. */
+  /** @param {TimelineTimeSelection|null} [selection] */
+  paintTimeSelection(selection = this._timeSelection) {
     if (!(this.rulerTimeSelection instanceof HTMLElement)) return;
     for (const old of this.lanesWorld.querySelectorAll('.time-selection-world')) old.remove();
-    const selection = this._timeSelection;
     for (const row of this.lanesWorld.querySelectorAll('.automation-row')) {
       const editor = row.querySelector('compost-envelope-editor');
       if (!editor) continue;
@@ -1770,9 +1771,11 @@ export class CompostTimeline extends HTMLElement {
     }
   }
 
-  paintSelection() {
+  /** Mark the selected clips; a gesture passes its preview instead of the selection. */
+  /** @param {string[]} [ids] */
+  paintSelection(ids = this._selected) {
     for (const element of this.clipElements()) {
-      if (this._selected.includes(element.dataset.id)) element.dataset.selected = '';
+      if (ids.includes(element.dataset.id)) element.dataset.selected = '';
       else delete element.dataset.selected;
     }
   }
@@ -1814,16 +1817,17 @@ export class CompostTimeline extends HTMLElement {
     this.rulerWrap.setAttribute('aria-label', `Timeline ruler, playhead at beat ${this._playhead.toFixed(2)}`);
   }
 
-  paintLoop() {
-    const left = (this._loopStart - this._scrollBeat) * this._pxPerBeat;
-    const width = Math.max(1, (this._loopEnd - this._loopStart) * this._pxPerBeat);
+  /** Paint the loop brace; a gesture passes its preview instead of the host's loop. */
+  paintLoop(start = this._loopStart, end = this._loopEnd, enabled = this._loopEnabled) {
+    const left = (start - this._scrollBeat) * this._pxPerBeat;
+    const width = Math.max(1, (end - start) * this._pxPerBeat);
     this.rulerBand.style.left = `${left}px`;
     this.rulerBand.style.width = `${width}px`;
-    this.rulerBand.toggleAttribute('data-off', !this._loopEnabled);
+    this.rulerBand.toggleAttribute('data-off', !enabled);
     this.rulerStart.style.left = `${left - 1}px`;
     this.rulerEnd.style.left = `${left + width - 5}px`;
-    this.rulerStart.title = `Loop start, beat ${this._loopStart}`;
-    this.rulerEnd.title = `Loop end, beat ${this._loopEnd}`;
+    this.rulerStart.title = `Loop start, beat ${start}`;
+    this.rulerEnd.title = `Loop end, beat ${end}`;
   }
 
   keepPlayheadVisible() {
@@ -2121,10 +2125,8 @@ export class CompostTimeline extends HTMLElement {
       const start = snapBeat(drag.startBeat, this.beatsPerBar, this.grid, this.snapModeFor(event));
       const end = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
       drag.previewSelection = normalizeTimeSelection(start, end, laneIds, this.worldEnd());
-      this._timeSelection = drag.previewSelection;
-      this.paintTimeSelection();
-      this._selected = drag.previewSelection ? this.clipsInsideTimeSelection(drag.previewSelection) : [];
-      this.paintSelection();
+      this.paintTimeSelection(drag.previewSelection);
+      this.paintSelection(drag.previewSelection ? this.clipsInsideTimeSelection(drag.previewSelection) : []);
       this.dispatchEvent(eventOf('time-select-input', drag.previewSelection || { start, end, laneIds }));
       return;
     }
@@ -2201,9 +2203,6 @@ export class CompostTimeline extends HTMLElement {
         drag.element.style.left = `${drag.startBeat * this._pxPerBeat}px`;
       }
       if (drag.type === 'time-selection' || drag.type === 'scroll-time') {
-        this._timeSelection = drag.originSelection
-          ? { ...drag.originSelection, laneIds: [...drag.originSelection.laneIds] } : null;
-        this._selected = [...(drag.originSelected || [])];
         this.paintTimeSelection();
         this.paintSelection();
         this.scrollBeat = drag.startScrollBeat ?? this._scrollBeat;
@@ -2214,9 +2213,7 @@ export class CompostTimeline extends HTMLElement {
         if (drag.type === 'ruler-zoom') this._pxPerBeat = drag.startPxPerBeat ?? this._pxPerBeat;
         this.render();
       }
-      if (drag.type === 'loop') {
-        this.setLoop(drag.start, drag.end, drag.loopEnabled, false);
-      }
+      if (drag.type === 'loop') this.paintLoop();
       this.clearLaneDropLine();
     }
     this.clearClipDragVisuals();
@@ -2340,7 +2337,8 @@ export class CompostTimeline extends HTMLElement {
     if (drag.kind === 'start') start = Math.min(snapValue(drag.start + delta, drag.start), end - MIN_CLIP_LENGTH);
     else if (drag.kind === 'end') end = Math.max(snapValue(drag.end + delta, drag.end), start + MIN_CLIP_LENGTH);
     else { start = snapValue(drag.start + delta, drag.start); end = start + (drag.end - drag.start); }
-    this.setLoop(start, end, this._loopEnabled);
+    drag.preview = { start, end };
+    this.paintLoop(start, end);
     this.dispatchEvent(eventOf('loop-input', { start, end, enabled: this._loopEnabled }));
   }
 
@@ -2348,7 +2346,9 @@ export class CompostTimeline extends HTMLElement {
     const drag = this.drag;
     if (!drag || drag.type !== 'loop' || event.pointerId !== drag.pointerId) return;
     this.drag = null;
-    this.dispatchEvent(eventOf('loop-change', { start: this._loopStart, end: this._loopEnd, enabled: this._loopEnabled }));
+    const preview = drag.preview ?? { start: drag.start, end: drag.end };
+    this.paintLoop();
+    this.dispatchEvent(eventOf('loop-change', { ...preview, enabled: this._loopEnabled }));
   }
 
   cancelLoopDrag(event) {
@@ -2357,14 +2357,13 @@ export class CompostTimeline extends HTMLElement {
   }
 
   /** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {{beat:number,value:number}[]} points */
+  /** Report an automation edit; the host applies it and hands the points back. */
   commitAutomationChange(lane, automation, points) {
     if (this.readonly) return;
-    automation.points = points.map((point) => ({ ...point }));
-    this.render();
     this.dispatchEvent(eventOf('automation-change', {
       laneId: lane.id,
       automationId: automation.id,
-      points: automation.points.map((point) => ({ ...point })),
+      points: points.map((point) => ({ ...point })),
     }));
   }
 
@@ -2378,8 +2377,7 @@ export class CompostTimeline extends HTMLElement {
       && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
     if (loopPart instanceof HTMLElement) {
       if (loopPart.classList.contains('ruler-band')) {
-        this.setLoop(this._loopStart, this._loopEnd, !this._loopEnabled);
-        this.dispatchEvent(eventOf('loop-toggle', { enabled: this._loopEnabled }));
+        this.dispatchEvent(eventOf('loop-toggle', { enabled: !this._loopEnabled }));
       }
       return;
     }
@@ -2556,7 +2554,7 @@ export class CompostTimeline extends HTMLElement {
     if (selection) {
       if (key === 'l' && !event.altKey && !event.shiftKey) {
         event.preventDefault();
-        this.setLoop(selection.start, selection.end, true, true);
+        this.dispatchEvent(eventOf('loop-change', { start: selection.start, end: selection.end, enabled: true }));
         return;
       }
       if (!this.readonly && (event.key === 'Delete' || event.key === 'Backspace')) {
@@ -2637,7 +2635,7 @@ export class CompostTimeline extends HTMLElement {
         event.preventDefault();
         const start = Math.min(...clips.map((clip) => Number(clip.start) || 0));
         const end = Math.max(...clips.map((clip) => (Number(clip.start) || 0) + (Number(clip.length) || 0)));
-        if (end > start + MIN_CLIP_LENGTH) this.setLoop(start, end, true, true);
+        if (end > start + MIN_CLIP_LENGTH) this.dispatchEvent(eventOf('loop-change', { start, end, enabled: true }));
       }
       return;
     }
