@@ -1735,9 +1735,11 @@ test('timeline automation view draw and commit sorted edits without clip selecti
     const row = element.shadowRoot.querySelector('.lane-automation');
     const clip = element.shadowRoot.querySelector('.clip');
     const clipStyle = getComputedStyle(clip);
+    const automationStyle = getComputedStyle(row);
     const on = { laneHeight: lane.getBoundingClientRect().height, baseHeight: base.getBoundingClientRect().height,
       rows: element.shadowRoot.querySelectorAll('.lane-automation').length,
       label: element.shadowRoot.querySelector('.lane-automation-label').textContent,
+      automationColor: automationStyle.color,
       clipOpacity: Number(clipStyle.opacity), clipPointerEvents: clipStyle.pointerEvents,
       baseLane: element.laneAtPoint(base.getBoundingClientRect().top + 4),
       rowLane: element.laneAtPoint(row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2) };
@@ -1750,6 +1752,7 @@ test('timeline automation view draw and commit sorted edits without clip selecti
   });
   expect(geometry.on.rows).toBe(1);
   expect(geometry.on.label).toBe('Volume');
+  expect(geometry.on.automationColor).toBe('rgb(40, 120, 180)');
   expect(geometry.on.clipOpacity).toBeCloseTo(.3, 3);
   expect(geometry.on.clipPointerEvents).toBe('none');
   expect(Math.abs(geometry.on.laneHeight - geometry.on.baseHeight)).toBeLessThanOrEqual(1);

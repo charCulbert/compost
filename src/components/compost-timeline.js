@@ -445,7 +445,7 @@ export class CompostTimeline extends HTMLElement {
         .lane[data-dimmed] .clip { opacity: .4; }
         .lane-base { position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
         .lane[data-automation-view] .clip { opacity: .3; pointer-events: none; }
-        .lane-automation { position: absolute; inset: 0; z-index: 4; color: color-mix(in srgb, var(--lane-color, currentColor) 30%, transparent); }
+        .lane-automation { position: absolute; inset: 0; z-index: 4; color: var(--lane-color, currentColor); }
         .automation-editor { width: 100%; height: 100%; min-height: 0; border: 0; overflow: visible; }
         .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); color: var(--compost-timeline-muted); font-size: .78em; line-height: 1; pointer-events: none; }
         .lane-automation[data-draw]:hover .automation-draw-hint { display: block; }
