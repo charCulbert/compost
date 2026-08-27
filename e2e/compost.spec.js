@@ -540,6 +540,29 @@ test('piano keyboard emits notes and its dock option changes layout state', asyn
   await expect(defaultPiano).toHaveAttribute('data-docked', '');
 });
 
+test('piano exposes wide key beds without clipping keys', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-piano/');
+  const piano = page.locator('compost-piano[data-option-target="piano"]');
+  await piano.evaluate((element) => {
+    element.setAttribute('inline', '');
+    element.removeAttribute('dock');
+    element.setAttribute('root-note', '0');
+    element.setAttribute('note-count', '128');
+    element.style.width = '20em';
+  });
+
+  const geometry = await piano.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    overflowX: getComputedStyle(element).overflowX,
+    lastKeyRight: element.shadowRoot.getElementById('note127').getBoundingClientRect().right,
+    scrollRight: element.getBoundingClientRect().left + element.scrollWidth,
+  }));
+  expect(geometry.scrollWidth).toBeGreaterThan(geometry.clientWidth);
+  expect(geometry.overflowX).toBe('auto');
+  expect(geometry.lastKeyRight).toBeLessThanOrEqual(geometry.scrollRight);
+});
+
 test('buttons expose real momentary and switch behavior', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-button/');
   const ping = page.locator('compost-button[parameter-id="ping"]');

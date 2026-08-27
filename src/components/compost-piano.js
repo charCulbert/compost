@@ -407,7 +407,8 @@ export class PianoKeyboard extends HTMLElement {
         display: block;
         width: 100%;
         height: var(--compost-piano-height);
-        overflow: hidden;
+        overflow-x: auto;
+        overflow-y: hidden;
         position: relative;
         text-align: center;
         background: var(--compost-piano-background);
