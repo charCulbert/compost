@@ -189,10 +189,7 @@
       <label><input type="checkbox" data-note-draw> Draw</label>
       <label><input type="checkbox" data-note-fold> Fold</label>
       <label><input type="checkbox" data-note-playhead checked> Run playhead</label>
-      <label>Pitch rows <input type="number" data-note-rows min="13" max="128" value="25" style="width: 5em"></label>
-      <button type="button" data-note-fit-pitches>All pitches</button>
       <button type="button" data-note-quantize>Quantize</button>
-      <button type="button" data-note-zoom>Reset zoom</button>
     </div>
     <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag notes to move; Alt-drag copies; Command/Ctrl inverts time snapping. Command/Ctrl-drag on a note changes velocity; Shift-click extends selection and Shift is precise for values and edges. In Draw mode, drag right for length and vertically for velocity. Drag empty grid for a note box or the ruler for time; Shift-click extends it. Drag the piano vertically to pan pitches or horizontally to zoom them. Double-click adds; Escape clears selection. Shift-arrows move an octave or fine in time; Alt-left/right changes length. In Fold, up/down steps through displayed pitches. Wheel scrolls pitch; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel zooms pitch.</small>
   </div>
@@ -486,7 +483,6 @@
       const draw = s.querySelector('[data-note-draw]');
       const fold = s.querySelector('[data-note-fold]');
       const playhead = s.querySelector('[data-note-playhead]');
-      const rows = s.querySelector('[data-note-rows]');
       let nextNoteId = 1;
       editor.noteIdFactory = () => `${cls}-note-${nextNoteId++}`;
       editor.setNotes([
@@ -519,17 +515,7 @@
         draw.dispatchEvent(new Event('change'));
       });
       fold.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
-      rows.addEventListener('change', () => editor.setAttribute('note-count', rows.value));
-      s.querySelector('[data-note-fit-pitches]').addEventListener('click', () => {
-        rows.value = '128';
-        editor.setAttribute('root-note', '0');
-        editor.setAttribute('note-count', '128');
-      });
       s.querySelector('[data-note-quantize]').addEventListener('click', () => editor.quantize());
-      s.querySelector('[data-note-zoom]').addEventListener('click', () => {
-        rows.value = '25';
-        editor.zoomReset();
-      });
       let last = performance.now();
       let position = editor.rangeStart;
       const advance = (now) => {

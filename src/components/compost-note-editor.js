@@ -123,7 +123,7 @@ export class CompostNoteEditor extends HTMLElement {
           --compost-note-editor-muted: color-mix(in srgb, currentColor 65%, transparent);
           --compost-note-editor-line: color-mix(in srgb, currentColor 18%, transparent);
           --compost-note-editor-bar-line: var(--compost-note-editor-muted);
-          --compost-note-editor-row: color-mix(in srgb, currentColor 5%, transparent);
+          --compost-note-editor-row: transparent;
           --compost-note-editor-signal: var(--compost-accent, AccentColor);
           --compost-note-editor-range: var(--compost-note-editor-text);
           --compost-note-editor-loop: var(--compost-note-editor-signal);
@@ -168,7 +168,7 @@ export class CompostNoteEditor extends HTMLElement {
           left: 0;
           right: 0;
           height: 1.15em;
-          background: color-mix(in srgb, currentColor 5%, Canvas);
+          background: Canvas;
           border-bottom: 1px solid var(--compost-note-editor-line);
           pointer-events: none;
         }
@@ -177,7 +177,7 @@ export class CompostNoteEditor extends HTMLElement {
           top: 0.15em;
           height: 0.73em;
           padding: 0.05em 0.25em 0.05em 0.2em;
-          background: color-mix(in srgb, currentColor 5%, Canvas);
+          background: Canvas;
           font-size: 0.73em;
           color: var(--compost-note-editor-text);
           line-height: 1;
@@ -254,9 +254,9 @@ export class CompostNoteEditor extends HTMLElement {
         .key.white { right: 0; background-color: Canvas; color: CanvasText; }
         .key.black { width: 100%; background: CanvasText; color: Canvas; z-index: 2; }
         .key[data-on] { background: var(--compost-note-editor-signal); color: AccentColorText; }
-        .key[data-scale] { background-image: linear-gradient(color-mix(in srgb, currentColor 6%, transparent), color-mix(in srgb, currentColor 6%, transparent)); }
-        .key[data-root] { background-image: linear-gradient(color-mix(in srgb, currentColor 12%, transparent), color-mix(in srgb, currentColor 12%, transparent)); }
-        .key[data-hover] { background-image: linear-gradient(color-mix(in srgb, currentColor 18%, transparent), color-mix(in srgb, currentColor 18%, transparent)); }
+        .key[data-scale] { border-left: 1px solid currentColor; }
+        .key[data-root] { border-left-width: 3px; }
+        .key[data-hover] { outline: 1px solid currentColor; outline-offset: -1px; }
         .key::before { content: attr(data-name); display: none; }
         .key[data-label]::before, .key[data-hover]::before { display: block; }
         .key.octave { box-shadow: inset 0 1px 0 color-mix(in srgb, CanvasText 65%, transparent); }
