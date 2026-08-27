@@ -50,6 +50,10 @@ test('note lengths and ruler labels read musically', () => {
     ['1.1.1', '1.1.2', '1.1.3']);
   assert.deepEqual(rulerLabels(1, 4, 320, 0.125).map((label) => label.text),
     ['1.1.1', '1.1.2', '1.1.3', '1.1.4']);
+  assert.deepEqual(rulerLabels(3, { barLength: 3, beatLength: 0.5 }, 160, 0.25)
+    .map((label) => label.text),
+  ['1.1.1', '1.1.2', '1.2.1', '1.2.2', '1.3.1', '1.3.2',
+    '1.4.1', '1.4.2', '1.5.1', '1.5.2', '1.6.1', '1.6.2']);
 });
 
 test('timeline geometry snaps, scales and marks looping passes', () => {

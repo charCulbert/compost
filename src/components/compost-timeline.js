@@ -149,7 +149,7 @@ export function clipNoteOpacity(velocity) {
 /** @param {number} pxPerBeat @param {number} beatsPerBar */
 export function rulerStep(pxPerBeat, beatsPerBar) {
   const px = Math.max(0, Number(pxPerBeat) || 0);
-  const bar = Math.max(1, Number(beatsPerBar) || DEFAULT_BEATS_PER_BAR);
+  const bar = Math.max(MIN_CLIP_LENGTH, Number(beatsPerBar) || DEFAULT_BEATS_PER_BAR);
   let bars = 1;
   while (bars < 8 && px * bar * bars < 80) bars *= 2;
   return bars;
@@ -1183,7 +1183,7 @@ export class CompostTimeline extends HTMLElement {
       if (lanes && beat < MIN_CLIP_LENGTH) continue;
       const line = document.createElement('div');
       const inBar = Math.abs(beat % this.beatsPerBar) < MIN_CLIP_LENGTH;
-      const inBeat = Math.abs(beat % 1) < MIN_CLIP_LENGTH;
+      const inBeat = Math.abs(beat % this.beatLength) < MIN_CLIP_LENGTH;
       line.className = `grid-line ${inBar ? 'bar' : inBeat ? 'beat' : 'cell'}`;
       line.part.add('grid-line', inBar ? 'bar-line' : inBeat ? 'beat-line' : 'cell-line');
       line.style.left = `${beat * this._pxPerBeat}px`;
@@ -1199,8 +1199,9 @@ export class CompostTimeline extends HTMLElement {
     const stepBars = rulerStep(this._pxPerBeat, this.beatsPerBar);
     const fragment = document.createDocumentFragment();
     const labelStep = this.beatsPerBar * stepBars;
-    for (const { beat, text } of rulerLabels(end + labelStep, this.beatsPerBar, this._pxPerBeat)) {
-      if (Math.abs(beat % labelStep) > MIN_CLIP_LENGTH) continue;
+    for (const { beat, text } of rulerLabels(end + labelStep,
+      { barLength: this.beatsPerBar, beatLength: this.beatLength }, this._pxPerBeat,
+      gridStep(this.beatsPerBar, this.grid))) {
       const label = document.createElement('div');
       label.className = 'ruler-label';
       label.part.add('ruler-label');

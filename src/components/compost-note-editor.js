@@ -804,13 +804,14 @@ export class CompostNoteEditor extends HTMLElement {
     for (let beat = 0; beat <= this.beats + 1e-9; beat += this.step) {
       const tick = document.createElement('div');
       const isBar = Math.abs(beat % this.beatsPerBar) < 1e-9;
-      const isBeat = Math.abs(beat % 1) < 1e-9;
+      const isBeat = Math.abs(beat % this.beatLength) < 1e-9;
       tick.className = `rt${isBar ? ' bar' : isBeat ? ' beat' : ''}`;
       tick.part.add('ruler-tick');
       tick.style.left = `${beat * px}px`;
       fragment.append(tick);
     }
-    for (const { beat, text } of rulerLabels(this.beats, this.beatsPerBar, px, this.step)) {
+    for (const { beat, text } of rulerLabels(this.beats,
+      { barLength: this.beatsPerBar, beatLength: this.beatLength }, px, this.step)) {
       const label = document.createElement('div');
       label.className = 'bn';
       label.part.add('ruler-label');
@@ -880,7 +881,7 @@ export class CompostNoteEditor extends HTMLElement {
     if (this.gridLines && step > 0) {
       for (let beat = 0; beat <= this.beats + 1e-9; beat += step) {
         const isBar = Math.abs(beat % this.beatsPerBar) < 1e-9;
-        const isBeat = Math.abs(beat % 1) < 1e-9;
+        const isBeat = Math.abs(beat % this.beatLength) < 1e-9;
         markup.push(`<div class="gl${isBar ? ' bar' : isBeat ? ' beat' : ''}" part="grid-line${isBar ? ' bar-line' : isBeat ? ' beat-line' : ''}" style="left:${(beat * px).toFixed(2)}px"></div>`);
       }
     }
