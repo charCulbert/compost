@@ -344,7 +344,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
   }
 
   freeTime(event) {
-    return this.snapMode === 'off' ? !event.altKey : event.altKey;
+    const modifier = event.metaKey || event.ctrlKey;
+    return this.snapMode === 'off' ? !modifier : modifier;
   }
 
   valueAtPointer(event) {
