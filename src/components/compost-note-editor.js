@@ -32,12 +32,9 @@ const DOUBLE_CLICK_MS = 500;
 /** A length in beats, written the way a musician reads it. */
 /** @param {number} duration */
 export function lengthText(duration) {
-  if (duration >= 1) {
-    const whole = Math.floor(duration);
-    const sixteenths = Math.round((duration - whole) * 4 * 100) / 100;
-    return `${whole}${sixteenths ? `.${sixteenths}` : ''} beat${duration >= 2 ? 's' : ''}`;
-  }
-  return `${Math.round(duration * 1000) / 1000} beat`;
+  const whole = Math.floor(duration);
+  const sixteenths = Math.round((duration - whole) * 4 * 100) / 100;
+  return `${whole}${sixteenths ? `.${sixteenths}` : ''} beat${duration >= 2 ? 's' : ''}`;
 }
 
 /** The musical name of a grid expressed as cells per bar. */
