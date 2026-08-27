@@ -2221,6 +2221,9 @@ test('timeline lane resizing is reversible and keyboard accessible', async ({ pa
   await page.keyboard.press('ArrowUp');
   expect(Number(await handle.getAttribute('aria-valuenow'))).toBe(initial + 4);
   expect(await timeline.evaluate((element) => element.testEvents.at(-1))).toEqual({ laneId: 'lane', height: initial + 4 });
+  await page.keyboard.press('Shift+ArrowDown');
+  expect(Number(await handle.getAttribute('aria-valuenow'))).toBe(initial + 3);
+  expect(await timeline.evaluate((element) => element.testEvents.at(-1))).toEqual({ laneId: 'lane', height: initial + 3 });
   await page.keyboard.press('Home');
   expect(await timeline.evaluate((element) => ({
     event: element.testEvents.at(-1), custom: Object.hasOwn(element.lanes[0], 'height'),

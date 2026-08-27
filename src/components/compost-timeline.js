@@ -1344,7 +1344,9 @@ export class CompostTimeline extends HTMLElement {
       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
       event.preventDefault();
       const direction = event.key === 'ArrowUp' ? 1 : -1;
-      apply(clamp(this.laneRowHeightFor(lane) + direction * (event.shiftKey ? 16 : 4), 24, 400));
+      const em = Number.parseFloat(getComputedStyle(this).fontSize) || 16;
+      const step = em * .25 * (event.shiftKey ? .25 : 1);
+      apply(clamp(this.laneRowHeightFor(lane) + direction * step, 24, 400));
       this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: this.laneRowHeightFor(lane) }));
     });
     apply(lane.height);
