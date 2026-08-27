@@ -17,7 +17,7 @@ import {
 import { extendSelectionRegion, normalizeSelectionRegion } from '../selection-region.js';
 export { rulerLabels } from '../time-ruler.js';
 import { rulerLabels } from '../time-ruler.js';
-import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP } from '../internal/gestures.js';
+import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP, TAP_MOVE_DISTANCE } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 
@@ -1102,7 +1102,7 @@ export class CompostNoteEditor extends HTMLElement {
       regionBefore: this.selectionRegion ? { ...this.selectionRegion,
         pitches: this.selectionRegion.pitches ? [...this.selectionRegion.pitches] : undefined } : null,
       target: kind === 'box' ? this.gridElement : this.ruler,
-      slop: event.pointerType === 'touch' ? DRAG_SLOP * 2 : DRAG_SLOP,
+      slop: TAP_MOVE_DISTANCE,
     };
     this.drag.target.setPointerCapture(event.pointerId);
   }
@@ -1251,6 +1251,7 @@ export class CompostNoteEditor extends HTMLElement {
       if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= drag.slop) return;
       if (!drag.moved) {
         drag.moved = true;
+        this.pendingEmptyClick = null;
         this.selectionRegion = null;
         this.renderSelectionRegion();
         this.marquee.style.display = 'block';
@@ -1388,8 +1389,20 @@ export class CompostNoteEditor extends HTMLElement {
         if (drag.kind === 'box') {
           const time = Number(event.timeStamp) || performance.now();
           const pending = this.pendingEmptyClick;
-          if (!pending || time - pending.time > DOUBLE_CLICK_MS
-            || Math.hypot(drag.x - pending.x, drag.y - pending.y) > DOUBLE_TAP_DISTANCE) {
+          const doubleClick = pending && time - pending.time <= DOUBLE_CLICK_MS
+            && Math.hypot(drag.x - pending.x, drag.y - pending.y) <= DOUBLE_TAP_DISTANCE;
+          if (doubleClick) {
+            this.pendingEmptyClick = null;
+            this.selectionRegion = null;
+            this.selection.clear();
+            this.renderNotes();
+            this.renderSelectionRegion();
+            this.emitSelection();
+            this.ignoreDoubleClick = true;
+            setTimeout(() => { this.ignoreDoubleClick = false; }, 0);
+            this.createNoteAt(pending.beat, pending.note);
+            return;
+          } else {
             this.pendingEmptyClick = {
               beat: drag.createBeat, note: drag.note0, x: drag.x, y: drag.y, time,
             };
@@ -1450,8 +1463,12 @@ export class CompostNoteEditor extends HTMLElement {
     const pending = this.pendingEmptyClick;
     this.pendingEmptyClick = null;
     const start = pending?.beat ?? this.creationBeat(this.xToBeat(point.x), this.gestureIsFree(event));
+    this.createNoteAt(start, pending?.note ?? this.yToNote(point.y));
+  }
+
+  createNoteAt(start, note) {
     const created = {
-      id: this.newNoteId(), note: pending?.note ?? this.yToNote(point.y),
+      id: this.newNoteId(), note,
       start: Math.min(start, Math.max(0, this.beats - this.step)),
       duration: Math.max(this.step, MIN_DURATION),
       velocity: this.defaultVelocity, channel: this.defaultChannel,

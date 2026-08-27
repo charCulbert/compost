@@ -2901,6 +2901,27 @@ test('note editor double-click creates in the clicked grid cell every time', asy
     .toEqual(cells.map((cell) => cell * geometry.step));
 });
 
+test('note editor tolerates hand movement without relying on native double-click', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-note-editor/');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => element.setNotes([]));
+  const grid = editor.locator('.grid');
+  await grid.evaluate((element) => {
+    element.addEventListener('dblclick', (event) => event.stopImmediatePropagation(), { capture: true });
+  });
+  const box = await grid.boundingBox();
+  const point = { x: box.x + box.width / 3, y: box.y + box.height / 3 };
+  for (let click = 0; click < 2; click += 1) {
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+    await page.mouse.move(point.x + 5, point.y + 2);
+    await page.mouse.up();
+    await page.waitForTimeout(60);
+  }
+  expect(await editor.evaluate((element) => element.notes.length)).toBe(1);
+  await expect(editor.locator('.marquee')).toBeHidden();
+});
+
 test('note editor duplication time contains the full span of every selected note', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-note-editor/');
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
