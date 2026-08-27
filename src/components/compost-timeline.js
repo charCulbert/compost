@@ -5,7 +5,6 @@ import { rulerLabels } from '../time-ruler.js';
 import { gridStepOf, snapModeWith, snapTime, timeGridLines, timeSignatureOf } from '../time-grid.js';
 import { extendSelectionRegion } from '../selection-region.js';
 import './compost-envelope-editor.js';
-import { parameterScaleBreakpoints } from '../parameter-scale.js';
 import { normalizeSelectionRegion } from '../selection-region.js';
 import {
   addEnvelopePoint,
@@ -36,7 +35,6 @@ const DEFAULT_BEATS_PER_BAR = 4;
 const DEFAULT_LOOP_END = 8;
 const DEFAULT_LANE_HEIGHT_EM = 4;
 const DEFAULT_THIN_LANE_HEIGHT_EM = 2.5;
-const DEFAULT_AUTOMATION_ROW_HEIGHT_EM = 2.36;
 /** How close, in px, a drag has to come to another clip's edge, a locator or the loop to snap to it. */
 const ANCHOR_REACH_PX = 8;
 /** The grab zone at a clip's edge, in em of the element's font, by pointer type. */
@@ -51,8 +49,7 @@ const TOUCH_TRIM_EDGE_EM = .75;
  * progress?: number, notes?: {start: number, duration: number, note: number, velocity?: number}[], color?: string}} TimelineClip */
 /** @typedef {{id: string, name: string, color?: string,
  * compact?: boolean, picked?: boolean, dimmed?: boolean, height?: number,
- * envelope?: {points: {beat: number, value: number}[], min: number, max: number, stepped?: boolean, scale?: 'linear'|'gain'}|null,
- * automation?: AutomationLaneView[],
+ * automation?: AutomationLaneView|null,
  * clips: TimelineClip[]}} TimelineLane */
 /** @typedef {{id: string, label: string, color?: string, min: number, max: number,
  * stepped: boolean, step?: number, scale?: 'linear'|'gain', points: {beat: number, value: number}[],
@@ -293,10 +290,10 @@ export function moveAutomationRange(points, start, end, delta, min = 0, max = 1,
 }
 
 function cloneAutomation(automation) {
-  return Array.isArray(automation) ? automation.map((entry) => ({
-    ...entry,
-    points: Array.isArray(entry.points) ? entry.points.map((point) => ({ ...point })) : [],
-  })) : undefined;
+  return automation && typeof automation === 'object' && !Array.isArray(automation) ? {
+    ...automation,
+    points: Array.isArray(automation.points) ? automation.points.map((point) => ({ ...point })) : [],
+  } : null;
 }
 
 /** @param {Event} event @param {string} className */
@@ -329,10 +326,8 @@ export class CompostTimeline extends HTMLElement {
     this.fontSize = 16;
     this.laneHeight = 64;
     this.thinLaneHeight = 32;
-    this.automationRowHeight = 32;
     this.automation = false;
     this.draw = false;
-    /** @type {string|null} */ this.automationChooserKey = null;
     this._pxPerBeat = DEFAULT_PX_PER_BEAT;
     this._scrollBeat = 0;
     this._playhead = 0;
@@ -380,7 +375,6 @@ export class CompostTimeline extends HTMLElement {
           --compost-timeline-lane-height: 4em;
           --compost-timeline-thin-lane-height: 2.5em;
           --compost-timeline-row-height: var(--compost-timeline-lane-height);
-          --compost-timeline-automation-row-height: 2.36em;
           --compost-timeline-clip-font-size: .91em;
           --compost-timeline-lane-font-size: .91em;
           display: block;
@@ -426,7 +420,9 @@ export class CompostTimeline extends HTMLElement {
         .headers { position: relative; width: 100%; }
         .lane-header { position: relative; box-sizing: border-box; height: auto; display: block; border-bottom: 1px solid var(--compost-timeline-line); color: var(--lane-color, currentColor); font-size: var(--compost-timeline-lane-font-size); }
         .lane-header-content { display: block; width: 100%; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
-        .lane-header-fallback { box-sizing: border-box; display: flex; align-items: center; padding: 0 1em; }
+        .lane-header-fallback { box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 0 1em; }
+        .lane-automation-label { max-width: 100%; overflow: hidden; color: var(--compost-timeline-muted); font-size: .82em; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+        .lane-header > .lane-automation-label { position: absolute; left: 1em; bottom: .55em; }
         .lane-header .lane-name, .lane-name-editor { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; cursor: default; }
         .lane-header .lane-name[data-picked] { background: color-mix(in srgb, var(--compost-timeline-select) 12%, transparent); outline: 1px solid var(--compost-timeline-select); outline-offset: .125em; }
         .lane-name-editor { box-sizing: border-box; width: 100%; border: 1px solid currentColor; outline: 2px solid currentColor; outline-offset: -2px; background: var(--compost-timeline-bg); color: var(--lane-color, currentColor); font: inherit; padding: .0625em .1875em; }
@@ -434,17 +430,6 @@ export class CompostTimeline extends HTMLElement {
         .lane-drop-line { position: absolute; left: 0; right: 0; z-index: 8; display: none; height: 1px; background: var(--compost-timeline-select); pointer-events: none; }
         .lane-resize { position: absolute; left: 0; right: 0; bottom: 0; height: .4em; z-index: 6; cursor: row-resize; touch-action: none; }
         .lane-resize:hover::after, .lane-resize:active::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--compost-timeline-select); }
-        .automation-header { box-sizing: border-box; height: var(--compost-timeline-automation-row-height); display: flex; align-items: center; gap: .3em; padding: 0 .6em 0 1.5em; border-top: 1px solid color-mix(in srgb, var(--compost-timeline-line) 50%, transparent); color: var(--compost-timeline-muted); font-size: .82em; }
-        .automation-chooser { appearance: none; min-width: 0; max-width: 16em; display: inline-flex; align-items: center; gap: .35em; overflow: hidden; border: 0; padding: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
-        .automation-chooser-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .automation-chooser::after { content: ""; flex: none; width: 0; height: 0; border-left: .2em solid transparent; border-right: .2em solid transparent; border-top: .25em solid currentColor; transform: translateY(.0625em); }
-        .automation-chooser:hover, .automation-chooser:focus-visible, .automation-chooser[aria-expanded="true"] { color: var(--compost-timeline-select); }
-        .automation-chooser:focus-visible, .automation-header button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-        .automation-header-buttons { display: inline-flex; align-items: center; gap: .08em; }
-        .automation-header-button { appearance: none; width: 1.25em; height: 1.25em; border: 0; padding: 0; background: none; color: inherit; font: inherit; line-height: 1; cursor: pointer; }
-        .automation-header-button:hover, .automation-header-button:focus-visible { color: var(--compost-timeline-select); }
-        .automation-header-value { margin-left: auto; color: currentColor; font-size: .86em; line-height: 1; }
-        .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); margin: 0; color: var(--compost-timeline-muted); font-size: .78em; line-height: 1; pointer-events: none; }
         .lanes-wrap { position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: none; }
         .lanes-wrap::-webkit-scrollbar { display: none; }
         .lanes-world { position: relative; min-height: 100%; }
@@ -459,14 +444,13 @@ export class CompostTimeline extends HTMLElement {
         .lane[data-drop-target] { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
         .lane[data-dimmed] .clip { opacity: .4; }
         .lane-base { position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
-        .lane-envelope-overlay { position: absolute; inset: 0 auto auto 0; z-index: 4; overflow: visible; pointer-events: none; }
-        .lane-envelope-line { fill: none; stroke: var(--lane-color, currentColor); stroke-width: 1; opacity: .3; vector-effect: non-scaling-stroke; }
-        .automation-row { position: relative; box-sizing: border-box; height: var(--compost-timeline-automation-row-height); overflow: visible; border-top: 1px solid var(--compost-timeline-line); background: var(--compost-timeline-bg); touch-action: none; }
+        .lane[data-automation-view] .clip { opacity: .3; pointer-events: none; }
+        .lane-automation { position: absolute; inset: 0; z-index: 4; color: color-mix(in srgb, var(--lane-color, currentColor) 30%, transparent); }
         .automation-editor { width: 100%; height: 100%; min-height: 0; border: 0; overflow: visible; }
-        .automation-row[data-state="overridden"] .automation-editor { color: var(--compost-timeline-muted); }
-        .automation-row[data-state="overridden"] .automation-editor::part(line) { stroke-dasharray: 3 3; }
-        .automation-row[data-state="recording"] .automation-editor { color: var(--compost-timeline-select); }
-        .automation-row[data-draw]:hover .automation-draw-hint { display: block; }
+        .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); color: var(--compost-timeline-muted); font-size: .78em; line-height: 1; pointer-events: none; }
+        .lane-automation[data-draw]:hover .automation-draw-hint { display: block; }
+        .lane-base[data-state="overridden"] .automation-editor::part(line) { stroke-dasharray: 3 3; }
+        .lane-base[data-state="recording"] .lane-automation { color: var(--compost-timeline-select); }
         .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid currentColor; border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: AccentColorText; cursor: grab; touch-action: none; }
         .clip[data-selected] { z-index: 3; border-width: 2px; }
         .clip:focus-visible { outline: none; }
@@ -617,24 +601,14 @@ export class CompostTimeline extends HTMLElement {
         : parsedThinHeight;
     this.thinLaneHeight = Math.max(24, Number.isFinite(cssThinHeight)
       ? cssThinHeight : fontSize * DEFAULT_THIN_LANE_HEIGHT_EM);
-    const rawAutomationHeight = style.getPropertyValue('--compost-timeline-automation-row-height').trim();
-    const parsedAutomationHeight = Number.parseFloat(rawAutomationHeight);
-    const cssAutomationHeight = rawAutomationHeight.endsWith('em') ? parsedAutomationHeight * fontSize
-      : rawAutomationHeight.endsWith('rem') ? parsedAutomationHeight * (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
-        : parsedAutomationHeight;
-    this.automationRowHeight = Math.max(20, Number.isFinite(cssAutomationHeight) ? cssAutomationHeight : fontSize * DEFAULT_AUTOMATION_ROW_HEIGHT_EM);
     this._loopEnabled = this.hasAttribute('loop-enabled');
     this.setAttribute('aria-label', this.label);
     this.style.setProperty('--compost-timeline-row-height', `${this.laneHeight}px`);
-    // the header column and the lane body resolve the row token against different
-    // font sizes; pinning it in px keeps an automation header level with its row
-    this.style.setProperty('--compost-timeline-automation-row-height', `${this.automationRowHeight}px`);
   }
 
   get lanes() {
     return this._lanes.map((lane) => ({
       ...lane,
-      envelope: lane.envelope && typeof lane.envelope === 'object' ? { ...lane.envelope, points: Array.isArray(lane.envelope.points) ? lane.envelope.points.map((point) => ({ ...point })) : [] } : lane.envelope,
       automation: cloneAutomation(lane.automation),
       clips: lane.clips.map((clip) => ({ ...clip, notes: clip.notes?.map((note) => ({ ...note })) })),
     }));
@@ -648,7 +622,6 @@ export class CompostTimeline extends HTMLElement {
       compact: Boolean(lane.compact),
       picked: Boolean(lane.picked),
       dimmed: Boolean(lane.dimmed),
-      envelope: lane.envelope && typeof lane.envelope === 'object' ? { ...lane.envelope, points: Array.isArray(lane.envelope.points) ? lane.envelope.points.map((point) => ({ ...point })) : [] } : lane.envelope,
       automation: cloneAutomation(lane.automation),
       clips: Array.isArray(lane.clips) ? lane.clips.map((clip) => ({ ...clip, notes: clip.notes?.map((note) => ({ ...note })) })) : [],
     })) : [];
@@ -746,19 +719,6 @@ export class CompostTimeline extends HTMLElement {
     this.paintTimeSelection();
   }
 
-  /** Synchronise a host-owned automation chooser menu's expanded state. */
-  /** @param {string} laneId @param {string} automationId @param {boolean} open */
-  setAutomationChooserOpen(laneId, automationId, open) {
-    const key = `${String(laneId)}\u0000${String(automationId)}`;
-    this.automationChooserKey = open ? key : null;
-    for (const chooser of this.headers.querySelectorAll('.automation-chooser')) {
-      const isOpen = Boolean(open
-        && chooser.dataset.laneId === String(laneId)
-        && chooser.dataset.automationId === String(automationId));
-      chooser.setAttribute('aria-expanded', String(isOpen));
-    }
-  }
-
   /** Replace one lane's clips without changing the lane order. */
   /** @param {string} laneId @param {TimelineClip[]} clips */
   setLaneClips(laneId, clips) {
@@ -778,46 +738,13 @@ export class CompostTimeline extends HTMLElement {
     body?.toggleAttribute('data-dimmed', lane.dimmed);
   }
 
-  /** Update one lane's automation rows without changing the lane order. */
-  /** @param {string} laneId @param {AutomationLaneView[]} automation */
+  /** Update the automation curve shown for one lane. */
+  /** @param {string} laneId @param {AutomationLaneView|null} automation */
   setLaneAutomation(laneId, automation) {
     const lane = this._lanes.find((entry) => entry.id === laneId);
     if (!lane) return;
     lane.automation = cloneAutomation(automation);
-    const previousWidth = Number.parseFloat(this.lanesWorld.style.width);
-    const previousEnd = Number.isFinite(previousWidth) && this._pxPerBeat > 0 ? previousWidth / this._pxPerBeat : null;
-    const end = this.worldEnd();
-    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
-    const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(laneId)}"]`);
-    const laneHeight = this.laneHeightFor(lane);
-    if (header instanceof HTMLElement) header.style.height = `${laneHeight}px`;
-    if (row instanceof HTMLElement) row.style.height = `${laneHeight}px`;
-    // only the automation sub-rows are rebuilt: the clip row (possibly mid-drag) and the
-    // header's name row stay in place, so a write painting at 10 Hz does not disturb them
-    if (header instanceof HTMLElement) {
-      for (const old of header.querySelectorAll('.automation-header')) old.remove();
-      for (const entry of this.automationFor(lane)) header.append(this.renderAutomationHeader(lane, entry));
-    }
-    if (row instanceof HTMLElement) {
-      for (const old of row.querySelectorAll('.automation-row')) old.remove();
-      for (const entry of this.automationFor(lane)) row.append(this.renderAutomationRow(lane, entry, end));
-    }
-    this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
-    const grid = this.lanesWorld.querySelector('.grid-world');
-    if (grid instanceof HTMLElement) grid.style.height = `${this.totalLaneHeight()}px`;
-    // the world only widens when the lane content grew past it; then the ruler follows
-    if (previousEnd === null || Math.abs(previousEnd - end) > MIN_CLIP_LENGTH) {
-      this.rulerWorld.style.width = `${end * this._pxPerBeat}px`;
-      this.lanesWorld.style.width = `${end * this._pxPerBeat}px`;
-      this.rulerWorld.replaceChildren(this.rulerGrid(end));
-      this.renderRulerLabels(end);
-      if (grid instanceof HTMLElement) {
-        grid.style.width = `${end * this._pxPerBeat}px`;
-        grid.replaceChildren(this.rulerGrid(end, true));
-      }
-    }
-    this.paintSelection();
-    this.paintTimeSelection();
+    this.render();
   }
 
   get playhead() { return this._playhead; }
@@ -895,7 +822,7 @@ export class CompostTimeline extends HTMLElement {
 
   /** @param {TimelineLane} lane */
   automationFor(lane) {
-    return this.automation && Array.isArray(lane?.automation) ? lane.automation : [];
+    return this.automation ? lane?.automation ?? null : null;
   }
 
   /** @param {TimelineLane} lane */
@@ -907,7 +834,7 @@ export class CompostTimeline extends HTMLElement {
 
   /** @param {TimelineLane} lane */
   laneHeightFor(lane) {
-    return this.laneRowHeightFor(lane) + this.automationFor(lane).length * this.automationRowHeight;
+    return this.laneRowHeightFor(lane);
   }
 
   totalLaneHeight() {
@@ -970,21 +897,6 @@ export class CompostTimeline extends HTMLElement {
       element.focus({ preventScroll: true });
       this.ensureClipVisible(id);
     }
-  }
-
-  /** Scroll the vertical lane viewport until an automation row is visible. */
-  /** @param {string} laneId @param {string} automationId @returns {boolean} */
-  revealAutomation(laneId, automationId) {
-    const row = this.lanesWorld.querySelector(`.automation-row[data-lane-id="${CSS.escape(String(laneId))}"][data-automation-id="${CSS.escape(String(automationId))}"]`);
-    if (!(row instanceof HTMLElement)) return false;
-    const viewport = this.lanesWrap.getBoundingClientRect();
-    const bounds = row.getBoundingClientRect();
-    const delta = bounds.top < viewport.top ? bounds.top - viewport.top
-      : bounds.bottom > viewport.bottom ? bounds.bottom - viewport.bottom : 0;
-    const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
-    this.lanesWrap.scrollTop = clamp(Math.ceil(this.lanesWrap.scrollTop + delta), 0, maximum);
-    this.paintLaneScroll();
-    return true;
   }
 
   // ---- Rendering --------------------------------------------------------------
@@ -1067,10 +979,10 @@ export class CompostTimeline extends HTMLElement {
   paintTimeSelection(selection = this._timeSelection) {
     if (!(this.rulerTimeSelection instanceof HTMLElement)) return;
     for (const old of this.lanesWorld.querySelectorAll('.time-selection-world')) old.remove();
-    for (const row of this.lanesWorld.querySelectorAll('.automation-row')) {
-      const editor = row.querySelector('compost-envelope-editor');
+    for (const surface of this.lanesWorld.querySelectorAll('.lane-automation')) {
+      const editor = surface.querySelector('compost-envelope-editor');
       if (!editor) continue;
-      if (selection?.laneIds.includes(String(row.dataset.laneId))) editor.setSelection(selection.start, selection.end);
+      if (selection?.laneIds.includes(String(surface.dataset.laneId))) editor.setSelection(selection.start, selection.end);
       else editor.setSelection(undefined, undefined);
     }
     if (!selection) {
@@ -1147,10 +1059,9 @@ export class CompostTimeline extends HTMLElement {
   worldEnd() {
     const last = this._lanes.reduce((end, lane) => {
       const clipEnd = lane.clips.reduce((clipMax, clip) => Math.max(clipMax, (Number(clip.start) || 0) + (Number(clip.length) || 0)), 0);
-      const automationEnd = this.automationFor(lane).reduce((automationMax, automation) => automation.points?.reduce(
-        (pointMax, point) => Math.max(pointMax, Number(point.beat) || 0), automationMax) || automationMax, 0);
-      const envelopeEnd = lane.envelope?.points?.reduce((pointMax, point) => Math.max(pointMax, Number(point.beat) || 0), 0) || 0;
-      return Math.max(end, clipEnd, automationEnd, envelopeEnd);
+      const automationEnd = lane.automation?.points?.reduce(
+        (pointMax, point) => Math.max(pointMax, Number(point.beat) || 0), 0) || 0;
+      return Math.max(end, clipEnd, automationEnd);
     }, 0);
     const locatorEnd = this._locators.at(-1)?.beat || 0;
     const visible = this._scrollBeat + Math.max(16, (this.lanesWrap.clientWidth || 320) / this._pxPerBeat);
@@ -1259,79 +1170,6 @@ export class CompostTimeline extends HTMLElement {
     }
   }
 
-  /** @param {TimelineLane} lane @param {AutomationLaneView} automation */
-  renderAutomationHeader(lane, automation) {
-    const header = document.createElement('div');
-    header.className = 'automation-header';
-    header.part.add('automation-header');
-    header.dataset.laneId = lane.id;
-    header.dataset.automationId = automation.id;
-    header.setAttribute('role', 'listitem');
-    header.tabIndex = 0;
-    header.setAttribute('aria-label', `${automation.label || automation.id} automation for ${lane.name || lane.id}`);
-    header.addEventListener('focus', () => { this.focusedLane = lane.id; this.focusedClip = null; });
-    const chooser = document.createElement('button');
-    chooser.type = 'button';
-    chooser.className = 'automation-chooser';
-    chooser.part.add('automation-chooser');
-    chooser.dataset.laneId = lane.id;
-    chooser.dataset.automationId = automation.id;
-    chooser.setAttribute('aria-haspopup', 'menu');
-    chooser.setAttribute('aria-expanded', String(this.automationChooserKey === `${String(lane.id)}\u0000${String(automation.id)}`));
-    chooser.setAttribute('aria-label', `Choose automation for ${lane.name || lane.id}`);
-    const label = document.createElement('span');
-    label.className = 'automation-chooser-label automation-header-label';
-    label.textContent = automation.label || automation.id;
-    chooser.append(label);
-    chooser.addEventListener('click', (event) => {
-      event.stopPropagation();
-      this.dispatchEvent(eventOf('automation-choose', {
-        laneId: lane.id,
-        automationId: automation.id,
-        clientX: event.clientX,
-        clientY: event.clientY,
-      }));
-    });
-    chooser.addEventListener('pointerdown', (event) => event.stopPropagation());
-    const buttons = document.createElement('span');
-    buttons.className = 'automation-header-buttons';
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'automation-header-button automation-add';
-    add.part.add('automation-add');
-    add.textContent = '+';
-    add.title = 'Add automation';
-    add.setAttribute('aria-label', `Add automation to ${lane.name || lane.id}`);
-    add.addEventListener('click', (event) => {
-      event.stopPropagation();
-      if (this.readonly) return;
-      this.dispatchEvent(eventOf('automation-add', { laneId: lane.id, clientX: event.clientX, clientY: event.clientY }));
-    });
-    add.addEventListener('pointerdown', (event) => event.stopPropagation());
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'automation-header-button automation-remove';
-    remove.part.add('automation-remove');
-    remove.textContent = '−';
-    remove.title = 'Remove automation';
-    remove.setAttribute('aria-label', `Remove ${automation.label || automation.id} automation from ${lane.name || lane.id}`);
-    remove.addEventListener('click', (event) => {
-      event.stopPropagation();
-      if (this.readonly) return;
-      this.dispatchEvent(eventOf('automation-remove', { laneId: lane.id, automationId: automation.id }));
-    });
-    remove.addEventListener('pointerdown', (event) => event.stopPropagation());
-    buttons.append(add, remove);
-    header.append(chooser, buttons);
-    if (Number.isFinite(Number(automation.value))) {
-      const value = document.createElement('span');
-      value.className = 'automation-header-value';
-      value.textContent = Number(automation.value).toFixed(2);
-      header.append(value);
-    }
-    return header;
-  }
-
   /** @param {TimelineLane} lane */
   renderLaneHeader(lane) {
     const header = document.createElement('div');
@@ -1350,7 +1188,7 @@ export class CompostTimeline extends HTMLElement {
       slot.className = 'lane-header-content';
       slot.name = `lane-header-${encodeURIComponent(lane.id)}`;
       header.append(slot);
-      for (const automation of this.automationFor(lane)) header.append(this.renderAutomationHeader(lane, automation));
+      if (this.automationFor(lane)) header.append(this.renderAutomationLabel(lane));
       header.append(this.renderLaneResizeHandle(lane));
       return header;
     }
@@ -1359,10 +1197,19 @@ export class CompostTimeline extends HTMLElement {
     main.className = 'lane-header-content lane-header-fallback';
     main.part.add('lane-header-fallback');
     main.append(this.renderLaneName(lane));
+    if (this.automationFor(lane)) main.append(this.renderAutomationLabel(lane));
     header.append(main);
-    for (const automation of this.automationFor(lane)) header.append(this.renderAutomationHeader(lane, automation));
     header.append(this.renderLaneResizeHandle(lane));
     return header;
+  }
+
+  /** @param {TimelineLane} lane */
+  renderAutomationLabel(lane) {
+    const label = document.createElement('span');
+    label.className = 'lane-automation-label';
+    label.part.add('lane-automation-label');
+    label.textContent = lane.automation?.label || lane.automation?.id || '';
+    return label;
   }
 
   /** A grab edge along the header's bottom border: drag sets the lane's own row
@@ -1505,80 +1352,18 @@ export class CompostTimeline extends HTMLElement {
     const base = document.createElement('div');
     base.className = 'lane-base';
     base.part.add('lane-content');
-    if (!this.automation) {
-      const overlay = this.renderEnvelopeOverlay(lane, end);
-      if (overlay) base.append(overlay);
-    }
     for (const clip of lane.clips) base.append(this.renderClip(clip, lane));
-    return base;
-  }
-
-  /** @param {AutomationLaneView} automation @param {number} end */
-  automationPath(automation, end, height = this.automationRowHeight) {
-    const points = (Array.isArray(automation.points) ? automation.points : [])
-      .filter((point) => Number.isFinite(Number(point.beat)) && Number.isFinite(Number(point.value)))
-      .sort((a, b) => Number(a.beat) - Number(b.beat));
-    if (!points.length) return '';
-    const y = (point) => automationValueToY(point.value, automation.min, automation.max, height, automation.scale);
-    const x = (point) => Math.max(0, Number(point.beat) || 0) * this._pxPerBeat;
-    let path = `M 0 ${y(points[0])} H ${x(points[0])}`;
-    for (let index = 1; index < points.length; index += 1) {
-      if (automation.stepped) path += ` H ${x(points[index])} V ${y(points[index])}`;
-      else {
-        const before = points[index - 1];
-        const after = points[index];
-        if (automation.scale === 'gain' && after.value !== before.value) {
-          const turns = parameterScaleBreakpoints({
-            min: automation.min, max: automation.max, curve: 'gain',
-          })
-            .filter((value) => (value - before.value) * (value - after.value) < 0)
-            .map((value) => ({
-              beat: before.beat + (after.beat - before.beat) * (value - before.value) / (after.value - before.value),
-              value,
-            }))
-            .sort((a, b) => a.beat - b.beat);
-          for (const turn of turns) path += ` L ${x(turn)} ${y(turn)}`;
-        }
-        path += ` L ${x(after)} ${y(after)}`;
-      }
-    }
-    path += ` H ${Math.max(x(points[points.length - 1]), end * this._pxPerBeat)}`;
-    return path;
-  }
-
-  /** @param {TimelineLane} lane @param {number} end */
-  renderEnvelopeOverlay(lane, end) {
-    const envelope = lane.envelope;
-    if (!envelope || !Array.isArray(envelope.points) || !envelope.points.length) return null;
-    const height = this.laneRowHeightFor(lane);
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.classList.add('lane-envelope-overlay');
-    svg.setAttribute('width', String(end * this._pxPerBeat));
-    svg.setAttribute('height', String(height));
-    svg.setAttribute('viewBox', `0 0 ${end * this._pxPerBeat} ${height}`);
-    svg.setAttribute('preserveAspectRatio', 'none');
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    line.classList.add('lane-envelope-line');
-    line.setAttribute('d', this.automationPath(envelope, end, height));
-    svg.append(line);
-    return svg;
-  }
-
-  /** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {number} end */
-  renderAutomationRow(lane, automation, end) {
-    const row = document.createElement('div');
-    row.className = 'automation-row';
-    row.part.add('automation-row');
-    row.dataset.laneId = lane.id;
-    row.dataset.automationId = automation.id;
-    row.dataset.state = automation.state || 'idle';
-    row.toggleAttribute('data-draw', this.draw);
-    row.setAttribute('role', 'listitem');
-    row.tabIndex = 0;
-    row.setAttribute('aria-label', `${automation.label || automation.id} automation for ${lane.name || lane.id}`);
-    row.addEventListener('focus', () => { this.focusedLane = lane.id; this.focusedClip = null; });
-    row.style.setProperty('--lane-color', automation.color || lane.color || 'var(--compost-timeline-text)');
-
+    const automation = this.automationFor(lane);
+    if (!automation) return base;
+    base.dataset.state = automation.state || 'idle';
+    const surface = document.createElement('div');
+    surface.className = 'lane-automation';
+    surface.dataset.laneId = lane.id;
+    surface.dataset.automationId = automation.id;
+    surface.toggleAttribute('data-draw', this.draw);
+    surface.setAttribute('role', 'group');
+    surface.setAttribute('aria-label', `${automation.label || automation.id} automation for ${lane.name || lane.id}`);
+    surface.tabIndex = 0;
     const editor = document.createElement('compost-envelope-editor');
     editor.className = 'automation-editor';
     editor.part.add('automation-editor');
@@ -1636,12 +1421,13 @@ export class CompostTimeline extends HTMLElement {
         clientY: event.detail.clientY,
       }));
     });
+    surface.append(editor);
     const hint = document.createElement('span');
     hint.className = 'automation-draw-hint';
-    hint.textContent = `✎ draw · grid 1/${Math.max(1, Number(this.grid) || 1)}`;
-    row.append(editor);
-    row.append(hint);
-    return row;
+    hint.textContent = '✎ draw';
+    surface.append(hint);
+    base.append(surface);
+    return base;
   }
 
   /** @param {TimelineLane} lane @param {number} end */
@@ -1654,11 +1440,11 @@ export class CompostTimeline extends HTMLElement {
     row.setAttribute('role', 'listitem');
     row.setAttribute('aria-label', lane.name || lane.id);
     row.toggleAttribute('data-dimmed', Boolean(lane.dimmed));
+    row.toggleAttribute('data-automation-view', this.automation);
     row.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
     row.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
     row.style.height = `${this.laneHeightFor(lane)}px`;
     row.append(this.renderLaneBase(lane, end));
-    for (const automation of this.automationFor(lane)) row.append(this.renderAutomationRow(lane, automation, end));
     return row;
   }
 
@@ -1923,23 +1709,16 @@ export class CompostTimeline extends HTMLElement {
   }
 
   automationFromEvent(event) {
-    const row = pathElement(event, 'automation-row');
-    if (!(row instanceof HTMLElement)) return null;
-    const lane = this._lanes.find((entry) => entry.id === row.dataset.laneId);
-    const automation = lane && this.automationFor(lane).find((entry) => entry.id === row.dataset.automationId);
+    const editor = pathElement(event, 'lane-automation');
+    if (!(editor instanceof HTMLElement)) return null;
+    const lane = this._lanes.find((entry) => entry.id === editor.dataset.laneId);
+    const automation = lane && this.automationFor(lane);
     if (!lane || !automation) return null;
     return {
-      row,
+      row: editor,
       lane,
       automation,
     };
-  }
-
-  automationHeaderFromEvent(event) {
-    const header = pathElement(event, 'automation-header');
-    if (!(header instanceof HTMLElement)) return null;
-    const lane = this._lanes.find((entry) => entry.id === header.dataset.laneId);
-    return lane ? { header, lane } : null;
   }
 
   updatePointerCursor(event) {
@@ -2073,8 +1852,6 @@ export class CompostTimeline extends HTMLElement {
     if (this.drag) return;
     if (event.composedPath().some((node) => node instanceof HTMLElement
       && node.matches('button, input, select, textarea, [data-timeline-interactive]'))) return;
-    if (event.composedPath().some((node) => node instanceof HTMLElement
-      && (node.classList.contains('automation-header-button') || node.classList.contains('automation-chooser')))) return;
     const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
       && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
     if (loopPart instanceof HTMLElement) return;
@@ -2506,8 +2283,6 @@ export class CompostTimeline extends HTMLElement {
 
   handleDoubleClick(event) {
     if (this.hasAttribute('disabled')) return;
-    if (event.composedPath().some((node) => node instanceof HTMLElement
-      && (node.classList.contains('automation-header-button') || node.classList.contains('automation-chooser')))) return;
     const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
       && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
     if (loopPart instanceof HTMLElement) {
@@ -2579,17 +2354,6 @@ export class CompostTimeline extends HTMLElement {
       }));
       return;
     }
-    const automationHeader = this.automationHeaderFromEvent(event);
-    if (automationHeader) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('automation-context', {
-        laneId: automationHeader.lane.id,
-        automationId: event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('automation-header'))?.dataset.automationId,
-        clientX: event.clientX,
-        clientY: event.clientY,
-      }));
-      return;
-    }
     const found = this.clipFromEvent(event);
     if (found) {
       event.preventDefault();
@@ -2636,7 +2400,6 @@ export class CompostTimeline extends HTMLElement {
     if (source instanceof HTMLInputElement || source instanceof HTMLTextAreaElement) return;
     const key = event.key.toLowerCase();
     const automationBody = this.automationFromEvent(event);
-    const automationHeader = this.automationHeaderFromEvent(event);
     const envelopeEditor = event.composedPath().some((node) => node instanceof HTMLElement
       && node.localName === 'compost-envelope-editor');
     if (!this.readonly && !event.altKey && !event.metaKey && !event.ctrlKey && key === 'b') {
@@ -2679,11 +2442,6 @@ export class CompostTimeline extends HTMLElement {
         this.dispatchEvent(eventOf('locator-move', { id: locatorTarget.locator.id, beat }));
         return;
       }
-    }
-    if (automationHeader && event.key === 'Escape') {
-      event.preventDefault();
-      automationHeader.header.blur();
-      return;
     }
     if (this.draw && automationBody && event.key.startsWith('Arrow')) {
       event.preventDefault();
@@ -2745,7 +2503,7 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     const headerTarget = this.laneHeaderFromEvent(event);
-    const onAutomationSurface = event.composedPath().some((node) => node instanceof HTMLElement && (node.classList.contains('automation-header') || node.classList.contains('automation-row')));
+    const onAutomationSurface = event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('lane-automation'));
     const onHeaderControl = event.composedPath().some((node) => node instanceof HTMLElement
       && node.matches('button, input, select, textarea, [data-timeline-interactive]'));
     if (headerTarget && !onAutomationSurface && !onHeaderControl) {
@@ -2768,13 +2526,12 @@ export class CompostTimeline extends HTMLElement {
         return;
       }
     }
-    if (event.shiftKey && event.key === 'F10' && (automationBody || automationHeader)) {
+    if (event.shiftKey && event.key === 'F10' && automationBody) {
       event.preventDefault();
-      const target = automationBody?.row || automationHeader?.header;
-      const rect = target.getBoundingClientRect();
+      const rect = automationBody.row.getBoundingClientRect();
       this.dispatchEvent(eventOf('automation-context', {
-        laneId: automationBody?.lane.id || automationHeader.lane.id,
-        automationId: automationBody?.automation.id || automationHeader.header.dataset.automationId,
+        laneId: automationBody.lane.id,
+        automationId: automationBody.automation.id,
         clientX: rect.left + rect.width / 2,
         clientY: rect.top + rect.height / 2,
       }));

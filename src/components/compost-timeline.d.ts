@@ -26,7 +26,7 @@ export interface TimelineClip {
   [key: string]: unknown;
 }
 
-/** One automation sub-row under a lane. */
+/** The automation curve shown in a lane's automation view. */
 export interface AutomationLaneView {
   id: string;
   label: string;
@@ -50,8 +50,7 @@ export interface TimelineLane {
   picked?: boolean;
   dimmed?: boolean;
   height?: number;
-  envelope?: {points: {beat: number, value: number}[], min: number, max: number, stepped?: boolean, scale?: 'linear' | 'gain'} | null;
-  automation?: AutomationLaneView[];
+  automation?: AutomationLaneView | null;
   clips: TimelineClip[];
   [key: string]: unknown;
 }
@@ -162,7 +161,7 @@ export function moveAutomationRange(points: {beat: number, value: number}[], sta
 
 /**
  * `<compost-timeline>`: an arrangement view of lanes, clips, locators, a
- * loop brace and automation sub-rows. The host owns all state; the element
+ * loop brace and an optional automation view. The host owns all state; the element
  * draws it and reports intent as CustomEvents: `seek`, `loop-input`,
  * `loop-change`, `loop-toggle`, `locator-*`, `time-select`, `time-delete`,
  * `clip-select`, `clip-open`, `clip-context`, `clip-move`, `clip-trim`,
@@ -186,8 +185,7 @@ export class CompostTimeline extends HTMLElement {
   follow: boolean;
   laneHeight: number;
   thinLaneHeight: number;
-  automationRowHeight: number;
-  /** Mirrors the `automation` attribute: whether sub-rows are shown. */
+  /** Mirrors the `automation` attribute: whether lanes show their automation curve. */
   automation: boolean;
   /** Mirrors the `draw` attribute: whether pointer gestures draw automation. */
   draw: boolean;
@@ -208,12 +206,8 @@ export class CompostTimeline extends HTMLElement {
   setLaneClips(laneId: string, clips: TimelineClip[]): void;
   /** Update generic lane emphasis without rebuilding its clips. */
   setLaneDimmed(laneId: string, dimmed: boolean): void;
-  /** Update one lane's automation rows without changing the lane order. */
-  setLaneAutomation(laneId: string, automation: AutomationLaneView[]): void;
-  /** Synchronise a host-owned automation chooser menu's expanded state. */
-  setAutomationChooserOpen(laneId: string, automationId: string, open: boolean): void;
-  /** Scroll the vertical lane viewport until an automation row is visible. */
-  revealAutomation(laneId: string, automationId: string): boolean;
+  /** Update the automation curve shown for one lane. */
+  setLaneAutomation(laneId: string, automation: AutomationLaneView | null): void;
 
   get locators(): TimelineLocator[];
   /** Replace the ruler locators; the host remains the source of truth. */

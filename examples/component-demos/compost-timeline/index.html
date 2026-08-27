@@ -25,13 +25,16 @@
             <legend>Host</legend>
             <label class="check"><input type="checkbox" data-play> Play head</label>
             <label class="check"><input type="checkbox" data-loop> Loop</label>
-            <label class="check"><input type="checkbox" data-automation checked> Automation rows</label>
+            <label class="check"><input type="checkbox" data-automation> Automation view</label>
             <label class="check"><input type="checkbox" data-draw> Draw automation</label>
+            <label>Lane A <select data-lane-automation="lane-a"><option value="gain">Gain</option><option value="pan">Pan</option><option value="">None</option></select></label>
+            <label>Lane B <select data-lane-automation="lane-b"><option value="pan">Pan</option><option value="gain">Gain</option><option value="">None</option></select></label>
+            <label>Lane C <select data-lane-automation="lane-c"><option value="gain">Gain</option><option value="pan">Pan</option><option value="">None</option></select></label>
             <button type="button" data-reset>Reset view</button>
             <output data-state>stopped · beat 0</output>
             <p class="muted">The host supplies three lanes and receives every timeline intent in the log. Drag a clip, trim an edge, or use the keyboard while the play head runs.</p>
           </fieldset>
-          <compost-timeline id="timeline" label="Timeline" beats-per-bar="4" grid="1/4" snap="off" automation style="height:360px; width:100%;"></compost-timeline>
+          <compost-timeline id="timeline" label="Timeline" beats-per-bar="4" grid="1/4" snap="off" style="height:360px; width:100%;"></compost-timeline>
         </div>
       </section>
       <section class="panel wide">
@@ -50,20 +53,14 @@
       const automation = document.querySelector('[data-automation]');
       const draw = document.querySelector('[data-draw]');
       const lanes = [
-        { id: 'lane-a', name: 'Lane A', picked: true, automation: [
-          { id: 'envelope-a', label: 'Envelope A', min: 0, max: 1, stepped: false, value: .6, points: [{ beat: 0, value: .2 }, { beat: 4, value: .8 }, { beat: 8, value: .6 }] },
-        ], clips: [
+        { id: 'lane-a', name: 'Lane A', picked: true, automation: { id: 'gain', label: 'Gain', min: 0, max: 1, stepped: false, value: .6, points: [{ beat: 0, value: .2 }, { beat: 4, value: .8 }, { beat: 8, value: .6 }] }, clips: [
           { id: 'clip-1', name: 'Clip 1', start: 0, length: 8, duration: 2, offset: 0, loop: true, state: 'stopped', notes: [{ start: 0, duration: .25, note: 36, velocity: 30 }, { start: .5, duration: .25, note: 42, velocity: 80 }, { start: 1, duration: .25, note: 38, velocity: 120 }] },
           { id: 'clip-2', name: 'Clip 2', start: 10, length: 4, duration: 4, offset: 0, loop: false, state: 'stopped', notes: [{ start: 0, duration: .5, note: 45 }, { start: 1, duration: .25, note: 48 }] },
-        ], envelope: { min: 0, max: 1, stepped: false, points: [{ beat: 0, value: .2 }, { beat: 4, value: .8 }, { beat: 8, value: .6 }] } },
-        { id: 'lane-b', name: 'Lane B', automation: [
-          { id: 'envelope-b', label: 'Envelope B', min: -1, max: 1, stepped: true, value: 0, points: [{ beat: 0, value: -.5 }, { beat: 6, value: .5 }] },
-        ], clips: [
+        ] },
+        { id: 'lane-b', name: 'Lane B', automation: { id: 'pan', label: 'Pan', min: -1, max: 1, stepped: false, value: 0, points: [{ beat: 0, value: -.5 }, { beat: 6, value: .5 }] }, clips: [
           { id: 'clip-3', name: 'Clip 3', start: 4, length: 12, duration: 4, offset: 0, loop: true, state: 'playing', notes: [{ start: 0, duration: 1, note: 40 }, { start: 1.5, duration: .5, note: 43 }] },
         ] },
-        { id: 'lane-c', name: 'Lane C', dimmed: true, automation: [
-          { id: 'envelope-c', label: 'Envelope C', min: 0, max: 1, stepped: false, value: .7, points: [{ beat: 2, value: .2 }, { beat: 8, value: .7 }] },
-        ], clips: [
+        { id: 'lane-c', name: 'Lane C', dimmed: true, automation: { id: 'gain', label: 'Gain', min: 0, max: 1, stepped: false, value: .7, points: [{ beat: 2, value: .2 }, { beat: 8, value: .7 }] }, clips: [
           { id: 'clip-4', name: 'Clip 4', start: 2, length: 6, duration: 6, offset: 0, loop: false, state: 'open', notes: [{ start: 0, duration: 2, note: 60 }, { start: 2, duration: 2, note: 64 }] },
         ] },
       ];
@@ -77,7 +74,17 @@
       timeline.setPlayhead(0);
       automation.addEventListener('change', () => timeline.toggleAttribute('automation', automation.checked));
       draw.addEventListener('change', () => timeline.toggleAttribute('draw', draw.checked));
-      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-header-context', 'lane-pick', 'lane-move', 'automation-change', 'automation-choose', 'automation-add', 'automation-remove', 'draw-toggle', 'automation-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
+      const automationChoices = {
+        gain: { id: 'gain', label: 'Gain', min: 0, max: 1, stepped: false, points: [{ beat: 0, value: .25 }, { beat: 8, value: .8 }] },
+        pan: { id: 'pan', label: 'Pan', min: -1, max: 1, stepped: false, points: [{ beat: 0, value: -.5 }, { beat: 8, value: .5 }] },
+      };
+      for (const select of document.querySelectorAll('[data-lane-automation]')) {
+        select.addEventListener('change', () => {
+          const choice = automationChoices[select.value];
+          timeline.setLaneAutomation(select.dataset.laneAutomation, choice ? structuredClone(choice) : null);
+        });
+      }
+      for (const type of ['seek', 'locator-jump', 'locator-prev', 'locator-next', 'locator-move', 'locator-create', 'locator-rename', 'locator-context', 'fit-request', 'time-select-input', 'time-select', 'time-delete', 'loop-input', 'loop-change', 'loop-toggle', 'clip-select', 'clip-open', 'clip-context', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'lane-header-context', 'lane-pick', 'lane-move', 'automation-change', 'draw-toggle', 'automation-context', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-split', 'clip-nudge', 'view-change']) {
         timeline.addEventListener(type, (event) => {
           const detail = { ...event.detail };
           delete detail.clientX;
@@ -94,9 +101,8 @@
           }
           if (type === 'automation-change') {
             const lane = timeline.lanes.find((entry) => entry.id === detail.laneId);
-            const row = lane?.automation?.find((entry) => entry.id === detail.automationId);
-            if (row) {
-              row.points = detail.points.map((point) => ({ ...point }));
+            if (lane?.automation?.id === detail.automationId) {
+              lane.automation.points = detail.points.map((point) => ({ ...point }));
               timeline.setLaneAutomation(lane.id, lane.automation);
             }
           }
