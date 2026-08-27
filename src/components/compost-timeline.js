@@ -435,6 +435,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-band { position: absolute; top: 2.35em; height: .75em; background: color-mix(in srgb, var(--compost-timeline-loop) 24%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop); cursor: grab; }
         .ruler-band[data-off] { background: color-mix(in srgb, var(--compost-timeline-loop-off) 14%, transparent); box-shadow: inset 0 0 0 1px var(--compost-timeline-loop-off); opacity: .7; }
         .ruler-handle { position: absolute; top: 2.22em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
+        .ruler-handle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         .ruler-handle::before { content: ""; position: absolute; inset-block: 0; width: 2px; background: var(--compost-timeline-loop); }
         .ruler-handle.start::before { left: 0; }
         .ruler-handle.end::before { right: 0; }
@@ -524,7 +525,7 @@ export class CompostTimeline extends HTMLElement {
       <div class="frame" part="frame">
         <div class="corner" part="corner"></div>
         <div class="ruler-wrap" part="ruler" role="group" tabindex="0" aria-label="Timeline ruler">
-          <div class="ruler"><div class="ruler-world"></div><div class="ruler-time-selection" part="time-selection"><span class="ruler-time-selection-readout" part="time-selection-readout"></span></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start"></div><div class="ruler-handle end" part="loop-handle loop-end"></div><div class="ruler-playhead" part="playhead"></div></div>
+          <div class="ruler"><div class="ruler-world"></div><div class="ruler-time-selection" part="time-selection"><span class="ruler-time-selection-readout" part="time-selection-readout"></span></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start" role="slider" tabindex="0" aria-label="Loop start"></div><div class="ruler-handle end" part="loop-handle loop-end" role="slider" tabindex="0" aria-label="Loop end"></div><div class="ruler-playhead" part="playhead"></div></div>
         </div>
         <div class="header-wrap" part="headers"><div class="headers" role="list"></div><div class="lane-drop-line"></div></div>
         <div class="lanes-wrap" part="lanes"><div class="lanes-world" role="list"></div><div class="playhead" part="playhead"></div></div>
@@ -1862,6 +1863,12 @@ export class CompostTimeline extends HTMLElement {
     this.rulerEnd.style.left = `${left + width - 5}px`;
     this.rulerStart.title = `Loop start, beat ${start}`;
     this.rulerEnd.title = `Loop end, beat ${end}`;
+    for (const [handle, value] of [[this.rulerStart, start], [this.rulerEnd, end]]) {
+      handle.setAttribute('aria-valuemin', '0');
+      handle.setAttribute('aria-valuemax', String(this.worldEnd()));
+      handle.setAttribute('aria-valuenow', String(value));
+      handle.setAttribute('aria-valuetext', `beat ${Math.round(value * 100) / 100}`);
+    }
   }
 
   keepPlayheadVisible() {
@@ -2634,6 +2641,19 @@ export class CompostTimeline extends HTMLElement {
       return;
     }
     if (envelopeEditor && !(this.draw && (event.key === 'Delete' || event.key === 'Backspace'))) return;
+    const keyStep = gridStep(this.beatsPerBar, this.grid) * (event.shiftKey ? 1 / 16 : 1);
+    const loopHandle = pathElement(event, 'ruler-handle');
+    if (loopHandle instanceof HTMLElement && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault();
+      if (this.readonly) return;
+      const delta = keyStep * (event.key === 'ArrowRight' ? 1 : -1);
+      const start = loopHandle.classList.contains('start')
+        ? clamp(this._loopStart + delta, 0, this._loopEnd - MIN_CLIP_LENGTH) : this._loopStart;
+      const end = loopHandle.classList.contains('end')
+        ? Math.max(this._loopEnd + delta, this._loopStart + MIN_CLIP_LENGTH) : this._loopEnd;
+      this.dispatchEvent(eventOf('loop-change', { start, end, enabled: this._loopEnabled }));
+      return;
+    }
     const locatorTarget = this.locatorFromEvent(event);
     if (locatorTarget) {
       if (event.key === 'F2' && !this.readonly) {
@@ -2644,6 +2664,15 @@ export class CompostTimeline extends HTMLElement {
       } else if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         this.dispatchEvent(eventOf('locator-jump', { id: locatorTarget.locator.id }));
+        return;
+      } else if (!this.readonly && (event.key === 'Delete' || event.key === 'Backspace')) {
+        event.preventDefault();
+        this.dispatchEvent(eventOf('locator-delete', { id: locatorTarget.locator.id }));
+        return;
+      } else if (!this.readonly && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault();
+        const beat = Math.max(0, locatorTarget.locator.beat + keyStep * (event.key === 'ArrowRight' ? 1 : -1));
+        this.dispatchEvent(eventOf('locator-move', { id: locatorTarget.locator.id, beat }));
         return;
       }
     }
@@ -2824,8 +2853,18 @@ export class CompostTimeline extends HTMLElement {
     }
     if (!this.readonly && event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
       event.preventDefault();
-      const step = gridStep(this.beatsPerBar, this.grid) * (event.key === 'ArrowRight' ? 1 : -1);
+      const step = keyStep * (event.key === 'ArrowRight' ? 1 : -1);
       this.dispatchEvent(eventOf('clip-nudge', { ids: this.selected.length ? this.selected : [found.clip.id], deltaBeats: step }));
+      return;
+    }
+    if (!this.readonly && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault();
+      const laneIndex = this._lanes.indexOf(found.lane);
+      const target = this._lanes[laneIndex + (event.key === 'ArrowUp' ? -1 : 1)];
+      if (!target) return;
+      this.dispatchEvent(eventOf('clip-move', {
+        ids: this.selected.length ? this.selected : [found.clip.id], laneId: target.id, deltaBeats: 0, copy: false,
+      }));
       return;
     }
     const adjacent = this.adjacentClip(found, event.key);

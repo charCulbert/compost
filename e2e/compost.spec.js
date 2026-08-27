@@ -1004,6 +1004,45 @@ test('timeline asks to join clips and insert time', async ({ page }) => {
   ]);
 });
 
+test('timeline keyboard reaches fine nudges, other lanes, loop handles and locators', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('grid', '4');
+    element.setLanes([
+      { id: 'a', name: 'A', clips: [{ id: 'one', name: 'one', start: 0, length: 2, duration: 2, loop: false }] },
+      { id: 'b', name: 'B', clips: [] },
+    ]);
+    element.setLocators([{ id: 'drop', beat: 6, name: 'drop' }]);
+    element.setLoop(2, 6, true);
+    element.testEvents = [];
+    for (const type of ['clip-nudge', 'clip-move', 'loop-change', 'locator-move', 'locator-delete']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.selected = ['one'];
+    element.focusClip('one');
+  });
+  await page.keyboard.press('Shift+Alt+ArrowRight');
+  await page.keyboard.press('Alt+ArrowDown');
+  await timeline.locator('.ruler-handle.start').focus();
+  await page.keyboard.press('ArrowRight');
+  await timeline.locator('.ruler-handle.end').focus();
+  await page.keyboard.press('Shift+ArrowLeft');
+  await timeline.locator('.ruler-locator').focus();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Delete');
+  expect(await timeline.evaluate((element) => element.testEvents)).toEqual([
+    { type: 'clip-nudge', detail: { ids: ['one'], deltaBeats: 1 / 16 } },
+    { type: 'clip-move', detail: { ids: ['one'], laneId: 'b', deltaBeats: 0, copy: false } },
+    { type: 'loop-change', detail: { start: 3, end: 6, enabled: true } },
+    // the demo page applied the first loop-change, as a host would, so the second starts from 3
+    { type: 'loop-change', detail: { start: 3, end: 6 - 1 / 16, enabled: true } },
+    { type: 'locator-move', detail: { id: 'drop', beat: 5 } },
+    { type: 'locator-delete', detail: { id: 'drop' } },
+  ]);
+  await expect(timeline.locator('.ruler-handle.start')).toHaveAttribute('aria-valuenow', '3');
+});
+
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');
