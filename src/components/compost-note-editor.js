@@ -111,6 +111,7 @@ export class CompostNoteEditor extends HTMLElement {
     /** @type {any} */ this.keyPan = null;
     /** @type {{id: string, time: number}|null} */ this.modifiedClick = null;
     /** @type {{beat: number, note: number, x: number, y: number, time: number}|null} */ this.pendingEmptyClick = null;
+    /** @type {ReturnType<typeof setTimeout>|null} */ this.emptySelectionTimer = null;
     this.ignoreDoubleClick = false;
     this.editorID = `compost-note-editor-${nextEditorID++}`;
     this.handleModifierKey = this.handleModifierKey.bind(this);
@@ -439,6 +440,8 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   disconnectedCallback() {
+    clearTimeout(this.emptySelectionTimer);
+    this.emptySelectionTimer = null;
     this.resizeObserver?.disconnect();
     window.removeEventListener('keydown', this.handleModifierKey, true);
     window.removeEventListener('keyup', this.handleModifierKey, true);
@@ -982,11 +985,18 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   emitSelection() {
+    clearTimeout(this.emptySelectionTimer);
+    this.emptySelectionTimer = null;
     this.expandSelectionRegionToNotes();
     this.renderSelectionRegion();
     this.dispatchEvent(new CustomEvent('selection-change', {
       bubbles: true, composed: true, detail: { ids: this.selectedIds },
     }));
+  }
+
+  scheduleEmptySelection() {
+    clearTimeout(this.emptySelectionTimer);
+    this.emptySelectionTimer = setTimeout(() => this.emitSelection(), DOUBLE_CLICK_MS);
   }
 
   /** Duplication time always contains every selected note from start to end. */
@@ -1164,6 +1174,8 @@ export class CompostNoteEditor extends HTMLElement {
   /** @param {PointerEvent} event */
   startPointer(event) {
     if (this.readonly || event.button !== 0 || this.drag) return;
+    clearTimeout(this.emptySelectionTimer);
+    this.emptySelectionTimer = null;
     const regionBefore = this.selectionRegion ? { ...this.selectionRegion,
       pitches: this.selectionRegion.pitches ? [...this.selectionRegion.pitches] : undefined } : null;
     const element = this.noteElementFrom(event);
@@ -1356,6 +1368,7 @@ export class CompostNoteEditor extends HTMLElement {
       return;
     }
     if (drag.mode === 'marq') {
+      const emptyClick = !drag.moved && !drag.shiftKey && drag.kind === 'box';
       if (drag.moved) {
         const region = normalizeSelectionRegion(drag.region?.start, drag.region?.end,
           drag.region?.pitches, this.beats);
@@ -1400,7 +1413,8 @@ export class CompostNoteEditor extends HTMLElement {
       }
       this.renderNotes();
       this.renderSelectionRegion();
-      this.emitSelection();
+      if (emptyClick) this.scheduleEmptySelection();
+      else this.emitSelection();
       return;
     }
     if (drag.copy && !drag.moved) {
@@ -1436,6 +1450,8 @@ export class CompostNoteEditor extends HTMLElement {
   /** @param {MouseEvent} event */
   handleDoubleClick(event) {
     if (this.readonly) return;
+    clearTimeout(this.emptySelectionTimer);
+    this.emptySelectionTimer = null;
     if (this.ignoreDoubleClick) { this.ignoreDoubleClick = false; return; }
     const noteElement = this.noteElementFrom(event);
     if (noteElement) {
