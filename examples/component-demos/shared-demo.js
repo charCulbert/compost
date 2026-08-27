@@ -513,9 +513,6 @@ function setupClipGridDemo() {
       state: live.index === index ? 'playing' : live.queued === index ? 'queued' : 'stopped',
       progress: live.index === index ? (((beat - live.start) / (clip.bars * 4)) % 1 + 1) % 1 : 0,
     }));
-    grid.setFrom(track === 0
-      ? { kind: 'timeline', name: 'verse', progress: 0.62 }
-      : { kind: 'overridden' });
     grid.setAttribute('stop', live.stopQueued ? 'queued' : live.index >= 0 || live.queued >= 0 ? 'active' : '');
   };
   const renderAll = () => {
@@ -554,10 +551,8 @@ function setupClipGridDemo() {
       const from = grids.indexOf(detail.source);
       const moved = tracks[from][detail.fromIndex];
       if (!moved) return;
-      const landed = tracks[track][detail.toIndex];
-      tracks[track][detail.toIndex] = { ...moved, name: detail.copy ? `${moved.name} copy` : moved.name };
-      // slots are fixed cells, so a move swaps rather than overwriting
-      if (!detail.copy) tracks[from][detail.fromIndex] = landed ?? null;
+      tracks[track][detail.toIndex] = { ...moved };
+      if (!detail.copy) tracks[from][detail.fromIndex] = null;
       renderAll();
       writeLog(`clip-drop ${moved.name} → ${grid.label} slot ${detail.toIndex + 1}${detail.copy ? ' (copy)' : ''}`);
     });

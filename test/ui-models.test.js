@@ -8,7 +8,7 @@ globalThis.customElements ??= {
   define(name, constructor) { this.elements.set(name, constructor); },
 };
 
-const { normalizeFrom, slotIndexAt } = await import('../src/components/compost-clip-grid.js');
+const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
 const { lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
 const {
   snapBeat, sortLocators, normalizeTimeSelection, clipBox, loopPassLines, clipNoteOpacity, previewTrimmedClip, rulerStep,
@@ -22,17 +22,6 @@ const {
 const { boundedPosition, constrainedSize } = await import('../src/components/compost-window.js');
 const { pointPlacement } = await import('../src/components/compost-popup.js');
 const { duplicatedNotes, selectionSpan, trimmedNotes, velocityShiftedNotes } = await import('../src/piano-roll-model.js');
-
-test('cross-view provenance stays host-owned and bounded', () => {
-  assert.deepEqual(normalizeFrom({ kind: 'timeline', name: 'verse', progress: 1.4 }), {
-    kind: 'timeline', name: 'verse', progress: 1,
-  });
-  assert.deepEqual(normalizeFrom({ kind: 'timeline', name: 'verse', progress: -0.2 }), {
-    kind: 'timeline', name: 'verse', progress: 0,
-  });
-  assert.deepEqual(normalizeFrom({ kind: 'overridden' }), { kind: 'overridden' });
-  assert.equal(normalizeFrom({ kind: 'other' }), null);
-});
 
 test('a pointer lands in the slot whose box contains it', () => {
   const rows = [{ top: 0, bottom: 32 }, { top: 32, bottom: 64 }, { top: 64, bottom: 96 }];

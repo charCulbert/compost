@@ -10,12 +10,6 @@ export interface ClipSpec {
   [key: string]: unknown;
 }
 
-/** The host-owned timeline provenance row under the slots. */
-export type FromSpec =
-  | {kind: 'timeline', name: string, progress: number}
-  | {kind: 'overridden'}
-  | null;
-
 /** The detail on slot-indexed intents (`clip-launch`, `clip-select`, ...). */
 export interface ClipSlotDetail {
   index: number;
@@ -46,9 +40,6 @@ export interface ClipDropDetail {
   copy: boolean;
 }
 
-/** Normalizes the host-owned timeline provenance row without touching slots. */
-export function normalizeFrom(value: unknown): FromSpec;
-
 /** Which slot a pointer at `y` lands in, given the rows' boxes. */
 export function slotIndexAt(y: number, rows: DOMRect[]): number;
 
@@ -78,10 +69,6 @@ export class CompostClipGrid extends HTMLElement {
   setClips(clips: (ClipSpec | null)[]): void;
   /** Cheap per-frame update of one playing clip's progress, 0..1. */
   setProgress(index: number, progress: number): void;
-  /** The current timeline provenance hint, copied so callers cannot mutate it. */
-  get from(): FromSpec;
-  /** Paints the host-owned timeline provenance row without rebuilding slots. */
-  setFrom(value: unknown): void;
   /** Lights a row across the grid, as the scene launcher does when hovered. */
   highlightRow(index: number, on: boolean): void;
   /** Opens an inline editor on a clip's name; the result arrives as `clip-rename`. */

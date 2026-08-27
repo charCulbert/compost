@@ -8,31 +8,9 @@ const ELLIPSIS_MIN_CHARS = 7;
 
 /** @typedef {'stopped'|'playing'|'queued'|'recording'} ClipState */
 /** @typedef {{name: string, state?: ClipState, loop?: boolean, progress?: number}} ClipSpec */
-/** @typedef {{kind: 'timeline', name: string, progress: number}|{kind: 'overridden'}|null} FromSpec */
 
-/** Normalize the host-owned timeline provenance row without touching slots. */
-/** @param {unknown} value @returns {FromSpec} */
-export function normalizeFrom(value) {
-  if (!value || typeof value !== 'object') return null;
-  if (value.kind === 'overridden') return { kind: 'overridden' };
-  if (value.kind !== 'timeline') return null;
-  const name = typeof value.name === 'string' ? value.name : '';
-  const progress = Number(value.progress);
-  return {
-    kind: 'timeline', name,
-    progress: Number.isFinite(progress) ? clamp(progress, 0, 1) : 0,
-  };
-}
-
-/** The visible identity only changes when the row kind or name changes. */
-/** @param {FromSpec} a @param {FromSpec} b */
-const sameFromIdentity = (a, b) => {
-  if (a?.kind !== b?.kind) return false;
-  return !a || a.kind === 'overridden' || a.name === b.name;
-};
-
-/** @param {string} fill */
-const triangle = (fill) => `<svg viewBox="0 0 7 8" aria-hidden="true"><path d="M1 .5 6 4 1 7.5Z" fill="${fill}"/></svg>`;
+/** @param {string} fill @param {string} [stroke] */
+const triangle = (fill, stroke = 'none') => `<svg viewBox="0 0 7 8" aria-hidden="true"><path d="M1 .5 6 4 1 7.5Z" fill="${fill}" stroke="${stroke}" stroke-linejoin="round"/></svg>`;
 /** @param {string} stroke */
 const ring = (stroke) => `<svg viewBox="0 0 8 8" aria-hidden="true"><circle cx="4" cy="4" r="3.5" stroke="${stroke}" fill="none"/></svg>`;
 /** @param {string} fill */
@@ -77,11 +55,6 @@ export class CompostClipGrid extends HTMLElement {
     this.slotCount = 5;
     this.label = 'Clips';
     /** @type {(ClipSpec|null)[]} */ this._clips = [];
-    /** @type {FromSpec} */ this._from = null;
-    this._fromElement = null;
-    this._fromProgress = null;
-    this._fromLabel = null;
-    this._fromName = null;
     /** @type {{pointerId: number, index: number, x: number, y: number, moved: boolean,
      * copy: boolean, target: CompostClipGrid|null, targetIndex: number, row: HTMLElement}|null} */
     this.drag = null;
@@ -98,21 +71,16 @@ export class CompostClipGrid extends HTMLElement {
     this.root.innerHTML = `
       <style>
         :host {
-          --compost-clip-grid-text: #3c3c34;
-          --compost-clip-grid-faint: #8a8a8a;
-          --compost-clip-grid-signal: #c45a2c;
-          --compost-clip-grid-signal-hi: #c45a2c;
-          --compost-clip-grid-select: #2f6da8;
-          --compost-clip-grid-over: #d98a4a;
-          --compost-clip-grid-dim: #aaaaaa;
-          --compost-clip-grid-rail: rgba(17, 17, 17, 0.12);
-          --compost-clip-grid-wash: rgba(196, 90, 44, 0.22);
-          --compost-clip-grid-highlight: rgba(17, 17, 17, 0.07);
-          --compost-clip-grid-editor-bg: #ffffff;
+          --compost-clip-grid-text: currentColor;
+          --compost-clip-grid-muted: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-clip-grid-rail: color-mix(in srgb, currentColor 30%, transparent);
+          --compost-clip-grid-line: color-mix(in srgb, currentColor 18%, transparent);
+          --compost-clip-grid-highlight: color-mix(in srgb, currentColor 10%, transparent);
+          --compost-clip-grid-accent: var(--compost-accent, AccentColor);
+          --compost-clip-grid-wash: color-mix(in srgb, var(--compost-clip-grid-accent) 18%, transparent);
+          --compost-clip-grid-editor-bg: Canvas;
           --compost-clip-grid-row-height: 2.9em;
           --compost-clip-grid-font-size: 0.91em;
-          --compost-clip-grid-color-scheme: light;
-          color-scheme: var(--compost-clip-grid-color-scheme);
           display: flex;
           flex-direction: column;
           min-height: 0;
@@ -134,6 +102,7 @@ export class CompostClipGrid extends HTMLElement {
           align-items: center;
           height: var(--compost-clip-grid-row-height);
           padding-right: 0.55em;
+          border-top: 1px solid var(--compost-clip-grid-line);
           /* isolate makes z-index:-1 mean "behind this row's text" rather than
              "behind the whole column" */
           isolation: isolate;
@@ -155,19 +124,18 @@ export class CompostClipGrid extends HTMLElement {
           bottom: 0;
           width: 0;
           background: var(--compost-clip-grid-wash);
-          filter: brightness(1.5);
         }
         .mark {
           position: absolute;
           left: 0;
           top: 0.36em;
           bottom: 0.36em;
-          width: 2px;
-          background: var(--compost-clip-grid-select);
+          width: 1px;
+          background: var(--compost-clip-grid-accent);
         }
         .row[data-dragging] { opacity: 0.3; }
-        .row[data-occupied] { box-shadow: inset 0 0 0 1px var(--compost-clip-grid-select); }
-        .row[data-occupied="copy"] { box-shadow: inset 0 0 0 1px var(--compost-clip-grid-signal); }
+        .row[data-occupied="move"] { box-shadow: inset 0 0 0 1px currentColor; }
+        .row[data-occupied="copy"] { box-shadow: inset 0 0 0 1px var(--compost-clip-grid-accent); }
         .tri {
           flex: none;
           align-self: stretch;
@@ -184,7 +152,7 @@ export class CompostClipGrid extends HTMLElement {
         }
         .tri svg { display: block; width: 0.64em; height: 0.73em; }
         .tri.record svg, .tri.rec svg { width: 0.73em; height: 0.73em; }
-        .tri:focus-visible { outline: 1px solid var(--compost-clip-grid-select); outline-offset: -1px; }
+        .tri:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         .name {
           flex: 1 1 auto;
           min-width: 0;
@@ -197,19 +165,21 @@ export class CompostClipGrid extends HTMLElement {
           cursor: pointer;
           touch-action: none;
         }
-        .name:focus-visible { outline: none; color: var(--compost-clip-grid-select); }
-        .row[data-state="playing"] .name { color: var(--compost-clip-grid-signal-hi); }
-        .row[data-state="queued"] .name { color: var(--compost-clip-grid-select); }
-        .row[data-state="recording"] .name { color: var(--compost-clip-grid-over); }
-        .preview { flex: none; width: 2.27em; height: 1.27em; color: var(--compost-clip-grid-faint); }
-        .row[data-state="playing"] .preview { color: var(--compost-clip-grid-signal-hi); }
+        .name:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+        .row[data-state="playing"] .name,
+        .row[data-state="queued"] .name,
+        .row[data-state="recording"] .name { color: var(--compost-clip-grid-accent); }
+        .preview { flex: none; width: 2.27em; height: 1.27em; color: var(--compost-clip-grid-muted); }
+        .row[data-state="playing"] .preview { color: var(--compost-clip-grid-accent); }
         .preview[hidden] { display: none !important; }
         .editor {
           box-sizing: border-box;
           width: 6.9em;
           margin-left: 0.45em;
           border: 0;
-          outline: 1px solid var(--compost-clip-grid-select);
+          border: 1px solid var(--compost-clip-grid-line);
+          outline: 2px solid currentColor;
+          outline-offset: -2px;
           background: var(--compost-clip-grid-editor-bg);
           color: var(--compost-clip-grid-text);
           font: inherit;
@@ -217,48 +187,10 @@ export class CompostClipGrid extends HTMLElement {
           -webkit-user-select: text;
           user-select: text;
         }
-        /* a slot that is waiting for the launch point breathes, so you know it is about to go */
-        @keyframes compost-clip-grid-breath { 50% { opacity: 0.3; } }
-        .row[data-state="queued"] .name, .row[data-state="queued"] .tri svg,
-        .stop[data-queued] .tri svg { animation: compost-clip-grid-breath 1s ease-in-out infinite; }
-        .stop { opacity: 0.55; transition: opacity 120ms; }
-        .stop:hover, .stop[data-queued] { opacity: 1; }
+        .stop { color: var(--compost-clip-grid-muted); }
+        .stop:hover { color: currentColor; }
+        .stop[data-queued] { color: var(--compost-clip-grid-accent); }
         .stop[hidden] { display: none !important; }
-        .from {
-          position: relative;
-          flex: none;
-          display: flex;
-          align-items: center;
-          gap: 0.6em;
-          box-sizing: border-box;
-          height: 2.2em;
-          padding: 0 0.9em;
-          overflow: hidden;
-          color: var(--compost-clip-grid-signal);
-          font-size: 1em;
-          white-space: nowrap;
-          pointer-events: none;
-        }
-        .from[hidden] { display: none !important; }
-        .from-progress {
-          position: absolute;
-          inset: 0 auto 0 0;
-          width: 0;
-          background: color-mix(in srgb, var(--compost-clip-grid-signal) 15%, transparent);
-          pointer-events: none;
-        }
-        .from-label, .from-name { position: relative; z-index: 1; }
-        .from-label {
-          color: var(--compost-clip-grid-faint);
-          font-size: 0.85em;
-        }
-        .from[data-kind="overridden"] { color: var(--compost-clip-grid-dim); }
-        .from[data-kind="overridden"] .from-label,
-        .from[data-kind="overridden"] .from-name { color: var(--compost-clip-grid-dim); }
-        @media (prefers-reduced-motion: reduce) {
-          .stop { transition: none; }
-          .row[data-state="queued"] .name, .row[data-state="queued"] .tri svg, .stop[data-queued] .tri svg { animation: none; }
-        }
       </style>`;
 
     this.addEventListener('click', (event) => this.handleClick(event));
@@ -355,36 +287,6 @@ export class CompostClipGrid extends HTMLElement {
     if (bar instanceof HTMLElement) bar.style.width = `${(clip.progress * 100).toFixed(1)}%`;
   }
 
-  /** The current timeline provenance hint, copied so callers cannot mutate it. */
-  get from() {
-    return this._from ? { ...this._from } : null;
-  }
-
-  /** Paints the host-owned timeline provenance row without rebuilding slots. */
-  /** @param {unknown} value */
-  setFrom(value) {
-    const current = this._from;
-    // A caller can update clip progress at the meter rate. Keep the visible
-    // nodes and the normalized object in place for that hot path.
-    if (current?.kind === 'timeline' && value && typeof value === 'object'
-      && value.kind === 'timeline' && value.name === current.name) {
-      const progress = Number(value.progress);
-      current.progress = Number.isFinite(progress) ? clamp(progress, 0, 1) : 0;
-      this.paintFromProgress();
-      return;
-    }
-    if (current?.kind === 'overridden' && value && typeof value === 'object'
-      && value.kind === 'overridden') return;
-    const next = normalizeFrom(value);
-    if (sameFromIdentity(current, next)) {
-      this._from = next;
-      if (next?.kind === 'timeline') this.paintFromProgress();
-      return;
-    }
-    this._from = next;
-    this.paintFrom();
-  }
-
   /** Lights a row across the grid, as the scene launcher does when hovered. */
   /** @param {number} index @param {boolean} on */
   highlightRow(index, on) {
@@ -444,14 +346,18 @@ export class CompostClipGrid extends HTMLElement {
         tri.setAttribute('aria-label', `${state === 'playing' || state === 'queued' ? 'Stop' : 'Launch'} ${clip.name} on ${this.label}`);
         tri.title = state === 'recording' ? 'finish take · launch'
           : state === 'playing' || state === 'queued' ? 'stop' : 'launch  ↵';
-        tri.innerHTML = state === 'recording' ? dot('var(--compost-clip-grid-over)')
-          : triangle(state === 'playing' ? 'var(--compost-clip-grid-signal-hi)'
-            : state === 'queued' ? 'var(--compost-clip-grid-select)' : 'var(--compost-clip-grid-faint)');
+        tri.part.add('launch');
+        tri.innerHTML = state === 'recording' ? dot('var(--compost-clip-grid-accent)')
+          : state === 'queued' ? triangle('none', 'var(--compost-clip-grid-accent)')
+            : triangle(state === 'playing'
+              ? 'var(--compost-clip-grid-accent)' : 'var(--compost-clip-grid-muted)');
         row.append(tri);
         row.insertAdjacentHTML('beforeend', PREVIEW);
+        row.querySelector('.preview')?.part.add('preview');
         if (this.renaming === index) {
           const input = document.createElement('input');
           input.className = 'editor';
+          input.part.add('editor');
           input.value = clip.name;
           input.setAttribute('aria-label', `Rename ${clip.name}`);
           let closed = false;
@@ -493,6 +399,7 @@ export class CompostClipGrid extends HTMLElement {
         if (this.armed) {
           /** @type {HTMLButtonElement} */ (tri).type = 'button';
           tri.dataset.action = 'record';
+          tri.part.add('record');
           tri.setAttribute('aria-label', `Record into ${this.label} slot ${index + 1}`);
           tri.title = 'record into this slot';
           tri.innerHTML = ring('var(--compost-clip-grid-rail)');
@@ -510,20 +417,14 @@ export class CompostClipGrid extends HTMLElement {
     const tri = document.createElement('button');
     tri.type = 'button';
     tri.className = 'tri';
+    tri.part.add('stop-control');
     tri.dataset.action = 'stop';
     tri.setAttribute('aria-label', `Stop ${this.label}`);
     stop.append(tri);
     rows.push(stop);
-    const from = document.createElement('div');
-    from.className = 'from';
-    from.part.add('from');
-    from.hidden = true;
-    from.setAttribute('role', 'status');
-    rows.push(from);
     const style = this.root.querySelector('style');
     this.root.replaceChildren(...(style ? [style] : []), ...rows);
     this.paintStop();
-    this.paintFrom();
     // a host re-rendering mid-drag must not lose the slot the drag is over
     if (this.dropMark) this.markDrop(this.dropMark.index, this.dropMark.copy);
     this.fitNames();
@@ -552,75 +453,9 @@ export class CompostClipGrid extends HTMLElement {
     if (!(stop instanceof HTMLElement) || !(tri instanceof HTMLElement)) return;
     const stopState = this.stopState;
     stop.toggleAttribute('data-queued', stopState === 'queued');
-    tri.innerHTML = square(stopState === 'queued' ? 'var(--compost-clip-grid-select)'
-      : stopState === 'active' ? 'var(--compost-clip-grid-text)' : 'var(--compost-clip-grid-faint)');
+    tri.innerHTML = square(stopState === 'queued' ? 'var(--compost-clip-grid-accent)'
+      : stopState === 'active' ? 'var(--compost-clip-grid-text)' : 'var(--compost-clip-grid-muted)');
     tri.title = stopState === 'queued' ? 'stop queued · click: cancel' : 'stop track';
-  }
-
-  paintFrom() {
-    const from = this.root.querySelector('.from');
-    if (!(from instanceof HTMLElement)) return;
-    if (from !== this._fromElement) {
-      this._fromElement = from;
-      this._fromProgress = null;
-      this._fromLabel = null;
-      this._fromName = null;
-    }
-    from.hidden = !this._from;
-    if (!this._from) {
-      from.removeAttribute('data-kind');
-      from.replaceChildren();
-      return;
-    }
-    const sameNodes = from.dataset.kind === this._from.kind
-      && (this._from.kind === 'overridden'
-        || this._fromName?.textContent === this._from.name);
-    if (sameNodes) {
-      if (this._from.kind === 'timeline') this.paintFromProgress();
-      return;
-    }
-    from.replaceChildren();
-    from.dataset.kind = this._from.kind;
-    if (this._from.kind === 'timeline') {
-      const progress = document.createElement('span');
-      progress.className = 'from-progress';
-      progress.part.add('from-progress');
-      progress.style.width = `${(this._from.progress * 100).toFixed(1)}%`;
-      const label = document.createElement('span');
-      label.className = 'from-label';
-      label.part.add('from-label');
-      label.textContent = 'timeline ▶';
-      const name = document.createElement('span');
-      name.className = 'from-name';
-      name.part.add('from-name');
-      name.textContent = this._from.name;
-      from.append(progress, label, name);
-      this._fromProgress = progress;
-      this._fromLabel = label;
-      this._fromName = name;
-    } else {
-      const label = document.createElement('span');
-      label.className = 'from-label';
-      label.part.add('from-label');
-      label.textContent = 'timeline ◂';
-      const name = document.createElement('span');
-      name.className = 'from-name';
-      name.part.add('from-name');
-      name.textContent = 'overridden';
-      from.append(label, name);
-      this._fromProgress = null;
-      this._fromLabel = label;
-      this._fromName = name;
-    }
-  }
-
-  paintFromProgress() {
-    if (this._from?.kind !== 'timeline') return;
-    if (!(this._fromProgress instanceof HTMLElement)) {
-      this.paintFrom();
-      return;
-    }
-    this._fromProgress.style.width = `${(this._from.progress * 100).toFixed(1)}%`;
   }
 
   /** The preview mark is decoration; the clip's name is not. Give the mark up on

@@ -150,6 +150,13 @@
 <template id="compost-audio">
   <compost-audio modal centered-while-off></compost-audio>
 </template>
+<template id="compost-clip-grid">
+  <div style="width: min(15em, calc(100vw - 64px)); display: grid; gap: .5em">
+    <span>Drums</span>
+    <compost-clip-grid label="Drums" slots="5" armed selected="4" stop="active" show-stop></compost-clip-grid>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click a name to select, then click its name again to rename; double-click opens. Enter launches. Drag to another slot; Option-drag copies.</small>
+  </div>
+</template>
 
 <div id="media"></div>
 <div id="root"></div>
@@ -183,7 +190,7 @@
     const out = s.querySelector('output');
     if (el === 'compost-meter' || el === 'compost-scope') out.remove();
     else {
-      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
+      for (const type of ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'clip-launch', 'clip-stop', 'clip-record', 'clip-select', 'clip-open', 'clip-context', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-move', 'clip-drag-start', 'clip-drag-end', 'clip-drop', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection'])
         s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
     }
     if (el === 'compost-window') {
@@ -262,6 +269,113 @@
         { parameterID: 'bypass', cc: 64, channel: null, min: 0, max: 1 },
       ]);
       s.querySelector('compost-midi-mappings').mappings = mappings;
+    }
+    if (el === 'compost-clip-grid') {
+      const grid = s.querySelector('compost-clip-grid');
+      let clips = [
+        { name: 'break.a', state: 'playing', progress: .62 },
+        { name: 'fill.b', state: 'stopped' },
+        null,
+        null,
+        { name: 'ride.d', state: 'stopped' },
+      ];
+      let take = 1;
+      const render = () => {
+        grid.setClips(clips);
+        if (clips.some((clip) => clip && clip.state !== 'stopped')) grid.setAttribute('stop', 'active');
+        else grid.removeAttribute('stop');
+      };
+      const queuePlayback = (index, keepRecording = false) => {
+        const queued = { ...clips[index], state: 'queued', progress: 0 };
+        clips[index] = queued;
+        render();
+        setTimeout(() => {
+          if (clips[index] !== queued) return;
+          clips = clips.map((clip, position) => {
+            if (!clip) return null;
+            if (position === index) return { ...clip, state: 'playing' };
+            if (keepRecording && clip.state === 'recording') return clip;
+            return clip.state !== 'stopped' ? { ...clip, state: 'stopped' } : clip;
+          });
+          render();
+        }, 750);
+      };
+      grid.addEventListener('clip-select', ({ detail }) => { grid.selected = detail.index; });
+      grid.addEventListener('clip-launch', ({ detail }) => {
+        const clip = clips[detail.index];
+        if (!clip) return;
+        if (clip.state === 'recording') {
+          queuePlayback(detail.index);
+          return;
+        } else if (clip.state === 'playing' || clip.state === 'queued') {
+          clips[detail.index] = { ...clip, state: 'stopped' };
+        } else {
+          clips = clips.map((other) => other?.state === 'queued'
+            ? { ...other, state: 'stopped' } : other);
+          queuePlayback(detail.index);
+          return;
+        }
+        render();
+      });
+      grid.addEventListener('clip-record', ({ detail }) => {
+        const previousRecording = clips.findIndex((clip) => clip?.state === 'recording');
+        clips = clips.map((clip) => {
+          if (!clip) return null;
+          if (clip.state === 'playing' || clip.state === 'queued') return { ...clip, state: 'stopped' };
+          return clip;
+        });
+        clips[detail.index] = { name: `take.${take++}`, state: 'recording' };
+        if (previousRecording >= 0) queuePlayback(previousRecording, true);
+        else render();
+      });
+      grid.addEventListener('clip-stop', () => {
+        clips = clips.map((clip) => clip ? { ...clip, state: 'stopped' } : null);
+        render();
+      });
+      grid.addEventListener('clip-rename', ({ detail }) => {
+        if (!clips[detail.index]) return;
+        clips[detail.index] = { ...clips[detail.index], name: detail.name };
+        render();
+      });
+      grid.addEventListener('clip-delete', ({ detail }) => {
+        clips[detail.index] = null;
+        if (grid.selected === detail.index) grid.selected = -1;
+        render();
+      });
+      grid.addEventListener('clip-duplicate', ({ detail }) => {
+        const to = clips.findIndex((clip) => !clip);
+        if (!clips[detail.index] || to < 0) return;
+        clips[to] = { ...clips[detail.index], state: 'stopped' };
+        render();
+      });
+      grid.addEventListener('clip-move', ({ detail }) => {
+        clips[detail.to] = clips[detail.index];
+        clips[detail.index] = null;
+        render();
+      });
+      grid.addEventListener('clip-drop', ({ detail }) => {
+        if (detail.source !== grid || !clips[detail.fromIndex]) return;
+        if (detail.copy) {
+          clips[detail.toIndex] = { ...clips[detail.fromIndex], state: 'stopped' };
+        } else {
+          clips[detail.toIndex] = clips[detail.fromIndex];
+          clips[detail.fromIndex] = null;
+        }
+        render();
+      });
+      render();
+      let previousFrame = performance.now();
+      const advance = (now) => {
+        const delta = (now - previousFrame) / 6000;
+        previousFrame = now;
+        clips.forEach((clip, index) => {
+          if (clip?.state !== 'playing') return;
+          clip.progress = ((clip.progress ?? 0) + delta) % 1;
+          grid.setProgress(index, clip.progress);
+        });
+        requestAnimationFrame(advance);
+      };
+      requestAnimationFrame(advance);
     }
     if (el === 'compost-envelope-editor') {
       const editor = s.querySelector('compost-envelope-editor');
