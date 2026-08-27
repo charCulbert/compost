@@ -367,7 +367,6 @@ export class CompostTimeline extends HTMLElement {
           --compost-timeline-over: #d98a4a;
           --compost-timeline-highlight: color-mix(in srgb, var(--compost-timeline-text) 8%, transparent);
           --compost-timeline-select: var(--compost-theme-learn, #6fa8eb);
-          --compost-timeline-marquee: color-mix(in srgb, var(--compost-timeline-select) 15%, transparent);
           --compost-timeline-playhead: var(--compost-timeline-text);
           --compost-timeline-loop: var(--compost-theme-accent, #8ea9c7);
           --compost-timeline-loop-off: color-mix(in srgb, var(--compost-timeline-muted) 60%, transparent);
@@ -503,7 +502,6 @@ export class CompostTimeline extends HTMLElement {
         .clip-loop-line { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; opacity: .6; pointer-events: none; }
         .clip-loop-line::before { content: ""; position: absolute; top: 0; left: -3px; border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 4px solid currentColor; }
         .clip-editor { position: relative; z-index: 4; width: calc(100% - 5px); margin: 2px; border: 0; outline: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-bg); color: var(--compost-timeline-text); font: inherit; font-size: .78em; }
-        .marquee { position: absolute; z-index: 7; border: 1px solid var(--compost-timeline-select); background: var(--compost-timeline-marquee); pointer-events: none; display: none; }
         .announce { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
         @keyframes compost-timeline-breath { 50% { opacity: .3; } }
         @media (prefers-reduced-motion: reduce) { .clip { transition: none; } .clip[data-state="queued"] .clip-name, .lane-session[data-state="queued"] .lane-session-name { animation: none; } }
@@ -514,7 +512,7 @@ export class CompostTimeline extends HTMLElement {
           <div class="ruler"><div class="ruler-world"></div><div class="ruler-time-selection" part="time-selection"></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start"></div><div class="ruler-handle end" part="loop-handle loop-end"></div><div class="ruler-playhead" part="playhead"></div></div>
         </div>
         <div class="header-wrap" part="headers"><div class="headers" role="list"></div><div class="lane-drop-line"></div></div>
-        <div class="lanes-wrap" part="lanes"><div class="lanes-world" role="list"></div><div class="marquee" part="marquee"></div><div class="playhead" part="playhead"></div></div>
+        <div class="lanes-wrap" part="lanes"><div class="lanes-world" role="list"></div><div class="playhead" part="playhead"></div></div>
       </div>
       <div class="announce" aria-live="polite"></div>`;
 
@@ -534,7 +532,6 @@ export class CompostTimeline extends HTMLElement {
     this.laneDropLine = part('.lane-drop-line');
     this.lanesWrap = part('.lanes-wrap');
     this.lanesWorld = part('.lanes-world');
-    this.marquee = part('.marquee');
     this.playheadElement = part('.playhead');
     this.announce = part('.announce');
 
@@ -2132,12 +2129,6 @@ export class CompostTimeline extends HTMLElement {
       this.paintLaneDropLine(drag.toIndex);
       return;
     }
-    if (drag.type === 'marquee') {
-      if (event.pointerType === 'touch' && drag.moved && Math.abs(dx) > Math.abs(dy)) {
-        drag.type = 'scroll-time';
-        this.marquee.style.display = 'none';
-      }
-    }
     if (drag.type === 'scroll-time') {
       this.scrollBeat = Math.max(0, drag.startScrollBeat - dx / this._pxPerBeat);
       return;
@@ -2146,16 +2137,6 @@ export class CompostTimeline extends HTMLElement {
       const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
       this.lanesWrap.scrollTop = clamp(drag.startScrollTop - dy, 0, maximum);
       this.paintLaneScroll();
-      return;
-    }
-    if (drag.type === 'marquee') {
-      if (!drag.moved) return;
-      const rect = this.lanesWrap.getBoundingClientRect();
-      const left = Math.min(drag.startX, event.clientX) - rect.left + this._scrollBeat * this._pxPerBeat;
-      const top = Math.min(drag.startY, event.clientY) - rect.top + this.lanesWrap.scrollTop;
-      const width = Math.abs(dx);
-      const height = Math.abs(dy);
-      Object.assign(this.marquee.style, { display: 'block', left: `${left - this._scrollBeat * this._pxPerBeat}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
       return;
     }
     if (drag.type === 'trim-left' || drag.type === 'trim-right') {
@@ -2300,30 +2281,6 @@ export class CompostTimeline extends HTMLElement {
       } else {
         this.setTimeSelection(null, null);
         this.dispatchEvent(eventOf('time-select', { start: null }));
-        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
-        this.dispatchEvent(eventOf('seek', { beat, source: 'lane' }));
-      }
-      return;
-    }
-    if (drag.type === 'marquee') {
-      this.marquee.style.display = 'none';
-      if (drag.moved) {
-        const left = Math.min(drag.startX, event.clientX);
-        const right = Math.max(drag.startX, event.clientX);
-        const top = Math.min(drag.startY, event.clientY);
-        const bottom = Math.max(drag.startY, event.clientY);
-        const selected = [...drag.base];
-        for (const lane of this._lanes) {
-          const laneRect = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(lane.id)}"] .lane-base`)?.getBoundingClientRect();
-          if (!laneRect || laneRect.bottom < top || laneRect.top > bottom) continue;
-          for (const clip of lane.clips) {
-            const rect = { left: (clip.start - this._scrollBeat) * this._pxPerBeat + this.lanesWrap.getBoundingClientRect().left, right: (clip.start + clip.length - this._scrollBeat) * this._pxPerBeat + this.lanesWrap.getBoundingClientRect().left, top: laneRect.top, bottom: laneRect.bottom };
-            if (rect.right >= left && rect.left <= right) selected.push(clip.id);
-          }
-        }
-        this._selected = [...new Set(selected)];
-        this.emitSelection();
-      } else {
         const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, event.altKey ? 'off' : this.snapMode);
         this.dispatchEvent(eventOf('seek', { beat, source: 'lane' }));
       }
