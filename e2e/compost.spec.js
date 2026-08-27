@@ -950,6 +950,21 @@ test('timeline clips stay in the ruler coordinate system while scrolled and zoom
   }) - 4)).toBeLessThan(.01);
 });
 
+test('timeline ruler labels stop with the grid', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const geometry = await timeline.evaluate((element) => {
+    element.pxPerBeat = 40;
+    element.scrollBeat = 0;
+    const world = element.shadowRoot.querySelector('.ruler-world');
+    return {
+      width: Number.parseFloat(world.style.width),
+      labels: [...world.querySelectorAll('.ruler-label')].map((label) => Number.parseFloat(label.style.left)),
+    };
+  });
+  expect(Math.max(...geometry.labels)).toBeLessThan(geometry.width);
+});
+
 test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => {
   await page.goto('/examples/component-demos/compost-timeline/');
   const timeline = page.locator('compost-timeline');

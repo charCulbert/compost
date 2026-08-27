@@ -1171,8 +1171,7 @@ export class CompostTimeline extends HTMLElement {
   renderRulerLabels(end) {
     const stepBars = rulerStep(this._pxPerBeat, this.beatsPerBar);
     const fragment = document.createDocumentFragment();
-    const labelStep = this.beatsPerBar * stepBars;
-    for (const { beat, text } of rulerLabels(end + labelStep,
+    for (const { beat, text } of rulerLabels(end,
       { barLength: this.beatsPerBar, beatLength: this.beatLength }, this._pxPerBeat,
       gridStep(this.beatsPerBar, this.grid))) {
       const label = document.createElement('div');
