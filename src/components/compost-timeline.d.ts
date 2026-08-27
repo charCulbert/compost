@@ -20,7 +20,6 @@ export interface TimelineClip {
   duration: number;
   loop?: boolean;
   state?: string;
-  progress?: number;
   notes?: {start: number, duration: number, note: number, velocity?: number}[];
   color?: string;
   [key: string]: unknown;

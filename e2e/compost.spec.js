@@ -1542,7 +1542,7 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
       clipRadius: getComputedStyle(clip).borderRadius,
       selectedBorder: getComputedStyle(clip).borderWidth,
       headerWidth: header.getBoundingClientRect().width,
-      progressWidth: clipProgress?.getBoundingClientRect().width ?? 0,
+      hasProgress: Boolean(clipProgress),
       hasNumber: Boolean(header.querySelector('.number')),
     };
   });
@@ -1551,7 +1551,7 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
   expect(measured.clipRadius).toBe('0px');
   expect(measured.selectedBorder).toBe('2px');
   expect(measured.headerWidth).toBeLessThan(250);
-  expect(measured.progressWidth).toBeGreaterThan(0);
+  expect(measured.hasProgress).toBe(false);
   expect(measured.hasNumber).toBe(false);
 });
 

@@ -46,7 +46,7 @@ const TOUCH_TRIM_EDGE_EM = .75;
 
 /** @typedef {{id: string, name: string, start: number, length: number,
  * offset?: number, duration: number, loop?: boolean, state?: string,
- * progress?: number, notes?: {start: number, duration: number, note: number, velocity?: number}[], color?: string}} TimelineClip */
+ * notes?: {start: number, duration: number, note: number, velocity?: number}[], color?: string}} TimelineClip */
 /** @typedef {{id: string, name: string, color?: string,
  * compact?: boolean, picked?: boolean, dimmed?: boolean, height?: number,
  * automation?: AutomationLaneView|null,
@@ -467,7 +467,6 @@ export class CompostTimeline extends HTMLElement {
         .clip-note { position: absolute; bottom: .25em; height: .125em; min-width: .125em; background: currentColor; }
         .clip-extent { position: absolute; inset: auto 0 0 0; height: 1px; background: currentColor; opacity: .35; pointer-events: none; }
         .clip-extent::before { content: ""; position: absolute; left: 0; bottom: 0; width: 1px; height: 1000%; background: currentColor; }
-        .clip-progress { position: absolute; inset: 0 auto 0 0; width: 0; background: color-mix(in srgb, currentColor 18%, transparent); pointer-events: none; }
         /* a loop point: a thin line the height of the clip and a small cap at the top, in the clip's colour */
         .clip-loop-line { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; opacity: .6; pointer-events: none; }
         .clip-loop-line::before { content: ""; position: absolute; top: 0; left: -.2em; border-left: .22em solid transparent; border-right: .22em solid transparent; border-top: .25em solid currentColor; }
@@ -1549,13 +1548,6 @@ export class CompostTimeline extends HTMLElement {
     const box = clipBox(clip, this._pxPerBeat, 0);
     element.style.left = `${box.left}px`;
     element.style.width = `${box.width}px`;
-    if (element.dataset.state === 'playing' && Number.isFinite(Number(clip.progress))) {
-      const progress = document.createElement('span');
-      progress.className = 'clip-progress';
-      progress.part.add('clip-progress');
-      progress.style.width = `${finiteClamp(Number(clip.progress), 0, 1) * 100}%`;
-      element.append(progress);
-    }
     this.paintClipContent(element, clip);
     if (this.renaming === clip.id) {
       const input = document.createElement('input');
