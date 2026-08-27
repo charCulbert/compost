@@ -1753,7 +1753,7 @@ test('timeline automation view draw and commit sorted edits without clip selecti
   expect(geometry.on.rows).toBe(1);
   expect(geometry.on.label).toBe('Volume');
   expect(geometry.on.automationColor).toBe('rgb(40, 120, 180)');
-  expect(geometry.on.clipOpacity).toBeCloseTo(.3, 3);
+  expect(geometry.on.clipOpacity).toBeCloseTo(.65, 3);
   expect(geometry.on.clipPointerEvents).toBe('none');
   expect(Math.abs(geometry.on.laneHeight - geometry.on.baseHeight)).toBeLessThanOrEqual(1);
   expect(geometry.on.baseLane).toBe('lane');
@@ -1796,6 +1796,42 @@ test('timeline automation view draw and commit sorted edits without clip selecti
     };
   });
   expect(update).toEqual({ sameLane: true, sameClip: true, label: 'Pan', automationId: 'pan' });
+});
+
+test('timeline automation view keeps a clip reachable through its name strip', async ({ page }) => {
+  await page.goto('/examples/component-demos/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('automation', '');
+    element.testEvents = [];
+    for (const type of ['clip-select', 'clip-open', 'clip-context', 'automation-change']) {
+      element.addEventListener(type, (event) => element.testEvents.push({ type, detail: event.detail }));
+    }
+    element.setLanes([{ id: 'lane', name: 'MIDI 1', clips: [
+      { id: 'clip', name: 'clip', start: 0, length: 4, duration: 4, notes: [] },
+    ], automation: { id: 'gain', label: 'Gain', min: 0, max: 1, stepped: false, points: [{ beat: 0, value: .5 }] } }]);
+  });
+  const boxes = await timeline.evaluate((element) => {
+    const clip = element.shadowRoot.querySelector('.clip').getBoundingClientRect();
+    const strip = element.shadowRoot.querySelector('.clip-name').getBoundingClientRect();
+    return { clip: { x: clip.x, y: clip.y, width: clip.width, height: clip.height }, strip: strip.height };
+  });
+  const stripPoint = [boxes.clip.x + boxes.clip.width / 2, boxes.clip.y + boxes.strip / 2];
+  const bodyPoint = [boxes.clip.x + boxes.clip.width / 2, boxes.clip.y + boxes.clip.height * .75];
+  await page.mouse.click(stripPoint[0], stripPoint[1]);
+  await expect(timeline.locator('.clip[data-selected]')).toHaveCount(1);
+  await page.mouse.dblclick(stripPoint[0], stripPoint[1]);
+  await page.mouse.click(stripPoint[0], stripPoint[1], { button: 'right' });
+  const beforeBody = await timeline.evaluate((element) => element.testEvents.map((event) => event.type));
+  expect(beforeBody).toContain('clip-select');
+  expect(beforeBody).toContain('clip-open');
+  expect(beforeBody).toContain('clip-context');
+  await timeline.evaluate((element) => { element.testEvents = []; });
+  await page.mouse.click(bodyPoint[0], bodyPoint[1]);
+  const afterBody = await timeline.evaluate((element) => element.testEvents.map((event) => event.type));
+  expect(afterBody).not.toContain('clip-select');
+  expect(afterBody).not.toContain('clip-open');
+  await expect(timeline.locator('.clip[data-selected]')).toHaveCount(1);
 });
 
 test('timeline automation edits use display space, lane-scoped ranges and draw arbitration', async ({ page }) => {

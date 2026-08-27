@@ -444,7 +444,7 @@ export class CompostTimeline extends HTMLElement {
         .lane[data-drop-target] { box-shadow: inset 0 0 0 1px var(--compost-timeline-select); }
         .lane[data-dimmed] .clip { opacity: .4; }
         .lane-base { position: relative; box-sizing: border-box; height: var(--lane-row-height, var(--compost-timeline-row-height)); }
-        .lane[data-automation-view] .clip { opacity: .3; pointer-events: none; }
+        .lane[data-automation-view] .clip { opacity: .65; pointer-events: none; }
         .lane-automation { position: absolute; inset: 0; z-index: 4; color: var(--lane-color, currentColor); }
         .automation-editor { width: 100%; height: 100%; min-height: 0; border: 0; overflow: visible; }
         .automation-draw-hint { position: absolute; display: none; top: 50%; right: .6em; transform: translateY(-50%); color: var(--compost-timeline-muted); font-size: .78em; line-height: 1; pointer-events: none; }
@@ -509,6 +509,27 @@ export class CompostTimeline extends HTMLElement {
     this.addEventListener('pointermove', (event) => this.movePointer(event));
     this.addEventListener('pointerup', (event) => this.endPointer(event));
     this.addEventListener('pointercancel', (event) => this.cancelPointer(event));
+    // In automation view the envelope covers the lane, so a clip's name strip is
+    // claimed here before the editor sees the event: it still selects, opens and
+    // asks for a menu. The clip body belongs to the curve.
+    this.addEventListener('pointerdown', (event) => this.startClipStrip(event), true);
+    this.addEventListener('dblclick', (event) => {
+      const found = this.hasAttribute('disabled') ? null : this.clipStripFromEvent(event);
+      if (!found) return;
+      event.__compostTimelineHandled = true;
+      event.stopPropagation();
+      event.preventDefault();
+      this.dispatchEvent(eventOf('clip-open', { id: found.clip.id, altKey: event.altKey, clientX: event.clientX, clientY: event.clientY }));
+    }, true);
+    this.addEventListener('contextmenu', (event) => {
+      const found = this.hasAttribute('disabled') ? null : this.clipStripFromEvent(event);
+      if (!found) return;
+      event.__compostTimelineHandled = true;
+      event.stopPropagation();
+      event.preventDefault();
+      this.selectOne(found.clip.id);
+      this.dispatchEvent(eventOf('clip-context', { id: found.clip.id, clientX: event.clientX, clientY: event.clientY }));
+    }, true);
     this.addEventListener('dblclick', (event) => {
       if (event.__compostTimelineHandled) return;
       event.__compostTimelineHandled = true;
@@ -1749,6 +1770,34 @@ export class CompostTimeline extends HTMLElement {
   clipFromEvent(event) {
     const element = pathElement(event, 'clip');
     return element ? this.findClip(element.dataset.id) && { element, ...this.findClip(element.dataset.id) } : null;
+  }
+
+  /** The clip whose name strip lies under the pointer while the automation view
+   * covers its lane. Clips are inert there, so this is a geometric hit test;
+   * in draw mode the pencil owns the whole lane. */
+  clipStripFromEvent(event) {
+    if (!this.automation || this.draw || !pathElement(event, 'lane-automation')) return null;
+    const lane = pathElement(event, 'lane');
+    if (!(lane instanceof HTMLElement)) return null;
+    for (const element of lane.querySelectorAll('.clip')) {
+      const rect = element.getBoundingClientRect();
+      const strip = element.querySelector('.clip-name')?.getBoundingClientRect().height || 0;
+      if (event.clientX < rect.left || event.clientX > rect.right) continue;
+      if (event.clientY < rect.top || event.clientY > rect.top + strip) continue;
+      const found = this.findClip(element.dataset.id);
+      return found ? { element, ...found } : null;
+    }
+    return null;
+  }
+
+  startClipStrip(event) {
+    if (this.hasAttribute('disabled') || event.button !== 0) return;
+    const found = this.clipStripFromEvent(event);
+    if (!found) return;
+    event.stopPropagation();
+    event.preventDefault();
+    const additive = event.shiftKey || event.metaKey || event.ctrlKey;
+    if (additive || !this._selected.includes(found.clip.id)) this.selectOne(found.clip.id, additive);
   }
 
   automationFromEvent(event) {
