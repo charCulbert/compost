@@ -142,6 +142,14 @@ test('quantize can be limited to a selection', () => {
   assert.equal(quantized[1].start, 1.25);
 });
 
+test('quantize supports partial strength and swung starts', () => {
+  const notes = [note({ start: 0.3, duration: 0.6 })];
+  const partial = quantizedNotes(notes, 0.25, { strength: 0.5, beats: 4 });
+  assert.equal(partial[0].start, 0.275);
+  const swung = quantizedNotes([note({ start: 0.36 })], 0.25, { swing: 1, beats: 4 });
+  assert.equal(swung[0].start, 0.375);
+});
+
 test('a marquee catches notes that overlap it, not just those inside', () => {
   const notes = [
     note({ id: 'a', note: 60, start: 0, duration: 2 }),

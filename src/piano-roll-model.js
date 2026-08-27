@@ -94,18 +94,35 @@ export function resizedNotes(notes, ids, deltaBeats, beats, step, mode = 'grid')
   });
 }
 
+function swungGridBeat(value, step, swing) {
+  const amount = clamp(Number(swing) || 0, -1, 1);
+  const index = Math.floor(value / step);
+  const candidates = [];
+  for (let cell = index - 1; cell <= index + 2; cell += 1) {
+    candidates.push(cell * step + (Math.abs(cell % 2) === 1 ? step * amount * 0.5 : 0));
+  }
+  return candidates.reduce((nearest, candidate) =>
+    Math.abs(candidate - value) < Math.abs(nearest - value) ? candidate : nearest);
+}
+
 /** Snaps starts to the grid, and lengths too unless lengths are left alone. */
 /** @param {RollNote[]} notes @param {number} step
- * @param {{ids?: string[]|null, lengths?: boolean, beats?: number}} [options] */
-export function quantizedNotes(notes, step, { ids = null, lengths = false, beats = Infinity } = {}) {
+ * @param {{ids?: string[]|null, lengths?: boolean, beats?: number, strength?: number, swing?: number}} [options] */
+export function quantizedNotes(notes, step, {
+  ids = null, lengths = false, beats = Infinity, strength = 1, swing = 0,
+} = {}) {
   if (!(step > 0)) return notes;
   const chosen = ids ? new Set(ids) : null;
-  return notes.map((note) => {
+  const amount = clamp(Number(strength) || 0, 0, 1);
+  const result = notes.map((note) => {
     if (chosen && !chosen.has(note.id)) return note;
-    const start = Math.round(note.start / step) * step;
-    const duration = lengths ? Math.max(step, Math.round(note.duration / step) * step) : note.duration;
+    const targetStart = swungGridBeat(note.start, step, swing);
+    const start = note.start + (targetStart - note.start) * amount;
+    const targetDuration = Math.max(step, Math.round(note.duration / step) * step);
+    const duration = lengths ? note.duration + (targetDuration - note.duration) * amount : note.duration;
     return normaliseNote({ ...note, start, duration }, Number.isFinite(beats) ? beats : start + duration);
   });
+  return resolveOverlaps(result, ids ?? result.map((note) => note.id));
 }
 
 /** Notes overlapping a marquee, in beats and MIDI note numbers. */
