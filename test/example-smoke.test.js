@@ -25,7 +25,7 @@ test('every element example is its own page sharing the common shell', () => {
     const page = read(`examples/${id}/index.html`);
     assert.match(page, new RegExp(`data-example-id="${id}"`, 'u'), `${id} shell`);
     assert.match(page, /<div class="row">/u, `${id} row`);
-    assert.match(page, /<pre id="markup"/u, `${id} markup preview`);
+    assert.doesNotMatch(page, /<pre id="markup"/u, `${id} has no source dump`);
     assert.match(page, /shared\/element-page\.js/u, `${id} uses the shared helper`);
     assert.match(page, new RegExp(`elementDemo\\('${id}`), `${id} mounts its demo`);
   }

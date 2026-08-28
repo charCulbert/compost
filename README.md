@@ -170,8 +170,8 @@ import { createParameterController } from 'compost/parameter-controller';
 
 `npm test` runs the unit tests, `npm run test:e2e` the Playwright suite.
 `npm run dev` serves the repo without caching; every element has its own
-example page under `examples/<element>/` that shows the element, its markup,
-and a live readout of the events it emits. Every example shares the same
+example page under `examples/<element>/` with a live readout of the events it
+emits. Every example shares the same
 light/dark color-scheme toggle and an "All examples" link back to the
 catalog. The scope omits its `scope-frame` readout because that event fires
 for every drawn frame. The Mono Synth, MIDI Controller, and Parameter Sync pages
