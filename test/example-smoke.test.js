@@ -33,6 +33,20 @@ test('the review page is the one source of element examples', async () => {
     assert.match(review, new RegExp(`<template id="${id}">`, 'u'), `${id} template`);
   }
   assert.match(review, /<pre id="markup"/u);
+  assert.doesNotMatch(review, /Branded page|allContexts/u);
+  assert.match(review, /shared\/color-scheme\.js/u);
+});
+
+test('every example page shares the light and dark color-scheme toggle', () => {
+  const toggle = read('examples/shared/color-scheme.js');
+  const styles = read('examples/shared/styles.css');
+  assert.match(toggle, /dataset\.colorScheme/u);
+  assert.match(toggle, /Light mode/u);
+  assert.match(toggle, /Dark mode/u);
+  assert.match(styles, /--bg: Canvas/u);
+  assert.match(styles, /data-color-scheme="dark"/u);
+  assert.match(read('examples/shared/example-page.js'), /color-scheme\.js/u);
+  assert.match(read('examples/signal-generator/main.js'), /color-scheme\.js/u);
 });
 
 test('the retired theme surface stays out of source and examples', () => {

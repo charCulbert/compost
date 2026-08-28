@@ -1,4 +1,5 @@
 import '../../src/components/index.js';
+import '../shared/color-scheme.js';
 import { isNoteOffMessage, isNoteOnMessage, midiNoteToFrequency, noteFromMessage } from '../../src/midi.js';
 import { createMIDIMappings } from '../../src/midi-mappings.js';
 import { createParameterController } from '../../src/parameter-controller.js';

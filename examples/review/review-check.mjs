@@ -1,5 +1,5 @@
 // Headless check for examples/review/review.html: renders one element in the
-// three page contexts, reports console errors, computed ink/font per context,
+// its default page context, reports console errors, computed ink/font,
 // the focused element after Tab, and saves examples/review/review-<element>.png.
 //
 //   npm run dev

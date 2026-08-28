@@ -1,4 +1,5 @@
 import { getExample } from './catalog.js';
+import './color-scheme.js';
 
 const exampleID = document.body?.dataset.exampleId;
 

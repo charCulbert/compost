@@ -1,7 +1,6 @@
 <!doctype html>
 <!--
-  Style review page. Open ?el=compost-knob to load one element under three
-  page contexts: unstyled, color-scheme: dark, and a branded serif page.
+  Style review page. Open ?el=compost-knob to load one default element example.
   Serve the repository root without caching: npm run dev
   then open http://127.0.0.1:8000/examples/review/review.html?el=compost-knob
 -->
@@ -12,12 +11,15 @@
   section h2 { font: inherit; font-size: 12px; opacity: .6; margin: 0 0 14px; text-transform: uppercase; letter-spacing: .06em; }
   .row { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
   output { display: block; margin-top: 12px; font-size: 12px; opacity: .7; font-family: ui-monospace, monospace; height: 1.2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .plain { background: white; color: black; }
-  .dark  { color-scheme: dark; background: Canvas; color: CanvasText; }
-  .brand { background: #f3ead8; color: #3b2a1a; font-family: Palatino, "Palatino Linotype", serif; font-size: 18px; --compost-accent: #c8412b; }
-  pre { margin: 0; padding: 16px 32px; font-size: 12px; background: #f6f6f6; overflow-x: auto; }
+  :root { color-scheme: light; }
+  :root[data-color-scheme="dark"] { color-scheme: dark; }
+  body { background: Canvas; color: CanvasText; }
+  pre { margin: 0; padding: 16px 32px; font-size: 12px; background: color-mix(in srgb, currentColor 5%, Canvas); overflow-x: auto; }
   #media:not(:empty) { padding: 16px 32px; border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
   nav { padding: 12px 32px; font-size: 12px; line-height: 2; } nav a { margin-right: 10px; }
+  .color-scheme-toggle { min-height: 2.25em; padding: 0 .75em; border: 1px solid currentColor; border-radius: 0; background: Canvas; color: CanvasText; font: inherit; cursor: pointer; }
+  .color-scheme-toggle.floating { position: fixed; z-index: 1000; top: .75em; right: .75em; }
+  .color-scheme-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 </style></head><body>
 
 <!-- One template per element. Defaults only: no ::part() overrides, no custom properties. -->
@@ -225,6 +227,7 @@
 <pre id="markup"></pre>
 <nav id="nav"></nav>
 <script type="module">
+  import '../shared/color-scheme.js';
   import { quantizedNotes } from '../../src/piano-roll-model.js';
   const ELEMENTS = [
     'compost-knob', 'compost-slider', 'compost-button', 'compost-number-box', 'compost-select',
@@ -238,19 +241,11 @@
   await import(`../../src/components/${el}.js`);
   await customElements.whenDefined(el);
   const tpl = document.getElementById(el);
-  const allContexts = [['plain', 'Unstyled page'], ['dark', 'color-scheme: dark'], ['brand', 'Branded page: serif, 18px, --compost-accent']];
-  const requestedContext = search.get('context');
-  const contexts = requestedContext ? allContexts.filter(([name]) => name === requestedContext) : allContexts;
-  for (const [cls, title] of contexts) {
-    const s = document.createElement('section'); s.className = cls;
-    s.innerHTML = `<h2>${title}</h2><div class="row"></div><output>last event: —</output>`;
+  {
+    const s = document.createElement('section'); s.className = 'plain';
+    s.innerHTML = '<h2>Default</h2><div class="row"></div><output>last event: —</output>';
     if (tpl) s.querySelector('.row').append(tpl.content.cloneNode(true));
     else s.querySelector('.row').textContent = `No template for ${el} yet: add <template id="${el}"> to this page.`;
-    if (el === 'compost-audio' && cls !== 'plain') {
-      const audio = s.querySelector('compost-audio');
-      audio.removeAttribute('modal');
-      audio.removeAttribute('centered-while-off');
-    }
     customElements.upgrade(s);
     document.getElementById('root').append(s);
     const out = s.querySelector('output');

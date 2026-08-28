@@ -1,11 +1,17 @@
-/* Retired: the runtime theme picker and its --compost-theme-* bridge. This
-   stylesheet still leans on --bg/--panel/--line/--text/--muted/--accent for
-   page chrome below; those are unset now, so the examples look wrong until
-   they're rebuilt on plain color/color-scheme/--compost-accent per README. */
 :root {
   --compost-ui-font: ui-sans-serif, system-ui, sans-serif;
+  --bg: Canvas;
+  --panel: Canvas;
+  --control-bg: Field;
+  --text: CanvasText;
+  --muted: color-mix(in srgb, currentColor 65%, transparent);
+  --line: color-mix(in srgb, currentColor 30%, transparent);
+  --accent: AccentColor;
+  color-scheme: light;
   font-family: var(--compost-ui-font);
 }
+
+:root[data-color-scheme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--compost-ui-font); }
@@ -94,15 +100,6 @@ body[data-example-id] .shell {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-}
-
-.theme-section {
-  flex: 0 1 300px;
-  display: flex;
-  justify-content: flex-end;
-  min-width: 0;
-  margin-left: auto;
-  padding: 4px;
 }
 
 .examples-nav {
@@ -327,11 +324,27 @@ body[data-example-id] .shell {
   margin-right: auto;
 }
 
-.example-theme-selector {
-  flex: 0 1 auto;
-  font-size: 14px;
+.color-scheme-toggle {
+  min-height: 2.25em;
+  padding: 0 .75em;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: Canvas;
+  color: CanvasText;
   font: inherit;
-  --compost-select-height: 30px;
+  cursor: pointer;
+}
+
+.color-scheme-toggle.floating {
+  position: fixed;
+  z-index: 1000;
+  top: .75em;
+  right: .75em;
+}
+
+.color-scheme-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 .example-nav-button,
