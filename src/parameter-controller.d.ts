@@ -1,7 +1,5 @@
 import type { ParameterCurveName } from './parameter-scale.js';
-import type { ParameterControl, ParameterEventDetail } from './utils.js';
-
-export type ParameterKind = 'continuous' | 'discrete' | 'trigger';
+import type { ParameterControl, ParameterEventDetail, ParameterKind } from './utils.js';
 
 export interface ParameterDefinitionInput {
   parameterID?: string;

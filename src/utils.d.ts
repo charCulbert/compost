@@ -45,10 +45,13 @@ export interface ParameterControl extends HTMLElement {
  * The detail every `parameter-begin`/`parameter-edit`/`parameter-end`
  * CustomEvent carries. Extra gesture fields ride along untyped.
  */
+/** The three shapes a parameter edit can take: free values, fixed choices, momentary presses. */
+export type ParameterKind = 'continuous' | 'discrete' | 'trigger';
+
 export interface ParameterEventDetail {
   parameterID: string;
   value: number;
-  kind: string;
+  kind: ParameterKind;
   source: string;
   cancelled: boolean;
   [key: string]: unknown;
