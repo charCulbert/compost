@@ -36,7 +36,19 @@
       }
 
       .audio-output { display: flex; flex: 1 1 auto; align-items: center; min-width: 0; }
-      .audio-output > compost-audio { align-self: stretch; height: calc(var(--demo-toolbar-height) - 1px); --compost-audio-button-size: calc(var(--demo-toolbar-height) - 1px); }
+      .audio-output > compost-audio {
+        align-self: stretch;
+        height: calc(var(--demo-toolbar-height) - 1px);
+        font-size: 1rem;
+        --compost-audio-button-size: 6em;
+        --compost-audio-centered-placeholder-width: calc(var(--demo-toolbar-height) - 1px);
+        --compost-audio-centered-placeholder-height: calc(var(--demo-toolbar-height) - 1px);
+        --compost-button-label-size: 1.5em;
+      }
+      .audio-output > compost-audio[running] {
+        --compost-audio-button-size: calc(var(--demo-toolbar-height) - 1px);
+        --compost-button-label-size: 1.125em;
+      }
       .audio-output > compost-slider { flex: 1 1 12em; width: min(100%, 18em); max-width: 18em; min-width: 10em; margin-inline: 1em; }
       .toolbar-action, .demo-header > .color-scheme-toggle { min-width: 6.5em; min-height: 100%; padding: 0 .75em; border: 0; border-left: 1px solid var(--line); background: Canvas; color: CanvasText; font: inherit; }
       .toolbar-action[aria-pressed="true"] { background: color-mix(in srgb, AccentColor 18%, Canvas); }

@@ -392,6 +392,8 @@ test('centered audio keeps its toolbar footprint without animating', async ({ pa
   const audio = page.locator('compost-audio');
   const slider = page.locator('compost-slider[parameter-id="outputGain"]');
   const offHostWidth = await audio.evaluate((element) => element.getBoundingClientRect().width);
+  const offButtonSize = await audio.evaluate((element) => element.powerButton.button.getBoundingClientRect().width);
+  const offLabelSize = await audio.evaluate((element) => parseFloat(getComputedStyle(element.powerButton.root.querySelector('.content')).fontSize));
   const sliderLeft = await slider.evaluate((element) => element.getBoundingClientRect().left);
 
   const animations = await audio.evaluate((element) => {
@@ -404,6 +406,11 @@ test('centered audio keeps its toolbar footprint without animating', async ({ pa
     .toBeCloseTo(offHostWidth);
   expect(await slider.evaluate((element) => element.getBoundingClientRect().left))
     .toBeCloseTo(sliderLeft);
+  const runningButtonSize = await audio.evaluate((element) => element.powerButton.button.getBoundingClientRect().width);
+  const runningLabelSize = await audio.evaluate((element) => parseFloat(getComputedStyle(element.powerButton.root.querySelector('.content')).fontSize));
+  expect(offButtonSize).toBeGreaterThan(runningButtonSize * 1.5);
+  expect(offLabelSize).toBeGreaterThan(runningLabelSize);
+  expect(runningLabelSize).toBeGreaterThan(14);
   expect(animations).toBe(0);
 });
 
