@@ -407,7 +407,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-locator-name { display: inline-block; min-width: 1px; }
         .ruler-locator-editor { box-sizing: border-box; width: 7em; border: 1px solid currentColor; outline: 2px solid currentColor; outline-offset: -2px; background: var(--compost-timeline-bg); color: currentColor; font: inherit; padding: 0 .125em; }
         .ruler-time-selection { position: absolute; display: none; z-index: 2; top: 1em; height: 1.1em; background: color-mix(in srgb, var(--compost-timeline-select) 10%, transparent); box-shadow: inset 1px 0 0 var(--compost-timeline-select), inset -1px 0 0 var(--compost-timeline-select); pointer-events: none; }
-        .ruler-band { position: absolute; top: 2.35em; height: .75em; border: 1px solid var(--compost-timeline-select); box-sizing: border-box; background: var(--compost-timeline-select); color: AccentColorText; cursor: grab; }
+        .ruler-band { position: absolute; top: 2.35em; height: .75em; box-sizing: border-box; background: var(--compost-timeline-select); box-shadow: inset 0 0 0 1px currentColor; color: AccentColorText; cursor: grab; }
         .ruler-band[hidden], .ruler-handle[hidden], .timeline-line[hidden] { display: none; }
         .ruler-handle { position: absolute; top: 2.22em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
         .ruler-handle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
