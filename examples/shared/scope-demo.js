@@ -1,4 +1,4 @@
-export function setupScopeReview(container, scopes) {
+export function setupScopeDemo(container, scopes) {
   container.innerHTML = `
     <div style="display: flex; align-items: end; gap: 1em; flex-wrap: wrap">
       <button type="button" data-run>Run oscillator</button>

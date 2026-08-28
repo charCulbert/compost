@@ -38,6 +38,7 @@ export interface MIDIMessageDetail {
  * @attribute output-id - applied output selection
  * @attribute input-only - shows and handles inputs only
  * @attribute output-only - shows and handles outputs only
+ * @attribute sysex - requests system-exclusive access
  */
 export class CompostMIDI extends HTMLElement {
   midiAccess: MIDIAccess | null;

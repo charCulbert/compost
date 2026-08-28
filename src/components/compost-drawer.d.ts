@@ -9,6 +9,7 @@ export interface DrawerResizeDetail {
  * closes and `drawer-resize` CustomEvents while resizing.
  *
  * @attribute open - reflected open state
+ * @attribute resizable - shows the resize handle
  * @attribute edge - edge the drawer docks to
  * @attribute orientation - 'horizontal' or 'vertical'
  * @attribute min-size - smallest size in px

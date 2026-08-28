@@ -15,6 +15,7 @@ import {
 } from '../piano-roll-model.js';
 import { extendSelectionRegion, normalizeSelectionRegion } from '../selection-region.js';
 import { rulerLabels } from '../internal/time-ruler.js';
+export { rulerLabels } from '../internal/time-ruler.js';
 import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP, TAP_MOVE_DISTANCE } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { gridStepForView, gridStepOf, gridTextForStep, gridTextOf, timeGridLines, timeSignatureOf } from '../time-grid.js';

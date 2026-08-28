@@ -1,4 +1,4 @@
-class ScopeReviewSource extends AudioWorkletProcessor {
+class ScopeSource extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [{
       name: 'frequency',
@@ -40,4 +40,4 @@ class ScopeReviewSource extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor('compost-scope-source', ScopeReviewSource);
+registerProcessor('compost-scope-source', ScopeSource);

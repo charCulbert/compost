@@ -54,10 +54,16 @@ test('every timeline intent is present in its public detail map', () => {
   assert.match(declaration, /'locator-next':/u);
 });
 
-// Attributes supported but not observed: the shared parameter gesture helpers
-// read `parameter-kind` through getAttribute on these controls.
-const parameterKindExtras = new Set([
-  'compost-button', 'compost-knob', 'compost-number-box', 'compost-select', 'compost-slider',
+// Public attributes supported outside attributeChangedCallback.
+const publicAttributeExtras = new Map([
+  ['compost-audio', ['modal']],
+  ['compost-button', ['parameter-kind']],
+  ['compost-drawer', ['resizable']],
+  ['compost-knob', ['parameter-kind']],
+  ['compost-midi', ['sysex']],
+  ['compost-number-box', ['parameter-kind']],
+  ['compost-select', ['parameter-kind']],
+  ['compost-slider', ['parameter-kind']],
 ]);
 
 function observedAttributeNames(source) {
@@ -76,7 +82,19 @@ test('every observed attribute is declared with an exact @attribute tag', () => 
     const declared = new Set(
       [...declaration.matchAll(/@attribute ([a-z][a-z0-9-]*)/gu)].map((match) => match[1]));
     const expected = new Set(observedAttributeNames(source));
-    if (parameterKindExtras.has(id)) expected.add('parameter-kind');
+    for (const name of publicAttributeExtras.get(id) ?? []) expected.add(name);
     assert.deepEqual(declared, expected, `${id} @attribute list`);
   }
+});
+
+test('moved public types remain available from their original modules', () => {
+  const noteEditor = fs.readFileSync(
+    path.join(root, 'src/components/compost-note-editor.js'), 'utf8');
+  const noteEditorDeclaration = fs.readFileSync(
+    path.join(root, 'src/components/compost-note-editor.d.ts'), 'utf8');
+  const parameterControllerDeclaration = fs.readFileSync(
+    path.join(root, 'src/parameter-controller.d.ts'), 'utf8');
+  assert.match(noteEditor, /export \{ rulerLabels \} from '\.\.\/internal\/time-ruler\.js'/u);
+  assert.match(noteEditorDeclaration, /export function rulerLabels\(/u);
+  assert.match(parameterControllerDeclaration, /export type \{ ParameterKind \} from '\.\/utils\.js'/u);
 });

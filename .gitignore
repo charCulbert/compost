@@ -93,5 +93,5 @@ Makefile
 !.env.*.example
 .claude/
 
-# Style review screenshots
-examples/review/*.png
+# Generated example screenshots
+examples/compost-*.png

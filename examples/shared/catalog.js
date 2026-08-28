@@ -1,4 +1,4 @@
-const elementIDs = [
+export const elementIDs = [
   'compost-audio', 'compost-midi', 'compost-device-selector', 'compost-drawer',
   'compost-knob', 'compost-slider', 'compost-meter', 'compost-number-box', 'compost-button',
   'compost-select', 'compost-piano', 'compost-scope', 'compost-midi-monitor',

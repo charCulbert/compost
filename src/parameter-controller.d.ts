@@ -1,5 +1,6 @@
 import type { ParameterCurveName } from './parameter-scale.js';
 import type { ParameterControl, ParameterEventDetail, ParameterKind } from './utils.js';
+export type { ParameterKind } from './utils.js';
 
 export interface ParameterDefinitionInput {
   parameterID?: string;

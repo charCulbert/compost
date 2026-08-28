@@ -30,11 +30,10 @@
     </main>
     <script type="module">
     import { elementDemo } from '../shared/element-page.js';
-    const el = 'compost-scope';
-    const { s } = await elementDemo('compost-scope', { output: false });
+    await elementDemo('compost-scope', { output: false });
     {
-    const { setupScopeReview } = await import('../shared/scope-demo.js');
-    setupScopeReview(
+    const { setupScopeDemo } = await import('../shared/scope-demo.js');
+    setupScopeDemo(
       document.getElementById('media'),
       [...document.querySelectorAll('compost-scope')],
     );

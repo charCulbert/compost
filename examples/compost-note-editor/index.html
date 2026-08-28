@@ -49,8 +49,7 @@
     <script type="module">
     import { quantizedNotes } from '../../src/piano-roll-model.js';
     import { elementDemo } from '../shared/element-page.js';
-    const el = 'compost-note-editor';
-    const { s, out } = await elementDemo('compost-note-editor');
+    const { s } = await elementDemo('compost-note-editor');
     {
       const editor = s.querySelector('compost-note-editor');
       const grid = s.querySelector('[data-note-grid]');

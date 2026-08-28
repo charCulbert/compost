@@ -9,7 +9,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, '..', '..');
+const root = resolve(here, '..');
 // A worktree under .claude/worktrees/<name> borrows the main checkout's modules.
 const playwrightPath = ['node_modules', '../../../node_modules']
   .map((dir) => resolve(root, dir, 'playwright/index.mjs'))

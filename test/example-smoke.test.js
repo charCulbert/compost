@@ -2,16 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { elementIDs, examples } from '../examples/shared/catalog.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
-const elementIDs = [
-  'compost-audio', 'compost-midi', 'compost-device-selector', 'compost-drawer',
-  'compost-knob', 'compost-slider', 'compost-meter', 'compost-number-box',
-  'compost-button', 'compost-select', 'compost-piano', 'compost-scope',
-  'compost-midi-monitor', 'compost-midi-mappings', 'compost-clip-grid',
-  'compost-envelope-editor', 'compost-note-editor', 'compost-timeline',
-  'compost-window', 'compost-popup',
-];
 
 test('the repository root redirects to the examples page', () => {
   const html = read('index.html');
@@ -21,10 +14,10 @@ test('the repository root redirects to the examples page', () => {
 test('the no-cache example server and checker share port 8000 by default', () => {
   assert.match(read('examples/serve.py'), /else 8000/u);
   assert.match(read('examples/check-example.mjs'), /process\.argv\[3\] \|\| '8000'/u);
+  assert.match(read('examples/check-example.mjs'), /const root = resolve\(here, '\.\.'\)/u);
 });
 
-test('every element example is its own page sharing the common shell', async () => {
-  const { examples } = await import('../examples/shared/catalog.js');
+test('every element example is its own page sharing the common shell', () => {
   const helper = read('examples/shared/element-page.js');
   for (const id of elementIDs) {
     assert.equal(examples.some((example) => example.id === id
@@ -38,6 +31,20 @@ test('every element example is its own page sharing the common shell', async () 
   }
   assert.match(helper, /example-page\.js/u);
   assert.doesNotMatch(helper, /\breview\b/u);
+});
+
+test('the shared example readout includes every literal component event', () => {
+  const helper = read('examples/shared/element-page.js');
+  const block = helper.match(/const EVENT_TYPES = \[([^;]+)\]/su);
+  assert.ok(block);
+  const declared = new Set(
+    [...block[1].matchAll(/'([^']+)'/gu)].map((match) => match[1]));
+  const componentSource = filesUnder('src/components')
+    .filter((file) => file.endsWith('.js'))
+    .map(read).join('\n');
+  const emitted = [...componentSource.matchAll(/(?:new CustomEvent|eventOf)\('([^']+)'/gu)]
+    .map((match) => match[1]);
+  for (const type of new Set(emitted)) assert.equal(declared.has(type), true, type);
 });
 
 test('every example page shares the light and dark color-scheme toggle', () => {

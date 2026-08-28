@@ -49,8 +49,7 @@
     <script type="module">
     import { quantizedNotes } from '../../src/piano-roll-model.js';
     import { elementDemo } from '../shared/element-page.js';
-    const el = 'compost-timeline';
-    const { s, out } = await elementDemo('compost-timeline');
+    const { s } = await elementDemo('compost-timeline');
     {
       const timeline = s.querySelector('compost-timeline');
       const play = s.querySelector('[data-timeline-play]');

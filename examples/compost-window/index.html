@@ -29,8 +29,7 @@
     </main>
     <script type="module">
     import { elementDemo } from '../shared/element-page.js';
-    const el = 'compost-window';
-    const { s, out } = await elementDemo('compost-window');
+    const { s } = await elementDemo('compost-window');
     {
       const windowElement = s.querySelector('compost-window');
       s.querySelector('[data-open-window]').addEventListener('click', () => {

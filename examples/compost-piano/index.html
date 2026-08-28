@@ -35,8 +35,7 @@
     </main>
     <script type="module">
     import { elementDemo } from '../shared/element-page.js';
-    const el = 'compost-piano';
-    const { s, out } = await elementDemo('compost-piano');
+    const { s } = await elementDemo('compost-piano');
     {
       const piano = s.querySelector('compost-piano');
       const root = s.querySelector('[data-piano-root]');

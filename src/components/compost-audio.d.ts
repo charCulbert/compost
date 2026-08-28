@@ -15,6 +15,7 @@ export interface AudioEventDetail {
  * @attribute stop-label - power-button label while running
  * @attribute start-aria-label - accessible name while stopped
  * @attribute stop-aria-label - accessible name while running
+ * @attribute modal - covers the viewport with a start-audio prompt while stopped
  * @attribute centered-while-off - centres the panel while stopped in modal mode
  * @attribute latency-hint - AudioContext latency category or seconds
  */
