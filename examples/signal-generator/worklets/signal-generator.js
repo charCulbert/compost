@@ -12,13 +12,8 @@ class CompostSignalGenerator extends AudioWorkletProcessor {
   constructor() {
     super();
     this.phase = 0;
-    this.gate = 1;
     this.capture = new Float32Array(1024);
     this.captureIndex = 0;
-    this.port.onmessage = ({ data }) => {
-      if (data?.type === 'noteOn') this.gate = 1;
-      if (data?.type === 'noteOff') this.gate = 0;
-    };
   }
 
   process(_inputs, outputs, parameters) {
@@ -35,7 +30,7 @@ class CompostSignalGenerator extends AudioWorkletProcessor {
       const raw = shape === 0 ? Math.sin(this.phase * Math.PI * 2)
         : shape === 2 ? (this.phase < .5 ? 1 : -1)
           : this.phase * 2 - 1;
-      const sample = (raw * amplitude + offset) * gain * this.gate;
+      const sample = (raw * amplitude + offset) * gain;
       for (const channel of output) channel[frame] = sample;
       this.capture[this.captureIndex++] = sample;
       this.phase = (this.phase + frequency / sampleRate) % 1;

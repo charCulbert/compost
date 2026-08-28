@@ -1,6 +1,6 @@
 import '../../src/components/index.js';
 import '../shared/example-page.js';
-import { isNoteOffMessage, isNoteOnMessage, midiNoteToFrequency, noteFromMessage } from '../../src/midi.js';
+import { isNoteOnMessage, midiNoteToFrequency, noteFromMessage } from '../../src/midi.js';
 import { createMIDIMappings } from '../../src/midi-mappings.js';
 import { createParameterController } from '../../src/parameter-controller.js';
 
@@ -92,7 +92,6 @@ midi.addEventListener('midi-message', (event) => {
 });
 
 piano.addEventListener('note-down', ({ detail }) => noteOn(detail.note, 'piano'));
-piano.addEventListener('note-up', ({ detail }) => audio?.oscillator.port.postMessage({ type: 'noteOff', note: detail.note }));
 
 audioControl.addEventListener('audio-started', ({ detail }) => setupAudio(detail.context));
 audioControl.addEventListener('audio-stopped', cleanupAudio);
@@ -188,12 +187,10 @@ function syncAudioParameters() {
 
 function noteOn(note, source) {
   setParameter('frequency', midiNoteToFrequency(note), source);
-  audio?.oscillator.port.postMessage({ type: 'noteOn', note });
 }
 
 function handlePackedNote(message, source) {
   if (isNoteOnMessage(message)) noteOn(noteFromMessage(message), source);
-  else if (isNoteOffMessage(message)) audio?.oscillator.port.postMessage({ type: 'noteOff', note: noteFromMessage(message) });
 }
 
 cleanupAudio();

@@ -73,6 +73,7 @@ test('the Signal Generator uses the current one-channel scope contract', () => {
   assert.match(main, /scope\.setSamples\(data\.samples\)/u);
   assert.match(worklet, /type: 'scope-samples', samples/u);
   assert.doesNotMatch(`${html}\n${main}\n${worklet}`, /parameter-id="mute"|name: 'mute'|parameters\.mute/u);
+  assert.doesNotMatch(`${main}\n${worklet}`, /noteOff|isNoteOffMessage|\bgate\b/u);
   assert.doesNotMatch(`${html}\n${main}`, /triggerSamples|source-channels|trigger-channel|periods-shown|samples-shown|captureTrigger/u);
   assert.match(main, /createParameterController/u);
   assert.match(main, /createMIDIMappings/u);
