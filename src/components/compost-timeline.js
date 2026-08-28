@@ -529,7 +529,7 @@ export class CompostTimeline extends HTMLElement {
       event.__compostTimelineHandled = true;
       event.stopPropagation();
       event.preventDefault();
-      this.selectOne(found.clip.id);
+      if (!this._selected.includes(found.clip.id)) this.selectOne(found.clip.id);
       this.dispatchEvent(eventOf('clip-context', { id: found.clip.id, clientX: event.clientX, clientY: event.clientY }));
     }, true);
     this.addEventListener('dblclick', (event) => {
