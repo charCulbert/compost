@@ -145,6 +145,49 @@ test('envelope points can be moved by a touch pointer', async ({ page }) => {
   expect(moved.value).toBeGreaterThan(before.value);
 });
 
+test('a drag whose release is missed outside the editor does not strand the point', async ({ page }) => {
+  await page.goto('/examples/review/review.html?el=compost-envelope-editor&context=plain');
+  const editor = page.locator('compost-envelope-editor');
+  await editor.evaluate((element) => {
+    element.points = [{ time: 0, value: 0 }, { time: 1, value: .5 }, { time: 4, value: 0 }];
+    element.commits = [];
+    element.addEventListener('envelope-change', ({ detail }) => {
+      element.commits.push(detail.points);
+      element.points = detail.points;
+    });
+  });
+  const box = await editor.locator('.point').nth(1).boundingBox();
+  const editorBox = await editor.boundingBox();
+
+  // A real press starts the drag and takes the pointer capture; the drag
+  // parks outside the editor's frame, out where a real release can happen
+  // without the page ever seeing a pointerup.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2 - 20);
+  await page.mouse.move(editorBox.x - 40, editorBox.y - 40);
+  const parked = await editor.evaluate((element) => element.drag?.preview?.[1] ?? element.points[1]);
+
+  // The release is missed; only the re-entry movement arrives, with no
+  // primary button held, and the point must stay where the drag left it
+  // instead of following along.
+  await editor.evaluate((element, { x, y }) => {
+    element.shadowRoot.querySelector('.surface').dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true, composed: true, pointerId: 1, pointerType: 'mouse',
+      clientX: x, clientY: y, buttons: 0,
+    }));
+  }, { x: editorBox.x - 10, y: editorBox.y - 10 });
+
+  const state = await editor.evaluate((element) => ({
+    commits: element.commits.length,
+    point: element.points[1],
+    drag: element.drag ? element.drag.mode : null,
+  }));
+  expect(state.drag).toBeNull();
+  expect(state.commits).toBe(1);
+  expect(state.point).toEqual(parked);
+});
+
 test('envelope value readout stays inside the lane at its upper edge', async ({ page }) => {
   await page.goto('/examples/review/review.html?el=compost-envelope-editor&context=plain');
   const editor = page.locator('compost-envelope-editor');

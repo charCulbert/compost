@@ -152,6 +152,11 @@ export class CompostEnvelopeEditor extends HTMLElement {
     });
     this.surface.addEventListener('pointerup', (event) => this.endPointer(event));
     this.surface.addEventListener('pointercancel', () => this.cancelPointer());
+    // A release outside the tracked area can go undelivered; capture being
+    // dropped mid-gesture is the sign the drag is over.
+    this.surface.addEventListener('lostpointercapture', (event) => {
+      if (this.drag && this.drag.pointerId === event.pointerId) this.endPointer(event);
+    });
     this.surface.addEventListener('touchend', (event) => event.preventDefault(), { passive: false });
     this.surface.addEventListener('dblclick', (event) => {
       if (performance.now() >= this.suppressDoubleClickUntil) this.addAtPointer(event);
@@ -514,6 +519,12 @@ export class CompostEnvelopeEditor extends HTMLElement {
       return;
     }
     if (drag.pointerId !== event.pointerId) return;
+    if ((event.buttons & 1) === 0 && event.pointerType !== 'touch') {
+      // The primary button was released out where the release never arrived;
+      // finalize the gesture instead of letting the point keep following.
+      this.endPointer(event);
+      return;
+    }
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
     drag.moved ||= Math.hypot(dx, dy) >= DRAG_SLOP;
