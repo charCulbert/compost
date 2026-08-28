@@ -11,7 +11,7 @@ import { defineElement, numberAttr } from '../utils.js';
 const DEFAULT_KEY_MAP =
   'KeyA KeyW KeyS KeyE KeyD KeyF KeyT KeyG KeyY KeyH KeyU KeyJ KeyK KeyO KeyL KeyP Semicolon';
 
-export class PianoKeyboard extends HTMLElement {
+export class CompostPiano extends HTMLElement {
   static get observedAttributes() {
     return ['root-note', 'note-count', 'key-map', 'dock', 'inline'];
   }
@@ -480,4 +480,4 @@ export class PianoKeyboard extends HTMLElement {
 
 }
 
-defineElement('compost-piano', PianoKeyboard);
+defineElement('compost-piano', CompostPiano);

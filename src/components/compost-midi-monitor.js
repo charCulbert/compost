@@ -1,7 +1,7 @@
 import { channelFromMessage, controllerFromMessage, controllerValueFromMessage, isControlChangeMessage, isNoteOffMessage, isNoteOnMessage, noteFromMessage, noteName, unpackMIDIMessage } from '../midi.js';
 import { defineElement, numberAttr } from '../utils.js';
 
-export class MIDIMonitor extends HTMLElement {
+export class CompostMIDIMonitor extends HTMLElement {
   static get observedAttributes() {
     return ['for', 'max-lines', 'announce'];
   }
@@ -156,4 +156,4 @@ export class MIDIMonitor extends HTMLElement {
   }
 }
 
-defineElement('compost-midi-monitor', MIDIMonitor);
+defineElement('compost-midi-monitor', CompostMIDIMonitor);

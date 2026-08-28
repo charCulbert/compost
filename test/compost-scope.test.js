@@ -49,12 +49,12 @@ globalThis.customElements = {
   },
 };
 
-const { ScopeVisualizer } = await import('../src/components/compost-scope.js');
+const { CompostScope } = await import('../src/components/compost-scope.js');
 
 test('canvas colors resolve through inherited style probes', () => {
   const previousGetComputedStyle = globalThis.getComputedStyle;
   globalThis.getComputedStyle = (element) => ({ color: element.resolvedColor });
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   scope.root.querySelector = () => ({ resolvedColor: 'rgb(12, 34, 56)' });
 
   try {
@@ -65,7 +65,7 @@ test('canvas colors resolve through inherited style probes', () => {
 });
 
 test('scope label fonts scale with the canvas pixel ratio', () => {
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   const font = scope.canvasFont({
     font: '14px sans-serif',
     fontFamily: 'sans-serif',
@@ -78,7 +78,7 @@ test('scope label fonts scale with the canvas pixel ratio', () => {
 });
 
 test('scope exposes a stable one-channel presentation description', () => {
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   const attributes = new Map();
   scope.getAttribute = (name) => attributes.get(name) ?? null;
   scope.setAttribute = (name, value) => attributes.set(name, String(value));
@@ -94,7 +94,7 @@ test('scope exposes a stable one-channel presentation description', () => {
 });
 
 test('setSamples retains one typed array without copying or reducing precision', () => {
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   const samples = new Float64Array([0.123456789012345, -0.25, 0.5]);
 
   assert.equal(scope.setSamples(samples), scope);
@@ -103,7 +103,7 @@ test('setSamples retains one typed array without copying or reducing precision',
 });
 
 test('setSamples can own typed and plain sample snapshots', () => {
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   const typed = new Float64Array([0.1, 0.2, 0.3]);
   scope.setSamples(typed, { copy: true });
   assert.notEqual(scope.samples, typed);
@@ -116,7 +116,7 @@ test('setSamples can own typed and plain sample snapshots', () => {
 });
 
 test('setSamples rejects empty, nonnumeric, and multichannel inputs', () => {
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   assert.throws(() => scope.setSamples(new Float32Array()), /requires samples/);
   assert.throws(() => scope.setSamples(['nope']), /one numeric sample array/);
   assert.throws(
@@ -133,7 +133,7 @@ test('setSamples coalesces updates to one browser-frame draw', () => {
     return callbacks.length;
   };
 
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   scope.isConnected = true;
   let draws = 0;
   let events = 0;
@@ -157,7 +157,7 @@ test('scope draws the complete supplied sample array across its width', () => {
   const previousWindow = globalThis.window;
   globalThis.window = { devicePixelRatio: 1 };
   const points = [];
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   scope.samples = new Float32Array([0, 0.5, -0.5]);
   scope.waveCtx = {
     clearRect() {},
@@ -177,7 +177,7 @@ test('scope draws the complete supplied sample array across its width', () => {
 });
 
 test('scope keeps acquisition and signal policy outside the renderer', () => {
-  const scope = new ScopeVisualizer();
+  const scope = new CompostScope();
   assert.equal(typeof scope.setSamples, 'function');
   for (const member of ['connectAudio', 'captureTrigger', 'start', 'stop']) {
     assert.equal(member in scope, false);
@@ -186,5 +186,5 @@ test('scope keeps acquisition and signal policy outside the renderer', () => {
     'frequency', 'trigger', 'trigger-level', 'samples-shown', 'periods-shown',
     'sample-rate', 'channels', 'source-channels', 'trigger-channel', 'fft-size',
     'smoothing-time-constant',
-  ]) assert.equal(ScopeVisualizer.observedAttributes.includes(attribute), false);
+  ]) assert.equal(CompostScope.observedAttributes.includes(attribute), false);
 });

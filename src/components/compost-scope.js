@@ -87,7 +87,7 @@ const markup = `
   </div>
 `;
 
-export class ScopeVisualizer extends HTMLElement {
+export class CompostScope extends HTMLElement {
   static get observedAttributes() {
     return [
       'value-range',
@@ -471,4 +471,4 @@ export class ScopeVisualizer extends HTMLElement {
   }
 }
 
-defineElement('compost-scope', ScopeVisualizer);
+defineElement('compost-scope', CompostScope);

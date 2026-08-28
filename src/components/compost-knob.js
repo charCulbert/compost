@@ -21,7 +21,7 @@ import {
 let nextKnobID = 1;
 const FINE_DRAG_SCALE = 0.1;
 
-export class SynthKnob extends HTMLElement {
+export class CompostKnob extends HTMLElement {
   static get observedAttributes() {
     return [
       'name',
@@ -775,4 +775,4 @@ export class SynthKnob extends HTMLElement {
   }
 }
 
-defineElement('compost-knob', SynthKnob);
+defineElement('compost-knob', CompostKnob);

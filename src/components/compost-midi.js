@@ -5,7 +5,7 @@ import './compost-select.js';
 const ALL_INPUTS = '*';
 const NO_INPUT = '__none__';
 
-export class WebMIDI extends HTMLElement {
+export class CompostMIDI extends HTMLElement {
   static get observedAttributes() {
     return ['input-id', 'output-id', 'input-only', 'output-only'];
   }
@@ -459,4 +459,4 @@ export class WebMIDI extends HTMLElement {
   }
 }
 
-defineElement('compost-midi', WebMIDI);
+defineElement('compost-midi', CompostMIDI);

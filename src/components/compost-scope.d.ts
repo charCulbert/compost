@@ -9,7 +9,7 @@ export interface ScopeFrameDetail {
  * samples. Presentation is attribute-driven; `setSamples` supplies exactly
  * what is drawn. Emits `scope-frame` after an actual browser-frame draw.
  */
-export class ScopeVisualizer extends HTMLElement {
+export class CompostScope extends HTMLElement {
   valueRange: number;
   yOffset: number;
   /** Displays one prepared channel, coalescing updates to browser frames. */
@@ -21,6 +21,6 @@ export class ScopeVisualizer extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-scope': ScopeVisualizer;
+    'compost-scope': CompostScope;
   }
 }

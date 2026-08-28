@@ -13,7 +13,7 @@ export interface ButtonTriggerDetail {
  * `button-trigger` plus a parameter gesture; a switch toggles `pressed` and
  * emits `change` inside a parameter gesture.
  */
-export class CircleButton extends HTMLElement {
+export class CompostButton extends HTMLElement {
   get mode(): 'switch' | 'trigger';
   get pressed(): boolean;
   set pressed(value: boolean);
@@ -38,6 +38,6 @@ export class CircleButton extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-button': CircleButton;
+    'compost-button': CompostButton;
   }
 }

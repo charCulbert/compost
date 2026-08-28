@@ -23,7 +23,7 @@ function formatNumber(value) {
   return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(6)));
 }
 
-export class MIDIMappingsEditor extends HTMLElement {
+export class CompostMIDIMappings extends HTMLElement {
   static get observedAttributes() {
     return ['disabled', 'heading', 'label'];
   }
@@ -594,4 +594,4 @@ export class MIDIMappingsEditor extends HTMLElement {
   }
 }
 
-defineElement('compost-midi-mappings', MIDIMappingsEditor);
+defineElement('compost-midi-mappings', CompostMIDIMappings);

@@ -7,7 +7,7 @@ export type { ParameterEventDetail } from '../utils.js';
  * `parameter-begin`/`parameter-edit`/`parameter-end` CustomEvents carrying
  * the shared parameter detail.
  */
-export class SynthKnob extends HTMLElement {
+export class CompostKnob extends HTMLElement {
   name: string;
   parameterID: string;
   label: string;
@@ -43,6 +43,6 @@ export class SynthKnob extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-knob': SynthKnob;
+    'compost-knob': CompostKnob;
   }
 }

@@ -34,7 +34,7 @@ export interface MIDIMessageDetail {
  * `input-id`/`output-id` are the applied state, and the picker only
  * requests changes.
  */
-export class WebMIDI extends HTMLElement {
+export class CompostMIDI extends HTMLElement {
   midiAccess: MIDIAccess | null;
   inputs: MIDIInput[];
   outputs: MIDIOutput[];
@@ -60,6 +60,6 @@ export class WebMIDI extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-midi': WebMIDI;
+    'compost-midi': CompostMIDI;
   }
 }

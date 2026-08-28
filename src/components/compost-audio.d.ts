@@ -11,7 +11,7 @@ export interface AudioEventDetail {
  * Emits `audio-started`, `audio-resumed`, `audio-suspended`,
  * `audio-stopped`, `audio-state-change` and `audio-error` CustomEvents.
  */
-export class WebAudio extends HTMLElement {
+export class CompostAudio extends HTMLElement {
   /** The owned context; null before the first start and after a close. */
   context: AudioContext | null;
   status: string;
@@ -34,6 +34,6 @@ export class WebAudio extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-audio': WebAudio;
+    'compost-audio': CompostAudio;
   }
 }

@@ -1,6 +1,6 @@
 import { beginParameterGesture, defineElement, editParameterGesture, endParameterGesture, numberAttr } from '../utils.js';
 
-export class CircleButton extends HTMLElement {
+export class CompostButton extends HTMLElement {
   static get observedAttributes() {
     return [
       'label',
@@ -313,4 +313,4 @@ export class CircleButton extends HTMLElement {
   }
 }
 
-defineElement('compost-button', CircleButton);
+defineElement('compost-button', CompostButton);

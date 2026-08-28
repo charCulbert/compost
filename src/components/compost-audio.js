@@ -1,7 +1,7 @@
 import { defineElement } from '../utils.js';
 import './compost-button.js';
 
-export class WebAudio extends HTMLElement {
+export class CompostAudio extends HTMLElement {
   static get observedAttributes() {
     return [
       'start-label',
@@ -352,4 +352,4 @@ export class WebAudio extends HTMLElement {
   }
 }
 
-defineElement('compost-audio', WebAudio);
+defineElement('compost-audio', CompostAudio);

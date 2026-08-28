@@ -22,18 +22,18 @@ globalThis.customElements = {
   },
 };
 
-const { WebAudio } = await import('../src/components/compost-audio.js');
-const { SynthKnob } = await import('../src/components/compost-knob.js');
+const { CompostAudio } = await import('../src/components/compost-audio.js');
+const { CompostKnob } = await import('../src/components/compost-knob.js');
 const { CompostNumberBox } = await import('../src/components/compost-number-box.js');
-const { ScopeVisualizer } = await import('../src/components/compost-scope.js');
+const { CompostScope } = await import('../src/components/compost-scope.js');
 const { CompostSelect } = await import('../src/components/compost-select.js');
 const { CompostEnvelopeEditor } = await import('../src/components/compost-envelope-editor.js');
 const { CompostNoteEditor } = await import('../src/components/compost-note-editor.js');
-const { PianoKeyboard } = await import('../src/components/compost-piano.js');
-const { ParameterSlider } = await import('../src/components/compost-slider.js');
+const { CompostPiano } = await import('../src/components/compost-piano.js');
+const { CompostSlider } = await import('../src/components/compost-slider.js');
 const { CompostDrawer } = await import('../src/components/compost-drawer.js');
-const { CircleButton } = await import('../src/components/compost-button.js');
-const { MIDIMappingsEditor } = await import('../src/components/compost-midi-mappings.js');
+const { CompostButton } = await import('../src/components/compost-button.js');
+const { CompostMIDIMappings } = await import('../src/components/compost-midi-mappings.js');
 const { envelopeValueAtTime } = await import('../src/envelope-model.js');
 const {
   beginParameterGesture,
@@ -42,7 +42,7 @@ const {
 } = await import('../src/utils.js');
 
 test('a suspended audio context is resumable rather than treated as running', async () => {
-  const audio = Object.create(WebAudio.prototype);
+  const audio = Object.create(CompostAudio.prototype);
   audio.context = { state: 'suspended' };
   let starts = 0;
   let stops = 0;
@@ -56,10 +56,10 @@ test('a suspended audio context is resumable rather than treated as running', as
 });
 
 test('audio can separate an icon label from its accessible name', () => {
-  assert.ok(WebAudio.observedAttributes.includes('start-aria-label'));
-  assert.ok(WebAudio.observedAttributes.includes('stop-aria-label'));
+  assert.ok(CompostAudio.observedAttributes.includes('start-aria-label'));
+  assert.ok(CompostAudio.observedAttributes.includes('stop-aria-label'));
 
-  const audio = Object.create(WebAudio.prototype);
+  const audio = Object.create(CompostAudio.prototype);
   audio.getAttribute = (name) => ({
     'start-label': '⏻',
     'stop-label': '⏻',
@@ -130,7 +130,7 @@ test('select user choices emit one complete discrete parameter gesture', () => {
 });
 
 test('stopping suspends the context and keeps the audio graph alive', async () => {
-  const audio = Object.create(WebAudio.prototype);
+  const audio = Object.create(CompostAudio.prototype);
   const events = [];
   const context = {
     state: 'running',
@@ -154,7 +154,7 @@ test('stopping suspends the context and keeps the audio graph alive', async () =
 });
 
 test('force-stopping reflects a closed context before close resolves', async () => {
-  const audio = Object.create(WebAudio.prototype);
+  const audio = Object.create(CompostAudio.prototype);
   const events = [];
   let resolveClose;
   const context = {
@@ -188,7 +188,7 @@ test('force-stopping reflects a closed context before close resolves', async () 
 test('resuming emits audio-resumed instead of rebuilding the graph', async () => {
   const previousWindow = globalThis.window;
   globalThis.window = { AudioContext: class AudioContext {} };
-  const audio = Object.create(WebAudio.prototype);
+  const audio = Object.create(CompostAudio.prototype);
   const events = [];
   const context = {
     state: 'suspended',
@@ -215,7 +215,7 @@ test('resuming emits audio-resumed instead of rebuilding the graph', async () =>
 test('an interrupted audio context resumes from the next user start gesture', async () => {
   const previousWindow = globalThis.window;
   globalThis.window = { AudioContext: class AudioContext {} };
-  const audio = Object.create(WebAudio.prototype);
+  const audio = Object.create(CompostAudio.prototype);
   const events = [];
   let resumes = 0;
   const context = {
@@ -260,7 +260,7 @@ test('an interrupted audio context resumes from the next user start gesture', as
 });
 
 test('piano touch drag transfers the active note between keys', () => {
-  const piano = Object.create(PianoKeyboard.prototype);
+  const piano = Object.create(CompostPiano.prototype);
   const events = [];
   Object.assign(piano, {
     touchNotes: new Map([[1, 60]]),
@@ -288,9 +288,9 @@ test('scope keeps signal acquisition, policy, and palette choices outside the di
     'drive', 'gain', 'gate', 'background-color', 'grid-color', 'zero-color',
     'trace-color', 'trace-colors', 'trigger-color', 'marker-color', 'label-color',
   ]) {
-    assert.equal(ScopeVisualizer.observedAttributes.includes(attribute), false);
+    assert.equal(CompostScope.observedAttributes.includes(attribute), false);
   }
-  assert.equal('generateDemoSamples' in ScopeVisualizer.prototype, false);
+  assert.equal('generateDemoSamples' in CompostScope.prototype, false);
 });
 
 test('envelope Cmd/Ctrl modifier inverts the configured time snapping mode', () => {
@@ -449,10 +449,10 @@ test('dragging a point inside an envelope selection starts a section move', () =
 });
 
 test('knobs and sliders expose disabled as a real control state', () => {
-  assert.ok(SynthKnob.observedAttributes.includes('disabled'));
-  assert.ok(ParameterSlider.observedAttributes.includes('disabled'));
+  assert.ok(CompostKnob.observedAttributes.includes('disabled'));
+  assert.ok(CompostSlider.observedAttributes.includes('disabled'));
 
-  for (const Control of [SynthKnob, ParameterSlider]) {
+  for (const Control of [CompostKnob, CompostSlider]) {
     const control = Object.create(Control.prototype);
     control.attributes = new Set(['disabled', 'editable']);
     control.beginValueEdit();
@@ -463,20 +463,20 @@ test('knobs and sliders expose disabled as a real control state', () => {
 test('knobs and sliders share range and curve attributes while sliders add orientation and interaction', () => {
   const sliderOnly = ['orientation', 'interaction'];
   assert.deepEqual(
-    SynthKnob.observedAttributes.filter((attribute) => attribute !== 'pointer-lock'),
-    ParameterSlider.observedAttributes.filter((attribute) => !sliderOnly.includes(attribute)),
+    CompostKnob.observedAttributes.filter((attribute) => attribute !== 'pointer-lock'),
+    CompostSlider.observedAttributes.filter((attribute) => !sliderOnly.includes(attribute)),
   );
   for (const attribute of sliderOnly) {
-    assert.ok(ParameterSlider.observedAttributes.includes(attribute));
+    assert.ok(CompostSlider.observedAttributes.includes(attribute));
   }
-  for (const Control of [SynthKnob, ParameterSlider, CompostNumberBox]) {
+  for (const Control of [CompostKnob, CompostSlider, CompostNumberBox]) {
     assert.equal(Control.observedAttributes.includes('taper'), false);
     assert.equal(Control.observedAttributes.includes('scale'), false);
   }
 });
 
 test('relative slider drag preserves the grabbed value and follows rail travel', () => {
-  const control = Object.create(ParameterSlider.prototype);
+  const control = Object.create(CompostSlider.prototype);
   const values = [];
   Object.assign(control, {
     min: 0,
@@ -512,7 +512,7 @@ test('slider exposes separate track, fill, and thumb styling parts', () => {
 });
 
 test('slider orientation controls pointer travel and accessible metadata', () => {
-  const control = Object.create(ParameterSlider.prototype);
+  const control = Object.create(CompostSlider.prototype);
   const aria = new Map();
   const values = [];
   let orientation = 'vertical';
@@ -563,7 +563,7 @@ test('slider orientation controls pointer travel and accessible metadata', () =>
 });
 
 test('knobs and sliders use global fine and coarse keyboard travel', () => {
-  for (const Control of [SynthKnob, ParameterSlider]) {
+  for (const Control of [CompostKnob, CompostSlider]) {
     const control = Object.create(Control.prototype);
     Object.defineProperties(control, {
       disabled: { value: false },
@@ -611,7 +611,7 @@ test('knobs and sliders use global fine and coarse keyboard travel', () => {
 });
 
 test('exact-value editors use the shared visible precision', () => {
-  for (const Control of [SynthKnob, ParameterSlider, CompostNumberBox]) {
+  for (const Control of [CompostKnob, CompostSlider, CompostNumberBox]) {
     const control = Object.create(Control.prototype);
     Object.assign(control, {
       _value: 0.68471234,
@@ -681,7 +681,7 @@ test('parameter lifecycle details always state whether the gesture was cancelled
 });
 
 test('trigger button ignores silent backend reflection', () => {
-  const button = Object.create(CircleButton.prototype);
+  const button = Object.create(CompostButton.prototype);
   let triggers = 0;
   Object.assign(button, {
     wasMappedActive: false,
@@ -736,7 +736,7 @@ function lifecycleTypes(events) {
 }
 
 test('knob executes keyboard/reset edits and keeps silent backend updates silent', () => {
-  const { control, events } = lifecycleHarness(SynthKnob, { min: '0', max: '1' });
+  const { control, events } = lifecycleHarness(CompostKnob, { min: '0', max: '1' });
   Object.assign(control, {
     _value: 0.5,
     min: 0,
@@ -794,7 +794,7 @@ test('knob pointer and typed gestures close once with cancellation details', () 
   HTMLElement.prototype.focus = () => {};
 
   try {
-    const { control, events } = lifecycleHarness(SynthKnob, {
+    const { control, events } = lifecycleHarness(CompostKnob, {
       min: '0', max: '1', editable: '', 'parameter-id': 'gain',
     });
     Object.assign(control, {
@@ -905,7 +905,7 @@ test('slider pointer cancellation, typed edits, reset, and silent updates close 
   };
   globalThis.document = { createElement() { return fakeInput(); } };
   try {
-    const { control, events } = lifecycleHarness(ParameterSlider, {
+    const { control, events } = lifecycleHarness(CompostSlider, {
       min: '0', max: '1', editable: '', 'parameter-id': 'gain',
     });
     Object.assign(control, {
@@ -1189,7 +1189,7 @@ test('number box uses normal, split-zone, and second-click fine drag scaling', (
   assert.equal(CompostNumberBox.observedAttributes.includes('drag-step-left'), true);
   assert.equal(CompostNumberBox.observedAttributes.includes('drag-step-middle'), true);
   assert.equal(CompostNumberBox.observedAttributes.includes('drag-step-right'), true);
-  assert.equal(ParameterSlider.observedAttributes.includes('compact'), false);
+  assert.equal(CompostSlider.observedAttributes.includes('compact'), false);
 });
 
 test('number box split-drag selects configurable left, middle, and right rates', () => {
@@ -1211,7 +1211,7 @@ test('number box split-drag selects configurable left, middle, and right rates',
 });
 
 test('MIDI mapping range editors use the full parameter bounds', () => {
-  const editor = Object.create(MIDIMappingsEditor.prototype);
+  const editor = Object.create(CompostMIDIMappings.prototype);
   editor._mappings = {
     parameterProvider: {
       definition(parameterID) {
@@ -1231,7 +1231,7 @@ test('MIDI mapping range editors use the full parameter bounds', () => {
 });
 
 test('MIDI mapping row delete buttons request one clear', () => {
-  const editor = Object.create(MIDIMappingsEditor.prototype);
+  const editor = Object.create(CompostMIDIMappings.prototype);
   let cleared = '';
   Object.assign(editor, {
     _mappings: {},
@@ -1249,7 +1249,7 @@ test('MIDI mapping row delete buttons request one clear', () => {
 });
 
 test('button triggers emit exact pulses and silent setters do nothing', () => {
-  const button = lifecycleHarness(CircleButton);
+  const button = lifecycleHarness(CompostButton);
   button.control.flashActive = () => {};
   button.control.trigger('control');
   assert.deepEqual(lifecycleTypes(button.events), [
@@ -1259,7 +1259,7 @@ test('button triggers emit exact pulses and silent setters do nothing', () => {
   button.control.setValue(1, false, 'backend');
   assert.deepEqual(button.events, []);
 
-  const switchButton = lifecycleHarness(CircleButton, { mode: 'switch' });
+  const switchButton = lifecycleHarness(CompostButton, { mode: 'switch' });
   switchButton.control.setValue(1, true, 'api');
   assert.equal(switchButton.control.value, 1);
   assert.deepEqual(lifecycleTypes(switchButton.events), [

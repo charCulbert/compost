@@ -8,7 +8,7 @@ globalThis.customElements = {
   define(name, constructor) { this.elements.set(name, constructor); },
 };
 
-const { WebMIDI } = await import('../src/components/compost-midi.js');
+const { CompostMIDI } = await import('../src/components/compost-midi.js');
 
 function inputDevice(id = 'keyboard') {
   const listeners = new Map();
@@ -29,7 +29,7 @@ function inputDevice(id = 'keyboard') {
 }
 
 function midiHarness(inputID = '__none__') {
-  return Object.assign(Object.create(WebMIDI.prototype), {
+  return Object.assign(Object.create(CompostMIDI.prototype), {
     selectedInputID: inputID,
     selectedOutputID: '',
     inputs: [],

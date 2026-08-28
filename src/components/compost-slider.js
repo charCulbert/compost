@@ -21,7 +21,7 @@ import {
 let nextSliderID = 1;
 const FINE_DRAG_SCALE = 0.1;
 
-export class ParameterSlider extends HTMLElement {
+export class CompostSlider extends HTMLElement {
   static get observedAttributes() {
     return [
       'name',
@@ -686,4 +686,4 @@ export class ParameterSlider extends HTMLElement {
   }
 }
 
-defineElement('compost-slider', ParameterSlider);
+defineElement('compost-slider', CompostSlider);

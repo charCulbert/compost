@@ -7,7 +7,7 @@ export type { ParameterEventDetail } from '../utils.js';
  * Edits arrive as `parameter-begin`/`parameter-edit`/`parameter-end`
  * CustomEvents carrying the shared parameter detail.
  */
-export class ParameterSlider extends HTMLElement {
+export class CompostSlider extends HTMLElement {
   name: string;
   parameterID: string;
   label: string;
@@ -49,6 +49,6 @@ export class ParameterSlider extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-slider': ParameterSlider;
+    'compost-slider': CompostSlider;
   }
 }

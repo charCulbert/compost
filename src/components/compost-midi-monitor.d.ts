@@ -3,7 +3,7 @@
  * `<compost-midi>` with the `for` attribute, assign an emitter to `midi`,
  * or push messages through `handleMIDIMessage`.
  */
-export class MIDIMonitor extends HTMLElement {
+export class CompostMIDIMonitor extends HTMLElement {
   /** The `midi-message` emitter being monitored, or null. */
   get midi(): EventTarget | null;
   set midi(value: EventTarget | null);
@@ -16,6 +16,6 @@ export class MIDIMonitor extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-midi-monitor': MIDIMonitor;
+    'compost-midi-monitor': CompostMIDIMonitor;
   }
 }

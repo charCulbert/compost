@@ -12,7 +12,7 @@ export interface MIDIMapModeChangeDetail {
  * model to `mappings`; the element listens for its events and emits
  * `midi-map-mode-change` when learn mode starts or stops.
  */
-export class MIDIMappingsEditor extends HTMLElement {
+export class CompostMIDIMappings extends HTMLElement {
   /** The mappings model this editor edits, or null. */
   get mappings(): MIDIMappings | null;
   set mappings(value: MIDIMappings | null);
@@ -27,6 +27,6 @@ export class MIDIMappingsEditor extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-midi-mappings': MIDIMappingsEditor;
+    'compost-midi-mappings': CompostMIDIMappings;
   }
 }

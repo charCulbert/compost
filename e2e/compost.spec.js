@@ -601,7 +601,7 @@ test('piano keyboard emits notes and its dock option changes layout state', asyn
     return defaultPiano.constructor.name;
   });
   const defaultPiano = page.locator('#default-piano');
-  expect(constructorName).toBe('PianoKeyboard');
+  expect(constructorName).toBe('CompostPiano');
   await expect(defaultPiano).toHaveAttribute('role', 'group');
   await expect(defaultPiano).toHaveAttribute('data-docked', '');
   const dockedCenterOffset = await defaultPiano.evaluate((element) => {

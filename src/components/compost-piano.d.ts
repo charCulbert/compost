@@ -8,7 +8,7 @@ export interface PianoNoteDetail {
  * computer keys. Emits `note-down` and `note-up` CustomEvents; incoming
  * MIDI can light keys through `handleMIDIMessage`.
  */
-export class PianoKeyboard extends HTMLElement {
+export class CompostPiano extends HTMLElement {
   constructor(options?: {
     naturalNoteWidth?: number;
     accidentalWidth?: number;
@@ -31,6 +31,6 @@ export class PianoKeyboard extends HTMLElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'compost-piano': PianoKeyboard;
+    'compost-piano': CompostPiano;
   }
 }
