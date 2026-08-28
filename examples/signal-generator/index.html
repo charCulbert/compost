@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Compost Signal Generator</title>
+    <title>Compost Mono Synth</title>
     <link rel="stylesheet" href="../shared/styles.css">
     <script type="module" src="./main.js"></script>
     <style>
@@ -88,17 +88,26 @@
         min-width: 0;
         min-height: 0;
         height: 100%;
-        overflow: hidden;
+        overflow: auto;
         padding: clamp(1.375em, 3vh, 2.25em) var(--demo-page-pad) calc(var(--footer-space) + 1em);
       }
       body[data-midi-drawer-open] .demo-page { grid-column: 2; }
 
-      .workbench { display: grid; width: min(100%, 32.5em); margin: auto; border: 1px solid var(--line); }
-      .parameter-zone { display: grid; gap: .75em; padding: .625em; border-bottom: 1px solid var(--line); }
+      .workbench { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; width: min(100%, 64em); margin: auto; border: 1px solid var(--line); }
+      .synth-grid { display: grid; grid-template-columns: minmax(22em, 1fr) minmax(22em, 1fr); min-width: 0; }
+      .parameter-zone { display: grid; align-content: start; gap: .75em; min-width: 0; padding: .625em; border-right: 1px solid var(--line); }
       .parameter-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .75em; }
       .wave-shape-select { width: 100%; }
       .control-row { display: flex; align-items: stretch; justify-content: center; gap: .75em; }
       .control-row compost-knob { flex: 1 1 5.25em; min-width: 0; max-width: 7em; --compost-knob-size: 4.125em; }
+      .editor-heading { display: flex; align-items: center; justify-content: space-between; gap: .75em; min-height: 2.5em; padding: .5em .625em; border-top: 1px solid var(--line); }
+      .editor-heading h2 { font-size: .75em; letter-spacing: .08em; text-transform: uppercase; }
+      .editor-heading p { color: var(--muted); font-size: .6875em; }
+      .transport { display: flex; align-items: center; gap: .625em; }
+      .transport button { min-height: 2.25em; border: 1px solid currentColor; background: Canvas; color: CanvasText; font: inherit; }
+      .transport compost-number-box { width: 5.5em; }
+      .amp-envelope { display: block; width: 100%; height: 9.5em; }
+      .note-editor { display: block; width: 100%; height: 15em; border-top: 1px solid var(--line); }
 
       .scope-stack { position: relative; display: grid; min-width: 0; }
       body[data-example-id] .scope-stack compost-scope { width: 100%; --scope-height: clamp(10em, 18vw, 11em); }
@@ -127,6 +136,8 @@
         .midi-drawer:not([open]) { width: 100%; }
         .demo-page, body[data-midi-drawer-open] .demo-page { order: 3; width: 100%; height: auto; overflow: visible; padding: 1em var(--demo-page-pad) calc(var(--footer-space) + 1em); }
         .workbench { width: 100%; margin: 0; }
+        .synth-grid { grid-template-columns: 1fr; }
+        .parameter-zone { border-right: 0; border-bottom: 1px solid var(--line); }
         .keyboard-footer { left: 0; }
         .keyboard-footer compost-piano { --compost-piano-dock-offset: 0px; }
       }
@@ -142,10 +153,10 @@
         </div>
         <div class="toolbar-preset">
           <span>Preset</span>
-          <select data-signal-preset aria-label="Preset">
-            <option value="saw-standard" selected>Saw</option>
-            <option value="sine-labels">Sine + labels</option>
-            <option value="unipolar-square">Unipolar square</option>
+          <select data-synth-preset aria-label="Preset">
+            <option value="saw-pluck" selected>Saw pluck</option>
+            <option value="sine-pad">Sine pad</option>
+            <option value="square-short">Short square</option>
           </select>
         </div>
       </header>
@@ -160,37 +171,49 @@
       </compost-drawer>
 
       <main class="demo-page">
-        <h1 class="sr-only">Signal Generator</h1>
+        <h1 class="sr-only">Mono Synth</h1>
         <section class="workbench">
-          <div class="parameter-zone">
-            <div class="parameter-actions">
-              <compost-select class="wave-shape-select" parameter-id="waveShape" label="Waveform" value="1">
-                <option value="0">Sine</option>
-                <option value="1" selected>Saw</option>
-                <option value="2">Square</option>
-              </compost-select>
-              <compost-button mode="trigger" parameter-id="phaseReset" label="Reset phase"></compost-button>
+          <div class="synth-grid">
+            <div class="parameter-zone">
+              <div class="parameter-actions">
+                <compost-select class="wave-shape-select" parameter-id="waveShape" label="Waveform" value="1">
+                  <option value="0">Sine</option>
+                  <option value="1" selected>Saw</option>
+                  <option value="2">Square</option>
+                </compost-select>
+                <compost-button mode="trigger" parameter-id="phaseReset" label="Reset phase"></compost-button>
+              </div>
+              <div class="control-row" aria-label="Oscillator controls">
+                <compost-knob parameter-id="transpose" label="Transpose" min="-24" max="24" value="0" step="1" unit="st" reset-value="0" editable></compost-knob>
+                <compost-knob parameter-id="amplitude" label="Amplitude" min="0" max="1" value=".8" step=".01" reset-value=".8" editable></compost-knob>
+                <compost-knob parameter-id="offset" label="Offset" min="-1" max="1" value="0" step=".01" reset-value="0" editable></compost-knob>
+              </div>
+              <div class="editor-heading"><h2>Amplitude envelope</h2><p>Attack · decay · sustain · release</p></div>
+              <compost-envelope-editor class="amp-envelope" label="Amplitude envelope" duration="2" min="0" max="1" grid=".05" grid-lines="time"></compost-envelope-editor>
             </div>
-            <div class="control-row" aria-label="Oscillator controls">
-              <compost-knob parameter-id="frequency" label="Frequency" min="55" max="1760" mid="220" curve="log" value="220" unit="Hz" reset-value="220" editable></compost-knob>
-              <compost-knob parameter-id="amplitude" label="Amplitude" min="0" max="1" value=".8" step=".01" reset-value=".8" editable></compost-knob>
-              <compost-knob parameter-id="offset" label="Offset" min="-1" max="1" value="0" step=".01" reset-value="0" editable></compost-knob>
-            </div>
-          </div>
 
-          <div class="scope-stack">
-            <compost-scope value-range="1" x-markers="0,.5,1" y-markers="-.5,0,.5" x-marker-labels="0:start,.5:middle,1:end" y-marker-labels="-.5,0,.5"></compost-scope>
-            <output class="scope-fps" data-scope-fps aria-label="Scope render rate unavailable">— fps</output>
-            <div class="scope-controls">
-              <div class="meter-cell"><compost-meter label="Output" min="-60" max="6" curve="gain"></compost-meter></div>
-              <div class="scope-settings">
-                <label class="scope-number-control">Vertical range <compost-number-box parameter-id="scopeRange" label="Vertical range" min=".1" max="2" value="1" step=".01" reset-value="1" split-drag></compost-number-box></label>
-                <label class="scope-number-control">Vertical center <compost-number-box parameter-id="scopeOffset" label="Vertical center" min="-2" max="2" value="0" step=".01" reset-value="0" split-drag></compost-number-box></label>
-                <label class="scope-label-editor">X labels <input data-scope-x-labels aria-label="X labels" value="0:start,.5:middle,1:end"></label>
-                <label class="scope-label-editor">Y labels <input data-scope-y-labels aria-label="Y labels" value="-.5,0,.5"></label>
+            <div class="scope-stack">
+              <compost-scope value-range="1" x-markers="0,.5,1" y-markers="-.5,0,.5" x-marker-labels="0:start,.5:middle,1:end" y-marker-labels="-.5,0,.5"></compost-scope>
+              <output class="scope-fps" data-scope-fps aria-label="Scope render rate unavailable">— fps</output>
+              <div class="scope-controls">
+                <div class="meter-cell"><compost-meter label="Output" min="-60" max="6" curve="gain"></compost-meter></div>
+                <div class="scope-settings">
+                  <label class="scope-number-control">Vertical range <compost-number-box parameter-id="scopeRange" label="Vertical range" min=".1" max="2" value="1" step=".01" reset-value="1" split-drag></compost-number-box></label>
+                  <label class="scope-number-control">Vertical center <compost-number-box parameter-id="scopeOffset" label="Vertical center" min="-2" max="2" value="0" step=".01" reset-value="0" split-drag></compost-number-box></label>
+                  <label class="scope-label-editor">X labels <input data-scope-x-labels aria-label="X labels" value="0:start,.5:middle,1:end"></label>
+                  <label class="scope-label-editor">Y labels <input data-scope-y-labels aria-label="Y labels" value="-.5,0,.5"></label>
+                </div>
               </div>
             </div>
           </div>
+          <div class="editor-heading">
+            <div><h2>Sequence</h2><p>Four-beat monophonic loop</p></div>
+            <div class="transport">
+              <button type="button" data-transport aria-pressed="false">Play</button>
+              <compost-number-box parameter-id="tempo" label="Tempo" min="40" max="240" value="120" step="1" unit="BPM" reset-value="120" split-drag></compost-number-box>
+            </div>
+          </div>
+          <compost-note-editor class="note-editor" label="Synth sequence" beats="4" start="0" end="4" loop loop-start="0" loop-end="4" time-signature="4/4" grid="1/16" adaptive-grid root-note="48" note-count="25"></compost-note-editor>
         </section>
         <footer class="keyboard-footer"><compost-piano dock root-note="36" note-count="49"></compost-piano></footer>
       </main>

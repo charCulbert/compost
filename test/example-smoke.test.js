@@ -59,7 +59,7 @@ test('the retired theme surface stays out of source and examples', () => {
   assert.doesNotMatch(exampleText, /data-compost-theme|data-shared-theme-group|themes\.css/u);
 });
 
-test('the Signal Generator uses the current one-channel scope contract', () => {
+test('the Mono Synth uses current editor and one-channel scope contracts', () => {
   const html = read('examples/signal-generator/index.html');
   const main = read('examples/signal-generator/main.js');
   const worklet = read('examples/signal-generator/worklets/signal-generator.js');
@@ -70,15 +70,21 @@ test('the Signal Generator uses the current one-channel scope contract', () => {
   assert.match(html, /data-scope-x-labels/u);
   assert.match(html, /class="app-frame"/u);
   assert.match(html, /<compost-select[^>]+parameter-id="waveShape"/u);
-  assert.match(html, /<select data-signal-preset/u);
+  assert.match(html, /<select data-synth-preset/u);
+  assert.match(html, /<compost-envelope-editor/u);
+  assert.match(html, /<compost-note-editor/u);
+  assert.match(html, /data-transport/u);
   assert.match(html, /class="keyboard-footer"/u);
   assert.match(main, /scope\.setSamples\(data\.samples\)/u);
   assert.match(main, /parameterID === 'phaseReset'/u);
+  assert.match(main, /noteEditor\.addEventListener\('notes-change'/u);
+  assert.match(main, /envelopeEditor\.addEventListener\('envelope-change'/u);
+  assert.match(main, /isNoteOffMessage/u);
   assert.match(worklet, /type: 'scope-samples', samples, outputSamples/u);
   assert.match(worklet, /data\?\.type === 'resetPhase'/u);
-  assert.match(worklet, /Math\.max\(-1, Math\.min\(1, scopeSample \* gain\)\)/u);
+  assert.match(worklet, /this\.stage = 'release'/u);
+  assert.match(worklet, /this\.playing/u);
   assert.doesNotMatch(`${html}\n${main}\n${worklet}`, /parameter-id="mute"|name: 'mute'|parameters\.mute/u);
-  assert.doesNotMatch(`${main}\n${worklet}`, /noteOff|isNoteOffMessage|\bgate\b/u);
   assert.doesNotMatch(`${html}\n${main}`, /scopeWindow|scopeSamples|scopePeriods|scopeCapture|publishScopeWindow/u);
   assert.doesNotMatch(`${html}\n${main}`, /triggerSamples|source-channels|trigger-channel|periods-shown|samples-shown|captureTrigger/u);
   assert.match(main, /createParameterController/u);
