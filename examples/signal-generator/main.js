@@ -14,7 +14,7 @@ const values = {
   tempo: 120,
   attack: .001,
   decay: .08,
-  sustain: 0,
+  sustain: .07,
   release: .08,
 };
 const displayValues = { scopeRange: 1, scopeOffset: 0 };
@@ -35,7 +35,7 @@ const melodicNotes = [
 ];
 const kickNotes = [
   { id: 'kick-1', note: 48, start: 0, duration: .25, velocity: 110, channel: 0 },
-  { id: 'kick-2', note: 55, start: 1.5, duration: .5, velocity: 100, channel: 0 },
+  { id: 'kick-2', note: 55, start: 1.5, duration: .0625, velocity: 100, channel: 0 },
   { id: 'kick-3', note: 46, start: 3, duration: 1, velocity: 105, channel: 0 },
 ];
 let notes = kickNotes.map((note) => ({ ...note }));
@@ -269,7 +269,7 @@ function applyPreset(name) {
   const presets = {
     kick: {
       waveShape: 0, transpose: 0, amplitude: .8, offset: 0,
-      adsr: [.001, .08, 0, .08],
+      adsr: [.001, .08, .07, .08],
       pitch: [[0, 12, -.35], [.05, -12], [1, -12]],
       notes: kickNotes,
       rootNote: 45,

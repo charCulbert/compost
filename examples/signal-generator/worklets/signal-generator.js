@@ -11,7 +11,7 @@ class CompostMonoSynth extends AudioWorkletProcessor {
       { name: 'tempo', defaultValue: 120, minValue: 40, maxValue: 240, automationRate: 'k-rate' },
       { name: 'attack', defaultValue: .001, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
       { name: 'decay', defaultValue: .08, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
-      { name: 'sustain', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'sustain', defaultValue: .07, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
       { name: 'release', defaultValue: .08, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
     ];
   }
