@@ -15,6 +15,7 @@ import {
   snapEnvelopeValue,
   splitEnvelopeAtTime,
 } from '../envelope-model.js';
+import { envelopeValueGuides, visibleEnvelopeGridStep } from '../internal/envelope-grid.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
 import {
   createLongPress,
@@ -46,8 +47,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.scale = 'linear';
     this.stepped = false;
     this.step = 0;
-    this.snapMode = 'grid';
-    this.grid = .125;
+    this.snapMode = 'off';
+    this.grid = null;
     this.draw = false;
     this._points = [];
     this.selection = null;
@@ -73,7 +74,6 @@ export class CompostEnvelopeEditor extends HTMLElement {
           --compost-envelope-point-border: var(--compost-envelope-bg);
           --compost-envelope-selection: color-mix(in srgb, var(--compost-envelope-signal) 12%, transparent);
           --compost-envelope-preview: var(--compost-envelope-signal);
-          --compost-envelope-grid-size: var(--_grid-x, 1em) 1em;
           display: block;
           box-sizing: border-box;
           min-width: 0;
@@ -91,9 +91,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
         :host([disabled]) { opacity: .55; pointer-events: none; }
         :host(:focus-visible) { outline: 2px solid currentColor; outline-offset: -2px; }
         .surface { position: relative; width: 100%; height: 100%; min-height: inherit; touch-action: none; overflow: hidden; }
-        .grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(to right, var(--compost-envelope-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--compost-envelope-grid) 1px, transparent 1px); background-size: var(--compost-envelope-grid-size); }
-        :host([grid-lines="time"]) .grid { background-image: linear-gradient(to right, var(--compost-envelope-grid) 1px, transparent 1px); }
-        :host([grid-lines="off"]) .grid { background-image: none; }
+        .grid { position: absolute; inset: 0; pointer-events: none; background-image: none; }
+        .value-grid-line { position: absolute; inset-inline: 0; border-block-start: 1px solid var(--compost-envelope-grid); }
         .selection-marquee { position: absolute; z-index: 1; display: none; box-sizing: border-box; border: 1px solid var(--compost-envelope-signal); background: var(--compost-envelope-selection); pointer-events: none; }
         svg { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; }
         .line-hit, .line, .selection-highlight, .segment-highlight { fill: none; vector-effect: non-scaling-stroke; }
@@ -131,6 +130,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
       </div>
     `;
     this.surface = this.root.querySelector('.surface');
+    this.gridElement = this.root.querySelector('.grid');
     this.selectionMarquee = this.root.querySelector('.selection-marquee');
     this.svg = this.root.querySelector('svg');
     this.lineHit = this.root.querySelector('.line-hit');
@@ -192,9 +192,9 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.scale = this.getAttribute('scale') === 'gain' ? 'gain' : 'linear';
     this.stepped = this.hasAttribute('stepped');
     this.step = effectiveEnvelopeStep(this.stepped, this.hasAttribute('step') ? this.getAttribute('step') : undefined);
-    this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
-    this.grid = Math.max(1e-9, numberAttr(this, 'grid', this.grid));
-    this.surface.style.setProperty('--_grid-x', `${this.grid / this.duration * 100}%`);
+    const grid = Number(this.getAttribute('grid'));
+    this.grid = this.hasAttribute('grid') && grid > 0 && Number.isFinite(grid) ? grid : null;
+    this.snapMode = this.grid && this.getAttribute('snap') !== 'off' ? 'grid' : 'off';
     this.draw = this.hasAttribute('draw');
     this.setAttribute('role', 'group');
     this.setAttribute('aria-label', this.label);
@@ -250,6 +250,28 @@ export class CompostEnvelopeEditor extends HTMLElement {
   x(time, width = this.size().width) { return clamp(Number(time) / this.duration, 0, 1) * width; }
   y(value, height = this.size().height) { return envelopeValueToY(value, this.min, this.max, height, this.scale); }
 
+  paintGrid(width, height) {
+    this.gridElement.replaceChildren();
+    this.gridElement.style.backgroundImage = 'none';
+    this.gridElement.style.removeProperty('background-size');
+    if (this.gridLines === 'off') return;
+    const visibleStep = visibleEnvelopeGridStep(this.grid, this.duration, width);
+    if (visibleStep) {
+      this.gridElement.style.backgroundImage = 'linear-gradient(to right, var(--compost-envelope-grid) 1px, transparent 1px)';
+      this.gridElement.style.backgroundSize = `${visibleStep / this.duration * 100}% 100%`;
+    }
+    if (this.gridLines === 'time') return;
+    for (const value of envelopeValueGuides(this.min, this.max, {
+      height, scale: this.scale, stepped: this.stepped, step: this.step,
+    })) {
+      const line = document.createElement('span');
+      line.className = 'value-grid-line';
+      line.dataset.value = String(value);
+      line.style.top = `${this.y(value, height)}px`;
+      this.gridElement.append(line);
+    }
+  }
+
   path(points, width, height) {
     if (!points.length) return '';
     const sorted = [...points].sort((a, b) => a.time - b.time);
@@ -266,6 +288,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
   render(points = this._points) {
     if (!this.isConnected) return;
     const { width, height } = this.size();
+    this.paintGrid(width, height);
     this.pointPreview.hidden = true;
     delete this.surface.dataset.hoverTarget;
     this.selectionMarquee.style.display = this.selection ? 'block' : 'none';
@@ -361,11 +384,12 @@ export class CompostEnvelopeEditor extends HTMLElement {
   timeAtPointer(event, free = false) {
     const rect = this.surface.getBoundingClientRect();
     const raw = clamp((event.clientX - rect.left) / Math.max(1, rect.width) * this.duration, 0, this.duration);
-    if (free) return raw;
+    if (free || !this.grid) return raw;
     return clamp(Math.round(raw / this.grid) * this.grid, 0, this.duration);
   }
 
   freeTime(event) {
+    if (!this.grid) return true;
     const modifier = event.metaKey || event.ctrlKey;
     return this.snapMode === 'off' ? !modifier : modifier;
   }
@@ -760,7 +784,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
     event.preventDefault();
     const factor = event.shiftKey ? .25 : 1;
     const pointValue = this._points[point.index];
-    const timeStep = (this.snapMode === 'off' ? this.duration * .01 : this.grid) * factor;
+    const timeStep = (this.snapMode === 'off' || !this.grid ? this.duration * .01 : this.grid) * factor;
     const valueStep = (this.step || (this.max - this.min) * .01) * factor;
     const points = moveEnvelopePoint(this._points, point.index, {
       time: pointValue.time + direction[0] * timeStep,

@@ -37,14 +37,14 @@ export interface EnvelopeSelectionDetail {
  * `envelope-selection`.
  *
  * @attribute label
- * @attribute duration - envelope length in seconds
+ * @attribute duration - envelope length in caller-owned time units
  * @attribute min - smallest value
  * @attribute max - largest value
  * @attribute scale - vertical scale name or exponent
  * @attribute stepped - draws a step curve
  * @attribute step - value snap step
- * @attribute snap - 'off' frees time from the grid
- * @attribute grid - time grid divisions
+ * @attribute snap - 'off' frees time while retaining a configured grid
+ * @attribute grid - positive time-grid interval; absent means free time
  * @attribute grid-lines - 'time' shows vertical rules; 'off' hides the grid
  * @attribute draw - freehand draw mode
  * @attribute readonly
@@ -59,7 +59,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
   stepped: boolean;
   step: number;
   snapMode: 'grid' | 'off';
-  grid: number;
+  grid: number | null;
   /** Which grid lines are visible: all, time divisions only, or none. */
   gridLines: 'all' | 'time' | 'off';
   draw: boolean;
