@@ -47,6 +47,12 @@ export function pointPlacement(request: {
  * `<compost-popup>`: a small menu anchored to a control or opened at a
  * point. Purely UI: a pick emits `popup-select` and closes; the host
  * decides what it means. Also emits `popup-open` and `popup-close`.
+ *
+ * @attribute open - reflected open state
+ * @attribute heading - visible heading above the items
+ * @attribute value - selected value
+ * @attribute label - accessible menu name
+ * @attribute sheet - bottom-sheet presentation
  */
 export class CompostPopup extends HTMLElement {
   activeIndex: number;

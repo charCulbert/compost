@@ -33,6 +33,11 @@ export interface MIDIMessageDetail {
  * and `midi-message` CustomEvents. Selection is attribute-driven:
  * `input-id`/`output-id` are the applied state, and the picker only
  * requests changes.
+ *
+ * @attribute input-id - applied input selection
+ * @attribute output-id - applied output selection
+ * @attribute input-only - shows and handles inputs only
+ * @attribute output-only - shows and handles outputs only
  */
 export class CompostMIDI extends HTMLElement {
   midiAccess: MIDIAccess | null;

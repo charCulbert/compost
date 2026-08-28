@@ -35,6 +35,32 @@ export function gridText(division: string | number, beatsPerBar?: number): strin
  * anything. Emits `notes-change`, `loop-input`/`loop-change`,
  * `range-input`/`range-change`, `selection-change`, `note-preview`,
  * `note-preview-end`, `note-context` and `note-quantize` CustomEvents.
+ *
+ * @attribute label
+ * @attribute beats - total length in quarter-note beats
+ * @attribute time-signature - meter as N/D
+ * @attribute grid - default grid, a note value or legacy cells
+ * @attribute adaptive-grid - lets zoom choose the effective grid step
+ * @attribute snap - 'off' frees edits from the grid
+ * @attribute start - first visible beat
+ * @attribute end - last visible beat
+ * @attribute loop-start - loop region start in beats
+ * @attribute loop-end - loop region end in beats
+ * @attribute root-note - MIDI note of the bottom row
+ * @attribute note-count - number of pitch rows
+ * @attribute beat-width - pixels per quarter-note beat; 0 lets zoom decide
+ * @attribute fold - folds away pitch rows without notes
+ * @attribute draw - draw mode; dragging paints notes
+ * @attribute playhead - playhead position in beats
+ * @attribute scale - comma-separated pitch classes to highlight
+ * @attribute root - root pitch class of the highlighted scale
+ * @attribute velocity - default velocity for new notes
+ * @attribute channel - default MIDI channel for new notes
+ * @attribute grid-lines - 'off' hides the grid lines
+ * @attribute loop - shows the loop region
+ * @attribute lock-loop-start - hides the loop start handle
+ * @attribute readonly
+ * @attribute disabled
  */
 export class CompostNoteEditor extends HTMLElement {
   label: string;

@@ -53,3 +53,30 @@ test('every timeline intent is present in its public detail map', () => {
   assert.match(declaration, /'locator-prev':/u);
   assert.match(declaration, /'locator-next':/u);
 });
+
+// Attributes supported but not observed: the shared parameter gesture helpers
+// read `parameter-kind` through getAttribute on these controls.
+const parameterKindExtras = new Set([
+  'compost-button', 'compost-knob', 'compost-number-box', 'compost-select', 'compost-slider',
+]);
+
+function observedAttributeNames(source) {
+  const block = source.match(/static get observedAttributes\(\)\s*\{[\s\S]*?\n  \}/u);
+  assert.ok(block, 'observedAttributes block');
+  return new Set([...block[0].matchAll(/'([a-z][a-z0-9-]*)'/gu)].map((match) => match[1]));
+}
+
+test('every observed attribute is declared with an exact @attribute tag', () => {
+  const files = fs.readdirSync(path.join(root, 'src/components'))
+    .filter((file) => file.startsWith('compost-') && file.endsWith('.js'));
+  for (const file of files) {
+    const id = file.replace(/\.js$/u, '');
+    const source = fs.readFileSync(path.join(root, 'src/components', file), 'utf8');
+    const declaration = fs.readFileSync(path.join(root, `src/components/${id}.d.ts`), 'utf8');
+    const declared = new Set(
+      [...declaration.matchAll(/@attribute ([a-z][a-z0-9-]*)/gu)].map((match) => match[1]));
+    const expected = new Set(observedAttributeNames(source));
+    if (parameterKindExtras.has(id)) expected.add('parameter-kind');
+    assert.deepEqual(declared, expected, `${id} @attribute list`);
+  }
+});

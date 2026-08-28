@@ -6,6 +6,30 @@ export type { ParameterEventDetail } from '../utils.js';
  * `<compost-slider>`: a linear parameter control, horizontal or vertical.
  * Edits arrive as `parameter-begin`/`parameter-edit`/`parameter-end`
  * CustomEvents carrying the shared parameter detail.
+ *
+ * @attribute name
+ * @attribute parameter-id - registers the slider with createParameterController
+ * @attribute label
+ * @attribute section - group heading for the accessibility description
+ * @attribute orientation - 'horizontal' or 'vertical'
+ * @attribute interaction - 'position' jumps to the pointer; 'relative' drags from the value
+ * @attribute min
+ * @attribute max
+ * @attribute mid - value pinned to the centre of the scale
+ * @attribute curve - linear, log or gain response
+ * @attribute shape - curve exponent
+ * @attribute position-step - position quantisation in 0..1
+ * @attribute step - value step
+ * @attribute display-fraction-digits - fixed decimals in the readout
+ * @attribute value
+ * @attribute text - pipe-delimited value labels
+ * @attribute editable - allows inline value text editing
+ * @attribute unit - suffix in the readout
+ * @attribute reset-value - value the double-click reset returns to
+ * @attribute min-label - label for the minimum edge
+ * @attribute max-label - label for the maximum edge
+ * @attribute parameter-kind - 'continuous', 'discrete' or 'trigger' override
+ * @attribute disabled
  */
 export class CompostSlider extends HTMLElement {
   name: string;

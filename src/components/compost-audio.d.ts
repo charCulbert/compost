@@ -10,6 +10,13 @@ export interface AudioEventDetail {
  * `<compost-audio>`: an audio power button that owns an AudioContext.
  * Emits `audio-started`, `audio-resumed`, `audio-suspended`,
  * `audio-stopped`, `audio-state-change` and `audio-error` CustomEvents.
+ *
+ * @attribute start-label - power-button label while stopped
+ * @attribute stop-label - power-button label while running
+ * @attribute start-aria-label - accessible name while stopped
+ * @attribute stop-aria-label - accessible name while running
+ * @attribute centered-while-off - centres the panel while stopped in modal mode
+ * @attribute latency-hint - AudioContext latency category or seconds
  */
 export class CompostAudio extends HTMLElement {
   /** The owned context; null before the first start and after a close. */

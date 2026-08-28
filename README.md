@@ -25,9 +25,11 @@ Utilities: `parameter-controller` (wires controls to your backend),
 learn), `device-settings`, `envelope-model`, `piano-roll-model`,
 `selection-region`, `time-grid` and `utils`.
 
-Each element's attributes, properties and events are listed in its type
-declaration next to the source (`src/components/<element>.d.ts`) and shown
-in its example page.
+Each element's supported attributes are declared with `@attribute` tags on the
+class in its type declaration next to the source
+(`src/components/<element>.d.ts`), which also lists its properties and events;
+a conformance test keeps the tags and the element's observed attributes in
+lockstep. Every element is shown in its example page.
 
 ## Events
 
@@ -43,7 +45,9 @@ straight through.
 Editors fire `<thing>-input` while you drag and `<thing>-change` when you let
 go: `envelope-input` / `envelope-change`, `loop-input` / `loop-change`,
 `automation-input` / `automation-change`, `notes-change`. Both carry the same
-payload, so you can preview the drag or ignore it until it commits. Escape
+payload, so you can preview the drag or ignore it until it commits.
+`notes-change` stands alone: the note editor commits each change as it
+happens, so there is no `-input`/`-change` pair for notes. Escape
 cancels a gesture: the element goes back to where it started and a control
 sends `parameter-end` with `cancelled: true`.
 

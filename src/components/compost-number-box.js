@@ -43,7 +43,6 @@ export class CompostNumberBox extends HTMLElement {
       'display-fraction-digits',
       'value',
       'text',
-      'options',
       'unit',
       'reset-value',
       'min-label',
@@ -272,7 +271,7 @@ export class CompostNumberBox extends HTMLElement {
     this.ariaLabelText = this.getAttribute('aria-label') || this.label;
     this.section = this.getAttribute('section') || '';
     this.unit = this.getAttribute('unit') || '';
-    this.valueText = this.getAttribute('text') ?? this.getAttribute('options') ?? '';
+    this.valueText = this.getAttribute('text') ?? '';
     this.placeholder = this.getAttribute('placeholder') || '';
     this.min = readNumberAttribute(this, 'min', this.min);
     this.max = readNumberAttribute(this, 'max', this.max);

@@ -2,6 +2,17 @@
  * `<compost-select>`: a native-backed select for discrete numeric parameters.
  * User choices emit `parameter-begin`/`parameter-edit`/`parameter-end`, and
  * `setValue(value, false)` applies host updates silently.
+ *
+ * @attribute value
+ * @attribute parameter-kind - 'continuous', 'discrete' or 'trigger' override
+ * @attribute disabled
+ * @attribute label
+ * @attribute name
+ * @attribute parameter-id - registers the select with createParameterController
+ * @attribute aria-label
+ * @attribute aria-labelledby
+ * @attribute aria-description
+ * @attribute aria-describedby
  */
 export class CompostSelect extends HTMLElement {
   get value(): string;

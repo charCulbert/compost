@@ -20,6 +20,12 @@ export interface DeviceSelectorHostConnection {
  * snapshot. It emits `device-settings-refresh` and `device-settings-input`
  * CustomEvents; `connectHost` wires both to async host callbacks with
  * stale-request protection.
+ *
+ * @attribute label - accessible name
+ * @attribute heading - visible dialog heading
+ * @attribute busy - shows the busy state while the host answers
+ * @attribute disabled
+ * @attribute error - error message shown in the dialog
  */
 export class CompostDeviceSelector extends HTMLElement {
   get snapshot(): DeviceSelectorSnapshot | null;

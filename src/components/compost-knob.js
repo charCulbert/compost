@@ -38,7 +38,6 @@ export class CompostKnob extends HTMLElement {
       'display-fraction-digits',
       'value',
       'text',
-      'options',
       'editable',
       'unit',
       'reset-value',
@@ -289,7 +288,7 @@ export class CompostKnob extends HTMLElement {
     this.displayFractionDigits = this.hasAttribute('display-fraction-digits')
       ? numberAttr(this, 'display-fraction-digits', null)
       : null;
-    this.valueText = this.getAttribute('text') ?? this.getAttribute('options') ?? '';
+    this.valueText = this.getAttribute('text') ?? '';
     this.resetValue = numberAttr(this, 'reset-value', this.resetValue);
     this.minLabel = this.getAttribute('min-label') ?? '';
     this.maxLabel = this.getAttribute('max-label') ?? '';

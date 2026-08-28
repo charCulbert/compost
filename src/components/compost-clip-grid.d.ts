@@ -53,6 +53,15 @@ export function slotIndexAt(y: number, rows: DOMRect[]): number;
  * `clip-record`, `clip-select`, `clip-open`, `clip-context`, `clip-rename`,
  * `clip-delete`, `clip-duplicate`, `clip-move`, `clip-drag-start`,
  * `clip-drag-end` and `clip-drop`. The host decides what each intent means.
+ *
+ * @attribute slots - number of clip slots (1-512)
+ * @attribute label
+ * @attribute armed - record-arms the track
+ * @attribute selected - index of the selected slot; absent clears
+ * @attribute record-queued - slot index queued for recording; reflected
+ * @attribute stop - index of the playing slot; absent clears
+ * @attribute disabled
+ * @attribute show-stop - shows the stop square while a clip plays
  */
 export class CompostClipGrid extends HTMLElement {
   slotCount: number;

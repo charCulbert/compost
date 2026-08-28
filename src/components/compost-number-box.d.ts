@@ -7,6 +7,35 @@ export type { ParameterEventDetail } from '../utils.js';
  * as `parameter-begin`/`parameter-edit`/`parameter-end` CustomEvents
  * carrying the shared parameter detail. With `allow-empty`, a cleared box
  * reads back as a null value.
+ *
+ * @attribute name
+ * @attribute parameter-id - registers the box with createParameterController
+ * @attribute label
+ * @attribute aria-label
+ * @attribute section - group heading for the accessibility description
+ * @attribute min
+ * @attribute max
+ * @attribute mid - value pinned to the centre of the scale
+ * @attribute curve - linear, log or gain response
+ * @attribute shape - curve exponent
+ * @attribute step - value step
+ * @attribute display-fraction-digits - fixed decimals in the readout
+ * @attribute value
+ * @attribute text - pipe-delimited value labels
+ * @attribute unit - suffix in the readout
+ * @attribute reset-value - value the double-click reset returns to
+ * @attribute min-label - label for the minimum edge
+ * @attribute max-label - label for the maximum edge
+ * @attribute placeholder - shown while the box reads as empty
+ * @attribute allow-empty - a cleared box reads back as a null value
+ * @attribute parameter-kind - 'continuous', 'discrete' or 'trigger' override
+ * @attribute disabled
+ * @attribute pointer-lock - locks the pointer during drags so it cannot leave the box
+ * @attribute split-drag - vertical drag zones with their own step sizes
+ * @attribute drag-step-left - value change per px in the left zone
+ * @attribute drag-step-middle - value change per px in the middle zone
+ * @attribute drag-step-right - value change per px in the right zone
+ * @attribute fine-drag-scale - multiplier for fine drags
  */
 export class CompostNumberBox extends HTMLElement {
   name: string;

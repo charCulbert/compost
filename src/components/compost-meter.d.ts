@@ -21,6 +21,13 @@ export interface MeterState {
  * `<compost-meter>`: a level meter of one lane per channel, with primary,
  * secondary, peak-hold and over bars. Purely presentational; the host
  * pushes levels through `setState`.
+ *
+ * @attribute label - accessible name
+ * @attribute min - smallest level
+ * @attribute max - largest level
+ * @attribute mid - value pinned to the centre of the scale
+ * @attribute curve - linear, log or gain response
+ * @attribute shape - curve exponent
  */
 export class CompostMeter extends HTMLElement {
   get min(): number;

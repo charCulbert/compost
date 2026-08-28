@@ -267,6 +267,22 @@ export function moveAutomationRange(points: TimelineAutomationPoint[], start: nu
  * `clip-rename`, `clip-delete`, `clip-duplicate`, `clip-split`,
  * `clip-nudge`, `lane-*`, `automation-*`, `draw-toggle`, `fit-request` and
  * `view-change`.
+ *
+ * Event details name the intent's subject: clip and locator events carry
+ * `id`/`ids`, lane events carry `laneId`.
+ *
+ * @attribute label
+ * @attribute time-signature - meter as N/D
+ * @attribute grid - default grid, a note value or legacy cells
+ * @attribute adaptive-grid - lets zoom choose the effective grid step
+ * @attribute snap - 'off' frees edits from the grid
+ * @attribute follow - auto-scrolls to keep the playhead in view
+ * @attribute loop-enabled - reflected loop state
+ * @attribute disabled
+ * @attribute readonly
+ * @attribute lane-height - default lane height in px
+ * @attribute automation - enables the automation lane view
+ * @attribute draw - draw mode
  */
 export class CompostTimeline extends HTMLElement {
   label: string;

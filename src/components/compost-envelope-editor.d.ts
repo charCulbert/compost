@@ -35,6 +35,20 @@ export interface EnvelopeSelectionDetail {
  * gesture), `envelope-change` (commit) and `envelope-context` CustomEvents.
  * Dragging empty space changes the selected time section and emits
  * `envelope-selection`.
+ *
+ * @attribute label
+ * @attribute duration - envelope length in seconds
+ * @attribute min - smallest value
+ * @attribute max - largest value
+ * @attribute scale - vertical scale name or exponent
+ * @attribute stepped - draws a step curve
+ * @attribute step - value snap step
+ * @attribute snap - 'off' frees time from the grid
+ * @attribute grid - time grid divisions
+ * @attribute grid-lines - 'time' shows vertical rules; 'off' hides the grid
+ * @attribute draw - freehand draw mode
+ * @attribute readonly
+ * @attribute disabled
  */
 export class CompostEnvelopeEditor extends HTMLElement {
   label: string;

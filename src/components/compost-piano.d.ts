@@ -7,6 +7,12 @@ export interface PianoNoteDetail {
  * `<compost-piano>`: an on-screen keyboard played by pointer, touch or the
  * computer keys. Emits `note-down` and `note-up` CustomEvents; incoming
  * MIDI can light keys through `handleMIDIMessage`.
+ *
+ * @attribute root-note - MIDI note of the bottom key
+ * @attribute note-count - number of keys
+ * @attribute key-map - computer-key layout for the keys
+ * @attribute dock - compact docked layout
+ * @attribute inline - full-width inline layout
  */
 export class CompostPiano extends HTMLElement {
   constructor(options?: {

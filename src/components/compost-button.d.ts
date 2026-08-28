@@ -12,6 +12,18 @@ export interface ButtonTriggerDetail {
  * `<compost-button>`: a trigger or switch button. A trigger press emits
  * `button-trigger` plus a parameter gesture; a switch toggles `pressed` and
  * emits `change` inside a parameter gesture.
+ *
+ * @attribute label
+ * @attribute mode - 'switch' or 'trigger'
+ * @attribute name
+ * @attribute parameter-id - registers the button with createParameterController
+ * @attribute section - group heading for the accessibility description
+ * @attribute pressed - reflected switch state
+ * @attribute value
+ * @attribute parameter-kind - 'continuous', 'discrete' or 'trigger' override
+ * @attribute disabled
+ * @attribute aria-label
+ * @attribute aria-description
  */
 export class CompostButton extends HTMLElement {
   get mode(): 'switch' | 'trigger';

@@ -11,6 +11,9 @@ export interface MIDIMapModeChangeDetail {
  * map-mode toggle and per-row CC, channel and range fields. Assign the
  * model to `mappings`; the element listens for its events and emits
  * `midi-map-mode-change` when learn mode starts or stops.
+ *
+ * @attribute disabled
+ * @attribute heading - visible panel heading
  */
 export class CompostMIDIMappings extends HTMLElement {
   /** The mappings model this editor edits, or null. */

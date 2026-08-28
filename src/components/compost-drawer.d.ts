@@ -7,6 +7,13 @@ export interface DrawerResizeDetail {
  * `<compost-drawer>`: a collapsible panel docked to an edge, optionally
  * resizable by a handle. Emits a plain `toggle` event when it opens or
  * closes and `drawer-resize` CustomEvents while resizing.
+ *
+ * @attribute open - reflected open state
+ * @attribute edge - edge the drawer docks to
+ * @attribute orientation - 'horizontal' or 'vertical'
+ * @attribute min-size - smallest size in px
+ * @attribute max-size - largest size in px
+ * @attribute label - accessible name
  */
 export class CompostDrawer extends HTMLElement {
   get open(): boolean;

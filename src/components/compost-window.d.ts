@@ -45,6 +45,22 @@ export function constrainedSize(request: {
  * `height` name the content size; the frame adds its own chrome. Emits
  * `window-open`, `window-close` (cancelable), `window-move`,
  * `window-resize` and `window-focus` CustomEvents.
+ *
+ * @attribute open - reflected open state
+ * @attribute heading - visible title-bar text
+ * @attribute x - viewport x of the frame
+ * @attribute y - viewport y of the frame
+ * @attribute width - content width in px
+ * @attribute height - content height in px
+ * @attribute min-width - smallest content width in px
+ * @attribute min-height - smallest content height in px
+ * @attribute max-width - largest content width in px
+ * @attribute max-height - largest content height in px
+ * @attribute aspect-ratio - width/height ratio kept while resizing
+ * @attribute resizable - shows the corner resize grip
+ * @attribute fullscreen - fills the viewport
+ * @attribute sheet - bottom-sheet presentation
+ * @attribute static - ignores drag and resize gestures
  */
 export class CompostWindow extends HTMLElement {
   minWidth: number;
