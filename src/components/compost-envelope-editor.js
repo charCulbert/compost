@@ -464,6 +464,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
       samples: [{ time, value: this.valueAtPointer(event) }],
       clickPoint: curveTarget?.kind === 'point' ? curveTarget : null,
       moved: false,
+      pressedSeen: (event.buttons & 1) === 1,
       freehand: this.freeTime(event),
       deletePoint: Boolean(point && event.altKey),
       created: createdOnDoubleTap,
@@ -519,7 +520,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
       return;
     }
     if (drag.pointerId !== event.pointerId) return;
-    if ((event.buttons & 1) === 0 && event.pointerType !== 'touch') {
+    if (event.buttons & 1) drag.pressedSeen = true;
+    else if (drag.pressedSeen && event.pointerType !== 'touch') {
       // The primary button was released out where the release never arrived;
       // finalize the gesture instead of letting the point keep following.
       this.endPointer(event);

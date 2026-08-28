@@ -1131,7 +1131,9 @@ export class CompostTimeline extends HTMLElement {
       return Math.max(end, clipEnd, automationEnd);
     }, 0);
     const locatorEnd = this._locators.at(-1)?.beat || 0;
-    const visible = this._scrollBeat + Math.max(16, (this.lanesWrap.clientWidth || 320) / this._pxPerBeat);
+    // The world reaches one viewport past the view plus a margin, so follow
+    // scrolling over fresh ground has room before the next grow.
+    const visible = this._scrollBeat + Math.max(16, (this.lanesWrap.clientWidth || 320) / this._pxPerBeat) + 16;
     return Math.max(16, last, locatorEnd, this._loopEnd, visible);
   }
 
@@ -1676,12 +1678,25 @@ export class CompostTimeline extends HTMLElement {
   }
 
   paintScroll() {
+    const width = this.lanesWrap?.clientWidth || 0;
+    // Scrolling over fresh ground (follow running past the drawn world) grows
+    // the world first; render() paints the scroll transform itself.
+    if (width && this._scrollBeat + width / this._pxPerBeat > this.drawnEndBeat()) {
+      this.render();
+      return;
+    }
     const offset = `${(-this._scrollBeat * this._pxPerBeat).toFixed(2)}px`;
     this.rulerWorld.style.transform = `translateX(${offset})`;
     this.lanesWorld.style.transform = `translateX(${offset})`;
     this.paintPlayhead();
     this.paintLoop();
     this.paintTimeSelection();
+  }
+
+  /** The world length actually drawn, in beats, as opposed to worldEnd(). */
+  drawnEndBeat() {
+    const width = Number.parseFloat(this.lanesWorld?.style.width);
+    return Number.isFinite(width) && this._pxPerBeat > 0 ? width / this._pxPerBeat : 0;
   }
 
   paintLaneScroll() {
