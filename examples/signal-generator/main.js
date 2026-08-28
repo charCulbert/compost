@@ -1,8 +1,9 @@
 import '../../src/components/index.js';
-import '../shared/color-scheme.js';
+import '../shared/example-page.js';
 import { isNoteOffMessage, isNoteOnMessage, midiNoteToFrequency, noteFromMessage } from '../../src/midi.js';
 import { createMIDIMappings } from '../../src/midi-mappings.js';
 import { createParameterController } from '../../src/parameter-controller.js';
+import { beginParameterGesture, editParameterGesture, endParameterGesture } from '../../src/utils.js';
 
 const values = {
   waveShape: 1,
@@ -13,6 +14,8 @@ const values = {
   mute: 0,
 };
 
+const displayValues = { scopeRange: 1, scopeOffset: 0 };
+
 const audioControl = document.querySelector('compost-audio');
 const scope = document.querySelector('compost-scope');
 const meter = document.querySelector('compost-meter');
@@ -21,9 +24,18 @@ const midi = document.querySelector('compost-midi');
 const midiDrawer = document.querySelector('.midi-drawer');
 const mappingsView = document.querySelector('compost-midi-mappings');
 const mapToggle = document.querySelector('[data-midi-map-toggle]');
+const waveShapeGroup = document.querySelector('[data-wave-shape-group]');
+const waveShapeButtons = [...document.querySelectorAll('[data-wave-shape]')];
+const preset = document.querySelector('[data-signal-preset]');
+const yLabels = document.querySelector('[data-scope-y-labels]');
+const scopeFPS = document.querySelector('[data-scope-fps]');
+const midiActivity = document.querySelector('[data-midi-activity]');
 const parameters = createParameterController({ root: document });
 const mappings = createMIDIMappings({ parameterProvider: parameters });
 let audio = null;
+let midiActivityTimeout = 0;
+let scopeFrames = 0;
+let scopeFrameStart = performance.now();
 
 mappingsView.mappings = mappings;
 mappings.addEventListener('midi-mapping-request', ({ detail }) => mappings.applyMapping(detail));
@@ -35,18 +47,49 @@ mappings.applyMappings([
   { parameterID: 'offset', cc: 71 },
   { parameterID: 'waveShape', cc: 79 },
   { parameterID: 'mute', cc: 64 },
+  { parameterID: 'scopeRange', cc: 77 },
+  { parameterID: 'scopeOffset', cc: 78 },
 ]);
 
-parameters.addEventListener('parameter-edit', ({ detail }) => setParameter(detail.parameterID, detail.value, detail.source));
-mappings.addEventListener('midi-parameter', ({ detail }) => setParameter(detail.parameterID, detail.value, 'midi'));
+parameters.addEventListener('parameter-edit', ({ detail }) => setValue(detail.parameterID, detail.value, detail.source));
+mappings.addEventListener('midi-parameter', ({ detail }) => setValue(detail.parameterID, detail.value, 'midi'));
 
-document.querySelector('[data-midi-open]').addEventListener('click', () => { midiDrawer.open = true; });
 mapToggle.addEventListener('click', () => {
   const active = mapToggle.getAttribute('aria-pressed') !== 'true';
   mapToggle.setAttribute('aria-pressed', String(active));
   if (active) mappingsView.controller?.beginSelecting();
   else mappingsView.controller?.cancel('toolbar');
 });
+
+for (const button of waveShapeButtons) {
+  button.addEventListener('click', () => {
+    const value = Number(button.dataset.waveShape);
+    beginParameterGesture(waveShapeGroup, values.waveShape, { source: 'wave-shape' });
+    editParameterGesture(waveShapeGroup, value, { source: 'wave-shape' });
+    endParameterGesture(waveShapeGroup, value, { source: 'wave-shape' });
+  });
+}
+
+preset.addEventListener('change', () => applyPreset(preset.value));
+yLabels.addEventListener('input', () => scope.setAttribute('y-marker-labels', yLabels.value));
+scope.addEventListener('scope-frame', ({ detail }) => {
+  scopeFrames += 1;
+  const elapsed = detail.time - scopeFrameStart;
+  if (elapsed < 1000) return;
+  scopeFPS.textContent = `${Math.round(scopeFrames * 1000 / elapsed)} fps`;
+  scopeFPS.setAttribute('aria-label', `Scope render rate ${scopeFPS.textContent}`);
+  scopeFrames = 0;
+  scopeFrameStart = detail.time;
+});
+
+function syncDrawerLayout() {
+  document.body.toggleAttribute('data-midi-drawer-open', midiDrawer.open);
+  document.documentElement.style.setProperty('--midi-drawer-space', midiDrawer.open ? `${midiDrawer.getBoundingClientRect().width}px` : '0px');
+}
+
+midiDrawer.addEventListener('toggle', () => requestAnimationFrame(syncDrawerLayout));
+midiDrawer.addEventListener('drawer-resize', () => requestAnimationFrame(syncDrawerLayout));
+syncDrawerLayout();
 mappingsView.addEventListener('midi-map-mode-change', ({ detail }) => {
   mapToggle.setAttribute('aria-pressed', String(detail.active));
   if (detail.active) midiDrawer.open = true;
@@ -54,6 +97,9 @@ mappingsView.addEventListener('midi-map-mode-change', ({ detail }) => {
 
 midi.addEventListener('midi-input-selected', ({ detail }) => midi.selectInput(detail.id));
 midi.addEventListener('midi-message', (event) => {
+  clearTimeout(midiActivityTimeout);
+  midiActivity.classList.add('active');
+  midiActivityTimeout = setTimeout(() => midiActivity.classList.remove('active'), 60);
   mappings.handleMIDIMessage(event);
   piano.handleExternalMIDI(event.detail.message);
   handlePackedNote(event.detail.message, 'midi');
@@ -116,12 +162,46 @@ function decibels(value) {
   return Math.max(-60, 20 * Math.log10(Math.max(value, .001)));
 }
 
+function setValue(parameterID, value, source) {
+  if (parameterID in values) setParameter(parameterID, value, source);
+  else if (parameterID in displayValues) setDisplayValue(parameterID, value, source);
+}
+
 function setParameter(parameterID, value, source) {
   if (!(parameterID in values)) return;
   values[parameterID] = Number(value);
   parameters.applyValue(parameterID, values[parameterID], { source });
+  if (parameterID === 'waveShape') syncWaveShape();
   const parameter = audio?.oscillator.parameters.get(parameterID);
   if (parameter) parameter.setTargetAtTime(values[parameterID], audio.context.currentTime, .01);
+}
+
+function setDisplayValue(parameterID, value, source) {
+  displayValues[parameterID] = Number(value);
+  parameters.applyValue(parameterID, displayValues[parameterID], { source });
+  if (parameterID === 'scopeRange') scope.setAttribute('value-range', String(displayValues[parameterID]));
+  if (parameterID === 'scopeOffset') scope.setAttribute('y-offset', String(displayValues[parameterID]));
+}
+
+function syncWaveShape() {
+  waveShapeGroup.setAttribute('value', String(values.waveShape));
+  for (const button of waveShapeButtons) {
+    button.setAttribute('aria-pressed', String(Number(button.dataset.waveShape) === values.waveShape));
+  }
+}
+
+function applyPreset(name) {
+  const presets = {
+    'saw-standard': { waveShape: 1, frequency: 220, amplitude: .8, offset: 0, scopeRange: 1, scopeOffset: 0, labels: '-.5,0,.5' },
+    'sine-labels': { waveShape: 0, frequency: 110, amplitude: .8, offset: 0, scopeRange: 1, scopeOffset: 0, labels: '-.5:low,0:center,.5:high' },
+    'unipolar-square': { waveShape: 2, frequency: 55, amplitude: .5, offset: .5, scopeRange: .5, scopeOffset: .5, labels: '0:min,.5:center,1:max' },
+  };
+  const selected = presets[name];
+  if (!selected) return;
+  for (const id of ['waveShape', 'frequency', 'amplitude', 'offset']) setParameter(id, selected[id], 'preset');
+  for (const id of ['scopeRange', 'scopeOffset']) setDisplayValue(id, selected[id], 'preset');
+  yLabels.value = selected.labels;
+  scope.setAttribute('y-marker-labels', selected.labels);
 }
 
 function syncAudioParameters() {
@@ -139,3 +219,4 @@ function handlePackedNote(message, source) {
 }
 
 cleanupAudio();
+syncWaveShape();
