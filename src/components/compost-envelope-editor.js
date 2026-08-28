@@ -672,12 +672,11 @@ export class CompostEnvelopeEditor extends HTMLElement {
         this.dispatchEvent(eventOf('envelope-change', {
           points: drag.origin.map((point) => ({ ...point })),
         }));
-      } else if (drag.clickPoint) {
-        this.suppressDoubleClickUntil = performance.now() + DOUBLE_TAP_MS;
-        this.dispatchEvent(eventOf('envelope-change', {
-          points: splitEnvelopeAtTime(drag.origin, drag.clickPoint.time,
-            this.min, this.max, this.scale, this.stepped),
-        }));
+      } else if (drag.clickPoint || drag.mode === 'segment') {
+        const before = drag.origin[drag.segmentIndex];
+        const after = drag.origin[drag.segmentIndex + 1];
+        this.setSelection(before?.time, after?.time);
+        this.dispatchSelection();
       }
       return;
     }

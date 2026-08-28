@@ -99,6 +99,8 @@ export class CompostNoteEditor extends HTMLElement {
     /** @type {Set<string>} */ this.selection = new Set();
     /** @type {number[]} */ this.visibleKeys = [];
     /** @type {any} */ this.drag = null;
+    /** @type {Map<number, {x: number, y: number}>} */ this.pointers = new Map();
+    /** @type {any} */ this.pinch = null;
     this.longPress = createLongPress();
     /** The last marquee's extent, kept so a duplicate can space itself by the
      * selected time. Pitch bounds mean a box; their absence means time only.
@@ -387,25 +389,39 @@ export class CompostNoteEditor extends HTMLElement {
     this.loopEndLine = part('.loop-end-line');
 
     this.gridElement.addEventListener('pointerdown', (event) => {
+      if (this.startNavigation(event)) return;
       this.updateHoverKey(event);
       this.startPointer(event);
     });
     this.gridElement.addEventListener('pointermove', (event) => {
+      if (this.moveNavigation(event)) return;
       this.updateHoverKey(event);
       this.movePointer(event);
     });
-    this.gridElement.addEventListener('pointerup', (event) => this.endPointer(event));
-    this.gridElement.addEventListener('pointercancel', (event) => this.endPointer(event));
+    this.gridElement.addEventListener('pointerup', (event) => {
+      if (!this.endNavigation(event)) this.endPointer(event);
+    });
+    this.gridElement.addEventListener('pointercancel', (event) => {
+      if (!this.endNavigation(event)) this.endPointer(event);
+    });
     this.gridElement.addEventListener('pointerleave', () => {
       if (!this.drag) this.clearHoverKey();
     });
     this.gridElement.addEventListener('dblclick', (event) => this.handleDoubleClick(event));
     installTouchDoubleClick(this.gridElement);
     this.gridElement.addEventListener('contextmenu', (event) => this.handleContextMenu(event));
-    this.ruler.addEventListener('pointerdown', (event) => this.startRulerSelection(event));
-    this.ruler.addEventListener('pointermove', (event) => this.movePointer(event));
-    this.ruler.addEventListener('pointerup', (event) => this.endPointer(event));
-    this.ruler.addEventListener('pointercancel', (event) => this.endPointer(event));
+    this.ruler.addEventListener('pointerdown', (event) => {
+      if (!this.startNavigation(event)) this.startRulerSelection(event);
+    });
+    this.ruler.addEventListener('pointermove', (event) => {
+      if (!this.moveNavigation(event)) this.movePointer(event);
+    });
+    this.ruler.addEventListener('pointerup', (event) => {
+      if (!this.endNavigation(event)) this.endPointer(event);
+    });
+    this.ruler.addEventListener('pointercancel', (event) => {
+      if (!this.endNavigation(event)) this.endPointer(event);
+    });
     this.keys.addEventListener('pointerdown', (event) => this.startKeyPan(event));
     this.keys.addEventListener('pointermove', (event) => this.moveKeyPan(event));
     this.keys.addEventListener('pointerup', (event) => this.endKeyPan(event));
@@ -751,6 +767,78 @@ export class CompostNoteEditor extends HTMLElement {
   /** Shift uses the same quarter-speed precision as the envelope editor. */
   gestureFactor(event) {
     return event.shiftKey ? 0.25 : 1;
+  }
+
+  startNavigation(event) {
+    if (event.pointerType !== 'touch') return false;
+    this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (this.pointers.size < 2) return false;
+    if (this.drag) this.endPointer({
+      type: 'pointercancel', pointerId: this.drag.pointerId,
+      clientX: event.clientX, clientY: event.clientY,
+    });
+    this.startPinch();
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  moveNavigation(event) {
+    if (event.pointerType !== 'touch' || !this.pointers.has(event.pointerId)) return false;
+    this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (!this.pinch) return false;
+    this.movePinch();
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  endNavigation(event) {
+    if (event.pointerType !== 'touch' || !this.pointers.has(event.pointerId)) return false;
+    const navigating = Boolean(this.pinch);
+    this.pointers.delete(event.pointerId);
+    if (this.pointers.size === 0) this.pinch = null;
+    if (navigating) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    return navigating;
+  }
+
+  startPinch() {
+    const [first, second] = [...this.pointers.values()];
+    if (!second) return;
+    const centerX = (first.x + second.x) / 2;
+    const centerY = (first.y + second.y) / 2;
+    const rect = this.gridWrap.getBoundingClientRect();
+    this.pinch = {
+      distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+      centerY,
+      pxPerBeat: this.pxPerBeat,
+      beat: (this.offset + centerX - rect.left) / this.pxPerBeat,
+      rootNote: this.rootNote,
+    };
+  }
+
+  movePinch() {
+    if (!this.pinch || this.pointers.size < 2) return;
+    const [first, second] = [...this.pointers.values()];
+    const centerX = (first.x + second.x) / 2;
+    const centerY = (first.y + second.y) / 2;
+    const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+    const width = this.gridWrap.clientWidth;
+    const fit = width / Math.max(1, this.beats);
+    const pxPerBeat = clamp(this.pinch.pxPerBeat * distance / this.pinch.distance,
+      fit, MAX_PX_PER_BEAT);
+    const rootNote = clamp(Math.round(this.pinch.rootNote
+      - (centerY - this.pinch.centerY) / Math.max(1, this.rowHeight)),
+      0, 128 - this.noteCount);
+    if (rootNote !== this.rootNote) this.setAttribute('root-note', String(rootNote));
+    this.zoomPxPerBeat = pxPerBeat;
+    const rect = this.gridWrap.getBoundingClientRect();
+    this.offset = clamp(this.pinch.beat * pxPerBeat - (centerX - rect.left),
+      0, Math.max(0, this.beats * pxPerBeat - width));
+    this.refresh();
   }
 
   // ---- Rendering ----------------------------------------------------------------

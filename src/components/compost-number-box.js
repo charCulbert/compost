@@ -3,7 +3,6 @@ import {
   normaliseCurveName,
   valueToNormalisedPosition,
 } from '../parameter-scale.js';
-import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import {
   clamp,
   beginParameterGesture,
@@ -219,7 +218,6 @@ export class CompostNumberBox extends HTMLElement {
     this.valueElement = this.root.querySelector('.value');
 
     this.box.addEventListener('pointerdown', (event) => this.beginDrag(event));
-    installTouchDoubleClick(this.box, { dispatch: false });
     this.box.addEventListener('pointermove', (event) => this.moveDrag(event));
     this.box.addEventListener('pointerup', (event) => this.endDrag(event));
     this.box.addEventListener('pointercancel', (event) => this.endDrag(event, false));
@@ -350,6 +348,7 @@ export class CompostNumberBox extends HTMLElement {
         && performance.now() - this.lastClickTime < 380,
       fine: Boolean(event.shiftKey),
       zoneScale: this.dragScaleFor(event),
+      pointerType: event.pointerType,
       lockDeltaEvents: 0,
       lockFallbackTimer: null,
     };
@@ -478,6 +477,7 @@ export class CompostNumberBox extends HTMLElement {
 
     const moved = this.drag.moved;
     const locked = this.drag.locked;
+    const pointerType = this.drag.pointerType;
     clearTimeout(this.drag.lockFallbackTimer);
     this.drag = null;
     this.toggleAttribute('data-dragging', false);
@@ -488,6 +488,9 @@ export class CompostNumberBox extends HTMLElement {
       if (commit) endParameterGesture(this, this.value);
       else endParameterGesture(this, this.value, { cancelled: true });
       this.lastClickTime = 0;
+    } else if (commit && pointerType === 'touch') {
+      this.lastClickTime = 0;
+      this.beginEdit(this.editableValueText(), true, true);
     } else if (commit) {
       const now = performance.now();
       if (now - this.lastClickTime < 380) {
@@ -633,11 +636,11 @@ export class CompostNumberBox extends HTMLElement {
     );
   }
 
-  beginEdit(initialValue = this.editableValueText(), selectValue = false) {
+  beginEdit(initialValue = this.editableValueText(), selectValue = false, gestureAlreadyBegun = false) {
     if (this.disabled || this.editing) return;
 
     this.editing = true;
-    beginParameterGesture(this, this.value);
+    if (!gestureAlreadyBegun) beginParameterGesture(this, this.value);
     const input = document.createElement('input');
     input.setAttribute('part', 'input');
     input.type = 'text';

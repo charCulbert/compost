@@ -38,6 +38,7 @@ export function gridText(division: string | number, beatsPerBar?: number): strin
  * anything. Emits `notes-change`, `loop-input`/`loop-change`,
  * `range-input`/`range-change`, `selection-change`, `note-preview`,
  * `note-preview-end`, `note-context` and `note-quantize` CustomEvents.
+ * A two-finger pinch zooms time and pans time or pitch.
  *
  * @attribute label
  * @attribute beats - total length in quarter-note beats

@@ -59,7 +59,10 @@ The same modifiers work across editors: Command/Ctrl inverts time snapping,
 Shift provides fine control on value drags and extends selection on an item
 drag, and Alt copies item moves. `compost-note-editor` also uses Command/Ctrl
 on a note body to edit velocity.
-Double-click resets a control; a double-tap does the same on touch.
+Double-click resets a control. On touch, double-tap resets knobs and sliders;
+a number-box tap opens its numeric editor while a drag still adjusts it.
+The timeline and note editor use a two-finger pinch to zoom time and pan the
+view; one-finger gestures remain edits or selections.
 `readonly` still shows live state and navigates but changes nothing;
 `disabled` is inert.
 

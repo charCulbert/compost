@@ -270,6 +270,7 @@ export function moveAutomationRange(points: TimelineAutomationPoint[], start: nu
  *
  * Event details name the intent's subject: clip and locator events carry
  * `id`/`ids`, lane events carry `laneId`.
+ * A two-finger pinch zooms time and pans time or lanes.
  *
  * @attribute label
  * @attribute time-signature - meter as N/D

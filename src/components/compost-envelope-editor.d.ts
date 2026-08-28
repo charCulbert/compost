@@ -34,7 +34,7 @@ export interface EnvelopeSelectionDetail {
  * gestures and emits replacement arrays as `envelope-input` (during a
  * gesture), `envelope-change` (commit) and `envelope-context` CustomEvents.
  * Dragging empty space changes the selected time section and emits
- * `envelope-selection`.
+ * `envelope-selection`; tapping a segment selects its span.
  *
  * @attribute label
  * @attribute duration - envelope length in caller-owned time units

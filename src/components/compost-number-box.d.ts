@@ -23,7 +23,8 @@ export type { ParameterEventDetail } from '../utils.js';
  * @attribute value
  * @attribute text - pipe-delimited value labels
  * @attribute unit - suffix in the readout
- * @attribute reset-value - value the double-click reset returns to
+ * @attribute reset-value - value the desktop double-click reset returns to;
+ * touch taps open the numeric editor
  * @attribute min-label - label for the minimum edge
  * @attribute max-label - label for the maximum edge
  * @attribute placeholder - shown while the box reads as empty
@@ -70,7 +71,7 @@ export class CompostNumberBox extends HTMLElement {
   setValue(value: number | string | null, shouldEmit?: boolean, source?: string): void;
   getParameterValue(): number | null;
   /** Opens the inline text editor. */
-  beginEdit(initialValue?: string, selectValue?: boolean): void;
+  beginEdit(initialValue?: string, selectValue?: boolean, gestureAlreadyBegun?: boolean): void;
 
   focus(options?: FocusOptions): void;
   blur(): void;

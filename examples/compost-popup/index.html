@@ -19,8 +19,8 @@
         <h2>Default</h2>
         <div class="row">
         <div data-popup-surface tabindex="0" aria-label="Context menu"
-          style="display: grid; place-items: center; width: min(24em, calc(100vw - 64px)); height: 8em; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); user-select: none">
-          Right-click to open context menu
+          style="display: grid; place-items: center; width: min(24em, calc(100vw - 64px)); height: 8em; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); touch-action: manipulation; user-select: none">
+          Right-click or hold to open context menu
         </div>
         <compost-popup data-option-target="popup" heading="Context menu" label="Context menu">
           <option value="open">Open</option>
@@ -35,15 +35,41 @@
     </main>
     <script type="module">
     import { elementDemo } from '../shared/element-page.js';
+    import { createLongPress, DRAG_SLOP } from '../../src/internal/gestures.js';
     const { s } = await elementDemo('compost-popup');
     {
       const popup = s.querySelector('compost-popup');
       const surface = s.querySelector('[data-popup-surface]');
-      surface.addEventListener('contextmenu', (event) => {
-        event.preventDefault();
+      const longPress = createLongPress();
+      let touch = null;
+      const openAt = (clientX, clientY) => {
         document.querySelectorAll('compost-popup').forEach((other) => { if (other !== popup) other.close('switch'); });
         const rect = surface.getBoundingClientRect();
-        popup.openAt(event.clientX || rect.left + rect.width / 2, event.clientY || rect.top + rect.height / 2);
+        popup.openAt(clientX || rect.left + rect.width / 2, clientY || rect.top + rect.height / 2);
+      };
+      surface.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        openAt(event.clientX, event.clientY);
+      });
+      surface.addEventListener('pointerdown', (event) => {
+        if (event.pointerType !== 'touch' || event.button !== 0) return;
+        event.preventDefault();
+        touch = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+        longPress.start(() => {
+          if (touch?.pointerId === event.pointerId) openAt(event.clientX, event.clientY);
+        });
+      });
+      surface.addEventListener('pointermove', (event) => {
+        if (!touch || touch.pointerId !== event.pointerId) return;
+        if (Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > DRAG_SLOP) {
+          longPress.cancel();
+          touch = null;
+        }
+      });
+      for (const type of ['pointerup', 'pointercancel']) surface.addEventListener(type, (event) => {
+        if (touch?.pointerId !== event.pointerId) return;
+        longPress.cancel();
+        touch = null;
       });
     }
 

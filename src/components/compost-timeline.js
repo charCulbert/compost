@@ -1889,6 +1889,7 @@ export class CompostTimeline extends HTMLElement {
       centerY,
       pxPerBeat: this._pxPerBeat,
       beat: this.beatAtPoint(centerX),
+      scrollTop: this.lanesWrap.scrollTop,
     };
   }
 
@@ -1897,11 +1898,15 @@ export class CompostTimeline extends HTMLElement {
     const points = [...this.pointers.values()];
     const [first, second] = points;
     const centerX = (first.x + second.x) / 2;
+    const centerY = (first.y + second.y) / 2;
     const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
     const nextPxPerBeat = finiteClamp(this.pinch.pxPerBeat * distance / this.pinch.distance, MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
     const rect = this.rulerWrap.getBoundingClientRect();
     this._pxPerBeat = nextPxPerBeat;
     this._scrollBeat = Math.max(0, this.pinch.beat - (centerX - rect.left) / nextPxPerBeat);
+    const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
+    this.lanesWrap.scrollTop = clamp(this.pinch.scrollTop - (centerY - this.pinch.centerY), 0, maximum);
+    this.paintLaneScroll();
     this.render();
     this.scheduleViewChange();
   }

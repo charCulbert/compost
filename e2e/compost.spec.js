@@ -122,6 +122,33 @@ test('envelope editor stays state-in and emits generic time/value intent', async
   await expect(editor.locator('.point')).toHaveCount(3);
 });
 
+test('a touch tap selects an envelope segment without adding a point', async ({ page }) => {
+  await page.goto('/examples/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  const result = await editor.evaluate((element) => {
+    element.points = [
+      { time: 0, value: 0 },
+      { time: 1, value: .5 },
+      { time: 3, value: .5 },
+      { time: 4, value: 0 },
+    ];
+    let selection = null;
+    element.addEventListener('envelope-selection', ({ detail }) => { selection = detail; });
+    const surface = element.shadowRoot.querySelector('.surface');
+    const rect = surface.getBoundingClientRect();
+    const options = {
+      bubbles: true, composed: true, pointerType: 'touch', isPrimary: true,
+      pointerId: 73, button: 0, clientX: rect.left + element.x(2),
+      clientY: rect.top + element.y(.5),
+    };
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, buttons: 1 }));
+    surface.dispatchEvent(new PointerEvent('pointerup', { ...options, buttons: 0 }));
+    return { selection, pointCount: element.points.length };
+  });
+
+  expect(result).toEqual({ selection: { start: 1, end: 3 }, pointCount: 4 });
+});
+
 test('envelope points can be moved by a touch pointer', async ({ page }) => {
   await page.goto('/examples/compost-envelope-editor/');
   const editor = page.locator('compost-envelope-editor');
@@ -340,7 +367,6 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
   for (const [demo, component, surface] of [
     ['compost-slider', 'compost-slider', '.range-input'],
     ['compost-knob', 'compost-knob', '.dial'],
-    ['compost-number-box', 'compost-number-box', '.box'],
   ]) {
     await page.goto(`/examples/${demo}/`);
     result = await dispatchTouchDoubleTap(page.locator(component).first().locator(surface));
@@ -349,11 +375,10 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
   }
 });
 
-test('touch double-tap resets parameter controls', async ({ page }) => {
+test('touch double-tap resets knobs and sliders', async ({ page }) => {
   for (const [demo, component, surface] of [
     ['compost-slider', 'compost-slider', '.range-input'],
     ['compost-knob', 'compost-knob', '.dial'],
-    ['compost-number-box', 'compost-number-box', '.box'],
   ]) {
     await test.step(demo, async () => {
       await page.goto(`/examples/${demo}/`);
@@ -596,6 +621,129 @@ test('number box commits, cancels, and drags through the real editor', async ({ 
     'parameter-end',
   ]);
   expect(events[4]).toEqual({ type: 'parameter-end', cancelled: true });
+});
+
+test('a number box touch tap opens its decimal editor', async ({ page }) => {
+  await page.goto('/examples/compost-number-box/');
+  const numberBox = page.locator('compost-number-box[data-option-target="number"]');
+  await numberBox.evaluate((element) => {
+    element.testEvents = [];
+    for (const type of ['parameter-begin', 'parameter-end']) {
+      element.addEventListener(type, () => element.testEvents.push(type));
+    }
+  });
+  await numberBox.locator('.box').evaluate((box) => {
+    const rect = box.getBoundingClientRect();
+    const options = {
+      bubbles: true, composed: true, pointerType: 'touch', isPrimary: true,
+      pointerId: 74, button: 0, clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+    box.dispatchEvent(new PointerEvent('pointerdown', { ...options, buttons: 1 }));
+    box.dispatchEvent(new PointerEvent('pointerup', { ...options, buttons: 0 }));
+  });
+
+  const editor = numberBox.getByRole('textbox', { name: 'Set Frequency' });
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveAttribute('inputmode', 'decimal');
+  await editor.fill('777');
+  await editor.press('Enter');
+  await expect(numberBox.getByRole('spinbutton', { name: 'Frequency' }))
+    .toHaveAttribute('aria-valuenow', '777');
+  expect(await numberBox.evaluate((element) => element.testEvents)).toEqual([
+    'parameter-begin', 'parameter-end',
+  ]);
+});
+
+test('two touch pointers pan and zoom the timeline without editing', async ({ page }) => {
+  const timeline = await openTimeline(page);
+  const before = await timeline.evaluate((element) => {
+    element.setLanes(Array.from({ length: 16 }, (_, index) => ({
+      id: `lane-${index}`, name: `Lane ${index + 1}`, clips: [],
+    })));
+    element.pxPerBeat = 24;
+    element.scrollBeat = 4;
+    element.shadowRoot.querySelector('.lanes-wrap').scrollTop = 120;
+    return {
+      pxPerBeat: element.pxPerBeat,
+      scrollBeat: element.scrollBeat,
+      scrollTop: element.shadowRoot.querySelector('.lanes-wrap').scrollTop,
+      selection: element.timeSelection,
+    };
+  });
+  const lane = timeline.locator('.lane').nth(3);
+  const after = await lane.evaluate((target) => {
+    const element = target.getRootNode().host;
+    const rect = target.getBoundingClientRect();
+    const dispatch = (type, pointerId, x, y, buttons) => target.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerType: 'touch', isPrimary: pointerId === 81,
+      pointerId, button: 0, buttons, clientX: x, clientY: y,
+    }));
+    const left = rect.left + rect.width * .35;
+    const right = rect.left + rect.width * .55;
+    const top = rect.top + 10;
+    dispatch('pointerdown', 81, left, top, 1);
+    dispatch('pointerdown', 82, right, top + 40, 1);
+    dispatch('pointermove', 81, left - 40, top + 40, 1);
+    dispatch('pointermove', 82, right + 60, top + 80, 1);
+    dispatch('pointerup', 81, left - 40, top + 40, 0);
+    dispatch('pointerup', 82, right + 60, top + 80, 0);
+    return {
+      pxPerBeat: element.pxPerBeat,
+      scrollBeat: element.scrollBeat,
+      scrollTop: element.shadowRoot.querySelector('.lanes-wrap').scrollTop,
+      selection: element.timeSelection,
+    };
+  });
+
+  expect(after.pxPerBeat).toBeGreaterThan(before.pxPerBeat);
+  expect(after.scrollBeat).not.toBe(before.scrollBeat);
+  expect(after.scrollTop).toBeLessThan(before.scrollTop);
+  expect(after.selection).toBeNull();
+});
+
+test('two touch pointers pan pitch and zoom time in the note editor', async ({ page }) => {
+  const editor = await openNoteEditor(page);
+  const before = await editor.evaluate((element) => {
+    element.setAttribute('root-note', '48');
+    element.zoomPxPerBeat = 32;
+    element.offset = 72;
+    element.refresh();
+    return {
+      pxPerBeat: element.pxPerBeat,
+      offset: element.offset,
+      rootNote: element.rootNote,
+      points: element.notes,
+    };
+  });
+  const after = await editor.locator('.grid').evaluate((target) => {
+    const element = target.getRootNode().host;
+    const rect = target.getBoundingClientRect();
+    const dispatch = (type, pointerId, x, y, buttons) => target.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, composed: true, pointerType: 'touch', isPrimary: pointerId === 91,
+      pointerId, button: 0, buttons, clientX: x, clientY: y,
+    }));
+    const left = rect.left + rect.width * .35;
+    const right = rect.left + rect.width * .55;
+    const top = rect.top + rect.height * .35;
+    dispatch('pointerdown', 91, left, top, 1);
+    dispatch('pointerdown', 92, right, top + 40, 1);
+    dispatch('pointermove', 91, left - 40, top + 40, 1);
+    dispatch('pointermove', 92, right + 60, top + 80, 1);
+    dispatch('pointerup', 91, left - 40, top + 40, 0);
+    dispatch('pointerup', 92, right + 60, top + 80, 0);
+    return {
+      pxPerBeat: element.pxPerBeat,
+      offset: element.offset,
+      rootNote: element.rootNote,
+      points: element.notes,
+    };
+  });
+
+  expect(after.pxPerBeat).toBeGreaterThan(before.pxPerBeat);
+  expect(after.offset).not.toBe(before.offset);
+  expect(after.rootNote).not.toBe(before.rootNote);
+  expect(after.points).toEqual(before.points);
 });
 
 test('slider typed editing uses real focus and lifecycle events', async ({ page }) => {
@@ -3581,6 +3729,26 @@ test('popup stays on screen, picks by keyboard and closes on an outside press', 
   expect(box.x + box.width).toBeLessThanOrEqual(600);
   await page.mouse.click(20, 20);
   await expect(context).toBeHidden();
+});
+
+test('a touch long-press opens the popup context menu', async ({ page }) => {
+  await page.goto('/examples/compost-popup/');
+  const popup = page.locator('compost-popup[data-option-target="popup"]');
+  await popup.evaluate((element) => element.close('test'));
+  const surface = page.locator('[data-popup-surface]');
+  await surface.evaluate(async (target) => {
+    const rect = target.getBoundingClientRect();
+    const options = {
+      bubbles: true, composed: true, pointerType: 'touch', isPrimary: true,
+      pointerId: 101, button: 0, clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+    target.dispatchEvent(new PointerEvent('pointerdown', { ...options, buttons: 1 }));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    target.dispatchEvent(new PointerEvent('pointerup', { ...options, buttons: 0 }));
+  });
+
+  await expect(popup).toHaveAttribute('open');
 });
 
 test('popup grows to fit an unconstrained option label', async ({ page }) => {
