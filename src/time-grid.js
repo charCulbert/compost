@@ -13,8 +13,7 @@ const TIME_SIGNATURE_DENOMINATORS = new Set([1, 2, 4, 8, 16]);
 
 /**
  * Parse a time signature while keeping model time in quarter-note beats.
- * `beatsPerBar` is the legacy N/4 alias used when no valid signature is given.
- * @param {string|null|undefined} value @param {number} [beatsPerBar]
+ * Unparseable or missing values fall back to 4/4.
  */
 export function timeSignatureOf(value) {
   const match = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(value ?? '');

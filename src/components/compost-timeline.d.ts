@@ -270,7 +270,7 @@ export function moveAutomationRange(points: TimelineAutomationPoint[], start: nu
  */
 export class CompostTimeline extends HTMLElement {
   label: string;
-  /** Effective meter. `time-signature` wins over the legacy N/4 `beats-per-bar`. */
+  /** Effective meter; 4/4 unless `time-signature` parses. */
   timeSignature: string;
   /** Effective bar length in quarter-note beats. */
   beatsPerBar: number;

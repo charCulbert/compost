@@ -37,17 +37,17 @@ export function formatValue(
 export interface ParameterControl extends HTMLElement {
   value?: number | null;
   parameterID?: string;
-  parameterKind?: string;
+  parameterKind?: ParameterKind;
   setValue?: (value: number, shouldEmit?: boolean, source?: string) => void;
 }
+
+/** The three shapes a parameter edit can take: free values, fixed choices, momentary presses. */
+export type ParameterKind = 'continuous' | 'discrete' | 'trigger';
 
 /**
  * The detail every `parameter-begin`/`parameter-edit`/`parameter-end`
  * CustomEvent carries. Extra gesture fields ride along untyped.
  */
-/** The three shapes a parameter edit can take: free values, fixed choices, momentary presses. */
-export type ParameterKind = 'continuous' | 'discrete' | 'trigger';
-
 export interface ParameterEventDetail {
   parameterID: string;
   value: number;

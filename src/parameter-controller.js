@@ -28,8 +28,7 @@ function definitionFromControl(control) {
   if (!parameterID) return null;
 
   const value = number(control.getParameterValue?.() ?? control.value, 0);
-  const declaredDefault = control.getAttribute?.('reset-value')
-    ?? control.getAttribute?.('init');
+  const declaredDefault = control.getAttribute?.('reset-value');
   const defaultValue = number(declaredDefault, value);
   const kind = control.parameterKind || control.getAttribute?.('parameter-kind')
     || (control.tagName === 'COMPOST-RADIO-GROUP' || control.tagName === 'COMPOST-TOGGLE'
