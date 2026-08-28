@@ -200,7 +200,7 @@
 <template id="compost-timeline">
   <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
     <span>Arrangement · 6/8</span>
-    <compost-timeline label="Arrangement" time-signature="6/8" grid="1/16"
+    <compost-timeline label="Arrangement" time-signature="6/8" grid="1/16" follow
       style="height: 24em"></compost-timeline>
     <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
       <label>Grid <select data-timeline-grid>
@@ -211,6 +211,7 @@
         <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
       </select></label>
       <label><input type="checkbox" data-timeline-snap checked> Snap</label>
+      <label><input type="checkbox" data-timeline-follow checked> Follow</label>
       <label><input type="checkbox" data-timeline-adaptive> Adaptive grid</label>
       <label><input type="checkbox" data-timeline-loop checked> Loop</label>
       <label><input type="checkbox" data-timeline-draw> Draw</label>
@@ -218,7 +219,7 @@
       <label><input type="checkbox" data-timeline-launch-quant checked> Launch quantization</label>
       <button type="button" data-timeline-play>Play</button>
     </div>
-    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Click a locator to jump; while playing, Launch quantization waits for the next bar. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. In automation view the curve owns the full row and clips are display-only context; this faux host applies point, range and Option-drag curve edits.</small>
+    <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection, and Shift is precise for edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Click a locator to jump; while playing, Launch quantization waits for the next bar. Turn Loop off and Follow keeps the playhead centred while the bar grid extends past the arrangement. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. In automation view the curve owns the full row and clips are display-only context; this faux host applies point, range and Option-drag curve edits.</small>
   </div>
 </template>
 
@@ -627,6 +628,7 @@
       const play = s.querySelector('[data-timeline-play]');
       const grid = s.querySelector('[data-timeline-grid]');
       const snap = s.querySelector('[data-timeline-snap]');
+      const follow = s.querySelector('[data-timeline-follow]');
       const adaptive = s.querySelector('[data-timeline-adaptive]');
       const loop = s.querySelector('[data-timeline-loop]');
       const draw = s.querySelector('[data-timeline-draw]');
@@ -657,6 +659,7 @@
       const automationView = s.querySelector('[data-timeline-automation]');
       grid.addEventListener('change', () => timeline.setAttribute('grid', grid.value));
       snap.addEventListener('change', () => timeline.setAttribute('snap', snap.checked ? 'grid' : 'off'));
+      follow.addEventListener('change', () => timeline.toggleAttribute('follow', follow.checked));
       adaptive.addEventListener('change', () => timeline.toggleAttribute('adaptive-grid', adaptive.checked));
       loop.addEventListener('change', () => timeline.setLoop(timeline.loopStart, timeline.loopEnd, loop.checked));
       draw.addEventListener('change', () => timeline.toggleAttribute('draw', draw.checked));
