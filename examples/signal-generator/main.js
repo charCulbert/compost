@@ -24,7 +24,7 @@ let pitchEnvelope = [
   { time: .1, value: 0 },
   { time: 1, value: 0 },
 ];
-let notes = [
+const defaultNotes = [
   { id: 'note-1', note: 60, start: 0, duration: .45, velocity: 110, channel: 0 },
   { id: 'note-2', note: 64, start: .5, duration: .45, velocity: 96, channel: 0 },
   { id: 'note-3', note: 67, start: 1, duration: .45, velocity: 104, channel: 0 },
@@ -34,6 +34,7 @@ let notes = [
   { id: 'note-7', note: 64, start: 3, duration: .45, velocity: 100, channel: 0 },
   { id: 'note-8', note: 62, start: 3.5, duration: .45, velocity: 94, channel: 0 },
 ];
+let notes = defaultNotes.map((note) => ({ ...note }));
 
 const audioControl = document.querySelector('compost-audio');
 const scope = document.querySelector('compost-scope');
@@ -262,9 +263,20 @@ function setDisplayValue(parameterID, value, source) {
 
 function applyPreset(name) {
   const presets = {
-    'saw-pluck': { waveShape: 1, transpose: 0, amplitude: .8, offset: 0, adsr: [.08, .2, .65, .35], pitch: [[0, 12, -.35], [.05, -12, .35], [.1, 0], [1, 0]] },
-    'sine-pad': { waveShape: 0, transpose: -12, amplitude: .8, offset: 0, adsr: [.35, .6, .75, 1.4], pitch: [[0, 0], [1, 0]] },
-    'square-short': { waveShape: 2, transpose: 0, amplitude: .5, offset: .5, adsr: [.005, .08, .8, .12], pitch: [[0, -12], [.08, 0], [1, 0]] },
+    'saw-pluck': { waveShape: 1, transpose: 0, amplitude: .8, offset: 0, adsr: [.08, .2, .65, .35], pitch: [[0, 12, -.35], [.05, -12, .35], [.1, 0], [1, 0]], notes: defaultNotes, rootNote: 48 },
+    'sine-pad': { waveShape: 0, transpose: -12, amplitude: .8, offset: 0, adsr: [.35, .6, .75, 1.4], pitch: [[0, 0], [1, 0]], notes: defaultNotes, rootNote: 48 },
+    'square-short': { waveShape: 2, transpose: 0, amplitude: .5, offset: .5, adsr: [.005, .08, .8, .12], pitch: [[0, -12], [.08, 0], [1, 0]], notes: defaultNotes, rootNote: 48 },
+    'sine-dive': {
+      waveShape: 0, transpose: 0, amplitude: .8, offset: 0,
+      adsr: [.001, .08, 0, .08],
+      pitch: [[0, 12, -.35], [.05, -12], [1, -12]],
+      notes: [
+        { id: 'dive-1', note: 48, start: 0, duration: .25, velocity: 110, channel: 0 },
+        { id: 'dive-2', note: 55, start: 1.5, duration: .5, velocity: 100, channel: 0 },
+        { id: 'dive-3', note: 46, start: 3, duration: 1, velocity: 105, channel: 0 },
+      ],
+      rootNote: 45,
+    },
   };
   const selected = presets[name];
   if (!selected) return;
@@ -274,6 +286,10 @@ function applyPreset(name) {
   pitchEnvelope = selected.pitch.map(([time, value, curve]) => ({ time, value, curve }));
   envelopeEditor.points = pitchEnvelope;
   postPitchEnvelope(pitchEnvelope);
+  notes = selected.notes.map((note) => ({ ...note }));
+  noteEditor.setAttribute('root-note', String(selected.rootNote));
+  noteEditor.notes = notes;
+  postSequence();
 }
 
 function syncAudioParameters() {

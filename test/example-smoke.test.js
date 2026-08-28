@@ -71,6 +71,7 @@ test('the Mono Synth uses current editor and one-channel scope contracts', () =>
   assert.match(html, /class="app-frame"/u);
   assert.match(html, /<compost-select[^>]+parameter-id="waveShape"/u);
   assert.match(html, /<select data-synth-preset/u);
+  assert.match(html, /<option value="sine-dive">Sine dive<\/option>/u);
   assert.match(html, /<compost-envelope-editor/u);
   assert.match(html, /label="Pitch envelope"/u);
   for (const id of ['attack', 'decay', 'sustain', 'release']) {
@@ -84,6 +85,7 @@ test('the Mono Synth uses current editor and one-channel scope contracts', () =>
   assert.match(main, /noteEditor\.addEventListener\('notes-change'/u);
   assert.match(main, /envelopeEditor\.addEventListener\('envelope-change'/u);
   assert.match(main, /type: 'pitchEnvelope'/u);
+  assert.match(main, /'sine-dive'/u);
   assert.match(main, /isNoteOffMessage/u);
   assert.match(worklet, /type: 'scope-samples', samples, outputSamples/u);
   assert.match(worklet, /data\?\.type === 'resetPhase'/u);
