@@ -15,6 +15,9 @@ class CompostSignalGenerator extends AudioWorkletProcessor {
     this.capture = new Float32Array(1024);
     this.outputCapture = new Float32Array(1024);
     this.captureIndex = 0;
+    this.port.onmessage = ({ data }) => {
+      if (data?.type === 'resetPhase') this.phase = 0;
+    };
   }
 
   process(_inputs, outputs, parameters) {

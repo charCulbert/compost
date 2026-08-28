@@ -12,14 +12,7 @@ const values = {
   outputGain: .5,
 };
 
-const displayValues = {
-  scopeWindow: 1,
-  scopeSamples: 1024,
-  scopePeriods: 4,
-  scopeRange: 1,
-  scopeOffset: 0,
-};
-const scopeCapture = new Float32Array(32768);
+const displayValues = { scopeRange: 1, scopeOffset: 0 };
 
 const audioControl = document.querySelector('compost-audio');
 const scope = document.querySelector('compost-scope');
@@ -30,8 +23,6 @@ const midiDrawer = document.querySelector('.midi-drawer');
 const mappingsView = document.querySelector('compost-midi-mappings');
 const mapToggle = document.querySelector('[data-midi-map-toggle]');
 const preset = document.querySelector('[data-signal-preset]');
-const samplesControl = document.querySelector('[data-samples-control]');
-const periodsControl = document.querySelector('[data-periods-control]');
 const xLabels = document.querySelector('[data-scope-x-labels]');
 const yLabels = document.querySelector('[data-scope-y-labels]');
 const scopeFPS = document.querySelector('[data-scope-fps]');
@@ -42,8 +33,6 @@ let audio = null;
 let midiActivityTimeout = 0;
 let scopeFrames = 0;
 let scopeFrameStart = performance.now();
-let scopeCaptureWriteIndex = 0;
-let scopeCaptureLength = 0;
 
 mappingsView.mappings = mappings;
 mappings.addEventListener('midi-mapping-request', ({ detail }) => mappings.applyMapping(detail));
@@ -54,14 +43,13 @@ mappings.applyMappings([
   { parameterID: 'amplitude', cc: 20 },
   { parameterID: 'offset', cc: 71 },
   { parameterID: 'waveShape', cc: 79 },
-  { parameterID: 'scopeSamples', cc: 76 },
-  { parameterID: 'scopePeriods', cc: 81 },
+  { parameterID: 'phaseReset', cc: 80 },
   { parameterID: 'scopeRange', cc: 77 },
   { parameterID: 'scopeOffset', cc: 78 },
 ]);
 
-parameters.addEventListener('parameter-edit', ({ detail }) => setValue(detail.parameterID, detail.value, detail.source));
-mappings.addEventListener('midi-parameter', ({ detail }) => setValue(detail.parameterID, detail.value, 'midi'));
+parameters.addEventListener('parameter-edit', ({ detail }) => applyParameterIntent(detail));
+mappings.addEventListener('midi-parameter', ({ detail }) => applyParameterIntent({ ...detail, source: 'midi' }));
 
 mapToggle.addEventListener('click', () => {
   const active = mapToggle.getAttribute('aria-pressed') !== 'true';
@@ -124,9 +112,9 @@ async function setupAudio(context) {
   oscillator.connect(context.destination);
   oscillator.port.onmessage = ({ data }) => {
     if (data?.type === 'scope-samples'
-        && data.samples instanceof Float32Array
-        && data.outputSamples instanceof Float32Array) {
-      captureScopeSamples(data.samples);
+      && data.samples instanceof Float32Array
+      && data.outputSamples instanceof Float32Array) {
+      scope.setSamples(data.samples);
       updateMeter(data.outputSamples);
     }
   };
@@ -137,34 +125,15 @@ async function setupAudio(context) {
 function cleanupAudio() {
   audio?.oscillator.disconnect();
   audio = null;
-  scopeCapture.fill(0);
-  scopeCaptureWriteIndex = 0;
-  scopeCaptureLength = 0;
   meter.setState({ channels: [{ primary: -60, secondary: -60 }] });
 }
 
-function captureScopeSamples(samples) {
-  for (const sample of samples) {
-    scopeCapture[scopeCaptureWriteIndex] = sample;
-    scopeCaptureWriteIndex = (scopeCaptureWriteIndex + 1) % scopeCapture.length;
+function applyParameterIntent({ parameterID, value, source }) {
+  if (parameterID === 'phaseReset') {
+    if (value === 1) audio?.oscillator.port.postMessage({ type: 'resetPhase' });
+    return;
   }
-  scopeCaptureLength = Math.min(scopeCapture.length, scopeCaptureLength + samples.length);
-  publishScopeWindow();
-}
-
-function publishScopeWindow() {
-  const requested = displayValues.scopeWindow === 0
-    ? displayValues.scopeSamples
-    : displayValues.scopePeriods * (audio?.context.sampleRate || 48000) / values.frequency;
-  const length = Math.max(2, Math.min(scopeCaptureLength, Math.round(requested)));
-  if (scopeCaptureLength < 2) return;
-
-  const samples = new Float32Array(length);
-  const start = (scopeCaptureWriteIndex - length + scopeCapture.length) % scopeCapture.length;
-  const firstLength = Math.min(length, scopeCapture.length - start);
-  samples.set(scopeCapture.subarray(start, start + firstLength));
-  if (firstLength < length) samples.set(scopeCapture.subarray(0, length - firstLength), firstLength);
-  scope.setSamples(samples);
+  setValue(parameterID, value, source);
 }
 
 function updateMeter(samples) {
@@ -209,25 +178,18 @@ function setDisplayValue(parameterID, value, source) {
   parameters.applyValue(parameterID, displayValues[parameterID], { source });
   if (parameterID === 'scopeRange') scope.setAttribute('value-range', String(displayValues[parameterID]));
   if (parameterID === 'scopeOffset') scope.setAttribute('y-offset', String(displayValues[parameterID]));
-  if (parameterID === 'scopeWindow') {
-    samplesControl.hidden = displayValues.scopeWindow !== 0;
-    periodsControl.hidden = displayValues.scopeWindow !== 1;
-  }
-  if (parameterID === 'scopeWindow'
-      || parameterID === 'scopeSamples'
-      || parameterID === 'scopePeriods') publishScopeWindow();
 }
 
 function applyPreset(name) {
   const presets = {
-    'saw-standard': { waveShape: 1, frequency: 220, amplitude: .8, offset: 0, scopeWindow: 1, scopeSamples: 1024, scopePeriods: 4, scopeRange: 1, scopeOffset: 0, xLabels: '0:start,.5:middle,1:end', yLabels: '-.5,0,.5' },
-    'sine-labels': { waveShape: 0, frequency: 110, amplitude: .8, offset: 0, scopeWindow: 1, scopeSamples: 1536, scopePeriods: 4, scopeRange: 1, scopeOffset: 0, xLabels: '0:start,.5:middle,1:end', yLabels: '-.5:low,0:center,.5:high' },
-    'unipolar-square': { waveShape: 2, frequency: 55, amplitude: .5, offset: .5, scopeWindow: 0, scopeSamples: 1024, scopePeriods: 4, scopeRange: .5, scopeOffset: .5, xLabels: '0:start,.5:middle,1:end', yLabels: '0:min,.5:center,1:max' },
+    'saw-standard': { waveShape: 1, frequency: 220, amplitude: .8, offset: 0, scopeRange: 1, scopeOffset: 0, xLabels: '0:start,.5:middle,1:end', yLabels: '-.5,0,.5' },
+    'sine-labels': { waveShape: 0, frequency: 110, amplitude: .8, offset: 0, scopeRange: 1, scopeOffset: 0, xLabels: '0:start,.5:middle,1:end', yLabels: '-.5:low,0:center,.5:high' },
+    'unipolar-square': { waveShape: 2, frequency: 55, amplitude: .5, offset: .5, scopeRange: .5, scopeOffset: .5, xLabels: '0:start,.5:middle,1:end', yLabels: '0:min,.5:center,1:max' },
   };
   const selected = presets[name];
   if (!selected) return;
   for (const id of ['waveShape', 'frequency', 'amplitude', 'offset']) setParameter(id, selected[id], 'preset');
-  for (const id of ['scopeWindow', 'scopeSamples', 'scopePeriods', 'scopeRange', 'scopeOffset']) setDisplayValue(id, selected[id], 'preset');
+  for (const id of ['scopeRange', 'scopeOffset']) setDisplayValue(id, selected[id], 'preset');
   xLabels.value = selected.xLabels;
   yLabels.value = selected.yLabels;
   scope.setAttribute('x-marker-labels', selected.xLabels);

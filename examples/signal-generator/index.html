@@ -83,6 +83,7 @@
 
       .workbench { display: grid; width: min(100%, 32.5em); margin: auto; border: 1px solid var(--line); }
       .parameter-zone { display: grid; gap: .75em; padding: .625em; border-bottom: 1px solid var(--line); }
+      .parameter-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .75em; }
       .wave-shape-select { width: 100%; }
       .control-row { display: flex; align-items: stretch; justify-content: center; gap: .75em; }
       .control-row compost-knob { flex: 1 1 5.25em; min-width: 0; max-width: 7em; --compost-knob-size: 4.125em; }
@@ -94,7 +95,6 @@
       .meter-cell { display: grid; place-items: center; padding: .625em 1em; border-right: 1px solid var(--line); }
       .meter-cell compost-meter { --meter-length: 5.5em; }
       .scope-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }
-      .scope-select-control { width: auto; padding: .625em; }
       .scope-number-control { display: grid; gap: .35em; padding: .625em; color: var(--muted); font-size: .6875em; }
       .scope-number-control compost-number-box { width: 100%; }
       .scope-label-editor { display: grid; grid-column: 1 / -1; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: .5em; padding: .625em; border-top: 1px solid var(--line); color: var(--muted); font-size: .6875em; }
@@ -151,11 +151,14 @@
         <h1 class="sr-only">Signal Generator</h1>
         <section class="workbench">
           <div class="parameter-zone">
-            <compost-select class="wave-shape-select" parameter-id="waveShape" label="Waveform" value="1">
-              <option value="0">Sine</option>
-              <option value="1" selected>Saw</option>
-              <option value="2">Square</option>
-            </compost-select>
+            <div class="parameter-actions">
+              <compost-select class="wave-shape-select" parameter-id="waveShape" label="Waveform" value="1">
+                <option value="0">Sine</option>
+                <option value="1" selected>Saw</option>
+                <option value="2">Square</option>
+              </compost-select>
+              <compost-button mode="trigger" parameter-id="phaseReset" label="Reset phase"></compost-button>
+            </div>
             <div class="control-row" aria-label="Oscillator controls">
               <compost-knob parameter-id="frequency" label="Frequency" min="55" max="1760" mid="220" curve="log" value="220" unit="Hz" reset-value="220" editable></compost-knob>
               <compost-knob parameter-id="amplitude" label="Amplitude" min="0" max="1" value=".8" step=".01" reset-value=".8" editable></compost-knob>
@@ -169,12 +172,6 @@
             <div class="scope-controls">
               <div class="meter-cell"><compost-meter label="Output" min="-60" max="6" curve="gain"></compost-meter></div>
               <div class="scope-settings">
-                <compost-select class="scope-select-control" parameter-id="scopeWindow" label="Window" value="1">
-                  <option value="0">Samples</option>
-                  <option value="1" selected>Periods</option>
-                </compost-select>
-                <label class="scope-number-control" data-samples-control hidden>Samples <compost-number-box parameter-id="scopeSamples" label="Samples" min="64" max="8192" value="1024" step="64" reset-value="1024" split-drag></compost-number-box></label>
-                <label class="scope-number-control" data-periods-control>Periods <compost-number-box parameter-id="scopePeriods" label="Periods" min="1" max="16" value="4" step="1" reset-value="4" split-drag></compost-number-box></label>
                 <label class="scope-number-control">Vertical range <compost-number-box parameter-id="scopeRange" label="Vertical range" min=".1" max="2" value="1" step=".01" reset-value="1" split-drag></compost-number-box></label>
                 <label class="scope-number-control">Vertical center <compost-number-box parameter-id="scopeOffset" label="Vertical center" min="-2" max="2" value="0" step=".01" reset-value="0" split-drag></compost-number-box></label>
                 <label class="scope-label-editor">X labels <input data-scope-x-labels aria-label="X labels" value="0:start,.5:middle,1:end"></label>
