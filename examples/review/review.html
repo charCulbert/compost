@@ -503,7 +503,7 @@
       let playing = false;
       const voices = new Set();
       let nextNoteId = 1;
-      editor.noteIdFactory = () => `${cls}-note-${nextNoteId++}`;
+      editor.noteIdFactory = () => `note-${nextNoteId++}`;
       editor.setNotes([
         { note: 56, start: 2.5, duration: .25, velocity: 88, channel: 0 },
         { note: 58, start: 2.75, duration: .25, velocity: 96, channel: 0 },
