@@ -1743,8 +1743,9 @@ export class CompostTimeline extends HTMLElement {
     const width = this.lanesWrap.clientWidth || 0;
     if (!width) return;
     const visible = width / this._pxPerBeat;
+    const anchor = visible / 2;
     if (this._playhead < this._scrollBeat + .5) this.scrollBeat = Math.max(0, this._playhead - 1);
-    else if (this._playhead > this._scrollBeat + visible - .5) this.scrollBeat = Math.max(0, this._playhead - visible + 1);
+    else if (this._playhead > this._scrollBeat + anchor) this.scrollBeat = Math.max(0, this._playhead - anchor);
   }
 
   ensureClipVisible(id) {

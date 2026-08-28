@@ -1119,6 +1119,39 @@ test('timeline clip selection and loop match the note-editor visual language', a
   await expect(timeline.locator('.ruler-band')).toBeHidden();
 });
 
+test('timeline follow anchors the playhead at the viewport centre while playing', async ({ page }) => {
+  await openTimeline(page);
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('follow', '');
+    element.setLoop(element.loopStart, element.loopEnd, false);
+  });
+  const { visible } = await timeline.evaluate((element) => ({
+    visible: element.shadowRoot.querySelector('.lanes-wrap').clientWidth / element.pxPerBeat,
+  }));
+
+  // walking the playhead forward beats at a time keeps it anchored at the
+  // centre once it crosses it, scrolling 1:1 with no edge-driven jumps
+  await timeline.evaluate((element) => element.setPlayhead(1));
+  let state = await timeline.evaluate((element) => ({
+    scrollBeat: element.scrollBeat, playhead: element.playhead,
+  }));
+  expect(state.scrollBeat).toBe(0);
+
+  await timeline.evaluate((element, beats) => {
+    for (let beat = 1; beat <= beats; beat += .5) element.setPlayhead(beat);
+  }, Math.ceil(visible) + 4);
+  state = await timeline.evaluate((element) => ({
+    scrollBeat: element.scrollBeat, playhead: element.playhead, visible: element.shadowRoot.querySelector('.lanes-wrap').clientWidth / element.pxPerBeat,
+  }));
+  expect(state.playhead).toBeCloseTo(state.scrollBeat + state.visible / 2, 0);
+  expect(state.playhead).toBeLessThan(state.scrollBeat + state.visible);
+
+  // a seek back to the start still pulls the view back
+  await timeline.evaluate((element) => element.setPlayhead(0.5));
+  expect(await timeline.evaluate((element) => element.scrollBeat)).toBe(0);
+});
+
 test('timeline loop band moves the whole loop, clamps at zero and shows grabbing', async ({ page }) => {
   await openTimeline(page);
   const timeline = page.locator('compost-timeline');
