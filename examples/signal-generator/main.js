@@ -6,25 +6,24 @@ import { createParameterController } from '../../src/parameter-controller.js';
 import { quantizedNotes } from '../../src/piano-roll-model.js';
 
 const values = {
-  waveShape: 1,
+  waveShape: 0,
   transpose: 0,
   amplitude: .8,
   offset: 0,
   outputGain: .5,
   tempo: 120,
-  attack: .08,
-  decay: .2,
-  sustain: .65,
-  release: .35,
+  attack: .001,
+  decay: .08,
+  sustain: 0,
+  release: .08,
 };
 const displayValues = { scopeRange: 1, scopeOffset: 0 };
 let pitchEnvelope = [
   { time: 0, value: 12, curve: -.35 },
-  { time: .05, value: -12, curve: .35 },
-  { time: .1, value: 0 },
-  { time: 1, value: 0 },
+  { time: .05, value: -12 },
+  { time: 1, value: -12 },
 ];
-const defaultNotes = [
+const melodicNotes = [
   { id: 'note-1', note: 60, start: 0, duration: .45, velocity: 110, channel: 0 },
   { id: 'note-2', note: 64, start: .5, duration: .45, velocity: 96, channel: 0 },
   { id: 'note-3', note: 67, start: 1, duration: .45, velocity: 104, channel: 0 },
@@ -34,7 +33,12 @@ const defaultNotes = [
   { id: 'note-7', note: 64, start: 3, duration: .45, velocity: 100, channel: 0 },
   { id: 'note-8', note: 62, start: 3.5, duration: .45, velocity: 94, channel: 0 },
 ];
-let notes = defaultNotes.map((note) => ({ ...note }));
+const kickNotes = [
+  { id: 'kick-1', note: 48, start: 0, duration: .25, velocity: 110, channel: 0 },
+  { id: 'kick-2', note: 55, start: 1.5, duration: .5, velocity: 100, channel: 0 },
+  { id: 'kick-3', note: 46, start: 3, duration: 1, velocity: 105, channel: 0 },
+];
+let notes = kickNotes.map((note) => ({ ...note }));
 
 const audioControl = document.querySelector('compost-audio');
 const scope = document.querySelector('compost-scope');
@@ -263,20 +267,16 @@ function setDisplayValue(parameterID, value, source) {
 
 function applyPreset(name) {
   const presets = {
-    'saw-pluck': { waveShape: 1, transpose: 0, amplitude: .8, offset: 0, adsr: [.08, .2, .65, .35], pitch: [[0, 12, -.35], [.05, -12, .35], [.1, 0], [1, 0]], notes: defaultNotes, rootNote: 48 },
-    'sine-pad': { waveShape: 0, transpose: -12, amplitude: .8, offset: 0, adsr: [.35, .6, .75, 1.4], pitch: [[0, 0], [1, 0]], notes: defaultNotes, rootNote: 48 },
-    'square-short': { waveShape: 2, transpose: 0, amplitude: .5, offset: .5, adsr: [.005, .08, .8, .12], pitch: [[0, -12], [.08, 0], [1, 0]], notes: defaultNotes, rootNote: 48 },
-    'sine-dive': {
+    kick: {
       waveShape: 0, transpose: 0, amplitude: .8, offset: 0,
       adsr: [.001, .08, 0, .08],
       pitch: [[0, 12, -.35], [.05, -12], [1, -12]],
-      notes: [
-        { id: 'dive-1', note: 48, start: 0, duration: .25, velocity: 110, channel: 0 },
-        { id: 'dive-2', note: 55, start: 1.5, duration: .5, velocity: 100, channel: 0 },
-        { id: 'dive-3', note: 46, start: 3, duration: 1, velocity: 105, channel: 0 },
-      ],
+      notes: kickNotes,
       rootNote: 45,
     },
+    'saw-pluck': { waveShape: 1, transpose: 0, amplitude: .8, offset: 0, adsr: [.08, .2, .65, .35], pitch: [[0, 12, -.35], [.05, -12, .35], [.1, 0], [1, 0]], notes: melodicNotes, rootNote: 48 },
+    'sine-pad': { waveShape: 0, transpose: -12, amplitude: .8, offset: 0, adsr: [.35, .6, .75, 1.4], pitch: [[0, 0], [1, 0]], notes: melodicNotes, rootNote: 48 },
+    'square-short': { waveShape: 2, transpose: 0, amplitude: .5, offset: .5, adsr: [.005, .08, .8, .12], pitch: [[0, -12], [.08, 0], [1, 0]], notes: melodicNotes, rootNote: 48 },
   };
   const selected = presets[name];
   if (!selected) return;

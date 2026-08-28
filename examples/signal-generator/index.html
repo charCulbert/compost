@@ -157,10 +157,10 @@
         <div class="toolbar-preset">
           <span>Preset</span>
           <select data-synth-preset aria-label="Preset">
-            <option value="saw-pluck" selected>Saw pluck</option>
+            <option value="kick" selected>Kick</option>
+            <option value="saw-pluck">Saw pluck</option>
             <option value="sine-pad">Sine pad</option>
             <option value="square-short">Short square</option>
-            <option value="sine-dive">Sine dive</option>
           </select>
         </div>
       </header>
@@ -180,9 +180,9 @@
           <div class="synth-grid">
             <div class="parameter-zone">
               <div class="parameter-actions">
-                <compost-select class="wave-shape-select" parameter-id="waveShape" label="Waveform" value="1">
-                  <option value="0">Sine</option>
-                  <option value="1" selected>Saw</option>
+                <compost-select class="wave-shape-select" parameter-id="waveShape" label="Waveform" value="0">
+                  <option value="0" selected>Sine</option>
+                  <option value="1">Saw</option>
                   <option value="2">Square</option>
                 </compost-select>
                 <compost-button mode="trigger" parameter-id="phaseReset" label="Reset phase"></compost-button>
@@ -193,10 +193,10 @@
                 <compost-knob parameter-id="offset" label="Offset" min="-1" max="1" value="0" step=".01" reset-value="0" editable></compost-knob>
               </div>
               <div class="adsr-controls" aria-label="Amplitude envelope controls">
-                <label class="adsr-control">Attack <compost-number-box parameter-id="attack" label="Attack" min=".001" max="10" value=".08" step=".001" unit="s" reset-value=".08" split-drag></compost-number-box></label>
-                <label class="adsr-control">Decay <compost-number-box parameter-id="decay" label="Decay" min=".001" max="10" value=".2" step=".001" unit="s" reset-value=".2" split-drag></compost-number-box></label>
-                <label class="adsr-control">Sustain <compost-number-box parameter-id="sustain" label="Sustain" min="0" max="1" value=".65" step=".01" reset-value=".65" split-drag></compost-number-box></label>
-                <label class="adsr-control">Release <compost-number-box parameter-id="release" label="Release" min=".001" max="10" value=".35" step=".001" unit="s" reset-value=".35" split-drag></compost-number-box></label>
+                <label class="adsr-control">Attack <compost-number-box parameter-id="attack" label="Attack" min=".001" max="10" value=".001" step=".001" unit="s" reset-value=".001" split-drag></compost-number-box></label>
+                <label class="adsr-control">Decay <compost-number-box parameter-id="decay" label="Decay" min=".001" max="10" value=".08" step=".001" unit="s" reset-value=".08" split-drag></compost-number-box></label>
+                <label class="adsr-control">Sustain <compost-number-box parameter-id="sustain" label="Sustain" min="0" max="1" value="0" step=".01" reset-value="0" split-drag></compost-number-box></label>
+                <label class="adsr-control">Release <compost-number-box parameter-id="release" label="Release" min=".001" max="10" value=".08" step=".001" unit="s" reset-value=".08" split-drag></compost-number-box></label>
               </div>
               <div class="editor-heading"><h2>Pitch envelope</h2><p>One second · semitones</p></div>
               <compost-envelope-editor class="pitch-envelope" label="Pitch envelope" duration="1" min="-12" max="12" grid=".05" step="1" grid-lines="time"></compost-envelope-editor>
@@ -223,7 +223,7 @@
               <compost-number-box parameter-id="tempo" label="Tempo" min="40" max="240" value="120" step="1" unit="BPM" reset-value="120" split-drag></compost-number-box>
             </div>
           </div>
-          <compost-note-editor class="note-editor" label="Synth sequence" beats="4" start="0" end="4" loop loop-start="0" loop-end="4" time-signature="4/4" grid="1/16" adaptive-grid root-note="48" note-count="25"></compost-note-editor>
+          <compost-note-editor class="note-editor" label="Synth sequence" beats="4" start="0" end="4" loop loop-start="0" loop-end="4" time-signature="4/4" grid="1/16" adaptive-grid root-note="45" note-count="25"></compost-note-editor>
         </section>
         <footer class="keyboard-footer"><compost-piano dock root-note="36" note-count="49"></compost-piano></footer>
       </main>

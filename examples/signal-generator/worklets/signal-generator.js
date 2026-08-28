@@ -3,16 +3,16 @@ import { envelopeCurvePosition } from '../../../src/envelope-model.js';
 class CompostMonoSynth extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [
-      { name: 'waveShape', defaultValue: 1, minValue: 0, maxValue: 2, automationRate: 'k-rate' },
+      { name: 'waveShape', defaultValue: 0, minValue: 0, maxValue: 2, automationRate: 'k-rate' },
       { name: 'transpose', defaultValue: 0, minValue: -24, maxValue: 24, automationRate: 'k-rate' },
       { name: 'amplitude', defaultValue: .8, minValue: 0, maxValue: 1, automationRate: 'a-rate' },
       { name: 'offset', defaultValue: 0, minValue: -1, maxValue: 1, automationRate: 'a-rate' },
       { name: 'outputGain', defaultValue: .5, minValue: 0, maxValue: 1, automationRate: 'a-rate' },
       { name: 'tempo', defaultValue: 120, minValue: 40, maxValue: 240, automationRate: 'k-rate' },
-      { name: 'attack', defaultValue: .08, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
-      { name: 'decay', defaultValue: .2, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
-      { name: 'sustain', defaultValue: .65, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
-      { name: 'release', defaultValue: .35, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
+      { name: 'attack', defaultValue: .001, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
+      { name: 'decay', defaultValue: .08, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
+      { name: 'sustain', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'release', defaultValue: .08, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
     ];
   }
 
