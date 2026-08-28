@@ -64,6 +64,9 @@ test('the Signal Generator uses the current one-channel scope contract', () => {
   const main = read('examples/signal-generator/main.js');
   const worklet = read('examples/signal-generator/worklets/signal-generator.js');
   assert.match(html, /<compost-scope[^>]+value-range="1"/u);
+  assert.match(html, /<compost-meter/u);
+  assert.match(html, /<compost-number-box[^>]+parameter-id="frequency"/u);
+  assert.match(html, /<compost-button[^>]+parameter-id="mute"/u);
   assert.match(main, /scope\.setSamples\(data\.samples\)/u);
   assert.match(worklet, /type: 'scope-samples', samples/u);
   assert.doesNotMatch(`${html}\n${main}`, /triggerSamples|source-channels|trigger-channel|periods-shown|samples-shown|captureTrigger/u);

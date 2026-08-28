@@ -18,8 +18,11 @@
       .signal-controls { display: grid; align-content: start; gap: 1.25em; padding: 1em; border-right: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
       .signal-controls compost-knob { --compost-knob-size: 7em; }
       .signal-controls compost-slider { width: 100%; }
+      .exact-frequency { display: grid; gap: .4em; }
+      .signal-visualizers { min-width: 0; padding: 1em; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5em; align-items: center; }
       .signal-scope { min-width: 0; padding: 1em; display: grid; align-content: center; }
       compost-scope { --scope-height: min(28em, 60vh); }
+      compost-meter { --meter-length: min(28em, 60vh); }
       .midi-drawer { position: fixed; inset: 0 auto 0 0; z-index: 20; }
       .midi-drawer[open] { width: min(28em, 90vw); }
       .midi-stack { display: grid; gap: 1.5em; padding: 1em; }
@@ -28,7 +31,8 @@
       @media (max-width: 44em) {
         .signal-main { grid-template-columns: 1fr; }
         .signal-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); border-right: 0; border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
-        .signal-controls compost-select, .signal-controls compost-slider { grid-column: 1 / -1; }
+        .signal-controls compost-select, .signal-controls compost-slider, .exact-frequency { grid-column: 1 / -1; }
+        .signal-visualizers { grid-template-columns: minmax(0, 1fr) auto; }
       }
     </style>
   </head>
@@ -37,8 +41,9 @@
       <header class="signal-bar">
         <h1>Signal Generator</h1>
         <compost-audio start-label="Start audio" stop-label="Suspend audio"></compost-audio>
+        <compost-button mode="switch" parameter-id="mute" label="Mute"></compost-button>
         <button type="button" data-midi-open>Open MIDI</button>
-        <compost-button mode="switch" label="MIDI Map" data-midi-map-toggle></compost-button>
+        <button type="button" data-midi-map-toggle aria-pressed="false">MIDI Map</button>
       </header>
 
       <div class="signal-main">
@@ -49,13 +54,20 @@
             <option value="2">Square</option>
           </compost-select>
           <compost-knob parameter-id="frequency" label="Frequency" min="55" max="1760" mid="220" curve="log" value="220" unit="Hz" reset-value="220" editable></compost-knob>
+          <div class="exact-frequency">
+            <span>Exact frequency</span>
+            <compost-number-box parameter-id="frequency" label="Exact frequency" min="55" max="1760" mid="220" curve="log" value="220" unit="Hz" reset-value="220" split-drag></compost-number-box>
+          </div>
           <compost-knob parameter-id="amplitude" label="Amplitude" min="0" max="1" value=".8" step=".01" reset-value=".8" editable></compost-knob>
           <compost-knob parameter-id="offset" label="Offset" min="-1" max="1" value="0" step=".01" reset-value="0" editable></compost-knob>
           <compost-slider parameter-id="outputGain" label="Output" min="0" max="1" value=".5" step=".01" reset-value=".5" editable></compost-slider>
         </section>
 
-        <section class="signal-scope" aria-label="Oscilloscope">
-          <compost-scope value-range="1" y-markers="-.5,0,.5" y-marker-labels="-.5,0,.5"></compost-scope>
+        <section class="signal-visualizers" aria-label="Signal visualizers">
+          <div class="signal-scope">
+            <compost-scope value-range="1" y-markers="-.5,0,.5" y-marker-labels="-.5,0,.5"></compost-scope>
+          </div>
+          <compost-meter label="Output" min="-60" max="6" curve="gain"></compost-meter>
         </section>
       </div>
 

@@ -10,10 +10,12 @@ const values = {
   amplitude: .8,
   offset: 0,
   outputGain: .5,
+  mute: 0,
 };
 
 const audioControl = document.querySelector('compost-audio');
 const scope = document.querySelector('compost-scope');
+const meter = document.querySelector('compost-meter');
 const piano = document.querySelector('compost-piano');
 const midi = document.querySelector('compost-midi');
 const midiDrawer = document.querySelector('.midi-drawer');
@@ -32,18 +34,21 @@ mappings.applyMappings([
   { parameterID: 'amplitude', cc: 20 },
   { parameterID: 'offset', cc: 71 },
   { parameterID: 'waveShape', cc: 79 },
+  { parameterID: 'mute', cc: 64 },
 ]);
 
 parameters.addEventListener('parameter-edit', ({ detail }) => setParameter(detail.parameterID, detail.value, detail.source));
 mappings.addEventListener('midi-parameter', ({ detail }) => setParameter(detail.parameterID, detail.value, 'midi'));
 
 document.querySelector('[data-midi-open]').addEventListener('click', () => { midiDrawer.open = true; });
-mapToggle.addEventListener('change', () => {
-  if (mapToggle.pressed) mappingsView.controller?.beginSelecting();
+mapToggle.addEventListener('click', () => {
+  const active = mapToggle.getAttribute('aria-pressed') !== 'true';
+  mapToggle.setAttribute('aria-pressed', String(active));
+  if (active) mappingsView.controller?.beginSelecting();
   else mappingsView.controller?.cancel('toolbar');
 });
 mappingsView.addEventListener('midi-map-mode-change', ({ detail }) => {
-  mapToggle.pressed = detail.active;
+  mapToggle.setAttribute('aria-pressed', String(detail.active));
   if (detail.active) midiDrawer.open = true;
 });
 
@@ -74,6 +79,7 @@ async function setupAudio(context) {
   oscillator.port.onmessage = ({ data }) => {
     if (data?.type === 'scope-samples' && data.samples instanceof Float32Array) {
       scope.setSamples(data.samples);
+      updateMeter(data.samples);
     }
   };
   audio = { context, oscillator };
@@ -83,6 +89,31 @@ async function setupAudio(context) {
 function cleanupAudio() {
   audio?.oscillator.disconnect();
   audio = null;
+  meter.setState({ channels: [{ primary: -60, secondary: -60 }] });
+}
+
+function updateMeter(samples) {
+  let peak = 0;
+  let squares = 0;
+  for (const sample of samples) {
+    const magnitude = Math.abs(sample);
+    peak = Math.max(peak, magnitude);
+    squares += sample * sample;
+  }
+  meter.setState({
+    primaryLabel: 'Peak',
+    secondaryLabel: 'RMS',
+    unit: 'dB',
+    channels: [{
+      primary: decibels(peak),
+      secondary: decibels(Math.sqrt(squares / samples.length)),
+      clipped: peak >= 1,
+    }],
+  });
+}
+
+function decibels(value) {
+  return Math.max(-60, 20 * Math.log10(Math.max(value, .001)));
 }
 
 function setParameter(parameterID, value, source) {
@@ -106,3 +137,5 @@ function handlePackedNote(message, source) {
   if (isNoteOnMessage(message)) noteOn(noteFromMessage(message), source);
   else if (isNoteOffMessage(message)) audio?.oscillator.port.postMessage({ type: 'noteOff', note: noteFromMessage(message) });
 }
+
+cleanupAudio();

@@ -6,6 +6,7 @@ class CompostSignalGenerator extends AudioWorkletProcessor {
       { name: 'amplitude', defaultValue: .8, minValue: 0, maxValue: 1, automationRate: 'a-rate' },
       { name: 'offset', defaultValue: 0, minValue: -1, maxValue: 1, automationRate: 'a-rate' },
       { name: 'outputGain', defaultValue: .5, minValue: 0, maxValue: 1, automationRate: 'a-rate' },
+      { name: 'mute', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
     ];
   }
 
@@ -32,10 +33,11 @@ class CompostSignalGenerator extends AudioWorkletProcessor {
       const amplitude = valueAt(parameters.amplitude, frame);
       const offset = valueAt(parameters.offset, frame);
       const gain = valueAt(parameters.outputGain, frame);
+      const mute = parameters.mute[0];
       const raw = shape === 0 ? Math.sin(this.phase * Math.PI * 2)
         : shape === 2 ? (this.phase < .5 ? 1 : -1)
           : this.phase * 2 - 1;
-      const sample = (raw * amplitude + offset) * gain * this.gate;
+      const sample = (raw * amplitude + offset) * gain * this.gate * (1 - mute);
       for (const channel of output) channel[frame] = sample;
       this.capture[this.captureIndex++] = sample;
       this.phase = (this.phase + frequency / sampleRate) % 1;
