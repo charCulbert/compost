@@ -407,6 +407,17 @@ test('centered audio keeps its toolbar footprint without animating', async ({ pa
   expect(animations).toBe(0);
 });
 
+test('signal generator drawer only takes its panel width while open', async ({ page }) => {
+  await page.goto('/examples/signal-generator/');
+  const drawer = page.locator('.midi-drawer');
+  const closedWidth = await drawer.evaluate((element) => element.getBoundingClientRect().width);
+
+  await drawer.evaluate((element) => { element.open = true; });
+
+  await expect.poll(() => drawer.evaluate((element) => element.getBoundingClientRect().width))
+    .toBeGreaterThan(closedWidth * 2);
+});
+
 test('parameter controller reflects host updates to both controls', async ({ page }) => {
   await page.goto('/examples/parameter-sync/');
   const controls = page.locator('[parameter-id="frequency"]');

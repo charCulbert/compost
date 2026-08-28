@@ -20,7 +20,8 @@
       .signal-controls compost-slider { width: 100%; }
       .signal-scope { min-width: 0; padding: 1em; display: grid; align-content: center; }
       compost-scope { --scope-height: min(28em, 60vh); }
-      .midi-drawer { position: fixed; inset: 0 auto 0 0; z-index: 20; width: min(28em, 90vw); }
+      .midi-drawer { position: fixed; inset: 0 auto 0 0; z-index: 20; }
+      .midi-drawer[open] { width: min(28em, 90vw); }
       .midi-stack { display: grid; gap: 1.5em; padding: 1em; }
       .midi-stack h2 { margin: 0 0 .5em; font-size: 1em; }
       compost-piano { border-top: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
