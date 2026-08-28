@@ -1,97 +1,37 @@
-# Plain-HTML style pass
+# Finish the plain-HTML pass
 
-Move every element onto the rules in the README's Style section, one element
-per round, each signed off by eye before the next. The README is the only
-document; this file is the working plan.
+The visual pass is complete for every element. The README is the product
+documentation; this file tracks only the work still needed to finish the pass.
 
-## Order
+## Interface conformance
 
-Parameter controls first so the derivation rules settle on the simplest
-shapes; everything after applies them.
+- [ ] Audit attribute/property reflection, `disabled` and `readonly` behavior,
+  intent-event names, and event `detail` types across every element.
+- [ ] Decide where native form participation is useful and use
+  `ElementInternals` only for those controls.
+- [ ] Add one conformance table and one shared test for the common contract.
+- [ ] Complete public declarations for exported utilities and timeline events.
 
-- [x] compost-knob
-- [x] compost-slider
-- [ ] compost-button
-- [ ] compost-number-box
-- [ ] compost-select
-- [ ] compost-meter
-- [ ] compost-scope (canvas: resolve colours through a probe)
-- [ ] compost-envelope-editor
-- [ ] compost-drawer
-- [ ] compost-window
-- [ ] compost-popup
-- [ ] compost-device-selector
-- [ ] compost-midi
-- [ ] compost-midi-monitor
-- [ ] compost-midi-mappings
-- [ ] compost-audio
-- [ ] compost-clip-grid
-- [ ] compost-piano
-- [ ] compost-note-editor
-- [ ] compost-timeline
+If the view fully determines a result it may produce it (duplicate, delete).
+Operations with parameters the view cannot see emit intent instead (quantize,
+legato, fit).
 
-## Done ahead of the elements
+## Examples
 
-`src/themes.css` and the `[data-compost-theme]` bridge rule are retired: no
-`./themes` export, no runtime theme picker in the examples. Every example
-that leaned on the old picker (signal generator's theme buttons, the shared
-theme selector) is broken until its element's round rebuilds it on plain
-`color` / `color-scheme` / `--compost-accent`, per README, Style. Expected;
-don't patch it early.
+`examples/review/review.html` is the current source of truth for element
+scenarios. Do not maintain a second version of those scenarios.
 
-## Each round
+- [ ] Replace each legacy `examples/component-demos/<element>/` page with its
+  review scenario: one purpose, defaults, and visible markup.
+- [ ] Update the examples index when the standalone pages are current.
+- [ ] Update the signal generator, MIDI controller, and parameter-sync
+  showcases to the current APIs. These remain larger examples where several
+  elements meet a real or faux backend.
 
-What gets done, in this order:
+## Verification
 
-1. Restyle the element to the nine rules: colour tokens and `color-scheme`
-   pins out, `currentColor` / `--compost-accent` / `Canvas` in, square focus
-   and learn rings, sizes in `em`, every structural piece named with `part`.
-   Geometry tokens stay.
-2. Any bug met on the way is its own commit with its own test.
-3. Update `src/components/<element>.d.ts` for any attribute or property that
-   changed; parts are named in the element's template.
-4. Add the element's scenario to the review page, run the unit tests and a
-   headless render check in all three contexts.
-5. Commit: `style: <element> follows the plain-HTML ethos`.
-
-## Verifying a round
-
-Serve the branch without caching and open the review page:
-
-```sh
-python3 examples/review/serve.py 8931
-open http://127.0.0.1:8931/examples/review/review.html?el=<element>
-```
-
-`examples/review/review.html` renders the real element from this branch in
-three page contexts: unstyled, `color-scheme: dark`, and a branded page
-(serif, 18px, `--compost-accent`). Each element has one `<template>` on that
-page showing its default states; `node examples/review/review-check.mjs
-<element>` is the headless version (console errors, computed ink per
-context, Tab focus, screenshot). Check:
-
-- **Reads**: ink, accent and muted tones come from the page; no leftover fixed
-  colour in any context; nothing invisible on dark.
-- **Works**: every gesture the element has (drag, click, keyboard, typed edit,
-  reset, open/close); the `last event` line shows the intent events.
-- **Focus**: Tab gives the square ring; the learn state gives it in accent.
-- **Scales**: the branded row is proportionally larger, not just bigger text.
-- **Looks right** to you.
-
-Reply "ok" to move on, or say what to change; changes land as a follow-up
-commit in the same round.
-
-## After the elements
-
-1. Interface pass: attribute↔property reflection, intent-event names and
-   `detail` shapes, `disabled`, form association via `ElementInternals`; one
-   conformance table and one shared test that runs against every element.
-   If the view fully determines a result it may produce it (duplicate,
-   delete); operations with parameters the view cannot see emit intent
-   instead (quantize, legato, fit).
-2. Examples: one minimal page per element showing one scenario, with the
-   markup on the page, defaults only. The bigger showcases (signal generator,
-   parameter sync) stay as the place several elements and a real backend meet.
+Run `npm test`, `npm run test:e2e`, and the review check for any element whose
+public contract or example changes.
 
 ## Parked
 
