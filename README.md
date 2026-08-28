@@ -169,9 +169,10 @@ import { createParameterController } from 'compost/parameter-controller';
 ## Working on it
 
 `npm test` runs the unit tests, `npm run test:e2e` the Playwright suite.
-`npm run dev` serves the repo without caching;
-`examples/review/review.html?el=<element>` is the source of truth for each
-element example and shows its markup on the page. Every example has the same
-light/dark color-scheme toggle. The Signal Generator, MIDI Controller, and
-Parameter Sync pages show current multi-element integration.
-`node examples/review/review-check.mjs <element>` checks an element headlessly.
+`npm run dev` serves the repo without caching; every element has its own
+example page under `examples/<element>/` that shows the element, its markup,
+and a live readout of the events it emits. Every example shares the same
+light/dark color-scheme toggle and an "All examples" link back to the
+catalog. The Signal Generator, MIDI Controller, and Parameter Sync pages
+show current multi-element integration.
+`node examples/check-example.mjs <element>` checks an element headlessly.

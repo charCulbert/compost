@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-envelope-editor · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-envelope-editor">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-envelope-editor</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div style="width: min(38em, calc(100vw - 64px)); display: grid; gap: .65em">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 1em; flex-wrap: wrap">
+            <span>Gain automation · 4 beats</span>
+            <span style="display: flex; gap: 1em; font-size: .875em">
+              <label><input type="checkbox" data-draw> Draw</label>
+              <label><input type="checkbox" data-snap checked> Snap</label>
+              <label><input type="checkbox" data-stepped> Stepped</label>
+            </span>
+          </div>
+          <compost-envelope-editor label="Gain automation over 4 beats" duration="4" grid="0.25"
+            style="height: 11em"></compost-envelope-editor>
+          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click a line to add a point; double-click or Alt-click a point to remove it. Drag empty space to select, then drag a selected point or press Cmd+D. Option-drag a segment to curve it. Shift is fine movement; Command/Ctrl inverts snapping.</small>
+        </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-envelope-editor';
+    const { s, out } = await elementDemo('compost-envelope-editor');
+    {
+      const editor = s.querySelector('compost-envelope-editor');
+      editor.points = [
+        { time: 0, value: 0 },
+        { time: .25, value: 1 },
+        { time: 1.25, value: .65 },
+        { time: 2.5, value: .65 },
+        { time: 4, value: 0 },
+      ];
+      editor.addEventListener('envelope-change', (event) => { editor.points = event.detail.points; });
+      const draw = s.querySelector('[data-draw]');
+      const snap = s.querySelector('[data-snap]');
+      const stepped = s.querySelector('[data-stepped]');
+      draw.addEventListener('change', () => editor.toggleAttribute('draw', draw.checked));
+      snap.addEventListener('change', () => editor.setAttribute('snap', snap.checked ? 'grid' : 'off'));
+      stepped.addEventListener('change', () => editor.toggleAttribute('stepped', stepped.checked));
+    }
+    </script>
+  </body>
+</html>

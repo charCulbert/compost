@@ -18,23 +18,26 @@ test('the repository root redirects to the examples page', () => {
   assert.match(html, /http-equiv="refresh" content="0; url=\.\/examples\/"/u);
 });
 
-test('the no-cache review server and checker share port 8000 by default', () => {
-  assert.match(read('examples/review/serve.py'), /else 8000/u);
-  assert.match(read('examples/review/review-check.mjs'), /process\.argv\[3\] \|\| '8000'/u);
+test('the no-cache example server and checker share port 8000 by default', () => {
+  assert.match(read('examples/serve.py'), /else 8000/u);
+  assert.match(read('examples/check-example.mjs'), /process\.argv\[3\] \|\| '8000'/u);
 });
 
-test('the review page is the one source of element examples', async () => {
+test('every element example is its own page sharing the common shell', async () => {
   const { examples } = await import('../examples/shared/catalog.js');
-  const review = read('examples/review/review.html');
-  assert.equal(fs.existsSync(path.join(root, 'examples/component-demos/catalog.js')), false);
+  const helper = read('examples/shared/element-page.js');
   for (const id of elementIDs) {
     assert.equal(examples.some((example) => example.id === id
-      && example.href === `./review/review.html?el=${id}`), true, id);
-    assert.match(review, new RegExp(`<template id="${id}">`, 'u'), `${id} template`);
+      && example.href === `./${id}/`), true, id);
+    const page = read(`examples/${id}/index.html`);
+    assert.match(page, new RegExp(`data-example-id="${id}"`, 'u'), `${id} shell`);
+    assert.match(page, /<div class="row">/u, `${id} row`);
+    assert.match(page, /<pre id="markup"/u, `${id} markup preview`);
+    assert.match(page, /shared\/element-page\.js/u, `${id} uses the shared helper`);
+    assert.match(page, new RegExp(`elementDemo\\('${id}`), `${id} mounts its demo`);
   }
-  assert.match(review, /<pre id="markup"/u);
-  assert.doesNotMatch(review, /Branded page|allContexts/u);
-  assert.match(review, /shared\/color-scheme\.js/u);
+  assert.match(helper, /example-page\.js/u);
+  assert.doesNotMatch(helper, /\breview\b/u);
 });
 
 test('every example page shares the light and dark color-scheme toggle', () => {
@@ -114,7 +117,7 @@ test('README is the finished product documentation', () => {
   const readme = read('README.md');
   for (const id of elementIDs) assert.match(readme, new RegExp(`\`${id}\``, 'u'), id);
   assert.match(readme, /not form-associated/u);
-  assert.match(readme, /source of truth for each[\s\S]+element example/u);
+  assert.doesNotMatch(readme, /\breview\b/u);
   assert.equal(fs.existsSync(path.join(root, 'docs/plans/2026-08-26-plain-html-style.md')), false);
 });
 

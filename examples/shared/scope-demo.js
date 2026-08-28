@@ -40,8 +40,8 @@ export function setupScopeReview(container, scopes) {
   runButton.addEventListener('click', async () => {
     if (!context) {
       context = new AudioContext();
-      await context.audioWorklet.addModule('./scope-source-worklet.js');
-      source = new AudioWorkletNode(context, 'compost-scope-review-source', {
+      await context.audioWorklet.addModule('../shared/scope-source-worklet.js');
+      source = new AudioWorkletNode(context, 'compost-scope-source', {
         numberOfInputs: 0,
         numberOfOutputs: 1,
         outputChannelCount: [1],

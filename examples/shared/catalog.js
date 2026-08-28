@@ -8,7 +8,7 @@ const elementIDs = [
 
 const elementExamples = elementIDs.map((id) => ({
   id,
-  href: `./review/review.html?el=${id}`,
+  href: `./${id}/`,
   title: id,
   summary: `One ${id} scenario with defaults and visible markup.`,
 }));

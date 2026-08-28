@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-note-editor · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-note-editor">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-note-editor</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
+          <span>Clip notes · 6/8 · two-bar loop with pickup</span>
+          <compost-note-editor data-option-target="editor" label="Clip notes" beats="12" start="2.5" end="9" loop loop-start="3" loop-end="9"
+            time-signature="6/8" grid="1/16" root-note="48" note-count="25" scale="0 2 4 5 7 9 11" root="0"
+            style="height: 24em"></compost-note-editor>
+          <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
+            <label>Grid <select data-note-grid>
+              <option value="off">Off</option><option value="bar">1 bar</option>
+              <option value="1/4">1/4</option><option value="1/4T">1/4 triplet</option>
+              <option value="1/8">1/8</option><option value="1/8T">1/8 triplet</option>
+              <option value="1/16" selected>1/16</option><option value="1/16T">1/16 triplet</option>
+              <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
+            </select></label>
+            <label><input type="checkbox" data-note-snap checked> Snap</label>
+            <label><input type="checkbox" data-note-adaptive> Adaptive grid</label>
+            <label><input type="checkbox" data-note-loop checked> Loop</label>
+            <label><input type="checkbox" data-note-draw> Draw</label>
+            <label><input type="checkbox" data-note-fold> Fold</label>
+            <button type="button" data-note-playhead>Play</button>
+            <button type="button" data-note-quantize>Quantize</button>
+          </div>
+          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag notes to move; Alt-drag copies; Command/Ctrl inverts time snapping. Command/Ctrl-drag on a note changes velocity; Shift-click extends selection and Shift is precise for values and edges. In Draw mode, drag right for length and vertically for velocity. Drag empty grid for a note box or the ruler for time; Shift-click extends it. Drag the piano vertically to pan pitches or horizontally to zoom them. Double-click adds; Escape clears selection. Shift-arrows move an octave or fine in time; Alt-left/right changes length. In Fold, up/down steps through displayed pitches. Wheel scrolls pitch; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel zooms pitch.</small>
+        </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { quantizedNotes } from '../../src/piano-roll-model.js';
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-note-editor';
+    const { s, out } = await elementDemo('compost-note-editor');
+    {
+      const editor = s.querySelector('compost-note-editor');
+      const grid = s.querySelector('[data-note-grid]');
+      const snap = s.querySelector('[data-note-snap]');
+      const adaptive = s.querySelector('[data-note-adaptive]');
+      const loop = s.querySelector('[data-note-loop]');
+      const draw = s.querySelector('[data-note-draw]');
+      const fold = s.querySelector('[data-note-fold]');
+      const playhead = s.querySelector('[data-note-playhead]');
+      let audioContext = null;
+      let playing = false;
+      const voices = new Set();
+      let nextNoteId = 1;
+      editor.noteIdFactory = () => `note-${nextNoteId++}`;
+      editor.setNotes([
+        { note: 56, start: 2.5, duration: .25, velocity: 88, channel: 0 },
+        { note: 58, start: 2.75, duration: .25, velocity: 96, channel: 0 },
+        { note: 60, start: 3, duration: .25, velocity: 112, channel: 0 },
+        { note: 60, start: 3.5, duration: .25, velocity: 94, channel: 0 },
+        { note: 60, start: 4, duration: .25, velocity: 108, channel: 0 },
+        { note: 55, start: 4.25, duration: .25, velocity: 82, channel: 0 },
+        { note: 48, start: 4.5, duration: .25, velocity: 86, channel: 0 },
+        { note: 67, start: 4.75, duration: .25, velocity: 104, channel: 0 },
+        { note: 67, start: 5.25, duration: .25, velocity: 92, channel: 0 },
+        { note: 58, start: 5.75, duration: .25, velocity: 88, channel: 0 },
+        { note: 60, start: 6, duration: .25, velocity: 112, channel: 0 },
+        { note: 60, start: 6.5, duration: .25, velocity: 94, channel: 0 },
+        { note: 60, start: 7, duration: .25, velocity: 108, channel: 0 },
+        { note: 53, start: 7.25, duration: .25, velocity: 82, channel: 0 },
+        { note: 50, start: 7.5, duration: .25, velocity: 86, channel: 0 },
+        { note: 65, start: 7.75, duration: .25, velocity: 104, channel: 0 },
+        { note: 65, start: 8.25, duration: .25, velocity: 92, channel: 0 },
+        { note: 63, start: 8.5, duration: .25, velocity: 96, channel: 0 },
+        { note: 58, start: 8.75, duration: .25, velocity: 88, channel: 0 },
+      ].map((note) => ({ ...note, id: editor.noteIdFactory() })));
+      editor.addEventListener('notes-change', ({ detail }) => { editor.notes = detail.notes; });
+      editor.addEventListener('note-quantize', ({ detail }) => {
+        editor.notes = quantizedNotes(editor.notes, detail.step,
+          { ids: detail.ids, lengths: detail.lengths, beats: editor.beats });
+      });
+      grid.addEventListener('change', () => {
+        if (grid.value === 'off') editor.setAttribute('grid-lines', 'off');
+        else {
+          editor.removeAttribute('grid-lines');
+          editor.setAttribute('grid', grid.value);
+        }
+      });
+      snap.addEventListener('change', () => editor.setAttribute('snap', snap.checked ? 'grid' : 'off'));
+      adaptive.addEventListener('change', () => editor.toggleAttribute('adaptive-grid', adaptive.checked));
+      loop.addEventListener('change', () => editor.toggleAttribute('loop', loop.checked));
+      draw.addEventListener('change', () => editor.toggleAttribute('draw', draw.checked));
+      s.addEventListener('keydown', (event) => {
+        if (event.key.toLowerCase() !== 'b' || event.metaKey || event.ctrlKey || event.altKey
+          || event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+        event.preventDefault();
+        draw.checked = !draw.checked;
+        draw.dispatchEvent(new Event('change'));
+      });
+      fold.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
+      s.querySelector('[data-note-quantize]').addEventListener('click', () => editor.quantize());
+      const stopVoices = () => {
+        for (const voice of voices) {
+          try { voice.stop(); } catch {}
+        }
+        voices.clear();
+      };
+      const playNote = (note) => {
+        if (!audioContext || audioContext.state !== 'running') return;
+        const oscillator = new OscillatorNode(audioContext, {
+          type: 'triangle', frequency: 440 * 2 ** ((note.note - 69) / 12),
+        });
+        const gain = new GainNode(audioContext, { gain: 0 });
+        const now = audioContext.currentTime;
+        const end = now + Math.max(.03, note.duration / 2);
+        const level = Math.max(.01, Math.min(1, note.velocity / 127)) * .14;
+        gain.gain.linearRampToValueAtTime(level, now + .005);
+        gain.gain.setValueAtTime(level, Math.max(now + .005, end - .025));
+        gain.gain.linearRampToValueAtTime(0, end);
+        oscillator.connect(gain).connect(audioContext.destination);
+        oscillator.addEventListener('ended', () => voices.delete(oscillator), { once: true });
+        voices.add(oscillator);
+        oscillator.start(now);
+        oscillator.stop(end + .01);
+      };
+      const playBetween = (from, to) => {
+        for (const note of editor.notes) {
+          if (note.start > from + 1e-9 && note.start <= to + 1e-9) playNote(note);
+        }
+      };
+      let last = performance.now();
+      let position = editor.rangeStart;
+      playhead.addEventListener('click', async () => {
+        playing = !playing;
+        playhead.textContent = playing ? 'Stop' : 'Play';
+        if (!playing) {
+          stopVoices();
+          editor.removeAttribute('playhead');
+          return;
+        }
+        audioContext ??= new AudioContext();
+        await audioContext.resume();
+        position = editor.rangeStart;
+        for (const note of editor.notes) {
+          if (Math.abs(note.start - position) < 1e-9) playNote(note);
+        }
+        last = performance.now();
+      });
+      const advance = (now) => {
+        const delta = Math.min(.05, (now - last) / 1000) * 2;
+        last = now;
+        if (playing) {
+          const start = editor.hasAttribute('loop') ? editor.loopStart : editor.rangeStart;
+          const end = editor.hasAttribute('loop') ? editor.loopEnd : editor.rangeEnd;
+          const next = position + delta;
+          if (next >= end) {
+            playBetween(position, end);
+            position = start + ((next - start) % (end - start));
+            for (const note of editor.notes) {
+              if (Math.abs(note.start - start) < 1e-9) playNote(note);
+            }
+            playBetween(start, position);
+          } else {
+            playBetween(position, next);
+            position = next;
+          }
+          editor.setAttribute('playhead', position.toFixed(3));
+        } else {
+          editor.removeAttribute('playhead');
+        }
+        requestAnimationFrame(advance);
+      };
+      requestAnimationFrame(advance);
+    }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-drawer · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-drawer">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-drawer</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div style="display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; width: min(42em, calc(100vw - 64px)); height: 20em; overflow: hidden; border: 1px solid color-mix(in srgb, currentColor 18%, transparent)">
+          <compost-drawer edge="left" open resizable min-size="160" max-size="360" style="grid-row: 1 / 3; --compost-drawer-size: 240px">
+            <span slot="title">Browser</span>
+            Browser contents
+          </compost-drawer>
+          <div style="display: grid; place-items: center; min-width: 0; padding: 1em; color: color-mix(in srgb, currentColor 65%, transparent)">Workspace</div>
+          <compost-drawer edge="bottom" open resizable min-size="80" max-size="180" style="grid-column: 2; --compost-drawer-size: 120px">
+            <span slot="title">Device</span>
+            Device contents
+          </compost-drawer>
+        </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-drawer';
+    const { s, out } = await elementDemo('compost-drawer');
+    </script>
+  </body>
+</html>

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-number-box · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-number-box">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-number-box</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div style="display: grid; gap: 0.4em"><span>Frequency</span><compost-number-box data-option-target="number" label="Frequency" min="20" max="20000" value="800" curve="log" unit="Hz" split-drag></compost-number-box></div>
+        <div style="display: grid; gap: 0.4em"><span>Fine tune</span><compost-number-box label="Fine tune" min="-100" max="100" value="0" step="1" unit=" ct" split-drag></compost-number-box></div>
+        <div style="display: grid; gap: 0.4em"><span>Disabled</span><compost-number-box label="Disabled" value="0.5" disabled></compost-number-box></div>
+        <div style="display: grid; gap: 0.4em"><span>Learning</span><compost-number-box label="Learning" value="0.6" split-drag midi-map-state="active mode label" style="--midi-map-label:'CC 74'"></compost-number-box></div>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-number-box';
+    const { s, out } = await elementDemo('compost-number-box');
+    </script>
+  </body>
+</html>

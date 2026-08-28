@@ -1,6 +1,6 @@
 """Static server for the repository root with caching disabled.
 
-    python3 examples/review/serve.py 8000
+    python3 examples/serve.py 8000
 
 Element modules change on every style round; `Cache-Control: no-store`
 keeps the browser from showing the previous one.
@@ -9,7 +9,7 @@ import http.server
 import os
 import sys
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):

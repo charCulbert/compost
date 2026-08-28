@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-scope · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-scope">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-scope</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div style="width: min(42em, calc(100vw - 64px))">
+          <compost-scope value-range="1"
+            x-marker-labels="0:start,0.5:middle,1:end"
+            y-marker-labels="-0.5:low,0:center,0.5:high"></compost-scope>
+        </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-scope';
+    const { s } = await elementDemo('compost-scope', { output: false });
+    {
+    const { setupScopeReview } = await import('../shared/scope-demo.js');
+    setupScopeReview(
+      document.getElementById('media'),
+      [...document.querySelectorAll('compost-scope')],
+    );
+    }
+    </script>
+  </body>
+</html>

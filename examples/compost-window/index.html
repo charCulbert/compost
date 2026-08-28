@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-window · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-window">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-window</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <button type="button" data-open-window>Open window</button>
+        <compost-window data-option-target="window" heading="Plug-in" width="320" height="160">
+          <div style="display: grid; place-items: center; height: 100%; color: color-mix(in srgb, currentColor 65%, transparent)">Plug-in contents</div>
+        </compost-window>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-window';
+    const { s, out } = await elementDemo('compost-window');
+    {
+      const windowElement = s.querySelector('compost-window');
+      s.querySelector('[data-open-window]').addEventListener('click', () => {
+        document.querySelectorAll('compost-window').forEach((other) => { if (other !== windowElement) other.open = false; });
+        windowElement.open = true;
+        windowElement.moveTo(32, 32);
+        windowElement.raise();
+      });
+    }
+
+    {
+    const firstWindow = document.querySelector('section.plain compost-window');
+    firstWindow.open = true;
+    firstWindow.moveTo(32, 32);
+    }
+    </script>
+  </body>
+</html>

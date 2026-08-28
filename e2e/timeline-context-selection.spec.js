@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('timeline context preserves an existing multi-clip selection', async ({ page }) => {
-  await page.goto('/examples/review/review.html?el=compost-timeline&context=plain');
+  await page.goto('/examples/compost-timeline/');
   const timeline = page.locator('compost-timeline');
   const result = await timeline.evaluate((element) => {
     element.setLanes([{ id: 'lane', name: 'Lane', clips: [

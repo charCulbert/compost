@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { nextPeakHold } from '../examples/review/meter-review.js';
+import { nextPeakHold } from '../examples/shared/meter-demo.js';
 
-test('review meter peaks hold before falling at a steady rate', () => {
+test('meter demo peaks hold before falling at a steady rate', () => {
   let hold = nextPeakHold({ level: -90, remaining: 0 }, -6, 0);
   assert.deepEqual(hold, { level: -6, remaining: 1.5 });
 

@@ -1,0 +1,22 @@
+import './example-page.js';
+
+// One readout per element example reports every intent the elements emit.
+const EVENT_TYPES = ['button-trigger', 'parameter-begin', 'parameter-edit', 'parameter-end', 'input', 'change', 'toggle', 'drawer-resize', 'window-open', 'window-close', 'window-move', 'window-resize', 'window-focus', 'popup-open', 'popup-close', 'popup-select', 'device-settings-refresh', 'device-settings-input', 'midi-ready', 'midi-devices-changed', 'midi-input-selected', 'midi-output-selected', 'midi-message', 'audio-started', 'audio-resumed', 'audio-suspended', 'audio-stopped', 'audio-state-change', 'audio-error', 'clip-launch', 'clip-stop', 'clip-record', 'clip-select', 'clip-open', 'clip-context', 'clip-rename', 'clip-delete', 'clip-duplicate', 'clip-move', 'clip-trim-input', 'clip-trim', 'clip-split', 'clip-nudge', 'clip-join', 'clip-drag-start', 'clip-drag-end', 'clip-drop', 'envelope-input', 'envelope-change', 'envelope-context', 'envelope-selection', 'notes-change', 'note-quantize', 'loop-input', 'loop-change', 'loop-toggle', 'range-input', 'range-change', 'selection-change', 'note-preview', 'note-preview-end', 'note-context', 'seek', 'time-select-input', 'time-select', 'time-delete', 'time-insert', 'time-duplicate', 'locator-jump', 'locator-move', 'locator-create', 'locator-rename', 'locator-delete', 'locator-context', 'lane-pick', 'lane-move', 'lane-resize', 'lanes-resize', 'lane-rename', 'lane-context', 'lane-create', 'lanes-context', 'lanes-create', 'automation-input', 'automation-change', 'automation-context', 'draw-toggle', 'fit-request', 'view-change'];
+
+/** Wires the example markup in `.row`: attaches the readout, fills the source
+ * preview, and returns the section and readout for the page's own wiring. */
+export async function elementDemo(id, { output = true } = {}) {
+  await import(`../../src/components/${id}.js`);
+  await customElements.whenDefined(id);
+  const s = document.querySelector('section.plain');
+  const out = s.querySelector('output');
+  if (output && out) {
+    for (const type of EVENT_TYPES) {
+      s.addEventListener(type, (e) => { out.textContent = `last event: ${type} ${JSON.stringify(e.detail ?? e.target.value)}`; });
+    }
+  } else if (out) out.remove();
+  const markup = document.getElementById('markup');
+  const row = s.querySelector('.row');
+  if (markup && row) markup.textContent = row.innerHTML.trim().replace(/^ {2}/gm, '');
+  return { s, out };
+}

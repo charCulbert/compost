@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-knob · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-knob">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-knob</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <compost-knob data-option-target="knob" label="Cutoff" min="20" max="20000" value="800" curve="log" unit="Hz" editable></compost-knob>
+        <compost-knob label="Resonance" min="0" max="1" value="0.35"></compost-knob>
+        <compost-knob label="Drive" min="0" max="10" value="3" disabled></compost-knob>
+        <compost-knob label="Learning" min="0" max="1" value="0.6" midi-map-state="active mode label" style="--midi-map-label:'CC 74'"></compost-knob>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-knob';
+    const { s, out } = await elementDemo('compost-knob');
+    </script>
+  </body>
+</html>

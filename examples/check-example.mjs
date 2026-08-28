@@ -1,9 +1,9 @@
-// Headless check for examples/review/review.html: renders one element in the
-// its default page context, reports console errors, computed ink/font,
-// the focused element after Tab, and saves examples/review/review-<element>.png.
+// Headless check for one element example: renders /examples/<element>/,
+// reports console errors, computed ink/font, the focused element after Tab,
+// and saves examples/<element>.png.
 //
 //   npm run dev
-//   node examples/review/review-check.mjs compost-knob [port]
+//   node examples/check-example.mjs compost-knob [port]
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -27,7 +27,7 @@ const page = await (await browser.newContext({ viewport: { width: 1000, height: 
 const errors = [];
 page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 page.on('pageerror', (error) => errors.push(String(error)));
-await page.goto(`http://127.0.0.1:${port}/examples/review/review.html?el=${el}`);
+await page.goto(`http://127.0.0.1:${port}/examples/${el}/`);
 await page.waitForTimeout(500);
 const info = await page.evaluate((el) => [...document.querySelectorAll('section')].map((section) => {
   const element = section.querySelector(el);
@@ -48,6 +48,6 @@ const focused = await page.evaluate(() => {
   const active = document.activeElement;
   return active ? `${active.tagName} outline=${getComputedStyle(active).outlineStyle}` : 'none';
 });
-await page.screenshot({ path: resolve(here, `review-${el}.png`), fullPage: true });
+await page.screenshot({ path: resolve(here, `${el}.png`), fullPage: true });
 console.log(JSON.stringify({ errors, focused, info }, null, 1));
 await browser.close();

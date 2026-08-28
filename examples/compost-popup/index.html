@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-popup · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-popup">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-popup</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div data-popup-surface tabindex="0" aria-label="Context menu"
+          style="display: grid; place-items: center; width: min(24em, calc(100vw - 64px)); height: 8em; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); user-select: none">
+          Right-click to open context menu
+        </div>
+        <compost-popup data-option-target="popup" heading="Context menu" label="Context menu">
+          <option value="open">Open</option>
+          <option value="rename">Rename</option>
+          <option value="duplicate">Duplicate</option>
+          <hr>
+          <option value="delete">Delete</option>
+        </compost-popup>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-popup';
+    const { s, out } = await elementDemo('compost-popup');
+    {
+      const popup = s.querySelector('compost-popup');
+      const surface = s.querySelector('[data-popup-surface]');
+      surface.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        document.querySelectorAll('compost-popup').forEach((other) => { if (other !== popup) other.close('switch'); });
+        const rect = surface.getBoundingClientRect();
+        popup.openAt(event.clientX || rect.left + rect.width / 2, event.clientY || rect.top + rect.height / 2);
+      });
+    }
+
+    {
+    const firstPopup = document.querySelector('section.plain compost-popup');
+    const surface = document.querySelector('section.plain [data-popup-surface]');
+    const rect = surface.getBoundingClientRect();
+    firstPopup.openAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    }
+    </script>
+  </body>
+</html>

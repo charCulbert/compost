@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-clip-grid · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-clip-grid">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-clip-grid</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div style="width: min(15em, calc(100vw - 64px)); display: grid; gap: .5em">
+          <span>Drums</span>
+          <compost-clip-grid label="Drums" slots="5" armed selected="4" stop="active" show-stop></compost-clip-grid>
+          <label><input type="checkbox" data-launch-quant checked> Launch quantization</label>
+          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click a name to select, then click its name again to rename; double-click opens. Enter launches. Drag to another slot; Option-drag copies.</small>
+        </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-clip-grid';
+    const { s, out } = await elementDemo('compost-clip-grid');
+    {
+      const grid = s.querySelector('compost-clip-grid');
+      let clips = [
+        { name: 'break.a', state: 'playing', progress: .62 },
+        { name: 'fill.b', color: '#d15a40', state: 'stopped' },
+        null,
+        null,
+        { name: 'ride.d', state: 'stopped' },
+      ];
+      let take = 1;
+      let queuedRecord = null;
+      const launchQuant = s.querySelector('[data-launch-quant]');
+      const render = () => {
+        grid.setClips(clips);
+        grid.recordQueued = queuedRecord?.index ?? -1;
+        if (clips.some((clip) => clip && (clip.state !== 'stopped' || clip.queued))) grid.setAttribute('stop', 'active');
+        else grid.removeAttribute('stop');
+      };
+      const startPlayback = (index) => {
+        clips = clips.map((clip, position) => {
+          if (!clip) return null;
+          return position === index
+            ? { ...clip, state: 'playing', queued: false, progress: 0 }
+            : { ...clip, state: 'stopped', queued: false };
+        });
+        queuedRecord = null;
+        render();
+      };
+      const queuePlayback = (index) => {
+        if (!launchQuant.checked) {
+          startPlayback(index);
+          return;
+        }
+        const queued = { ...clips[index], queued: true, progress: 0 };
+        clips[index] = queued;
+        queuedRecord = null;
+        render();
+        setTimeout(() => {
+          if (clips[index] !== queued) return;
+          startPlayback(index);
+        }, 750);
+      };
+      const startRecording = (index) => {
+        clips = clips.map((clip) => clip ? { ...clip, state: 'stopped', queued: false } : null);
+        clips[index] = { name: `take.${take++}`, state: 'recording' };
+        queuedRecord = null;
+        render();
+      };
+      grid.addEventListener('clip-select', ({ detail }) => { grid.selected = detail.index; });
+      grid.addEventListener('clip-launch', ({ detail }) => {
+        const clip = clips[detail.index];
+        if (!clip) return;
+        if (clip.queued) {
+          clips[detail.index] = { ...clip, queued: false };
+        } else if (clip.state === 'recording') {
+          queuePlayback(detail.index);
+          return;
+        } else if (clip.state === 'playing') {
+          clips[detail.index] = { ...clip, state: 'stopped' };
+        } else {
+          clips = clips.map((other) => other?.queued
+            ? { ...other, queued: false } : other);
+          queuePlayback(detail.index);
+          return;
+        }
+        render();
+      });
+      grid.addEventListener('clip-record', ({ detail }) => {
+        if (queuedRecord?.index === detail.index) {
+          queuedRecord = null;
+          render();
+          return;
+        }
+        if (!launchQuant.checked) {
+          startRecording(detail.index);
+          return;
+        }
+        clips = clips.map((clip) => clip?.queued ? { ...clip, queued: false } : clip);
+        const pending = { index: detail.index };
+        queuedRecord = pending;
+        render();
+        setTimeout(() => {
+          if (queuedRecord !== pending) return;
+          startRecording(detail.index);
+        }, 750);
+      });
+      grid.addEventListener('clip-stop', () => {
+        clips = clips.map((clip) => clip ? { ...clip, state: 'stopped', queued: false } : null);
+        queuedRecord = null;
+        render();
+      });
+      grid.addEventListener('clip-rename', ({ detail }) => {
+        if (!clips[detail.index]) return;
+        clips[detail.index] = { ...clips[detail.index], name: detail.name };
+        render();
+      });
+      grid.addEventListener('clip-delete', ({ detail }) => {
+        clips[detail.index] = null;
+        if (grid.selected === detail.index) grid.selected = -1;
+        render();
+      });
+      grid.addEventListener('clip-duplicate', ({ detail }) => {
+        const to = clips.findIndex((clip) => !clip);
+        if (!clips[detail.index] || to < 0) return;
+        clips[to] = { ...clips[detail.index], state: 'stopped', queued: false };
+        render();
+      });
+      grid.addEventListener('clip-move', ({ detail }) => {
+        clips[detail.to] = clips[detail.index];
+        clips[detail.index] = null;
+        render();
+      });
+      grid.addEventListener('clip-drop', ({ detail }) => {
+        if (detail.source !== grid || !clips[detail.fromIndex]) return;
+        if (detail.copy) {
+          clips[detail.toIndex] = { ...clips[detail.fromIndex], state: 'stopped', queued: false };
+        } else {
+          clips[detail.toIndex] = clips[detail.fromIndex];
+          clips[detail.fromIndex] = null;
+        }
+        render();
+      });
+      render();
+      let previousFrame = performance.now();
+      const advance = (now) => {
+        const delta = (now - previousFrame) / 6000;
+        previousFrame = now;
+        clips.forEach((clip, index) => {
+          if (clip?.state !== 'playing') return;
+          clip.progress = ((clip.progress ?? 0) + delta) % 1;
+          grid.setProgress(index, clip.progress);
+        });
+        requestAnimationFrame(advance);
+      };
+      requestAnimationFrame(advance);
+    }
+    </script>
+  </body>
+</html>

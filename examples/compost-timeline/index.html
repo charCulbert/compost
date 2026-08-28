@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-timeline · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-timeline">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-timeline</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
+          <span>Arrangement · 6/8</span>
+          <compost-timeline label="Arrangement" time-signature="6/8" grid="1/16" follow
+            style="height: 24em"></compost-timeline>
+          <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
+            <label>Grid <select data-timeline-grid>
+              <option value="bar">1 bar</option>
+              <option value="1/4">1/4</option><option value="1/4T">1/4 triplet</option>
+              <option value="1/8">1/8</option><option value="1/8T">1/8 triplet</option>
+              <option value="1/16" selected>1/16</option><option value="1/16T">1/16 triplet</option>
+              <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
+            </select></label>
+            <label><input type="checkbox" data-timeline-snap checked> Snap</label>
+            <label><input type="checkbox" data-timeline-follow checked> Follow</label>
+            <label><input type="checkbox" data-timeline-adaptive> Adaptive grid</label>
+            <label><input type="checkbox" data-timeline-loop checked> Loop</label>
+            <label><input type="checkbox" data-timeline-draw> Draw</label>
+            <label><input type="checkbox" data-timeline-automation> Automation view</label>
+            <label><input type="checkbox" data-timeline-launch-quant checked> Launch quantization</label>
+            <button type="button" data-timeline-play>Play</button>
+          </div>
+          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Drag a clip title to move it or an edge to trim; drag its body to select time. Alt-drag copies; Command/Ctrl inverts time snapping. Shift-click extends selection; arrows move a time selection and Shift-arrows grow it. Shift is precise for clip edges. Double-click empty space creates a grid-length clip. Command/Ctrl-C, X and V use this example's in-memory clipboard; D duplicates and E splits at the playhead. Delete edits clips or the selected time. Click a locator to jump; while playing, Launch quantization waits for the next bar. Turn Loop off and Follow keeps the playhead centred while the bar grid extends past the arrangement. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time under the pointer; Alt-wheel resizes lanes. In automation view the curve owns the full row and clips are display-only context; this faux host applies point, range and Option-drag curve edits.</small>
+        </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { quantizedNotes } from '../../src/piano-roll-model.js';
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-timeline';
+    const { s, out } = await elementDemo('compost-timeline');
+    {
+      const timeline = s.querySelector('compost-timeline');
+      const play = s.querySelector('[data-timeline-play]');
+      const grid = s.querySelector('[data-timeline-grid]');
+      const snap = s.querySelector('[data-timeline-snap]');
+      const follow = s.querySelector('[data-timeline-follow]');
+      const adaptive = s.querySelector('[data-timeline-adaptive]');
+      const loop = s.querySelector('[data-timeline-loop]');
+      const draw = s.querySelector('[data-timeline-draw]');
+      const launchQuant = s.querySelector('[data-timeline-launch-quant]');
+      let playing = false;
+      let lanes = [
+        { id: 'drums', name: 'Drums', color: 'var(--compost-accent, AccentColor)', automation:
+          { id: 'gain', label: 'Gain', min: 0, max: 1, value: .72, state: 'playing', points: [
+            { beat: 0, value: .5, curve: .35 }, { beat: 4, value: .8 }, { beat: 8, value: .65 },
+          ] }, clips: [
+          { id: 'beat', name: 'Beat', start: 0, length: 8, duration: 2, loop: true, state: 'playing',
+            notes: [{ start: 0, duration: .25, note: 36, velocity: 110 }, { start: .5, duration: .25, note: 42, velocity: 82 }] },
+          { id: 'fill', name: 'Fill', start: 10, length: 2, duration: 2, loop: false, state: 'stopped' },
+        ] },
+        { id: 'synth', name: 'Synth', clips: [
+          { id: 'pad', name: 'Pad', start: 2, length: 4, duration: 4, loop: false, state: 'stopped' },
+          { id: 'take', name: 'Recording', start: 8, length: 3, duration: 3, loop: false, state: 'recording' },
+        ] },
+      ];
+      const render = () => timeline.setLanes(lanes);
+      render();
+      // The host owns the lane headers: a name and a menu choosing which curve the
+      // lane shows in automation view. None of that is timeline UI.
+      const parameters = {
+        drums: [['gain', 'Gain', 0, 1], ['pan', 'Pan', -1, 1]],
+        synth: [['cutoff', 'Cutoff', 0, 1], ['pan', 'Pan', -1, 1]],
+      };
+      const automationView = s.querySelector('[data-timeline-automation]');
+      grid.addEventListener('change', () => timeline.setAttribute('grid', grid.value));
+      snap.addEventListener('change', () => timeline.setAttribute('snap', snap.checked ? 'grid' : 'off'));
+      follow.addEventListener('change', () => timeline.toggleAttribute('follow', follow.checked));
+      adaptive.addEventListener('change', () => timeline.toggleAttribute('adaptive-grid', adaptive.checked));
+      loop.addEventListener('change', () => timeline.setLoop(timeline.loopStart, timeline.loopEnd, loop.checked));
+      draw.addEventListener('change', () => timeline.toggleAttribute('draw', draw.checked));
+      automationView.addEventListener('change', () => timeline.toggleAttribute('automation', automationView.checked));
+      play.addEventListener('click', () => {
+        playing = !playing;
+        play.textContent = playing ? 'Stop' : 'Play';
+        if (playing) transportBeat = timeline.playhead;
+      });
+      for (const lane of lanes) {
+        const header = document.createElement('div');
+        header.style.cssText = 'box-sizing: border-box; height: 100%; display: grid; gap: .25em; align-content: center; padding: 0 .75em';
+        const name = document.createElement('span');
+        name.textContent = lane.name;
+        const select = document.createElement('select');
+        select.setAttribute('aria-label', `${lane.name} automation`);
+        select.style.cssText = 'font: inherit; font-size: .85em; max-width: 100%';
+        for (const [id, label] of parameters[lane.id]) select.append(new Option(label, id, false, lane.automation?.id === id));
+        select.append(new Option('None', '', false, !lane.automation));
+        select.addEventListener('change', () => {
+          const chosen = parameters[lane.id].find(([id]) => id === select.value);
+          lane.automation = chosen ? { id: chosen[0], label: chosen[1], min: chosen[2], max: chosen[3], stepped: false, points: [
+            { beat: 0, value: (chosen[2] + chosen[3]) / 2 }, { beat: 6, value: chosen[3] }, { beat: 12, value: chosen[2] },
+          ] } : null;
+          timeline.setLaneAutomation(lane.id, lane.automation);
+        });
+        header.append(name, select);
+        timeline.setLaneHeader(lane.id, header);
+      }
+      // A faux backend: the timeline only asks, this host applies every intent
+      // to its own lanes and locators and hands the result back.
+      let locators = [
+        { id: 'intro', beat: 0, name: 'Intro' },
+        { id: 'verse', beat: 8, name: 'Verse' },
+      ];
+      let created = 0;
+      let transportBeat = 1;
+      let queuedLocator = null;
+      const renderLocators = () => timeline.setLocators(locators);
+      renderLocators();
+      timeline.setLoop(0, 8, true);
+      timeline.setPlayhead(1);
+      const allClips = () => lanes.flatMap((lane) => lane.clips);
+      const laneOf = (clip) => lanes.find((lane) => lane.clips.includes(clip));
+      const setPosition = (beat) => {
+        transportBeat = beat;
+        timeline.setPlayhead(beat);
+      };
+      const jumpToLocator = (id) => {
+        const locator = locators.find((entry) => entry.id === id);
+        if (!locator) return;
+        if (!playing || !launchQuant.checked) {
+          queuedLocator = null;
+          setPosition(locator.beat);
+          return;
+        }
+        const bar = timeline.beatsPerBar || 4;
+        queuedLocator = { beat: locator.beat, at: (Math.floor(transportBeat / bar) + 1) * bar };
+      };
+      launchQuant.addEventListener('change', () => {
+        if (!launchQuant.checked && queuedLocator) {
+          const { beat } = queuedLocator;
+          queuedLocator = null;
+          setPosition(beat);
+        }
+      });
+      let clipboard = [];
+      const copySelection = () => {
+        const selection = timeline.timeSelection;
+        const selected = new Set(timeline.selected);
+        const origin = selection?.start ?? Math.min(...allClips().filter((clip) => selected.has(clip.id)).map((clip) => clip.start));
+        if (!Number.isFinite(origin)) return false;
+        clipboard = [];
+        for (const lane of lanes) {
+          if (selection && !selection.laneIds.includes(lane.id)) continue;
+          for (const clip of lane.clips) {
+            if (!selection && !selected.has(clip.id)) continue;
+            const start = selection ? Math.max(selection.start, clip.start) : clip.start;
+            const end = selection ? Math.min(selection.end, clip.start + clip.length) : clip.start + clip.length;
+            if (end <= start) continue;
+            clipboard.push({ laneId: lane.id, offset: start - origin, clip: { ...clip,
+              start: 0, length: end - start, offset: (clip.offset || 0) + start - clip.start } });
+          }
+        }
+        return clipboard.length > 0;
+      };
+      const deleteSelection = () => {
+        const selection = timeline.timeSelection;
+        if (selection) return apply['time-delete']({ ...selection, removeTime: false });
+        const ids = timeline.selected;
+        if (ids.length) apply['clip-delete']({ ids });
+      };
+      const paste = () => {
+        if (!clipboard.length) return;
+        const ids = [];
+        for (const entry of clipboard) {
+          const lane = lanes.find((candidate) => candidate.id === entry.laneId) ?? lanes[0];
+          created += 1;
+          const clip = { ...entry.clip, id: `${entry.clip.id}-paste-${created}`, start: timeline.playhead + entry.offset };
+          lane.clips.push(clip);
+          ids.push(clip.id);
+        }
+        timeline.setTimeSelection(null, null);
+        render();
+        timeline.selected = ids;
+      };
+      const apply = {
+        'loop-change': ({ start, end, enabled }) => { loop.checked = enabled; timeline.setLoop(start, end, enabled); },
+        'loop-toggle': ({ enabled }) => { loop.checked = enabled; timeline.setLoop(timeline.loopStart, timeline.loopEnd, enabled); },
+        'draw-toggle': ({ enabled }) => { draw.checked = enabled; timeline.toggleAttribute('draw', enabled); },
+        seek: ({ beat }) => { queuedLocator = null; setPosition(beat); },
+        'fit-request': () => timeline.zoomToFit?.(16),
+        'automation-change': ({ laneId, automationId, points }) => {
+          const lane = lanes.find((entry) => entry.id === laneId);
+          if (lane?.automation?.id !== automationId) return;
+          lane.automation.points = points.map((point) => ({ ...point }));
+          render();
+        },
+        'locator-create': ({ beat }) => { created += 1; locators.push({ id: `marker-${created}`, beat, name: `Marker ${created}` }); renderLocators(); },
+        'locator-jump': ({ id }) => jumpToLocator(id),
+        'locator-move': ({ id, beat }) => { const locator = locators.find((entry) => entry.id === id); if (locator) { locator.beat = beat; renderLocators(); } },
+        'locator-rename': ({ id, name }) => { const locator = locators.find((entry) => entry.id === id); if (locator) { locator.name = name; renderLocators(); } },
+        'locator-delete': ({ id }) => { locators = locators.filter((entry) => entry.id !== id); renderLocators(); },
+        'clip-trim': ({ id, start, end }) => {
+          const clip = allClips().find((entry) => entry.id === id);
+          if (!clip) return;
+          clip.start = start;
+          clip.length = end - start;
+          render();
+        },
+        'clip-move': ({ ids, deltaBeats, laneId, copy }) => {
+          const moving = allClips().filter((clip) => ids.includes(clip.id))
+            .map((clip) => ({ ...clip, id: copy ? `${clip.id}-copy-${created += 1}` : clip.id, start: clip.start + deltaBeats }));
+          if (!moving.length) return;
+          if (!copy) lanes.forEach((lane) => { lane.clips = lane.clips.filter((clip) => !ids.includes(clip.id)); });
+          (lanes.find((lane) => lane.id === laneId) ?? lanes[0]).clips.push(...moving);
+          render();
+        },
+        'clip-nudge': ({ ids, deltaBeats }) => { for (const clip of allClips()) if (ids.includes(clip.id)) clip.start = Math.max(0, clip.start + deltaBeats); render(); },
+        'clip-rename': ({ id, name }) => { const clip = allClips().find((entry) => entry.id === id); if (clip) { clip.name = name; render(); } },
+        'clip-delete': ({ ids }) => { lanes.forEach((lane) => { lane.clips = lane.clips.filter((clip) => !ids.includes(clip.id)); }); render(); },
+        'clip-duplicate': ({ ids }) => {
+          for (const clip of allClips().filter((entry) => ids.includes(entry.id))) {
+            created += 1;
+            laneOf(clip).clips.push({ ...clip, id: `${clip.id}-copy-${created}`, start: clip.start + clip.length });
+          }
+          render();
+        },
+        'clip-split': ({ ids, beat, beats }) => {
+          const cuts = beats ?? [beat];
+          for (const clip of allClips().filter((entry) => ids.includes(entry.id))) {
+            const lane = laneOf(clip);
+            let head = clip;
+            for (const cut of [...cuts].sort((a, b) => a - b)) {
+              if (!(cut > head.start && cut < head.start + head.length)) continue;
+              created += 1;
+              const tail = { ...head, id: `${clip.id}-${created}`, start: cut, length: head.start + head.length - cut, offset: (head.offset || 0) + (cut - head.start) };
+              head.length = cut - head.start;
+              lane.clips.push(tail);
+              head = tail;
+            }
+          }
+          render();
+        },
+        'clip-join': ({ ids }) => {
+          const joined = allClips().filter((clip) => ids.includes(clip.id));
+          const lane = joined.length ? laneOf(joined[0]) : null;
+          if (!lane || joined.some((clip) => laneOf(clip) !== lane)) return;
+          const start = Math.min(...joined.map((clip) => clip.start));
+          const end = Math.max(...joined.map((clip) => clip.start + clip.length));
+          lane.clips = lane.clips.filter((clip) => !ids.includes(clip.id));
+          lane.clips.push({ ...joined[0], start, length: end - start, duration: end - start, offset: 0 });
+          render();
+        },
+        'time-delete': ({ start, end, laneIds, removeTime }) => {
+          for (const lane of lanes.filter((entry) => laneIds.includes(entry.id))) {
+            const kept = [];
+            for (const clip of lane.clips) {
+              const clipEnd = clip.start + clip.length;
+              if (clipEnd <= start || clip.start >= end) kept.push(clip);
+              else {
+                if (clip.start < start) kept.push({ ...clip, length: start - clip.start });
+                if (clipEnd > end) { created += 1; kept.push({ ...clip, id: `${clip.id}-${created}`, start: end, length: clipEnd - end, offset: (clip.offset || 0) + (end - clip.start) }); }
+              }
+            }
+            lane.clips = removeTime ? kept.map((clip) => clip.start >= end ? { ...clip, start: clip.start - (end - start) } : clip) : kept;
+          }
+          render();
+        },
+        'time-insert': ({ beat, beats, laneIds }) => {
+          for (const lane of lanes.filter((entry) => laneIds.includes(entry.id))) {
+            for (const clip of lane.clips) if (clip.start >= beat) clip.start += beats;
+          }
+          render();
+        },
+        'time-duplicate': ({ start, end, laneIds, to }) => {
+          for (const lane of lanes.filter((entry) => laneIds.includes(entry.id))) {
+            const copies = [];
+            for (const clip of lane.clips) {
+              const from = Math.max(start, clip.start);
+              const until = Math.min(end, clip.start + clip.length);
+              if (until <= from) continue;
+              created += 1;
+              copies.push({ ...clip, id: `${clip.id}-copy-${created}`, start: to + from - start,
+                length: until - from, offset: (clip.offset || 0) + from - clip.start });
+            }
+            lane.clips.push(...copies);
+          }
+          render();
+        },
+        'lane-create': ({ laneId, beat, length }) => {
+          created += 1;
+          lanes.find((entry) => entry.id === laneId)?.clips.push({ id: `clip-${created}`, name: `Clip ${created}`, start: beat, length, duration: length, loop: false, state: 'stopped' });
+          render();
+        },
+        'lanes-create': () => { created += 1; lanes.push({ id: `lane-${created}`, name: `Lane ${created}`, clips: [] }); render(); },
+        'lane-move': ({ laneId, toIndex }) => {
+          const index = lanes.findIndex((entry) => entry.id === laneId);
+          if (index < 0) return;
+          const [lane] = lanes.splice(index, 1);
+          lanes.splice(toIndex, 0, lane);
+          render();
+        },
+        'lane-rename': ({ laneId, name }) => { const lane = lanes.find((entry) => entry.id === laneId); if (lane) { lane.name = name; render(); } },
+        'lane-resize': ({ laneId, height }) => { const lane = lanes.find((entry) => entry.id === laneId); if (lane) { lane.height = height ?? undefined; render(); } },
+        'lanes-resize': ({ height }) => { for (const lane of lanes) lane.height = height; render(); },
+      };
+      for (const [type, handler] of Object.entries(apply)) timeline.addEventListener(type, ({ detail }) => handler(detail));
+      const clipboardAction = (action) => {
+        if (action === 'copy') copySelection();
+        if (action === 'cut' && copySelection()) deleteSelection();
+        if (action === 'paste') paste();
+      };
+      timeline.addEventListener('keydown', (event) => {
+        if (!(event.metaKey || event.ctrlKey) || !['c', 'x', 'v'].includes(event.key.toLowerCase())) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        clipboardAction({ c: 'copy', x: 'cut', v: 'paste' }[event.key.toLowerCase()]);
+      }, true);
+      let last = performance.now();
+      const advance = (now) => {
+        const delta = Math.min(.05, (now - last) / 1000) * 2;
+        last = now;
+        if (playing) {
+          transportBeat += delta;
+          if (queuedLocator && transportBeat >= queuedLocator.at) {
+            const { beat } = queuedLocator;
+            queuedLocator = null;
+            setPosition(beat);
+            requestAnimationFrame(advance);
+            return;
+          }
+          const length = timeline.loopEnd - timeline.loopStart;
+          const beat = loop.checked
+            ? timeline.loopStart + ((transportBeat - timeline.loopStart) % length + length) % length
+            : transportBeat;
+          timeline.setPlayhead(beat);
+        }
+        requestAnimationFrame(advance);
+      };
+      requestAnimationFrame(advance);
+    }
+    </script>
+  </body>
+</html>

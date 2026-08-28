@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-slider · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-slider">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-slider</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <h2>Default</h2>
+        <div class="row">
+        <div style="width: 260px; display: grid; gap: 20px; align-self: center">
+          <compost-slider data-option-target="slider" label="Cutoff" min="20" max="20000" value="800" curve="log" unit="Hz" editable></compost-slider>
+          <compost-slider label="Mix" value="0.5" disabled></compost-slider>
+        </div>
+        <compost-slider label="Level" orientation="vertical" min="-60" max="6" value="-12" step="0.5" unit=" dB" min-label="-inf" style="align-self: center"></compost-slider>
+        <div style="width: 260px; display: grid; gap: 20px; align-self: center">
+          <compost-slider label="Learning" value="0.7" midi-map-state="active mode label" style="--midi-map-label:'CC 1'"></compost-slider>
+          <compost-slider label="Cutoff (relative drag)" min="20" max="20000" value="800" curve="log" unit="Hz" interaction="relative"></compost-slider>
+        </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+      <pre id="markup"></pre>
+    </main>
+    <script type="module">
+    import { elementDemo } from '../shared/element-page.js';
+    const el = 'compost-slider';
+    const { s, out } = await elementDemo('compost-slider');
+    </script>
+  </body>
+</html>

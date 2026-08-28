@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-test('review worklet publishes consecutive 1024-sample blocks', async () => {
+test('scope worklet publishes consecutive 1024-sample blocks', async () => {
   const previousProcessor = globalThis.AudioWorkletProcessor;
   const previousRegister = globalThis.registerProcessor;
   const previousSampleRate = globalThis.sampleRate;
@@ -18,7 +18,7 @@ test('review worklet publishes consecutive 1024-sample blocks', async () => {
   globalThis.sampleRate = 48000;
 
   try {
-    await import('../examples/review/scope-source-worklet.js');
+    await import('../examples/shared/scope-source-worklet.js');
     const processor = new Processor();
     const output = new Float32Array(1024);
     processor.process([], [[output]], { frequency: [12000] });

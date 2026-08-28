@@ -40,4 +40,4 @@ class ScopeReviewSource extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor('compost-scope-review-source', ScopeReviewSource);
+registerProcessor('compost-scope-source', ScopeReviewSource);
