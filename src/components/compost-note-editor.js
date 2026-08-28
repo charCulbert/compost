@@ -225,6 +225,7 @@ export class CompostNoteEditor extends HTMLElement {
         /* a host whose clips always start at zero keeps the start where it is */
         :host([lock-loop-start]) .loop-handle.start { display: none; }
         :host([lock-loop-start]) .region { cursor: default; }
+        :host([data-marker-drag]) .region, :host([data-marker-drag]) .handle { cursor: grabbing; }
         :host(:not([loop])) .region, :host(:not([loop])) .loop-handle,
         :host(:not([loop])) .timeline-line.loop { display: none; }
         .keys {
@@ -1559,6 +1560,7 @@ export class CompostNoteEditor extends HTMLElement {
     this.loopDrag = { pointerId: event.pointerId, scope, kind, x: event.clientX,
       start, end, px: this.pxPerBeat, node: event.currentTarget };
     this.renderMarkerGuide();
+    this.setAttribute('data-marker-drag', '');
     /** @type {HTMLElement} */ (event.currentTarget).setAttribute('data-on', '');
     /** @type {HTMLElement} */ (event.currentTarget).setPointerCapture(event.pointerId);
   }
@@ -1596,6 +1598,7 @@ export class CompostNoteEditor extends HTMLElement {
     const drag = this.loopDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     this.loopDrag = null;
+    this.removeAttribute('data-marker-drag');
     this.markerGuide.removeAttribute('data-on');
     /** @type {HTMLElement} */ (drag.node).removeAttribute('data-on');
     this.zoomPxPerBeat = 0;

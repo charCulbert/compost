@@ -407,7 +407,8 @@ export class CompostTimeline extends HTMLElement {
         .ruler-locator-name { display: inline-block; min-width: 1px; }
         .ruler-locator-editor { box-sizing: border-box; width: 7em; border: 1px solid currentColor; outline: 2px solid currentColor; outline-offset: -2px; background: var(--compost-timeline-bg); color: currentColor; font: inherit; padding: 0 .125em; }
         .ruler-time-selection { position: absolute; display: none; z-index: 2; top: 1em; height: 1.1em; background: color-mix(in srgb, var(--compost-timeline-select) 10%, transparent); box-shadow: inset 1px 0 0 var(--compost-timeline-select), inset -1px 0 0 var(--compost-timeline-select); pointer-events: none; }
-        .ruler-band { position: absolute; top: 2.35em; height: .75em; box-sizing: border-box; background: var(--compost-timeline-select); box-shadow: inset 0 0 0 1px currentColor; color: AccentColorText; cursor: grab; }
+        .ruler-band { position: absolute; top: 2.35em; height: .75em; z-index: 2; box-sizing: border-box; background: var(--compost-timeline-select); box-shadow: inset 0 0 0 1px currentColor; color: AccentColorText; cursor: grab; }
+        :host([data-loop-drag]) .ruler-band, :host([data-loop-drag]) .ruler-handle { cursor: grabbing; }
         .ruler-band[hidden], .ruler-handle[hidden], .timeline-line[hidden] { display: none; }
         .ruler-handle { position: absolute; top: 2.22em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
         .ruler-handle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
@@ -2423,6 +2424,7 @@ export class CompostTimeline extends HTMLElement {
       start: this._loopStart, end: this._loopEnd, loopEnabled: this._loopEnabled,
       px: this._pxPerBeat, node: event.currentTarget,
     };
+    this.setAttribute('data-loop-drag', '');
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
 
@@ -2438,7 +2440,7 @@ export class CompostTimeline extends HTMLElement {
     let end = drag.end;
     if (drag.kind === 'start') start = Math.min(snapValue(drag.start + delta, drag.start), end - MIN_CLIP_LENGTH);
     else if (drag.kind === 'end') end = Math.max(snapValue(drag.end + delta, drag.end), start + MIN_CLIP_LENGTH);
-    else { start = snapValue(drag.start + delta, drag.start); end = start + (drag.end - drag.start); }
+    else { start = Math.max(0, snapValue(drag.start + delta, drag.start)); end = start + (drag.end - drag.start); }
     drag.preview = { start, end };
     this.paintLoop(start, end);
     this.dispatchEvent(eventOf('loop-input', { start, end, enabled: this._loopEnabled }));
@@ -2448,6 +2450,7 @@ export class CompostTimeline extends HTMLElement {
     const drag = this.drag;
     if (!drag || drag.type !== 'loop' || event.pointerId !== drag.pointerId) return;
     this.drag = null;
+    this.removeAttribute('data-loop-drag');
     const preview = drag.preview ?? { start: drag.start, end: drag.end };
     this.paintLoop();
     this.dispatchEvent(eventOf('loop-change', { ...preview, enabled: this._loopEnabled }));
@@ -2455,6 +2458,7 @@ export class CompostTimeline extends HTMLElement {
 
   cancelLoopDrag(event) {
     if (!this.drag || this.drag.type !== 'loop' || event.pointerId !== this.drag.pointerId) return;
+    this.removeAttribute('data-loop-drag');
     this.cancelActiveDrag();
   }
 

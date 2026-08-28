@@ -935,7 +935,9 @@ test('timeline regions extend on Shift-click, span every lane from the ruler and
   expect(selection).toEqual({ start: 2, end: 8, laneIds: ['a', 'b'] });
   expect(await timeline.evaluate((element) => element.selected)).toEqual([]);
 
-  // a drag along the ruler's loop row makes a region on every lane
+  // a drag along the ruler's loop row makes a region on every lane; the loop
+  // band is out of the way while the loop is off
+  await timeline.evaluate((element) => element.setLoop(element.loopStart, element.loopEnd, false));
   await page.mouse.move(ruler.x + 1 * pxPerBeat, ruler.y + ruler.height - 4);
   await page.mouse.down();
   await page.mouse.move(ruler.x + 5 * pxPerBeat, ruler.y + ruler.height - 4, { steps: 4 });
@@ -1115,6 +1117,37 @@ test('timeline clip selection and loop match the note-editor visual language', a
   await timeline.evaluate((element) => element.setLoop(1, 6, false));
   await expect(timeline.locator('.timeline-line.loop').first()).toBeHidden();
   await expect(timeline.locator('.ruler-band')).toBeHidden();
+});
+
+test('timeline loop band moves the whole loop, clamps at zero and shows grabbing', async ({ page }) => {
+  await openTimeline(page);
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('snap', 'off');
+    element.setLoop(4, 8, true);
+    element.addEventListener('loop-change', ({ detail }) => {
+      element.setLoop(detail.start, detail.end, detail.enabled);
+    });
+  });
+  const band = timeline.locator('.ruler-band');
+  let box = await band.boundingBox();
+  const px = await timeline.evaluate((element) => element.pxPerBeat);
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  expect(await band.evaluate((node) => getComputedStyle(node).cursor)).toBe('grab');
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 2 * px, box.y + box.height / 2);
+  expect(await band.evaluate((node) => getComputedStyle(node).cursor)).toBe('grabbing');
+  await page.mouse.up();
+  expect(await timeline.evaluate((element) => [Math.round(element.loopStart), Math.round(element.loopEnd)])).toEqual([6, 10]);
+
+  // dragging past zero clamps the start and keeps the length
+  box = await band.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 20 * px, box.y + box.height / 2);
+  await page.mouse.up();
+  expect(await timeline.evaluate((element) => [Math.round(element.loopStart), Math.round(element.loopEnd)])).toEqual([0, 4]);
 });
 
 test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => {
@@ -2730,6 +2763,34 @@ test('note editor and timeline count a 6/8 meter on a note-value grid', async ({
   expect(timelineMeter).toMatchObject({ signature: '6/8', barLength: 3, beatLength: .5 });
   expect(timelineMeter.labels).toContain('1.6');
   expect(await timeline.locator('.lanes-world .grid-line.pulse').count()).toBeGreaterThan(0);
+});
+
+test('note editor loop region moves the whole loop, clamps at zero and shows grabbing', async ({ page }) => {
+  await openNoteEditor(page);
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => {
+    element.setAttribute('snap', 'off');
+    element.setLoop(4, 8, true);
+  });
+  const region = editor.locator('.region');
+  let box = await region.boundingBox();
+  const px = await editor.evaluate((element) => element.pxPerBeat);
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  expect(await region.evaluate((node) => getComputedStyle(node).cursor)).toBe('grab');
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 2 * px, box.y + box.height / 2);
+  expect(await region.evaluate((node) => getComputedStyle(node).cursor)).toBe('grabbing');
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => [Math.round(element.loopStart), Math.round(element.loopEnd)])).toEqual([6, 10]);
+
+  // dragging past zero clamps the start and keeps the length
+  box = await region.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 20 * px, box.y + box.height / 2);
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => [Math.round(element.loopStart), Math.round(element.loopEnd)])).toEqual([0, 4]);
 });
 
 test('note editor example host plays a one-beat pickup into a two-bar 6/8 loop', async ({ page }) => {
