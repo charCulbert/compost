@@ -111,6 +111,8 @@
       .transport compost-number-box { width: 5.5em; }
       .pitch-envelope { display: block; width: 100%; height: 8em; }
       .note-editor { display: block; width: 100%; height: 15em; border-top: 1px solid var(--line); }
+      .note-editor::part(range-start), .note-editor::part(range-end),
+      .note-editor::part(range-start-line), .note-editor::part(range-end-line) { display: none; }
 
       .scope-stack { position: relative; display: grid; min-width: 0; }
       body[data-example-id] .scope-stack compost-scope { width: 100%; --scope-height: clamp(10em, 18vw, 11em); }
@@ -146,7 +148,7 @@
       }
     </style>
   </head>
-  <body data-example-id="signal-generator">
+  <body data-example-id="monosynth">
     <div class="app-frame">
       <header class="demo-header" data-example-nav>
         <div class="audio-output">
@@ -199,7 +201,7 @@
                 <label class="adsr-control">Release <compost-number-box parameter-id="release" label="Release" min=".001" max="10" value=".08" step=".001" unit="s" reset-value=".08" split-drag></compost-number-box></label>
               </div>
               <div class="editor-heading"><h2>Pitch envelope</h2><p>One second · semitones</p></div>
-              <compost-envelope-editor class="pitch-envelope" label="Pitch envelope" duration="1" min="-12" max="12" grid=".05" step="1" grid-lines="time"></compost-envelope-editor>
+              <compost-envelope-editor class="pitch-envelope" label="Pitch envelope" duration="1" min="-12" max="12" step="1"></compost-envelope-editor>
             </div>
 
             <div class="scope-stack">
@@ -223,7 +225,7 @@
               <compost-number-box parameter-id="tempo" label="Tempo" min="40" max="240" value="120" step="1" unit="BPM" reset-value="120" split-drag></compost-number-box>
             </div>
           </div>
-          <compost-note-editor class="note-editor" label="Synth sequence" beats="4" start="0" end="4" loop loop-start="0" loop-end="4" time-signature="4/4" grid="1/16" adaptive-grid root-note="45" note-count="25"></compost-note-editor>
+          <compost-note-editor class="note-editor" label="Synth sequence" beats="4" start="0" end="4" time-signature="4/4" grid="1/16" adaptive-grid root-note="45" note-count="25"></compost-note-editor>
         </section>
         <footer class="keyboard-footer"><compost-piano dock root-note="36" note-count="49"></compost-piano></footer>
       </main>

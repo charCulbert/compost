@@ -431,7 +431,7 @@ test('drawer keeps its declared initial size during upgrade', async ({ page }) =
 });
 
 test('centered audio keeps its toolbar footprint without animating', async ({ page }) => {
-  await page.goto('/examples/signal-generator/');
+  await page.goto('/examples/monosynth/');
   const audio = page.locator('compost-audio');
   const slider = page.locator('compost-slider[parameter-id="outputGain"]');
   const offHostWidth = await audio.evaluate((element) => element.getBoundingClientRect().width);
@@ -457,8 +457,8 @@ test('centered audio keeps its toolbar footprint without animating', async ({ pa
   expect(animations).toBe(0);
 });
 
-test('signal generator drawer only takes its panel width while open', async ({ page }) => {
-  await page.goto('/examples/signal-generator/');
+test('monosynth drawer only takes its panel width while open', async ({ page }) => {
+  await page.goto('/examples/monosynth/');
   const drawer = page.locator('.midi-drawer');
   const closedWidth = await drawer.evaluate((element) => element.getBoundingClientRect().width);
 
@@ -466,6 +466,23 @@ test('signal generator drawer only takes its panel width while open', async ({ p
 
   await expect.poll(() => drawer.evaluate((element) => element.getBoundingClientRect().width))
     .toBeGreaterThan(closedWidth * 2);
+});
+
+test('monosynth editors omit unlabeled time and boundary markers', async ({ page }) => {
+  await page.goto('/examples/monosynth/');
+  const noteEditor = page.locator('compost-note-editor');
+  const envelopeEditor = page.locator('compost-envelope-editor');
+
+  await expect(noteEditor).not.toHaveAttribute('loop', '');
+  expect(await noteEditor.evaluate((editor) => [
+    'range-start', 'range-end', 'range-start-line', 'range-end-line',
+    'loop', 'loop-start', 'loop-end',
+  ].map((part) => getComputedStyle(editor.shadowRoot.querySelector(`[part~="${part}"]`)).display)))
+    .toEqual(['none', 'none', 'none', 'none', 'none', 'none', 'none']);
+  expect(await envelopeEditor.evaluate((editor) => ({
+    grid: editor.grid,
+    background: editor.shadowRoot.querySelector('.grid').style.backgroundImage,
+  }))).toEqual({ grid: null, background: 'none' });
 });
 
 test('parameter controller reflects host updates to both controls', async ({ page }) => {
@@ -1163,6 +1180,9 @@ test('timeline loop band moves the whole loop, clamps at zero and shows grabbing
     });
   });
   const band = timeline.locator('.ruler-band');
+  const handleMarks = await timeline.locator('.ruler-handle').evaluateAll((handles) =>
+    handles.map((handle) => getComputedStyle(handle, '::before').content));
+  expect(handleMarks).toEqual(['none', 'none']);
   let box = await band.boundingBox();
   const px = await timeline.evaluate((element) => element.pxPerBeat);
 

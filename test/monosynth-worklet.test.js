@@ -15,7 +15,7 @@ test('the mono synth worklet gates a note through release', async () => {
   globalThis.sampleRate = 48000;
 
   try {
-    await import('../examples/signal-generator/worklets/signal-generator.js');
+    await import('../examples/monosynth/worklets/monosynth.js');
     const processor = new Processor();
     const parameters = Object.fromEntries(Processor.parameterDescriptors.map(
       ({ name, defaultValue }) => [name, new Float32Array([defaultValue])],

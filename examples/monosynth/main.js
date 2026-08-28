@@ -132,10 +132,6 @@ noteEditor.addEventListener('note-quantize', ({ detail }) => {
   noteEditor.notes = notes;
   postSequence();
 });
-noteEditor.addEventListener('loop-change', ({ detail }) => {
-  noteEditor.setLoop(detail.start, detail.end);
-  postSequence();
-});
 noteEditor.addEventListener('note-preview', ({ detail }) => postNote('noteOn', detail, 'editor'));
 noteEditor.addEventListener('note-preview-end', ({ detail }) => postNote('noteOff', detail, 'editor'));
 
@@ -180,7 +176,7 @@ async function setupAudio(context) {
   if (audioSetup) return audioSetup;
   audioSetup = (async () => {
     cleanupAudio();
-    await context.audioWorklet.addModule('./worklets/signal-generator.js');
+    await context.audioWorklet.addModule('./worklets/monosynth.js');
     const synth = new AudioWorkletNode(context, 'compost-mono-synth', {
       numberOfInputs: 0,
       numberOfOutputs: 1,
@@ -303,8 +299,8 @@ function postPitchEnvelope(points) {
 function postSequence() {
   audio?.synth.port.postMessage({
     type: 'sequence', notes,
-    loopStart: noteEditor.loopStart,
-    loopEnd: noteEditor.loopEnd,
+    loopStart: 0,
+    loopEnd: 4,
   });
 }
 

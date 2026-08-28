@@ -173,6 +173,6 @@ import { createParameterController } from 'compost/parameter-controller';
 example page under `examples/<element>/` that shows the element, its markup,
 and a live readout of the events it emits. Every example shares the same
 light/dark color-scheme toggle and an "All examples" link back to the
-catalog. The Signal Generator, MIDI Controller, and Parameter Sync pages
+catalog. The Mono Synth, MIDI Controller, and Parameter Sync pages
 show current multi-element integration.
 `node examples/check-example.mjs <element>` checks an element headlessly.

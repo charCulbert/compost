@@ -412,9 +412,6 @@ export class CompostTimeline extends HTMLElement {
         .ruler-band[hidden], .ruler-handle[hidden], .timeline-line[hidden] { display: none; }
         .ruler-handle { position: absolute; top: 2.22em; height: 1em; width: .72em; z-index: 2; cursor: col-resize; touch-action: none; }
         .ruler-handle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-        .ruler-handle::before { content: ""; position: absolute; top: .12em; border-block: .25em solid transparent; }
-        .ruler-handle.start::before { left: 0; border-left: .4em solid AccentColorText; }
-        .ruler-handle.end::before { right: 0; border-right: .4em solid AccentColorText; }
         .ruler-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; box-shadow: -1px 0 Canvas, 1px 0 Canvas; pointer-events: none; z-index: 4; }
         .ruler-playhead::before { content: ""; position: absolute; top: .08em; left: -.25em; border-left: .25em solid transparent; border-right: .25em solid transparent; border-top: .31em solid currentColor; }
         .header-wrap, .lanes-wrap { min-height: 0; overflow: hidden; }

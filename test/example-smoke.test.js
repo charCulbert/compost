@@ -49,7 +49,7 @@ test('every example page shares the light and dark color-scheme toggle', () => {
   assert.match(styles, /--bg: Canvas/u);
   assert.match(styles, /data-color-scheme="dark"/u);
   assert.match(read('examples/shared/example-page.js'), /color-scheme\.js/u);
-  assert.match(read('examples/signal-generator/main.js'), /example-page\.js/u);
+  assert.match(read('examples/monosynth/main.js'), /example-page\.js/u);
 });
 
 test('the retired theme surface stays out of source and examples', () => {
@@ -63,9 +63,9 @@ test('the retired theme surface stays out of source and examples', () => {
 });
 
 test('the Mono Synth uses current editor and one-channel scope contracts', () => {
-  const html = read('examples/signal-generator/index.html');
-  const main = read('examples/signal-generator/main.js');
-  const worklet = read('examples/signal-generator/worklets/signal-generator.js');
+  const html = read('examples/monosynth/index.html');
+  const main = read('examples/monosynth/main.js');
+  const worklet = read('examples/monosynth/worklets/monosynth.js');
   assert.match(html, /<compost-scope[^>]+value-range="1"/u);
   assert.match(html, /<compost-meter/u);
   assert.match(html, /<compost-number-box[^>]+parameter-id="scopeRange"/u);
@@ -81,6 +81,8 @@ test('the Mono Synth uses current editor and one-channel scope contracts', () =>
     assert.match(html, new RegExp(`parameter-id="${id}"`, 'u'));
   }
   assert.match(html, /<compost-note-editor/u);
+  assert.doesNotMatch(html, /<compost-note-editor[^>]+\bloop(?:\s|=|>)/u);
+  assert.doesNotMatch(html, /<compost-envelope-editor[^>]+\bgrid=/u);
   assert.match(html, /data-transport/u);
   assert.match(html, /class="keyboard-footer"/u);
   assert.match(main, /scope\.setSamples\(data\.samples\)/u);
