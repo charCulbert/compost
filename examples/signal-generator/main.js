@@ -3,7 +3,6 @@ import '../shared/example-page.js';
 import { isNoteOffMessage, isNoteOnMessage, midiNoteToFrequency, noteFromMessage } from '../../src/midi.js';
 import { createMIDIMappings } from '../../src/midi-mappings.js';
 import { createParameterController } from '../../src/parameter-controller.js';
-import { beginParameterGesture, editParameterGesture, endParameterGesture } from '../../src/utils.js';
 
 const values = {
   waveShape: 1,
@@ -11,7 +10,6 @@ const values = {
   amplitude: .8,
   offset: 0,
   outputGain: .5,
-  mute: 0,
 };
 
 const displayValues = { scopeRange: 1, scopeOffset: 0 };
@@ -24,8 +22,6 @@ const midi = document.querySelector('compost-midi');
 const midiDrawer = document.querySelector('.midi-drawer');
 const mappingsView = document.querySelector('compost-midi-mappings');
 const mapToggle = document.querySelector('[data-midi-map-toggle]');
-const waveShapeGroup = document.querySelector('[data-wave-shape-group]');
-const waveShapeButtons = [...document.querySelectorAll('[data-wave-shape]')];
 const preset = document.querySelector('[data-signal-preset]');
 const yLabels = document.querySelector('[data-scope-y-labels]');
 const scopeFPS = document.querySelector('[data-scope-fps]');
@@ -46,7 +42,6 @@ mappings.applyMappings([
   { parameterID: 'amplitude', cc: 20 },
   { parameterID: 'offset', cc: 71 },
   { parameterID: 'waveShape', cc: 79 },
-  { parameterID: 'mute', cc: 64 },
   { parameterID: 'scopeRange', cc: 77 },
   { parameterID: 'scopeOffset', cc: 78 },
 ]);
@@ -60,15 +55,6 @@ mapToggle.addEventListener('click', () => {
   if (active) mappingsView.controller?.beginSelecting();
   else mappingsView.controller?.cancel('toolbar');
 });
-
-for (const button of waveShapeButtons) {
-  button.addEventListener('click', () => {
-    const value = Number(button.dataset.waveShape);
-    beginParameterGesture(waveShapeGroup, values.waveShape, { source: 'wave-shape' });
-    editParameterGesture(waveShapeGroup, value, { source: 'wave-shape' });
-    endParameterGesture(waveShapeGroup, value, { source: 'wave-shape' });
-  });
-}
 
 preset.addEventListener('change', () => applyPreset(preset.value));
 yLabels.addEventListener('input', () => scope.setAttribute('y-marker-labels', yLabels.value));
@@ -171,7 +157,6 @@ function setParameter(parameterID, value, source) {
   if (!(parameterID in values)) return;
   values[parameterID] = Number(value);
   parameters.applyValue(parameterID, values[parameterID], { source });
-  if (parameterID === 'waveShape') syncWaveShape();
   const parameter = audio?.oscillator.parameters.get(parameterID);
   if (parameter) parameter.setTargetAtTime(values[parameterID], audio.context.currentTime, .01);
 }
@@ -181,13 +166,6 @@ function setDisplayValue(parameterID, value, source) {
   parameters.applyValue(parameterID, displayValues[parameterID], { source });
   if (parameterID === 'scopeRange') scope.setAttribute('value-range', String(displayValues[parameterID]));
   if (parameterID === 'scopeOffset') scope.setAttribute('y-offset', String(displayValues[parameterID]));
-}
-
-function syncWaveShape() {
-  waveShapeGroup.setAttribute('value', String(values.waveShape));
-  for (const button of waveShapeButtons) {
-    button.setAttribute('aria-pressed', String(Number(button.dataset.waveShape) === values.waveShape));
-  }
 }
 
 function applyPreset(name) {
@@ -219,4 +197,3 @@ function handlePackedNote(message, source) {
 }
 
 cleanupAudio();
-syncWaveShape();

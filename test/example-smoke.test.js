@@ -66,12 +66,13 @@ test('the Signal Generator uses the current one-channel scope contract', () => {
   assert.match(html, /<compost-scope[^>]+value-range="1"/u);
   assert.match(html, /<compost-meter/u);
   assert.match(html, /<compost-number-box[^>]+parameter-id="scopeRange"/u);
-  assert.match(html, /<compost-button[^>]+parameter-id="mute"/u);
   assert.match(html, /class="app-frame"/u);
-  assert.match(html, /class="wave-shape-switch"/u);
+  assert.match(html, /<compost-select[^>]+parameter-id="waveShape"/u);
+  assert.match(html, /<select data-signal-preset/u);
   assert.match(html, /class="keyboard-footer"/u);
   assert.match(main, /scope\.setSamples\(data\.samples\)/u);
   assert.match(worklet, /type: 'scope-samples', samples/u);
+  assert.doesNotMatch(`${html}\n${main}\n${worklet}`, /parameter-id="mute"|name: 'mute'|parameters\.mute/u);
   assert.doesNotMatch(`${html}\n${main}`, /triggerSamples|source-channels|trigger-channel|periods-shown|samples-shown|captureTrigger/u);
   assert.match(main, /createParameterController/u);
   assert.match(main, /createMIDIMappings/u);

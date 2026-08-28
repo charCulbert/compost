@@ -43,7 +43,7 @@
 
       .toolbar-preset { display: flex; align-items: center; flex: 0 0 15em; gap: .625em; padding: 0 .75em; border-left: 1px solid var(--line); }
       .toolbar-preset > span { color: var(--muted); }
-      .toolbar-preset compost-select { flex: 1 1 auto; min-width: 0; }
+      .toolbar-preset select { flex: 1 1 auto; min-width: 0; font: inherit; }
       .example-link-group { display: flex; align-items: stretch; margin: 0; }
       .example-link-group .example-nav-button { min-height: 100%; border: 0; border-left: 1px solid var(--line); font-size: inherit; }
       .example-link-group .example-nav-button:first-child { display: none; }
@@ -82,12 +82,8 @@
       body[data-midi-drawer-open] .demo-page { grid-column: 2; }
 
       .workbench { display: grid; width: min(100%, 32.5em); margin: auto; border: 1px solid var(--line); }
-      .parameter-zone { display: grid; grid-template-columns: 2.625em minmax(0, 1fr); gap: .75em; align-items: center; padding: .625em; border-bottom: 1px solid var(--line); }
-      .wave-shape-switch { display: grid; width: 2.625em; border: 1px solid var(--line); background: Field; }
-      .wave-shape-switch button { display: grid; place-items: center; width: 2.5em; height: 2.5em; padding: 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: FieldText; }
-      .wave-shape-switch button:last-child { border-bottom: 0; }
-      .wave-shape-switch button[aria-pressed="true"] { background: AccentColor; color: AccentColorText; }
-      .wave-shape-switch svg { width: 1.625em; height: 1.125em; fill: none; stroke: currentColor; stroke-width: 1.7; }
+      .parameter-zone { display: grid; gap: .75em; padding: .625em; border-bottom: 1px solid var(--line); }
+      .wave-shape-select { width: 100%; }
       .control-row { display: flex; align-items: stretch; justify-content: center; gap: .75em; }
       .control-row compost-knob { flex: 1 1 5.25em; min-width: 0; max-width: 7em; --compost-knob-size: 4.125em; }
 
@@ -129,16 +125,15 @@
         <div class="audio-output">
           <compost-audio modal centered-while-off start-label="⏻" stop-label="⏻" start-aria-label="Start audio" stop-aria-label="Suspend audio"></compost-audio>
           <compost-slider parameter-id="outputGain" label="Master" min="0" max="1" value=".5" step=".01" reset-value=".5" editable></compost-slider>
-          <compost-button mode="switch" parameter-id="mute" label="Mute"></compost-button>
           <button class="toolbar-action" type="button" data-midi-map-toggle aria-pressed="false">MIDI Map</button>
         </div>
         <div class="toolbar-preset">
           <span>Preset</span>
-          <compost-select data-signal-preset value="saw-standard" placeholder="Custom" aria-label="Preset">
+          <select data-signal-preset aria-label="Preset">
             <option value="saw-standard" selected>Saw</option>
             <option value="sine-labels">Sine + labels</option>
             <option value="unipolar-square">Unipolar square</option>
-          </compost-select>
+          </select>
         </div>
       </header>
 
@@ -155,11 +150,11 @@
         <h1 class="sr-only">Signal Generator</h1>
         <section class="workbench">
           <div class="parameter-zone">
-            <div class="wave-shape-switch" data-wave-shape-group parameter-id="waveShape" parameter-kind="discrete" min="0" max="2" step="1" value="1" role="group" aria-label="Wave shape" tabindex="0">
-              <button type="button" data-wave-shape="0" aria-label="Sine wave" aria-pressed="false"><svg viewBox="0 0 28 18"><path d="M1 9C4 1 10 1 14 9S24 17 27 9"/></svg></button>
-              <button type="button" data-wave-shape="1" aria-label="Saw wave" aria-pressed="true"><svg viewBox="0 0 28 18"><path d="M1 2L13 16V2L27 16"/></svg></button>
-              <button type="button" data-wave-shape="2" aria-label="Square wave" aria-pressed="false"><svg viewBox="0 0 28 18"><path d="M1 15V3h12v12h14V3"/></svg></button>
-            </div>
+            <compost-select class="wave-shape-select" parameter-id="waveShape" label="Waveform" value="1">
+              <option value="0">Sine</option>
+              <option value="1" selected>Saw</option>
+              <option value="2">Square</option>
+            </compost-select>
             <div class="control-row" aria-label="Oscillator controls">
               <compost-knob parameter-id="frequency" label="Frequency" min="55" max="1760" mid="220" curve="log" value="220" unit="Hz" reset-value="220" editable></compost-knob>
               <compost-knob parameter-id="amplitude" label="Amplitude" min="0" max="1" value=".8" step=".01" reset-value=".8" editable></compost-knob>
