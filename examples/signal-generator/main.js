@@ -19,10 +19,9 @@ const values = {
 };
 const displayValues = { scopeRange: 1, scopeOffset: 0 };
 let pitchEnvelope = [
-  { time: 0, value: 12, curve: -.2 },
-  { time: .18, value: 0 },
-  { time: .45, value: -5, curve: .15 },
-  { time: .8, value: 0 },
+  { time: 0, value: 12, curve: -.35 },
+  { time: .05, value: -12, curve: .35 },
+  { time: .1, value: 0 },
   { time: 1, value: 0 },
 ];
 let notes = [
@@ -263,7 +262,7 @@ function setDisplayValue(parameterID, value, source) {
 
 function applyPreset(name) {
   const presets = {
-    'saw-pluck': { waveShape: 1, transpose: 0, amplitude: .8, offset: 0, adsr: [.08, .2, .65, .35], pitch: [[0, 12], [.18, 0], [.45, -5], [.8, 0], [1, 0]] },
+    'saw-pluck': { waveShape: 1, transpose: 0, amplitude: .8, offset: 0, adsr: [.08, .2, .65, .35], pitch: [[0, 12, -.35], [.05, -12, .35], [.1, 0], [1, 0]] },
     'sine-pad': { waveShape: 0, transpose: -12, amplitude: .8, offset: 0, adsr: [.35, .6, .75, 1.4], pitch: [[0, 0], [1, 0]] },
     'square-short': { waveShape: 2, transpose: 0, amplitude: .5, offset: .5, adsr: [.005, .08, .8, .12], pitch: [[0, -12], [.08, 0], [1, 0]] },
   };
@@ -272,7 +271,7 @@ function applyPreset(name) {
   for (const id of ['waveShape', 'transpose', 'amplitude', 'offset']) setParameter(id, selected[id], 'preset');
   ['attack', 'decay', 'sustain', 'release'].forEach((id, index) =>
     setParameter(id, selected.adsr[index], 'preset'));
-  pitchEnvelope = selected.pitch.map(([time, value]) => ({ time, value }));
+  pitchEnvelope = selected.pitch.map(([time, value, curve]) => ({ time, value, curve }));
   envelopeEditor.points = pitchEnvelope;
   postPitchEnvelope(pitchEnvelope);
 }
