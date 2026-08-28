@@ -713,6 +713,7 @@ test('two touch pointers pan pitch and zoom time in the note editor', async ({ p
       pxPerBeat: element.pxPerBeat,
       offset: element.offset,
       rootNote: element.rootNote,
+      noteCount: element.noteCount,
       points: element.notes,
     };
   });
@@ -729,13 +730,14 @@ test('two touch pointers pan pitch and zoom time in the note editor', async ({ p
     dispatch('pointerdown', 91, left, top, 1);
     dispatch('pointerdown', 92, right, top + 40, 1);
     dispatch('pointermove', 91, left - 40, top + 40, 1);
-    dispatch('pointermove', 92, right + 60, top + 80, 1);
+    dispatch('pointermove', 92, right + 60, top + 140, 1);
     dispatch('pointerup', 91, left - 40, top + 40, 0);
-    dispatch('pointerup', 92, right + 60, top + 80, 0);
+    dispatch('pointerup', 92, right + 60, top + 140, 0);
     return {
       pxPerBeat: element.pxPerBeat,
       offset: element.offset,
       rootNote: element.rootNote,
+      noteCount: element.noteCount,
       points: element.notes,
     };
   });
@@ -743,6 +745,7 @@ test('two touch pointers pan pitch and zoom time in the note editor', async ({ p
   expect(after.pxPerBeat).toBeGreaterThan(before.pxPerBeat);
   expect(after.offset).not.toBe(before.offset);
   expect(after.rootNote).not.toBe(before.rootNote);
+  expect(after.noteCount).toBeLessThan(before.noteCount);
   expect(after.points).toEqual(before.points);
 });
 

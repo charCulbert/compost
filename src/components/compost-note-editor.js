@@ -25,6 +25,7 @@ let nextEditorID = 1;
 const MIN_ROWS = 13;
 const MAX_ROWS = 128;
 const MAX_PX_PER_BEAT = 600;
+const MIN_PINCH_SPAN = 24;
 const DOUBLE_CLICK_MS = 500;
 const PREVIEW_PULSE_MS = 160;
 
@@ -811,12 +812,14 @@ export class CompostNoteEditor extends HTMLElement {
     const centerX = (first.x + second.x) / 2;
     const centerY = (first.y + second.y) / 2;
     const rect = this.gridWrap.getBoundingClientRect();
+    const pitchPosition = clamp((centerY - rect.top) / Math.max(1, rect.height), 0, 1);
     this.pinch = {
-      distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
-      centerY,
+      xDistance: Math.max(MIN_PINCH_SPAN, Math.abs(second.x - first.x)),
+      yDistance: Math.max(MIN_PINCH_SPAN, Math.abs(second.y - first.y)),
       pxPerBeat: this.pxPerBeat,
       beat: (this.offset + centerX - rect.left) / this.pxPerBeat,
-      rootNote: this.rootNote,
+      noteCount: this.noteCount,
+      pitch: this.rootNote + this.noteCount * (1 - pitchPosition),
     };
   }
 
@@ -825,17 +828,21 @@ export class CompostNoteEditor extends HTMLElement {
     const [first, second] = [...this.pointers.values()];
     const centerX = (first.x + second.x) / 2;
     const centerY = (first.y + second.y) / 2;
-    const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+    const xDistance = Math.max(MIN_PINCH_SPAN, Math.abs(second.x - first.x));
+    const yDistance = Math.max(MIN_PINCH_SPAN, Math.abs(second.y - first.y));
     const width = this.gridWrap.clientWidth;
     const fit = width / Math.max(1, this.beats);
-    const pxPerBeat = clamp(this.pinch.pxPerBeat * distance / this.pinch.distance,
+    const pxPerBeat = clamp(this.pinch.pxPerBeat * xDistance / this.pinch.xDistance,
       fit, MAX_PX_PER_BEAT);
-    const rootNote = clamp(Math.round(this.pinch.rootNote
-      - (centerY - this.pinch.centerY) / Math.max(1, this.rowHeight)),
-      0, 128 - this.noteCount);
+    const noteCount = clamp(Math.round(this.pinch.noteCount * this.pinch.yDistance / yDistance),
+      MIN_ROWS, MAX_ROWS);
+    const rect = this.gridWrap.getBoundingClientRect();
+    const pitchPosition = clamp((centerY - rect.top) / Math.max(1, rect.height), 0, 1);
+    const rootNote = clamp(Math.round(this.pinch.pitch - noteCount * (1 - pitchPosition)),
+      0, 128 - noteCount);
+    if (noteCount !== this.noteCount) this.setAttribute('note-count', String(noteCount));
     if (rootNote !== this.rootNote) this.setAttribute('root-note', String(rootNote));
     this.zoomPxPerBeat = pxPerBeat;
-    const rect = this.gridWrap.getBoundingClientRect();
     this.offset = clamp(this.pinch.beat * pxPerBeat - (centerX - rect.left),
       0, Math.max(0, this.beats * pxPerBeat - width));
     this.refresh();

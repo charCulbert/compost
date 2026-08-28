@@ -61,8 +61,9 @@ drag, and Alt copies item moves. `compost-note-editor` also uses Command/Ctrl
 on a note body to edit velocity.
 Double-click resets a control. On touch, double-tap resets knobs and sliders;
 a number-box tap opens its numeric editor while a drag still adjusts it.
-The timeline and note editor use a two-finger pinch to zoom time and pan the
-view; one-finger gestures remain edits or selections.
+The timeline uses a two-finger pinch to zoom time and pan time or lanes. The
+note editor pinches horizontally for time and vertically for pitch; moving the
+pinch pans both axes. One-finger gestures remain edits or selections.
 `readonly` still shows live state and navigates but changes nothing;
 `disabled` is inert.
 
