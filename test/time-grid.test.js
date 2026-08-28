@@ -10,10 +10,10 @@ test('time signatures expose bar and denominator-beat lengths in quarter-note be
   assert.deepEqual(timeSignatureOf('12/8'), {
     numerator: 12, denominator: 8, beatLength: 0.5, barLength: 6, pulseLength: 1.5, text: '12/8',
   });
-  assert.deepEqual(timeSignatureOf(null, 5), {
-    numerator: 5, denominator: 4, beatLength: 1, barLength: 5, pulseLength: null, text: '5/4',
+  assert.deepEqual(timeSignatureOf(null), {
+    numerator: 4, denominator: 4, beatLength: 1, barLength: 4, pulseLength: null, text: '4/4',
   });
-  assert.equal(timeSignatureOf('7/3', 3).text, '3/4');
+  assert.equal(timeSignatureOf('7/3').text, '4/4');
 });
 
 test('compound meters add pulse lines without losing beats or note-value cells', () => {

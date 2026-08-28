@@ -2614,7 +2614,6 @@ test('note editor and timeline count a 6/8 meter on a note-value grid', async ({
   await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   const editorMeter = await editor.evaluate((element) => {
-    element.setAttribute('beats-per-bar', '9');
     element.setAttribute('time-signature', '6/8');
     element.setAttribute('grid', '1/16');
     element.zoomPxPerBeat = 80;
@@ -2634,7 +2633,6 @@ test('note editor and timeline count a 6/8 meter on a note-value grid', async ({
   await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const timelineMeter = await timeline.evaluate((element) => {
-    element.setAttribute('beats-per-bar', '9');
     element.setAttribute('time-signature', '6/8');
     element.setAttribute('grid', '1/16');
     element.pxPerBeat = 80;

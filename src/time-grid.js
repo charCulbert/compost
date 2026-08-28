@@ -16,7 +16,7 @@ const TIME_SIGNATURE_DENOMINATORS = new Set([1, 2, 4, 8, 16]);
  * `beatsPerBar` is the legacy N/4 alias used when no valid signature is given.
  * @param {string|null|undefined} value @param {number} [beatsPerBar]
  */
-export function timeSignatureOf(value, beatsPerBar = 4) {
+export function timeSignatureOf(value) {
   const match = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(value ?? '');
   const numerator = Number(match?.[1]);
   const denominator = Number(match?.[2]);
@@ -29,9 +29,8 @@ export function timeSignatureOf(value, beatsPerBar = 4) {
       text: `${numerator}/${denominator}`,
     };
   }
-  const legacy = Math.max(1, Math.round(Number(beatsPerBar) || 4));
-  return { numerator: legacy, denominator: 4, beatLength: 1, barLength: legacy,
-    pulseLength: null, text: `${legacy}/4` };
+  return { numerator: 4, denominator: 4, beatLength: 1, barLength: 4,
+    pulseLength: null, text: '4/4' };
 }
 
 /** All distinct grid, denominator-beat, compound-pulse and bar lines. */

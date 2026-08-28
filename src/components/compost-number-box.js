@@ -48,7 +48,6 @@ export class CompostNumberBox extends HTMLElement {
       'reset-value',
       'min-label',
       'max-label',
-      'init',
       'placeholder',
       'allow-empty',
       'disabled',
@@ -284,7 +283,7 @@ export class CompostNumberBox extends HTMLElement {
     this.displayFractionDigits = this.hasAttribute('display-fraction-digits')
       ? readNumberAttribute(this, 'display-fraction-digits', null)
       : null;
-    this.resetValue = readNumberAttribute(this, 'reset-value', readNumberAttribute(this, 'init', this.resetValue));
+    this.resetValue = readNumberAttribute(this, 'reset-value', this.resetValue);
     this.minLabel = this.getAttribute('min-label') ?? '';
     this.maxLabel = this.getAttribute('max-label') ?? '';
 
@@ -722,7 +721,6 @@ export class CompostNumberBox extends HTMLElement {
 
   resetTargetValue() {
     if (this.hasAttribute('reset-value')) return this.resetValue;
-    if (this.hasAttribute('init')) return this.resetValue;
     if (this.dataset?.field === 'max') return this.max;
     if (this.dataset?.field === 'min') return this.min;
     return this.resetValue;

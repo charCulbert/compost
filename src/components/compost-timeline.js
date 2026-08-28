@@ -1,7 +1,7 @@
 import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { clamp, defineElement, numberAttr } from '../utils.js';
-import { rulerLabels } from '../time-ruler.js';
+import { rulerLabels } from '../internal/time-ruler.js';
 import { gridStepForView, gridStepOf, snapModeWith, snapTime, timeGridLines, timeSignatureOf } from '../time-grid.js';
 import { extendSelectionRegion } from '../selection-region.js';
 import './compost-envelope-editor.js';
@@ -309,7 +309,7 @@ function eventOf(type, detail) {
 
 export class CompostTimeline extends HTMLElement {
   static get observedAttributes() {
-    return ['label', 'beats-per-bar', 'time-signature', 'grid', 'adaptive-grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'readonly', 'lane-height', 'automation', 'draw'];
+    return ['label', 'time-signature', 'grid', 'adaptive-grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'readonly', 'lane-height', 'automation', 'draw'];
   }
 
   constructor() {
@@ -597,7 +597,7 @@ export class CompostTimeline extends HTMLElement {
 
   syncAttributes() {
     this.label = this.getAttribute('label') || this.label;
-    const meter = timeSignatureOf(this.getAttribute('time-signature'), numberAttr(this, 'beats-per-bar', DEFAULT_BEATS_PER_BAR));
+    const meter = timeSignatureOf(this.getAttribute('time-signature'));
     this.timeSignature = meter.text;
     this.beatsPerBar = meter.barLength;
     this.beatLength = meter.beatLength;

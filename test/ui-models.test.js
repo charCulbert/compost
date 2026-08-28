@@ -9,7 +9,8 @@ globalThis.customElements ??= {
 };
 
 const { slotIndexAt } = await import('../src/components/compost-clip-grid.js');
-const { gridText, lengthText, rulerLabels } = await import('../src/components/compost-note-editor.js');
+const { gridText, lengthText } = await import('../src/components/compost-note-editor.js');
+const { rulerLabels } = await import('../src/internal/time-ruler.js');
 const {
   snapBeat, sortLocators, normalizeTimeSelection, clipBox, loopPassLines, clipNoteOpacity, previewTrimmedClip, rulerStep,
   automationValueToY, automationValueFromY,

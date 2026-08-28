@@ -14,8 +14,7 @@ import {
   velocityShiftedNotes,
 } from '../piano-roll-model.js';
 import { extendSelectionRegion, normalizeSelectionRegion } from '../selection-region.js';
-export { rulerLabels } from '../time-ruler.js';
-import { rulerLabels } from '../time-ruler.js';
+import { rulerLabels } from '../internal/time-ruler.js';
 import { createLongPress, DOUBLE_TAP_DISTANCE, DRAG_SLOP, TAP_MOVE_DISTANCE } from '../internal/gestures.js';
 import { installTouchDoubleClick } from '../internal/touch-double-click.js';
 import { gridStepForView, gridStepOf, gridTextForStep, gridTextOf, timeGridLines, timeSignatureOf } from '../time-grid.js';
@@ -55,7 +54,7 @@ export const gridText = gridTextOf;
 export class CompostNoteEditor extends HTMLElement {
   static get observedAttributes() {
     return [
-      'label', 'beats', 'beats-per-bar', 'time-signature', 'grid', 'adaptive-grid', 'snap', 'start', 'end', 'loop-start', 'loop-end',
+      'label', 'beats', 'time-signature', 'grid', 'adaptive-grid', 'snap', 'start', 'end', 'loop-start', 'loop-end',
       'root-note', 'note-count', 'beat-width', 'fold', 'draw', 'playhead', 'scale', 'root',
       'velocity', 'channel', 'grid-lines', 'loop', 'lock-loop-start', 'readonly', 'disabled',
     ];
@@ -455,7 +454,7 @@ export class CompostNoteEditor extends HTMLElement {
   syncAttributes() {
     this.label = this.getAttribute('label') ?? this.label;
     this.setAttribute('aria-label', this.label);
-    const meter = timeSignatureOf(this.getAttribute('time-signature'), numberAttr(this, 'beats-per-bar', 4));
+    const meter = timeSignatureOf(this.getAttribute('time-signature'));
     this.timeSignature = meter.text;
     this.beatsPerBar = meter.barLength;
     this.beatLength = meter.beatLength;

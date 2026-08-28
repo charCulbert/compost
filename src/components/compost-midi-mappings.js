@@ -25,7 +25,7 @@ function formatNumber(value) {
 
 export class CompostMIDIMappings extends HTMLElement {
   static get observedAttributes() {
-    return ['disabled', 'heading', 'label'];
+    return ['disabled', 'heading'];
   }
 
   constructor() {
@@ -549,7 +549,7 @@ export class CompostMIDIMappings extends HTMLElement {
     if (!this.controller || this.controller.state === 'idle') {
       this.mapButton.textContent = 'Map MIDI';
     }
-    this.heading.textContent = this.getAttribute('heading') || this.getAttribute('label') || 'MIDI mappings';
+    this.heading.textContent = this.getAttribute('heading') || 'MIDI mappings';
     this.caption.textContent = `${this.heading.textContent} editor table`;
     this.empty.hidden = hasMappings;
     this.tableScroll.hidden = !hasMappings;

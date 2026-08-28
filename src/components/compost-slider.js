@@ -46,7 +46,6 @@ export class CompostSlider extends HTMLElement {
       'reset-value',
       'min-label',
       'max-label',
-      'init',
       'disabled',
     ];
   }
@@ -321,7 +320,7 @@ export class CompostSlider extends HTMLElement {
       ? numberAttr(this, 'display-fraction-digits', null)
       : null;
     this.valueText = this.getAttribute('text') ?? this.getAttribute('options') ?? '';
-    this.resetValue = numberAttr(this, 'reset-value', numberAttr(this, 'init', this.resetValue));
+    this.resetValue = numberAttr(this, 'reset-value', this.resetValue);
     this.minLabel = this.getAttribute('min-label') ?? '';
     this.maxLabel = this.getAttribute('max-label') ?? '';
     this.setValue(numberAttr(this, 'value', this._value), false);

@@ -23,9 +23,6 @@ export interface NotePreviewDetail { note: number, velocity: number, channel: nu
 /** The detail on `note-context`; `id` is absent for the editor background. */
 export interface NoteContextDetail { id: string | undefined, clientX: number, clientY: number }
 
-/** Bar, beat and grid-cell labels, made sparser when space is tight. */
-export function rulerLabels(beats: number, meter: number | {barLength: number, beatLength: number}, pxPerBeat: number, gridStep?: number): {beat: number, text: string}[];
-
 /** A length in the meter's denominator beats, written the way a musician reads it. */
 export function lengthText(duration: number, beatLength?: number): string;
 

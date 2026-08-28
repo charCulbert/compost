@@ -23,7 +23,7 @@ export interface SnapTimeOptions {
 }
 
 export const MIN_TIME: number;
-export function timeSignatureOf(value?: string | null, beatsPerBar?: number): TimeSignature;
+export function timeSignatureOf(value?: string | null): TimeSignature;
 export function timeGridLines(end: number, geometry: {
   gridStep: number;
   beatLength: number;
