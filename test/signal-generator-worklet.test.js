@@ -21,10 +21,18 @@ test('the mono synth worklet gates a note through release', async () => {
       ({ name, defaultValue }) => [name, new Float32Array([defaultValue])],
     ));
     const output = [new Float32Array(128), new Float32Array(128)];
-    processor.handleMessage({ type: 'adsr', attack: .001, decay: .001, sustain: .5, release: .001 });
+    parameters.attack[0] = .001;
+    parameters.decay[0] = .001;
+    parameters.sustain[0] = .5;
+    parameters.release[0] = .001;
+    processor.handleMessage({
+      type: 'pitchEnvelope',
+      points: [{ time: 0, value: 12 }, { time: .01, value: 0 }],
+    });
     processor.handleMessage({ type: 'noteOn', source: 'test', note: 69, velocity: 127 });
     processor.process([], [output], parameters);
     assert.ok(output[0].some((sample) => sample !== 0));
+    assert.ok(processor.voiceAge > 0);
 
     processor.handleMessage({ type: 'noteOff', source: 'test', note: 69 });
     processor.process([], [output], parameters);

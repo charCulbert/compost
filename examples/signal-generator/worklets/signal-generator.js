@@ -1,3 +1,5 @@
+import { envelopeCurvePosition } from '../../../src/envelope-model.js';
+
 class CompostMonoSynth extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [
@@ -7,6 +9,10 @@ class CompostMonoSynth extends AudioWorkletProcessor {
       { name: 'offset', defaultValue: 0, minValue: -1, maxValue: 1, automationRate: 'a-rate' },
       { name: 'outputGain', defaultValue: .5, minValue: 0, maxValue: 1, automationRate: 'a-rate' },
       { name: 'tempo', defaultValue: 120, minValue: 40, maxValue: 240, automationRate: 'k-rate' },
+      { name: 'attack', defaultValue: .08, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
+      { name: 'decay', defaultValue: .2, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
+      { name: 'sustain', defaultValue: .65, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'release', defaultValue: .35, minValue: .001, maxValue: 10, automationRate: 'k-rate' },
     ];
   }
 
@@ -21,11 +27,12 @@ class CompostMonoSynth extends AudioWorkletProcessor {
     this.playing = false;
     this.voiceKey = null;
     this.voiceNote = 60;
+    this.voiceAge = 0;
     this.velocity = 0;
     this.level = 0;
     this.stage = 'idle';
     this.stageStep = 0;
-    this.adsr = { attack: .08, decay: .2, sustain: .65, release: .35 };
+    this.pitchEnvelope = [{ time: 0, value: 0 }, { time: 1, value: 0 }];
     this.capture = new Float32Array(1024);
     this.outputCapture = new Float32Array(1024);
     this.captureIndex = 0;
@@ -34,13 +41,15 @@ class CompostMonoSynth extends AudioWorkletProcessor {
 
   handleMessage(data) {
     if (data?.type === 'resetPhase') this.phase = 0;
-    if (data?.type === 'adsr') {
-      this.adsr = {
-        attack: Math.max(.001, Number(data.attack) || .001),
-        decay: Math.max(.001, Number(data.decay) || .001),
-        sustain: clamp(Number(data.sustain), 0, 1),
-        release: Math.max(.001, Number(data.release) || .001),
-      };
+    if (data?.type === 'pitchEnvelope' && Array.isArray(data.points)) {
+      this.pitchEnvelope = data.points
+        .filter((point) => Number.isFinite(Number(point.time)) && Number.isFinite(Number(point.value)))
+        .map((point) => ({
+          time: Math.max(0, Number(point.time)),
+          value: clamp(Number(point.value), -12, 12),
+          curve: clamp(Number(point.curve) || 0, -1, 1),
+        }))
+        .sort((a, b) => a.time - b.time);
     }
     if (data?.type === 'sequence') {
       this.notes = Array.isArray(data.notes)
@@ -70,11 +79,16 @@ class CompostMonoSynth extends AudioWorkletProcessor {
     const shape = Math.round(parameters.waveShape[0]);
     const transpose = parameters.transpose[0];
     const tempo = parameters.tempo[0];
+    const attack = parameters.attack[0];
+    const decay = parameters.decay[0];
+    const sustain = parameters.sustain[0];
+    const release = parameters.release[0];
 
     for (let frame = 0; frame < frames; frame += 1) {
-      this.updateVoice();
-      const envelope = this.nextEnvelopeValue();
-      const frequency = 440 * 2 ** ((this.voiceNote + transpose - 69) / 12);
+      this.updateVoice(attack, release);
+      const envelope = this.nextEnvelopeValue(decay, sustain);
+      const pitch = this.voiceNote + transpose + pitchEnvelopeValue(this.pitchEnvelope, this.voiceAge);
+      const frequency = 440 * 2 ** ((pitch - 69) / 12);
       const amplitude = valueAt(parameters.amplitude, frame);
       const offset = valueAt(parameters.offset, frame);
       const gain = valueAt(parameters.outputGain, frame);
@@ -88,6 +102,7 @@ class CompostMonoSynth extends AudioWorkletProcessor {
       this.outputCapture[this.captureIndex] = outputSample;
       this.captureIndex += 1;
       this.phase = (this.phase + frequency / sampleRate) % 1;
+      this.voiceAge += 1 / sampleRate;
       if (this.playing) this.beat = wrap(this.beat + tempo / 60 / sampleRate,
         this.loopStart, this.loopEnd);
 
@@ -96,7 +111,7 @@ class CompostMonoSynth extends AudioWorkletProcessor {
     return true;
   }
 
-  updateVoice() {
+  updateVoice(attack, release) {
     let target = null;
     for (const note of this.liveNotes.values()) target = note;
     if (!target && this.playing) {
@@ -109,38 +124,39 @@ class CompostMonoSynth extends AudioWorkletProcessor {
     }
     if (target?.key === this.voiceKey) return;
     if (!target) {
-      if (this.voiceKey !== null) this.releaseVoice();
+      if (this.voiceKey !== null) this.releaseVoice(release);
       return;
     }
     this.voiceKey = target.key;
     this.voiceNote = target.note;
+    this.voiceAge = 0;
     this.velocity = clamp(target.velocity / 127, 0, 1);
     this.stage = 'attack';
-    this.stageStep = (1 - this.level) / Math.max(1, this.adsr.attack * sampleRate);
+    this.stageStep = (1 - this.level) / Math.max(1, attack * sampleRate);
   }
 
-  releaseVoice() {
+  releaseVoice(release) {
     this.voiceKey = null;
     this.stage = 'release';
-    this.stageStep = this.level / Math.max(1, this.adsr.release * sampleRate);
+    this.stageStep = this.level / Math.max(1, release * sampleRate);
   }
 
-  nextEnvelopeValue() {
+  nextEnvelopeValue(decay, sustain) {
     if (this.stage === 'attack') {
       this.level += this.stageStep;
       if (this.level >= 1) {
         this.level = 1;
         this.stage = 'decay';
-        this.stageStep = (1 - this.adsr.sustain) / Math.max(1, this.adsr.decay * sampleRate);
+        this.stageStep = (1 - sustain) / Math.max(1, decay * sampleRate);
       }
     } else if (this.stage === 'decay') {
       this.level -= this.stageStep;
-      if (this.level <= this.adsr.sustain) {
-        this.level = this.adsr.sustain;
+      if (this.level <= sustain) {
+        this.level = sustain;
         this.stage = 'sustain';
       }
     } else if (this.stage === 'sustain') {
-      this.level = this.adsr.sustain;
+      this.level = sustain;
     } else if (this.stage === 'release') {
       this.level -= this.stageStep;
       if (this.level <= 0) {
@@ -167,6 +183,21 @@ class CompostMonoSynth extends AudioWorkletProcessor {
 
 function valueAt(parameter, frame) {
   return parameter.length === 1 ? parameter[0] : parameter[frame];
+}
+
+function pitchEnvelopeValue(points, time) {
+  if (!points.length) return 0;
+  if (time <= points[0].time) return points[0].value;
+  for (let index = 1; index < points.length; index += 1) {
+    const next = points[index];
+    const previous = points[index - 1];
+    if (time > next.time) continue;
+    const span = next.time - previous.time;
+    if (!(span > 0)) return previous.value;
+    const position = envelopeCurvePosition((time - previous.time) / span, previous.curve);
+    return previous.value + (next.value - previous.value) * position;
+  }
+  return points.at(-1).value;
 }
 
 function clamp(value, min, max) {

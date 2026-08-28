@@ -72,6 +72,10 @@ test('the Mono Synth uses current editor and one-channel scope contracts', () =>
   assert.match(html, /<compost-select[^>]+parameter-id="waveShape"/u);
   assert.match(html, /<select data-synth-preset/u);
   assert.match(html, /<compost-envelope-editor/u);
+  assert.match(html, /label="Pitch envelope"/u);
+  for (const id of ['attack', 'decay', 'sustain', 'release']) {
+    assert.match(html, new RegExp(`parameter-id="${id}"`, 'u'));
+  }
   assert.match(html, /<compost-note-editor/u);
   assert.match(html, /data-transport/u);
   assert.match(html, /class="keyboard-footer"/u);
@@ -79,10 +83,12 @@ test('the Mono Synth uses current editor and one-channel scope contracts', () =>
   assert.match(main, /parameterID === 'phaseReset'/u);
   assert.match(main, /noteEditor\.addEventListener\('notes-change'/u);
   assert.match(main, /envelopeEditor\.addEventListener\('envelope-change'/u);
+  assert.match(main, /type: 'pitchEnvelope'/u);
   assert.match(main, /isNoteOffMessage/u);
   assert.match(worklet, /type: 'scope-samples', samples, outputSamples/u);
   assert.match(worklet, /data\?\.type === 'resetPhase'/u);
   assert.match(worklet, /this\.stage = 'release'/u);
+  assert.match(worklet, /pitchEnvelopeValue/u);
   assert.match(worklet, /this\.playing/u);
   assert.doesNotMatch(`${html}\n${main}\n${worklet}`, /parameter-id="mute"|name: 'mute'|parameters\.mute/u);
   assert.doesNotMatch(`${html}\n${main}`, /scopeWindow|scopeSamples|scopePeriods|scopeCapture|publishScopeWindow/u);

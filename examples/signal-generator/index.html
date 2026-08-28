@@ -100,13 +100,16 @@
       .wave-shape-select { width: 100%; }
       .control-row { display: flex; align-items: stretch; justify-content: center; gap: .75em; }
       .control-row compost-knob { flex: 1 1 5.25em; min-width: 0; max-width: 7em; --compost-knob-size: 4.125em; }
+      .adsr-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+      .adsr-control { display: grid; gap: .25em; min-width: 0; padding: .45em; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font-size: .6875em; }
+      .adsr-control compost-number-box { width: 100%; }
       .editor-heading { display: flex; align-items: center; justify-content: space-between; gap: .75em; min-height: 2.5em; padding: .5em .625em; border-top: 1px solid var(--line); }
       .editor-heading h2 { font-size: .75em; letter-spacing: .08em; text-transform: uppercase; }
       .editor-heading p { color: var(--muted); font-size: .6875em; }
       .transport { display: flex; align-items: center; gap: .625em; }
       .transport button { min-height: 2.25em; border: 1px solid currentColor; background: Canvas; color: CanvasText; font: inherit; }
       .transport compost-number-box { width: 5.5em; }
-      .amp-envelope { display: block; width: 100%; height: 9.5em; }
+      .pitch-envelope { display: block; width: 100%; height: 8em; }
       .note-editor { display: block; width: 100%; height: 15em; border-top: 1px solid var(--line); }
 
       .scope-stack { position: relative; display: grid; min-width: 0; }
@@ -188,8 +191,14 @@
                 <compost-knob parameter-id="amplitude" label="Amplitude" min="0" max="1" value=".8" step=".01" reset-value=".8" editable></compost-knob>
                 <compost-knob parameter-id="offset" label="Offset" min="-1" max="1" value="0" step=".01" reset-value="0" editable></compost-knob>
               </div>
-              <div class="editor-heading"><h2>Amplitude envelope</h2><p>Attack · decay · sustain · release</p></div>
-              <compost-envelope-editor class="amp-envelope" label="Amplitude envelope" duration="2" min="0" max="1" grid=".05" grid-lines="time"></compost-envelope-editor>
+              <div class="adsr-controls" aria-label="Amplitude envelope controls">
+                <label class="adsr-control">Attack <compost-number-box parameter-id="attack" label="Attack" min=".001" max="10" value=".08" step=".001" unit="s" reset-value=".08" split-drag></compost-number-box></label>
+                <label class="adsr-control">Decay <compost-number-box parameter-id="decay" label="Decay" min=".001" max="10" value=".2" step=".001" unit="s" reset-value=".2" split-drag></compost-number-box></label>
+                <label class="adsr-control">Sustain <compost-number-box parameter-id="sustain" label="Sustain" min="0" max="1" value=".65" step=".01" reset-value=".65" split-drag></compost-number-box></label>
+                <label class="adsr-control">Release <compost-number-box parameter-id="release" label="Release" min=".001" max="10" value=".35" step=".001" unit="s" reset-value=".35" split-drag></compost-number-box></label>
+              </div>
+              <div class="editor-heading"><h2>Pitch envelope</h2><p>One second · semitones</p></div>
+              <compost-envelope-editor class="pitch-envelope" label="Pitch envelope" duration="1" min="-12" max="12" grid=".05" step="1" grid-lines="time"></compost-envelope-editor>
             </div>
 
             <div class="scope-stack">

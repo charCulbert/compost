@@ -5,7 +5,6 @@ import { createMIDIMappings } from '../../src/midi-mappings.js';
 import { createParameterController } from '../../src/parameter-controller.js';
 import { quantizedNotes } from '../../src/piano-roll-model.js';
 
-const ENVELOPE_DURATION = 2;
 const values = {
   waveShape: 1,
   transpose: 0,
@@ -13,14 +12,18 @@ const values = {
   offset: 0,
   outputGain: .5,
   tempo: 120,
+  attack: .08,
+  decay: .2,
+  sustain: .65,
+  release: .35,
 };
 const displayValues = { scopeRange: 1, scopeOffset: 0 };
-let envelopePoints = [
-  { time: 0, value: 0 },
-  { time: .08, value: 1 },
-  { time: .28, value: .65 },
-  { time: 1.65, value: .65 },
-  { time: ENVELOPE_DURATION, value: 0 },
+let pitchEnvelope = [
+  { time: 0, value: 12, curve: -.2 },
+  { time: .18, value: 0 },
+  { time: .45, value: -5, curve: .15 },
+  { time: .8, value: 0 },
+  { time: 1, value: 0 },
 ];
 let notes = [
   { id: 'note-1', note: 60, start: 0, duration: .45, velocity: 110, channel: 0 },
@@ -61,7 +64,7 @@ let scopeFrameStart = performance.now();
 
 noteEditor.noteIdFactory = () => `note-${nextNoteID++}`;
 noteEditor.notes = notes;
-envelopeEditor.points = envelopePoints;
+envelopeEditor.points = pitchEnvelope;
 mappingsView.mappings = mappings;
 mappings.addEventListener('midi-mapping-request', ({ detail }) => mappings.applyMapping(detail));
 mappings.addEventListener('midi-unmapping-request', ({ detail }) => mappings.applyClear(detail.parameterID));
@@ -73,6 +76,10 @@ mappings.applyMappings([
   { parameterID: 'waveShape', cc: 79 },
   { parameterID: 'phaseReset', cc: 80 },
   { parameterID: 'tempo', cc: 76 },
+  { parameterID: 'attack', cc: 73 },
+  { parameterID: 'decay', cc: 75 },
+  { parameterID: 'sustain', cc: 70 },
+  { parameterID: 'release', cc: 72 },
   { parameterID: 'scopeRange', cc: 77 },
   { parameterID: 'scopeOffset', cc: 78 },
 ]);
@@ -128,11 +135,11 @@ noteEditor.addEventListener('loop-change', ({ detail }) => {
 noteEditor.addEventListener('note-preview', ({ detail }) => postNote('noteOn', detail, 'editor'));
 noteEditor.addEventListener('note-preview-end', ({ detail }) => postNote('noteOff', detail, 'editor'));
 
-envelopeEditor.addEventListener('envelope-input', ({ detail }) => postADSR(normaliseEnvelope(detail.points)));
+envelopeEditor.addEventListener('envelope-input', ({ detail }) => postPitchEnvelope(detail.points));
 envelopeEditor.addEventListener('envelope-change', ({ detail }) => {
-  envelopePoints = normaliseEnvelope(detail.points);
-  envelopeEditor.points = envelopePoints;
-  postADSR(envelopePoints);
+  pitchEnvelope = detail.points;
+  envelopeEditor.points = pitchEnvelope;
+  postPitchEnvelope(pitchEnvelope);
 });
 
 function syncDrawerLayout() {
@@ -189,7 +196,7 @@ async function setupAudio(context) {
     audio = { context, synth };
     syncAudioParameters();
     postSequence();
-    postADSR(envelopePoints);
+    postPitchEnvelope(pitchEnvelope);
     synth.port.postMessage({ type: 'transport', playing });
     return audio;
   })();
@@ -256,53 +263,26 @@ function setDisplayValue(parameterID, value, source) {
 
 function applyPreset(name) {
   const presets = {
-    'saw-pluck': { waveShape: 1, transpose: 0, amplitude: .8, offset: 0, envelope: [.08, .2, .65, .35] },
-    'sine-pad': { waveShape: 0, transpose: -12, amplitude: .8, offset: 0, envelope: [.02, .35, .45, .7] },
-    'square-short': { waveShape: 2, transpose: 0, amplitude: .5, offset: .5, envelope: [.005, .08, .8, .12] },
+    'saw-pluck': { waveShape: 1, transpose: 0, amplitude: .8, offset: 0, adsr: [.08, .2, .65, .35], pitch: [[0, 12], [.18, 0], [.45, -5], [.8, 0], [1, 0]] },
+    'sine-pad': { waveShape: 0, transpose: -12, amplitude: .8, offset: 0, adsr: [.35, .6, .75, 1.4], pitch: [[0, 0], [1, 0]] },
+    'square-short': { waveShape: 2, transpose: 0, amplitude: .5, offset: .5, adsr: [.005, .08, .8, .12], pitch: [[0, -12], [.08, 0], [1, 0]] },
   };
   const selected = presets[name];
   if (!selected) return;
   for (const id of ['waveShape', 'transpose', 'amplitude', 'offset']) setParameter(id, selected[id], 'preset');
-  const [attack, decay, sustain, release] = selected.envelope;
-  envelopePoints = [
-    { time: 0, value: 0 },
-    { time: attack, value: 1 },
-    { time: attack + decay, value: sustain },
-    { time: ENVELOPE_DURATION - release, value: sustain },
-    { time: ENVELOPE_DURATION, value: 0 },
-  ];
-  envelopeEditor.points = envelopePoints;
-  postADSR(envelopePoints);
+  ['attack', 'decay', 'sustain', 'release'].forEach((id, index) =>
+    setParameter(id, selected.adsr[index], 'preset'));
+  pitchEnvelope = selected.pitch.map(([time, value]) => ({ time, value }));
+  envelopeEditor.points = pitchEnvelope;
+  postPitchEnvelope(pitchEnvelope);
 }
 
 function syncAudioParameters() {
   for (const [id, value] of Object.entries(values)) setParameter(id, value, 'setup');
 }
 
-function normaliseEnvelope(points) {
-  if (points.length !== 5) return envelopePoints;
-  const attackEnd = clamp(points[1].time, .001, ENVELOPE_DURATION - .003);
-  const decayEnd = clamp(points[2].time, attackEnd + .001, ENVELOPE_DURATION - .002);
-  const releaseStart = clamp(points[3].time, decayEnd + .001, ENVELOPE_DURATION - .001);
-  const sustain = clamp(points[2].value, 0, 1);
-  return [
-    { time: 0, value: 0 },
-    { time: attackEnd, value: 1 },
-    { time: decayEnd, value: sustain },
-    { time: releaseStart, value: sustain },
-    { time: ENVELOPE_DURATION, value: 0 },
-  ];
-}
-
-function postADSR(points) {
-  const normalised = normaliseEnvelope(points);
-  audio?.synth.port.postMessage({
-    type: 'adsr',
-    attack: normalised[1].time,
-    decay: normalised[2].time - normalised[1].time,
-    sustain: normalised[2].value,
-    release: ENVELOPE_DURATION - normalised[3].time,
-  });
+function postPitchEnvelope(points) {
+  audio?.synth.port.postMessage({ type: 'pitchEnvelope', points });
 }
 
 function postSequence() {
@@ -321,10 +301,6 @@ function handlePackedNote(message, source) {
   const detail = { note: noteFromMessage(message), velocity: 100, channel: 0 };
   if (isNoteOnMessage(message)) postNote('noteOn', detail, source);
   else if (isNoteOffMessage(message)) postNote('noteOff', detail, source);
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, Number(value)));
 }
 
 cleanupAudio();
