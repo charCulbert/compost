@@ -13,6 +13,7 @@ class CompostSignalGenerator extends AudioWorkletProcessor {
     super();
     this.phase = 0;
     this.capture = new Float32Array(1024);
+    this.outputCapture = new Float32Array(1024);
     this.captureIndex = 0;
   }
 
@@ -30,16 +31,24 @@ class CompostSignalGenerator extends AudioWorkletProcessor {
       const raw = shape === 0 ? Math.sin(this.phase * Math.PI * 2)
         : shape === 2 ? (this.phase < .5 ? 1 : -1)
           : this.phase * 2 - 1;
-      const sample = (raw * amplitude + offset) * gain;
-      for (const channel of output) channel[frame] = sample;
-      this.capture[this.captureIndex++] = sample;
+      const scopeSample = raw * amplitude + offset;
+      const outputSample = Math.max(-1, Math.min(1, scopeSample * gain));
+      for (const channel of output) channel[frame] = outputSample;
+      this.capture[this.captureIndex] = scopeSample;
+      this.outputCapture[this.captureIndex] = outputSample;
+      this.captureIndex += 1;
       this.phase = (this.phase + frequency / sampleRate) % 1;
 
       if (this.captureIndex === this.capture.length) {
         const samples = this.capture;
+        const outputSamples = this.outputCapture;
         this.capture = new Float32Array(samples.length);
+        this.outputCapture = new Float32Array(outputSamples.length);
         this.captureIndex = 0;
-        this.port.postMessage({ type: 'scope-samples', samples }, [samples.buffer]);
+        this.port.postMessage({ type: 'scope-samples', samples, outputSamples }, [
+          samples.buffer,
+          outputSamples.buffer,
+        ]);
       }
     }
     return true;
