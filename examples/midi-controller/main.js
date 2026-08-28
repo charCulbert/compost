@@ -70,7 +70,6 @@ function sendKnobCC(name, value, source) {
 
 function setKnobCC(state, cc) {
   state.cc = clampMidiValue(cc);
-  state.knob.setAttribute('cc', String(state.cc));
   if (state.assignment) state.assignment.value = String(state.cc);
 }
 

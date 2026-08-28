@@ -22,7 +22,8 @@ Devices: `compost-audio`, `compost-midi`, `compost-device-selector`,
 Utilities: `parameter-controller` (wires controls to your backend),
 `parameter-scale` (linear/log/gain curves), `midi`, `midi-mapping`,
 `midi-mappings` and `midi-learn-ui` (message parsing, CC mapping, MIDI
-learn), `device-settings`, `piano-roll-model`.
+learn), `device-settings`, `envelope-model`, `piano-roll-model`,
+`selection-region`, `time-grid` and `utils`.
 
 Each element's attributes, properties and events are listed in its type
 declaration next to the source (`src/components/<element>.d.ts`) and shown
@@ -57,6 +58,10 @@ on a note body to edit velocity.
 Double-click resets a control; a double-tap does the same on touch.
 `readonly` still shows live state and navigates but changes nothing;
 `disabled` is inert.
+
+The controls are not form-associated. They represent backend parameters and
+editor state rather than named form fields, so the application owns
+serialization and submission.
 
 Events name what the user asked for, never which input did it. Elements show
 the state you give them; saving, undo, menus and what happens next are yours.
@@ -160,6 +165,8 @@ import { createParameterController } from 'compost/parameter-controller';
 
 `npm test` runs the unit tests, `npm run test:e2e` the Playwright suite.
 `npm run dev` serves the repo without caching;
-`examples/review/review.html?el=<element>` shows one element in three page
-contexts and `node examples/review/review-check.mjs <element>` does the same
-headlessly. The current plan is in `docs/plans/`.
+`examples/review/review.html?el=<element>` is the source of truth for each
+element example and shows its markup on the page. Add `&context=plain`,
+`dark`, or `brand` to isolate one page context. The Signal Generator, MIDI
+Controller, and Parameter Sync pages show current multi-element integration.
+`node examples/review/review-check.mjs <element>` checks an element headlessly.

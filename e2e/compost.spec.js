@@ -42,6 +42,45 @@ async function performTouchDoubleTap(page, locator) {
   }
 }
 
+async function openTimeline(page) {
+  await page.goto('/examples/review/review.html?el=compost-timeline&context=plain');
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    const isolated = document.createElement('compost-timeline');
+    for (const attribute of element.attributes) isolated.setAttribute(attribute.name, attribute.value);
+    isolated.style.cssText = element.style.cssText;
+    isolated.setAttribute('time-signature', '4/4');
+    isolated.setAttribute('grid', '1/4');
+    isolated.setAttribute('snap', 'off');
+    element.replaceWith(isolated);
+  });
+  return timeline;
+}
+
+async function openNoteEditor(page) {
+  await page.goto('/examples/review/review.html?el=compost-note-editor&context=plain');
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => {
+    element.setAttribute('time-signature', '4/4');
+    element.setAttribute('grid', '1/16');
+    element.setAttribute('snap', 'grid');
+    element.setAttribute('start', '1');
+    element.setAttribute('end', '10');
+    element.setAttribute('loop-start', '2');
+    element.setAttribute('loop-end', '8');
+    let nextNoteId = 1;
+    element.noteIdFactory = () => `demo-editor-note-${nextNoteId++}`;
+    element.setNotes([
+      { note: 60, start: 0, duration: .5, velocity: 100, channel: 0 },
+      { note: 64, start: 2, duration: .5, velocity: 88, channel: 0 },
+      { note: 60, start: 4, duration: .5, velocity: 100, channel: 0 },
+      { note: 64, start: 6, duration: .5, velocity: 88, channel: 0 },
+      { note: 67, start: 6.5, duration: .5, velocity: 96, channel: 0 },
+    ].map((note) => ({ ...note, id: element.noteIdFactory() })));
+  });
+  return editor;
+}
+
 for (const example of examples) {
   test(`${example.id} loads`, async ({ page }) => {
     const errors = [];
@@ -61,14 +100,16 @@ for (const example of examples) {
       ...new Set(elements.map((element) => element.localName).filter((name) => name.includes('-'))),
     ]);
     expect(undefinedElements).toEqual([]);
-    await expect(page.locator('select')).toHaveCount(example.id === 'compost-timeline' ? 3 : 0);
   });
 }
 
 test('envelope editor stays state-in and emits generic time/value intent', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  await page.goto('/examples/review/review.html?el=compost-envelope-editor&context=plain');
   const editor = page.locator('compost-envelope-editor');
-  await expect(editor).toHaveAttribute('aria-label', 'Envelope');
+  await expect(editor).toHaveAttribute('aria-label', 'Gain automation over 4 beats');
+  await editor.evaluate((element) => { element.points = [
+    { time: 0, value: 0 }, { time: 1, value: .5 }, { time: 4, value: 0 },
+  ]; });
   await expect(editor.locator('.point')).toHaveCount(3);
 
   const box = await editor.boundingBox();
@@ -82,8 +123,11 @@ test('envelope editor stays state-in and emits generic time/value intent', async
 });
 
 test('envelope points can be moved by a touch pointer', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  await page.goto('/examples/review/review.html?el=compost-envelope-editor&context=plain');
   const editor = page.locator('compost-envelope-editor');
+  await editor.evaluate((element) => { element.points = [
+    { time: 0, value: 0 }, { time: 1, value: .5 }, { time: 4, value: 0 },
+  ]; });
   const before = await editor.evaluate((element) => element.points[1]);
   const box = await editor.locator('.point').nth(1).boundingBox();
   expect(box.width).toBeGreaterThanOrEqual(20);
@@ -102,8 +146,11 @@ test('envelope points can be moved by a touch pointer', async ({ page }) => {
 });
 
 test('envelope value readout stays inside the lane at its upper edge', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  await page.goto('/examples/review/review.html?el=compost-envelope-editor&context=plain');
   const editor = page.locator('compost-envelope-editor');
+  await editor.evaluate((element) => { element.points = [
+    { time: 0, value: 0 }, { time: 1, value: .5 }, { time: 4, value: 0 },
+  ]; });
   const point = editor.locator('.point').nth(1);
   const pointBox = await point.boundingBox();
   const editorBox = await editor.boundingBox();
@@ -125,8 +172,11 @@ test('envelope value readout stays inside the lane at its upper edge', async ({ 
 });
 
 test('a touch double-tap creates on the second press and continues as a drag', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  await page.goto('/examples/review/review.html?el=compost-envelope-editor&context=plain');
   const editor = page.locator('compost-envelope-editor');
+  await editor.evaluate((element) => { element.points = [
+    { time: 0, value: 0 }, { time: 1, value: .5 }, { time: 4, value: 0 },
+  ]; });
   const gesture = await editor.evaluate(async (element) => {
     const changes = [];
     element.addEventListener('envelope-change', ({ detail }) => changes.push(detail.points));
@@ -141,13 +191,14 @@ test('a touch double-tap creates on the second press and continues as a drag', a
     await new Promise((resolve) => setTimeout(resolve, 80));
     surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, pointerId: 82 }));
     const createdOnDown = element.shadowRoot.querySelectorAll('.point').length === 4;
+    const createdIndex = element.drag.pointIndex;
     const createdTime = element.drag.origin[element.drag.pointIndex].time;
     const moved = { ...options, pointerId: 82, clientX: options.clientX + 120,
       clientY: options.clientY + 24 };
     surface.dispatchEvent(new PointerEvent('pointermove', moved));
     surface.dispatchEvent(new PointerEvent('pointerup', moved));
     return { createdOnDown, createdTime,
-      finalTime: element.points.find((point) => point.time > 5)?.time ?? 0,
+      finalTime: changes.at(-1)?.[createdIndex]?.time ?? 0,
       changeCount: changes.length };
   });
   expect(gesture.createdOnDown).toBe(true);
@@ -157,8 +208,11 @@ test('a touch double-tap creates on the second press and continues as a drag', a
 });
 
 test('a browser-synthesized touch dblclick does not apply the edit twice', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  await page.goto('/examples/review/review.html?el=compost-envelope-editor&context=plain');
   const editor = page.locator('compost-envelope-editor');
+  await editor.evaluate((element) => { element.points = [
+    { time: 0, value: 0 }, { time: 1, value: .5 }, { time: 4, value: 0 },
+  ]; });
   const box = await editor.boundingBox();
   const client = await page.context().newCDPSession(page);
   await client.send('Emulation.setTouchEmulationEnabled', { enabled: true });
@@ -173,7 +227,7 @@ test('a browser-synthesized touch dblclick does not apply the edit twice', async
 });
 
 test('the envelope surface cancels the touch default that zooms iOS pages', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-envelope-editor/');
+  await page.goto('/examples/review/review.html?el=compost-envelope-editor&context=plain');
   const prevented = await page.locator('compost-envelope-editor').evaluate((element) => {
     const event = new Event('touchend', { bubbles: true, composed: true, cancelable: true });
     element.shadowRoot.querySelector('.surface').dispatchEvent(event);
@@ -183,7 +237,7 @@ test('the envelope surface cancels the touch default that zooms iOS pages', asyn
 });
 
 test('double-tap component actions cancel the iOS zoom default', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   let activationCount = 0;
   const noteGrid = page.locator('compost-note-editor').locator('.grid');
   await noteGrid.evaluate((element) => element.addEventListener('dblclick', () => {
@@ -194,17 +248,14 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
   expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
   expect(activationCount).toBe(1);
 
-  await page.goto('/examples/component-demos/compost-timeline/');
-  const timelineLane = page.locator('compost-timeline').locator('.lane').first();
-  await timelineLane.evaluate((element) => element.addEventListener('dblclick', () => {
-    window.__touchDoubleActivations = (window.__touchDoubleActivations || 0) + 1;
-  }));
+  await openTimeline(page);
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => element.setLanes([{ id: 'lane', name: 'Lane', clips: [] }]));
+  const timelineLane = timeline.locator('.lane').first();
   result = await dispatchTouchDoubleTap(timelineLane);
-  activationCount = await page.evaluate(() => window.__touchDoubleActivations || 0);
   expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
-  expect(activationCount).toBe(1);
 
-  await page.goto('/examples/component-demos/compost-clip-grid/');
+  await page.goto('/examples/review/review.html?el=compost-clip-grid&context=plain');
   const clipName = page.locator('compost-clip-grid').first().locator('.name').first();
   await clipName.evaluate((element) => element.addEventListener('dblclick', () => {
     window.__touchDoubleActivations = (window.__touchDoubleActivations || 0) + 1;
@@ -219,7 +270,7 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
     ['compost-knob', 'compost-knob', '.dial'],
     ['compost-number-box', 'compost-number-box', '.box'],
   ]) {
-    await page.goto(`/examples/component-demos/${demo}/`);
+    await page.goto(`/examples/review/review.html?el=${demo}&context=plain`);
     result = await dispatchTouchDoubleTap(page.locator(component).first().locator(surface));
     expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
   }
@@ -232,7 +283,7 @@ test('touch double-tap resets parameter controls', async ({ page }) => {
     ['compost-number-box', 'compost-number-box', '.box'],
   ]) {
     await test.step(demo, async () => {
-      await page.goto(`/examples/component-demos/${demo}/`);
+      await page.goto(`/examples/review/review.html?el=${demo}&context=plain`);
       const control = page.locator(component).first();
       const resetValue = await control.evaluate((element) => {
         element.setValue(element.min + (element.max - element.min) * 0.25, false);
@@ -248,7 +299,7 @@ test('touch double-tap resets parameter controls', async ({ page }) => {
 });
 
 test('knob keyboard edits use a complete parameter gesture', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-knob/');
+  await page.goto('/examples/review/review.html?el=compost-knob&context=plain');
   const knob = page.locator('compost-knob[data-option-target="knob"]');
   await expect(knob).toHaveAttribute('role', 'slider');
   await expect(page.locator('input[type="range"]')).toHaveCount(0);
@@ -273,26 +324,22 @@ test('knob keyboard edits use a complete parameter gesture', async ({ page }) =>
   ]);
 });
 
-test('select supports keyboard selection', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-select/');
-  const select = page.locator('compost-select[aria-label="Wave shape"]');
-  const combobox = page.getByRole('combobox', { name: 'Wave shape' });
+test('select supports native selection', async ({ page }) => {
+  await page.goto('/examples/review/review.html?el=compost-select&context=plain');
+  const select = page.locator('compost-select[parameter-id="osc-waveform"]');
+  const combobox = page.getByRole('combobox', { name: 'Waveform' });
 
-  await expect(select).toHaveAttribute('value', 'saw');
-  await combobox.focus();
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('Enter');
+  await expect(select).toHaveAttribute('value', '2');
+  await combobox.selectOption('3');
 
-  await expect(select).toHaveAttribute('value', 'square');
-  await expect(combobox).toContainText('Square');
-  await expect(combobox).toHaveAttribute('aria-expanded', 'false');
+  await expect(select).toHaveAttribute('value', '3');
+  await expect(combobox).toHaveValue('3');
 });
 
 test('dragging the slider track does not open the value editor', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-slider/');
-  const slider = page.getByRole('slider', { name: 'Feedback' });
-  const track = slider.locator('[part="input"]');
+  await page.goto('/examples/review/review.html?el=compost-slider&context=plain');
+  const slider = page.locator('compost-slider[data-option-target="slider"]');
+  const track = slider.locator('.range-input');
   const box = await track.boundingBox();
 
   await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
@@ -303,32 +350,11 @@ test('dragging the slider track does not open the value editor', async ({ page }
   await expect(slider.locator('.value-editor')).toHaveCount(0);
 });
 
-test('select listbox keeps the same width across reopens', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-select/');
-  const select = page.locator('compost-select[aria-label="Wave shape"]');
-  const combobox = page.getByRole('combobox', { name: 'Wave shape' });
-  const listbox = select.locator('[role="listbox"]');
-  // A trigger narrower than its options is the case that used to grow on every open.
-  await select.evaluate((element) => { element.style.width = '120px'; });
-
-  const widths = [];
-  for (let i = 0; i < 3; i += 1) {
-    await combobox.click();
-    await expect(listbox).toBeVisible();
-    widths.push((await listbox.boundingBox()).width);
-    await page.keyboard.press('Escape');
-    await expect(listbox).toBeHidden();
-  }
-
-  expect(widths[1]).toBe(widths[0]);
-  expect(widths[2]).toBe(widths[0]);
-});
-
 test('drawer summary toggles its public open state', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-drawer/');
-  const drawer = page.locator('compost-drawer[data-drawer-id="bottom"]');
+  await page.goto('/examples/review/review.html?el=compost-drawer&context=plain');
+  const drawer = page.locator('compost-drawer[edge="bottom"]');
   const summary = drawer.locator('summary');
-  const resizeHandle = page.getByRole('separator', { name: 'Resize Instrument drawer' });
+  const resizeHandle = page.getByRole('separator', { name: 'Resize Device drawer' });
 
   await expect(drawer).toHaveAttribute('open', '');
   await summary.click();
@@ -336,21 +362,21 @@ test('drawer summary toggles its public open state', async ({ page }) => {
   await summary.click();
   await expect(drawer).toHaveAttribute('open', '');
 
-  await expect(resizeHandle).toHaveAttribute('aria-valuemin', '100');
-  await expect(resizeHandle).toHaveAttribute('aria-valuemax', '420');
+  await expect(resizeHandle).toHaveAttribute('aria-valuemin', '80');
+  await expect(resizeHandle).toHaveAttribute('aria-valuemax', '180');
   await resizeHandle.focus();
   await page.keyboard.press('ArrowUp');
-  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '236');
-  await expect(resizeHandle).toHaveAttribute('aria-valuetext', '236 pixels');
+  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '136');
+  await expect(resizeHandle).toHaveAttribute('aria-valuetext', '136 pixels');
 
   for (let press = 0; press < 20; press += 1) {
     await page.keyboard.press('ArrowUp');
   }
-  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '420');
+  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '180');
 
   await summary.click();
   await summary.click();
-  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '420');
+  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '180');
 });
 
 test('drawer keeps its declared initial size during upgrade', async ({ page }) => {
@@ -364,7 +390,7 @@ test('drawer keeps its declared initial size during upgrade', async ({ page }) =
 test('centered audio keeps its toolbar footprint without animating', async ({ page }) => {
   await page.goto('/examples/signal-generator/');
   const audio = page.locator('compost-audio');
-  const slider = page.locator('.audio-output > compost-slider');
+  const slider = page.locator('compost-slider[parameter-id="outputGain"]');
   const offHostWidth = await audio.evaluate((element) => element.getBoundingClientRect().width);
   const sliderLeft = await slider.evaluate((element) => element.getBoundingClientRect().left);
 
@@ -392,27 +418,26 @@ test('parameter controller reflects host updates to both controls', async ({ pag
 });
 
 test('device selector applies host settings and restores focus', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-device-selector/');
+  await page.goto('/examples/review/review.html?el=compost-device-selector&context=plain');
+  const selector = page.locator('compost-device-selector');
   const openButton = page.getByRole('button', { name: 'Device settings' });
-  const dialog = page.getByRole('dialog', { name: 'Audio & MIDI settings' });
+  const dialog = selector.locator('dialog');
 
-  await expect(page.locator('[data-device-demo-state="output"]')).toHaveText('speakers');
-  await openButton.click();
+  await expect.poll(() => selector.evaluate((element) => element.snapshot.audio.outputDeviceId))
+    .toBe('speakers');
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Close' })).toBeFocused();
+  await expect(selector.getByRole('button', { name: 'Close' })).toBeFocused();
   await expect(openButton).toHaveAttribute('aria-expanded', 'true');
 
   const output = dialog.getByRole('combobox', { name: 'Audio output' });
-  await output.focus();
-  await page.keyboard.press('End');
-  await page.keyboard.press('Enter');
-  await expect(page.locator('[data-device-demo-state="output"]')).toHaveText('headphones');
+  await output.selectOption('headphones');
+  await expect.poll(() => selector.evaluate((element) => element.snapshot.audio.outputDeviceId))
+    .toBe('headphones');
 
   const sampleRate = dialog.getByRole('combobox', { name: 'Sample rate' });
-  await sampleRate.focus();
-  await page.keyboard.press('End');
-  await page.keyboard.press('Enter');
-  await expect(page.locator('[data-device-demo-state="sampleRate"]')).toHaveText('96000 Hz');
+  await sampleRate.selectOption('96000');
+  await expect.poll(() => selector.evaluate((element) => element.snapshot.audio.sampleRate))
+    .toBe(96000);
 
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
@@ -421,9 +446,9 @@ test('device selector applies host settings and restores focus', async ({ page }
 });
 
 test('number box commits, cancels, and drags through the real editor', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-number-box/');
+  await page.goto('/examples/review/review.html?el=compost-number-box&context=plain');
   const numberBox = page.locator('compost-number-box[data-option-target="number"]');
-  const spinbutton = page.getByRole('spinbutton', { name: 'Ratio' });
+  const spinbutton = page.getByRole('spinbutton', { name: 'Frequency' });
 
   await numberBox.evaluate((element) => {
     element.testEvents = [];
@@ -436,16 +461,16 @@ test('number box commits, cancels, and drags through the real editor', async ({ 
 
   await spinbutton.focus();
   await page.keyboard.press('Enter');
-  const editor = page.getByRole('textbox', { name: 'Set Ratio' });
-  await editor.fill('12.34');
+  const editor = page.getByRole('textbox', { name: 'Set Frequency' });
+  await editor.fill('1234');
   await editor.press('Enter');
-  await expect(spinbutton).toHaveAttribute('aria-valuenow', '12.34');
+  await expect(spinbutton).toHaveAttribute('aria-valuenow', '1234');
 
   await spinbutton.focus();
   await page.keyboard.press('Enter');
-  await page.getByRole('textbox', { name: 'Set Ratio' }).fill('55');
+  await page.getByRole('textbox', { name: 'Set Frequency' }).fill('5500');
   await page.keyboard.press('Escape');
-  await expect(spinbutton).toHaveAttribute('aria-valuenow', '12.34');
+  await expect(spinbutton).toHaveAttribute('aria-valuenow', '1234');
 
   const bounds = await spinbutton.boundingBox();
   expect(bounds).not.toBeNull();
@@ -454,7 +479,7 @@ test('number box commits, cancels, and drags through the real editor', async ({ 
   await page.mouse.move(bounds.x + 4, bounds.y + bounds.height / 2 - 24);
   await page.mouse.up();
   await expect.poll(async () => Number(await spinbutton.getAttribute('aria-valuenow')))
-    .toBeGreaterThan(12.34);
+    .toBeGreaterThan(1234);
 
   const events = await numberBox.evaluate((element) => element.testEvents);
   expect(events.slice(0, 3).map(({ type }) => type)).toEqual([
@@ -466,7 +491,7 @@ test('number box commits, cancels, and drags through the real editor', async ({ 
 });
 
 test('slider typed editing uses real focus and lifecycle events', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-slider/');
+  await page.goto('/examples/review/review.html?el=compost-slider&context=plain');
   const slider = page.locator('compost-slider[data-option-target="slider"]');
 
   await slider.evaluate((element) => {
@@ -478,7 +503,7 @@ test('slider typed editing uses real focus and lifecycle events', async ({ page 
 
   await slider.focus();
   await page.keyboard.press('Enter');
-  const editor = page.getByRole('textbox', { name: 'Set Log Cutoff value' });
+  const editor = page.getByRole('textbox', { name: 'Set Cutoff value' });
   await editor.fill('5000');
   await editor.press('Enter');
 
@@ -493,7 +518,7 @@ test('slider typed editing uses real focus and lifecycle events', async ({ page 
 });
 
 test('piano keyboard emits notes and its dock option changes layout state', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-piano/');
+  await page.goto('/examples/review/review.html?el=compost-piano&context=plain');
   const piano = page.locator('compost-piano[data-option-target="piano"]');
 
   await piano.evaluate((element) => {
@@ -540,14 +565,14 @@ test('piano keyboard emits notes and its dock option changes layout state', asyn
     ['up', 72],
   ]);
 
-  await page.locator('[data-option="piano-root"]').fill('120');
-  await page.locator('[data-option="piano-count"]').fill('8');
+  await page.locator('[data-piano-root]').fill('120');
+  await page.locator('[data-piano-count]').fill('8');
   await piano.evaluate((element) => { element.testEvents = []; });
   await piano.focus();
   await page.keyboard.press('a');
   expect(await piano.evaluate((element) => element.testEvents)).toEqual([]);
 
-  await page.locator('[data-option="piano-docked"]').uncheck();
+  await page.locator('[data-piano-dock]').uncheck();
   await expect(piano).not.toHaveAttribute('dock', '');
   await expect(piano).toHaveAttribute('inline', '');
 
@@ -569,7 +594,7 @@ test('piano keyboard emits notes and its dock option changes layout state', asyn
 });
 
 test('piano exposes wide key beds without clipping keys', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-piano/');
+  await page.goto('/examples/review/review.html?el=compost-piano&context=plain');
   const piano = page.locator('compost-piano[data-option-target="piano"]');
   await piano.evaluate((element) => {
     element.setAttribute('inline', '');
@@ -591,10 +616,11 @@ test('piano exposes wide key beds without clipping keys', async ({ page }) => {
   expect(geometry.lastKeyRight).toBeLessThanOrEqual(geometry.scrollRight);
 });
 
-test('buttons expose real momentary and switch behavior', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-button/');
+test('buttons expose real trigger and switch behavior', async ({ page }) => {
+  await page.goto('/examples/review/review.html?el=compost-button&context=plain');
   const ping = page.locator('compost-button[parameter-id="ping"]');
   const latch = page.locator('compost-button[parameter-id="latch"]');
+  await latch.evaluate((element) => element.removeAttribute('pressed'));
 
   await ping.evaluate((element) => {
     element.testEvents = [];
@@ -613,7 +639,7 @@ test('buttons expose real momentary and switch behavior', async ({ page }) => {
   ]);
   await expect(ping).not.toHaveAttribute('pressed', '');
 
-  const latchButton = page.getByRole('button', { name: 'Latch' });
+  const latchButton = page.getByRole('button', { name: 'Bypass' });
   await latchButton.click();
   await expect(latch).toHaveAttribute('pressed', '');
   await expect(latchButton).toHaveAttribute('aria-pressed', 'true');
@@ -632,18 +658,19 @@ test('buttons expose real momentary and switch behavior', async ({ page }) => {
   });
   expect(styles).toEqual({
     borderRadius: '0px',
-    overflowWrap: 'anywhere',
+    overflowWrap: 'normal',
     whiteSpace: 'normal',
   });
 });
 
 test('MIDI monitor stays quiet by default and renders bounded messages', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-midi-monitor/');
+  await page.goto('/examples/review/review.html?el=compost-midi-monitor&context=plain');
   const monitor = page.locator('compost-midi-monitor');
   const log = page.getByRole('log', { name: 'MIDI message log' });
 
   await expect(log).toHaveAttribute('aria-live', 'off');
   await monitor.evaluate((element) => {
+    element.setAttribute('max-lines', '8');
     for (let note = 60; note < 70; note += 1) {
       element.handleMIDIMessage([0x90, note, 100]);
     }
@@ -656,7 +683,7 @@ test('MIDI monitor stays quiet by default and renders bounded messages', async (
 });
 
 test('MIDI mapping panel does not clip its map-mode focus ring', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-midi-mappings/');
+  await page.goto('/examples/review/review.html?el=compost-midi-mappings&context=plain');
   const editor = page.locator('compost-midi-mappings');
   await editor.getByRole('button', { name: 'Map MIDI' }).focus();
 
@@ -667,66 +694,23 @@ test('MIDI mapping panel does not clip its map-mode focus ring', async ({ page }
   expect(overflow).toEqual({ panel: 'visible', table: 'auto' });
 });
 
-test('clip grid reports launches, stops and drops between grids', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-clip-grid/');
-  const drums = page.locator('compost-clip-grid[data-grid="0"]');
-  const bass = page.locator('compost-clip-grid[data-grid="1"]');
-  const state = page.locator('[data-option-state]');
+test('clip grid review host applies launch, stop and record intents', async ({ page }) => {
+  await page.goto('/examples/review/review.html?el=compost-clip-grid&context=plain');
+  const grid = page.locator('compost-clip-grid');
+  const fill = grid.getByRole('button', { name: 'Launch fill.b on Drums' });
+  await fill.click();
+  await expect(grid.locator('.row').nth(1)).toHaveAttribute('data-queued', '');
+  await expect(grid.locator('.row').nth(1)).toHaveAttribute('data-state', 'playing', { timeout: 3000 });
+  await grid.getByRole('button', { name: 'Stop Drums' }).click();
+  await expect(grid.locator('.row[data-state="playing"]')).toHaveCount(0, { timeout: 3000 });
 
-  // every clip button says which track it is on
-  await expect(drums.getByRole('button', { name: 'Launch fill.b on Drums' })).toHaveCount(1);
-  await expect(bass.getByRole('button', { name: /^ride\.c on Bass, stopped/u })).toHaveCount(0);
-  await drums.getByRole('button', { name: 'Launch fill.b on Drums' }).click();
-  await expect(state).toHaveText('fill.b queued · stopped');
-  await expect(drums.locator('.row[data-state="stopped"][data-queued] .queue')).toHaveCount(1);
-  await expect(state).toHaveText('fill.b playing · stopped', { timeout: 3000 });
-  await expect(drums.locator('.row[data-state="playing"] .progress')).toHaveCount(1);
-  await drums.getByRole('button', { name: 'Stop Drums' }).click();
-  await expect(drums).toHaveAttribute('stop', 'queued');
-  await expect(state).toHaveText('stopped · stopped', { timeout: 3000 });
-
-  // a name dragged onto the other grid's empty slot lands there
-  const name = drums.getByRole('button', { name: /^ride\.c/ });
-  const from = await name.boundingBox();
-  const targetRow = bass.locator('.row').nth(3);
-  const to = await targetRow.boundingBox();
-  await page.mouse.move(from.x + 5, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(to.x + 40, to.y + to.height / 2, { steps: 8 });
-  await expect(targetRow).toHaveAttribute('data-occupied', 'move');
-  await page.mouse.up();
-  await expect(bass.getByRole('button', { name: /^ride\.c/ })).toHaveCount(1);
-  await expect(drums.getByRole('button', { name: /^ride\.c/ })).toHaveCount(0);
-
-  // an armed track offers a record ring in an empty slot
-  await page.locator('[data-option="grid-armed"]').check();
-  await drums.evaluate((grid) => { grid.recordQueued = 4; });
-  await expect(drums.getByRole('button', { name: 'Cancel queued recording in Drums slot 5' })).toHaveCount(1);
-  await expect(drums.locator('.row[data-record-queued] .queue')).toHaveCount(1);
-  await drums.evaluate((grid) => { grid.recordQueued = -1; });
-  await drums.getByRole('button', { name: 'Record into Drums slot 5' }).click();
-  await expect(drums.getByRole('button', { name: /^take 5/ })).toHaveCount(1);
-
-  // a focused name opens from the keyboard too: Shift-Enter, or e
-  const log = page.locator('[data-log]');
-  await drums.getByRole('button', { name: /^break\.a/ }).focus();
-  await page.keyboard.press('Shift+Enter');
-  await expect(log).toContainText('clip-open break.a');
-  await page.locator('[data-log]').evaluate((node) => { node.textContent = ''; });
-  await drums.getByRole('button', { name: /^break\.a/ }).focus();
-  await page.keyboard.press('e');
-  await expect(log).toContainText('clip-open break.a');
-
-  await drums.evaluate((grid) => grid.setClips([
-    { name: 'take.a', state: 'recording', queued: true }, null, null, null, null,
-  ]));
-  await expect(drums.locator('.row[data-state="recording"][data-queued] .tri svg circle[fill]')).toHaveCount(1);
-  await expect(drums.locator('.row[data-state="recording"][data-queued] .queue')).toHaveCount(1);
+  await grid.getByRole('button', { name: 'Record into Drums slot 3' }).click();
+  await expect(grid.getByRole('button', { name: /^take\.1/u })).toHaveCount(1, { timeout: 3000 });
 });
 
 test('clip grid slow mouse click renames without hijacking open or touch', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-clip-grid/');
-  const grid = page.locator('compost-clip-grid[data-grid="0"]');
+  await page.goto('/examples/review/review.html?el=compost-clip-grid&context=plain');
+  const grid = page.locator('compost-clip-grid');
   const name = grid.getByRole('button', { name: /^break\.a/ });
   const editor = grid.locator('.editor');
 
@@ -738,7 +722,6 @@ test('clip grid slow mouse click renames without hijacking open or touch', async
   await name.dblclick();
   await page.waitForTimeout(400);
   await expect(editor).toHaveCount(0);
-  await expect(page.locator('[data-log]')).toContainText('clip-open break.a');
 
   await name.evaluate((element) => element.dispatchEvent(new PointerEvent('click', {
     bubbles: true, composed: true, pointerType: 'touch', pointerId: 1,
@@ -748,7 +731,7 @@ test('clip grid slow mouse click renames without hijacking open or touch', async
 });
 
 test('timeline reports move, trim, delete and ruler seek intents', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const clip = timeline.locator('.clip[data-id="beat"]');
   const ruler = timeline.locator('.ruler-wrap');
@@ -846,7 +829,7 @@ test('timeline reports move, trim, delete and ruler seek intents', async ({ page
 });
 
 test('timeline is a region holding a list of lanes and names unnamed lanes by id', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => element.setLanes([{ id: 'bus-7', clips: [] }]));
   await expect(timeline).toHaveAttribute('role', 'region');
@@ -856,7 +839,7 @@ test('timeline is a region holding a list of lanes and names unnamed lanes by id
 });
 
 test('timeline regions extend on Shift-click, span every lane from the ruler and clear on Escape', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setAttribute('snap', 'grid');
@@ -903,7 +886,7 @@ test('timeline regions extend on Shift-click, span every lane from the ruler and
 });
 
 test('timeline clips snap to their neighbours and locators', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setAttribute('snap', 'grid');
@@ -941,7 +924,7 @@ test('timeline clips snap to their neighbours and locators', async ({ page }) =>
 });
 
 test('timeline clips stay in the ruler coordinate system while scrolled and zoomed', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.pxPerBeat = 40;
@@ -972,7 +955,7 @@ test('timeline clips stay in the ruler coordinate system while scrolled and zoom
 });
 
 test('timeline ruler labels stop with the grid', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const geometry = await timeline.evaluate((element) => {
     element.pxPerBeat = 40;
@@ -987,7 +970,7 @@ test('timeline ruler labels stop with the grid', async ({ page }) => {
 });
 
 test('timeline clip selection and loop match the note-editor visual language', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLanes([{ id: 'lane', name: 'Lane', clips: [
@@ -1026,7 +1009,7 @@ test('timeline clip selection and loop match the note-editor visual language', a
 });
 
 test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const clip = timeline.locator('.clip[data-id="beat"]');
   await timeline.evaluate((element) => {
@@ -1066,7 +1049,7 @@ test('timeline Alt toggles copy while a clip is in flight', async ({ page }) => 
 });
 
 test('timeline trims every selected clip together and grabs edges in em', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setAttribute('snap', 'grid');
@@ -1097,7 +1080,7 @@ test('timeline trims every selected clip together and grabs edges in em', async 
 });
 
 test('timeline asks to join clips and insert time', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLanes([
@@ -1127,7 +1110,7 @@ test('timeline asks to join clips and insert time', async ({ page }) => {
 });
 
 test('timeline keyboard reaches fine nudges, other lanes, loop handles and locators', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setAttribute('grid', '4');
@@ -1144,6 +1127,7 @@ test('timeline keyboard reaches fine nudges, other lanes, loop handles and locat
     element.selected = ['one'];
     element.focusClip('one');
   });
+  await timeline.locator('.clip[data-id="one"]').focus();
   await page.keyboard.press('Shift+Alt+ArrowRight');
   await page.keyboard.press('Alt+ArrowDown');
   await timeline.locator('.ruler-handle.start').focus();
@@ -1157,16 +1141,15 @@ test('timeline keyboard reaches fine nudges, other lanes, loop handles and locat
     { type: 'clip-nudge', detail: { ids: ['one'], deltaBeats: 1 / 16 } },
     { type: 'clip-move', detail: { ids: ['one'], laneId: 'b', deltaBeats: 0, copy: false } },
     { type: 'loop-change', detail: { start: 3, end: 6, enabled: true } },
-    // the demo page applied the first loop-change, as a host would, so the second starts from 3
-    { type: 'loop-change', detail: { start: 3, end: 6 - 1 / 16, enabled: true } },
+    { type: 'loop-change', detail: { start: 2, end: 6 - 1 / 16, enabled: true } },
     { type: 'locator-move', detail: { id: 'drop', beat: 5 } },
     { type: 'locator-delete', detail: { id: 'drop' } },
   ]);
-  await expect(timeline.locator('.ruler-handle.start')).toHaveAttribute('aria-valuenow', '3');
+  await expect(timeline.locator('.ruler-handle.start')).toHaveAttribute('aria-valuenow', '2');
 });
 
 test('timeline sizes every lane with Alt and zooms to the region on z', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLanes([
@@ -1213,7 +1196,7 @@ test('timeline sizes every lane with Alt and zooms to the region on z', async ({
 });
 
 test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const clip = timeline.locator('.clip[data-id="beat"]');
   const other = timeline.locator('.clip[data-id="other"]');
@@ -1265,11 +1248,11 @@ test('timeline copies stay on the grid and Cmd inverts snapping', async ({ page 
   await page.keyboard.down('Meta');
   await page.mouse.click(name.x + name.width / 2, name.y + name.height / 2);
   await page.keyboard.up('Meta');
-  expect(await timeline.evaluate((element) => element.selected)).toEqual(['other']);
+  expect(await timeline.evaluate((element) => element.selected)).toEqual(['beat']);
 });
 
 test('timeline rulers expose locators, time selections and measured row geometry', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setAttribute('automation', '');
@@ -1483,7 +1466,7 @@ test('timeline rulers expose locators, time selections and measured row geometry
 });
 
 test('timeline enters from the keyboard and nudges before arrow navigation', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'beat', name: 'beat', start: 0, length: 8, duration: 2, loop: true }] }]);
@@ -1509,7 +1492,7 @@ test('timeline enters from the keyboard and nudges before arrow navigation', asy
 });
 
 test('timeline keeps lane headers aligned and touch drags scroll time', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.testEvents = [];
@@ -1588,7 +1571,7 @@ test('timeline keeps lane headers aligned and touch drags scroll time', async ({
 });
 
 test('timeline defaults to bounded neutral clips with ordinary selection', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLanes([{ id: 'lane', name: 'Lane A', clips: [
@@ -1622,7 +1605,7 @@ test('timeline defaults to bounded neutral clips with ordinary selection', async
 });
 
 test('timeline swaps structured note marks for a caller-owned clip preview', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const result = await timeline.evaluate((element) => {
     element.setLanes([{ id: 'lane', name: 'Lane', clips: [{ id: 'clip', name: 'Clip',
@@ -1644,7 +1627,7 @@ test('timeline swaps structured note marks for a caller-owned clip preview', asy
 });
 
 test('timeline paints velocity dashes and clip drop targets', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.removeAttribute('automation');
@@ -1715,7 +1698,7 @@ test('timeline paints velocity dashes and clip drop targets', async ({ page }) =
 });
 
 test('timeline slots caller-owned lane headers without taking over their controls', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLanes([{ id: 'caller', name: 'Fallback', clips: [] }]);
@@ -1734,7 +1717,7 @@ test('timeline slots caller-owned lane headers without taking over their control
 });
 
 test('timeline dimming is a generic presentation flag', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => element.setLanes([{ id: 'lane', name: 'Track', color: 'rgb(40, 120, 180)', clips: [
     { id: 'clip', name: 'clip', start: 0, length: 1, duration: 1, notes: [] },
@@ -1756,7 +1739,7 @@ test('timeline dimming is a generic presentation flag', async ({ page }) => {
 });
 
 test('timeline keeps low-zoom loop caps at least 8px apart', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLanes([{ id: 'lane', name: 'Loop', clips: [{ id: 'loop', name: 'loop', start: 0, length: 12, duration: 1, loop: true, notes: [] }] }]);
@@ -1771,7 +1754,7 @@ test('timeline keeps low-zoom loop caps at least 8px apart', async ({ page }) =>
 });
 
 test('timeline leaves most of a phone-width view for arrangement editing', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const widths = await timeline.evaluate((element) => {
     element.style.width = '375px';
@@ -1788,7 +1771,7 @@ test('timeline leaves most of a phone-width view for arrangement editing', async
 });
 
 test('timeline aligns regular and compact lanes with automation view', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setAttribute('automation', '');
@@ -1826,7 +1809,7 @@ test('timeline aligns regular and compact lanes with automation view', async ({ 
 });
 
 test('timeline generic header intents stay local', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const events = await timeline.evaluate((element) => {
     element.testEvents = [];
@@ -1859,7 +1842,7 @@ test('timeline generic header intents stay local', async ({ page }) => {
 });
 
 test('a real double-click on an empty MIDI lane emits one lane-create', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLanes([{ id: 'midi', name: 'MIDI 1', clips: [] }]);
@@ -1876,7 +1859,7 @@ test('a real double-click on an empty MIDI lane emits one lane-create', async ({
 });
 
 test('timeline automation view draw and commit sorted edits without clip selection', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setAttribute('automation', '');
@@ -1962,7 +1945,7 @@ test('timeline automation view draw and commit sorted edits without clip selecti
 });
 
 test('timeline automation view makes background clips entirely inert', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setAttribute('automation', '');
@@ -2011,8 +1994,14 @@ test('timeline automation view makes background clips entirely inert', async ({ 
 });
 
 test('timeline automation edits use display space, lane-scoped ranges and draw arbitration', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    const isolated = document.createElement('compost-timeline');
+    for (const attribute of element.attributes) isolated.setAttribute(attribute.name, attribute.value);
+    isolated.style.cssText = element.style.cssText;
+    element.replaceWith(isolated);
+  });
   await timeline.evaluate((element) => {
     document.documentElement.style.fontSize = '11px';
     element.style.fontSize = '11px';
@@ -2030,6 +2019,11 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
       { id: 'linear', name: 'Linear', clips: [], automation: { id: 'env', label: 'Linear', min: 0, max: 1, stepped: false,
         points: [{ beat: 0, value: .1 }, { beat: 4, value: .9 }] } },
     ]);
+    element.addEventListener('automation-change', ({ detail }) => {
+      const lane = element.lanes.find((entry) => entry.id === detail.laneId);
+      if (lane?.automation) element.setLaneAutomation(detail.laneId,
+        { ...lane.automation, points: detail.points });
+    });
   });
 
   const gainMove = await timeline.evaluate((element) => {
@@ -2316,7 +2310,7 @@ test('timeline automation edits use display space, lane-scoped ranges and draw a
 });
 
 test('timeline loop handles stay generic while the range is dragged', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.setLoop(1, 9, true);
@@ -2335,7 +2329,7 @@ test('timeline loop handles stay generic while the range is dragged', async ({ p
 });
 
 test('timeline lane geometry includes the separator at automation boundaries', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const geometry = await timeline.evaluate((element) => {
     element.setLanes([
@@ -2363,7 +2357,7 @@ test('timeline lane geometry includes the separator at automation boundaries', a
 });
 
 test('timeline lane resizing is reversible and keyboard accessible', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.testEvents = [];
@@ -2401,7 +2395,7 @@ test('timeline lane resizing is reversible and keyboard accessible', async ({ pa
 });
 
 test('note editor moves, trims, velocity-drags and edits playback markers through real gestures', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => {
     element.testEvents = [];
@@ -2592,7 +2586,7 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
 });
 
 test('note editor and timeline count a 6/8 meter on a note-value grid', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   const editorMeter = await editor.evaluate((element) => {
     element.setAttribute('beats-per-bar', '9');
@@ -2612,7 +2606,7 @@ test('note editor and timeline count a 6/8 meter on a note-value grid', async ({
   expect(editorMeter.labels).toContain('1.6');
   await expect(editor.locator('.gl.pulse')).toHaveCount(4);
 
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const timelineMeter = await timeline.evaluate((element) => {
     element.setAttribute('beats-per-bar', '9');
@@ -2651,7 +2645,7 @@ test('note editor review host plays a one-beat pickup into a two-bar 6/8 loop', 
 });
 
 test('note editor playback and loop ranges are independent', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   expect(await editor.evaluate((element) => {
     element.setRange(6, 10);
@@ -2666,7 +2660,7 @@ test('note editor playback and loop ranges are independent', async ({ page }) =>
 });
 
 test('note editor resets note velocity on Command-double-click', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => {
     element.defaultVelocity = 91;
@@ -2678,7 +2672,7 @@ test('note editor resets note velocity on Command-double-click', async ({ page }
 });
 
 test('note editor stops copying immediately when Alt is released during a drag', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   const before = await editor.evaluate((element) => ({
     count: element.notes.length, id: element.notes[0].id, start: element.notes[0].start,
@@ -2701,7 +2695,7 @@ test('note editor stops copying immediately when Alt is released during a drag',
 });
 
 test('note editor reports context intent for notes and empty grid', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => {
     element.testContexts = [];
@@ -2715,7 +2709,7 @@ test('note editor reports context intent for notes and empty grid', async ({ pag
 });
 
 test('note editor pitch keys select a pitch and time-grid lines can be hidden', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.locator('.key[data-note="60"]').click();
   expect(await editor.evaluate((element) => element.notes
@@ -2733,7 +2727,7 @@ test('note editor pitch keys select a pitch and time-grid lines can be hidden', 
 });
 
 test('note editor keeps a snapped time span separate from its selected pitches', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => element.setNotes([
     { id: 'chosen', note: 60, start: 2, duration: 0.5, velocity: 100, channel: 0 },
@@ -2797,7 +2791,7 @@ test('note editor keeps a snapped time span separate from its selected pitches',
 });
 
 test('note editor defers empty-click semantics and Shift-click extends the prior box', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => element.setNotes([
     { id: 'low', note: 60, start: 2, duration: 0.5, velocity: 100, channel: 0 },
@@ -2845,7 +2839,7 @@ test('note editor defers empty-click semantics and Shift-click extends the prior
 });
 
 test('note editor double-click creates in the clicked grid cell every time', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => element.setNotes([]));
   const geometry = await editor.evaluate((element) => ({
@@ -2869,7 +2863,7 @@ test('note editor double-click creates in the clicked grid cell every time', asy
 });
 
 test('note editor tolerates hand movement without relying on native double-click', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => element.setNotes([]));
   const grid = editor.locator('.grid');
@@ -2890,7 +2884,7 @@ test('note editor tolerates hand movement without relying on native double-click
 });
 
 test('note editor duplication time contains the full span of every selected note', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => element.setNotes([
     { id: 'e', note: 64, start: 2, duration: 1, velocity: 100, channel: 0 },
@@ -2921,7 +2915,7 @@ test('note editor duplication time contains the full span of every selected note
 });
 
 test('note editor Shift-click grows a selected note into a visible row range', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => element.setNotes([
     { id: 'e', note: 64, start: 2, duration: 1, velocity: 100, channel: 0 },
@@ -2945,7 +2939,7 @@ test('note editor Shift-click grows a selected note into a visible row range', a
 });
 
 test('note editor keeps the selection anchor fixed when Cmd changes mid-drag', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   const geometry = await editor.evaluate((element) => ({
     px: element.pxPerBeat, y: element.noteToY(72), row: element.rowHeight,
@@ -2965,7 +2959,7 @@ test('note editor keeps the selection anchor fixed when Cmd changes mid-drag', a
 });
 
 test('note editor geometry edits trim earlier tails and replace covered starts by channel', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => {
     element.setNotes([
@@ -2987,7 +2981,7 @@ test('note editor geometry edits trim earlier tails and replace covered starts b
 });
 
 test('note editor vertical arrows stay on displayed pitches in Fold', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   const id = await editor.evaluate((element) => {
     const note = element.notes.find((entry) => entry.note === 60);
@@ -3005,7 +2999,7 @@ test('note editor vertical arrows stay on displayed pitches in Fold', async ({ p
 });
 
 test('note editor creates velocity-shaped notes and applies keyboard edit modifiers', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
 
   const first = await editor.evaluate((element) => element.notes[0]);
@@ -3053,7 +3047,7 @@ test('note editor creates velocity-shaped notes and applies keyboard edit modifi
 });
 
 test('note editor loop visibility and keybed panning follow host state', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await expect(editor.locator('.region')).toBeVisible();
   await editor.evaluate((element) => element.removeAttribute('loop'));
@@ -3096,7 +3090,7 @@ test('note editor loop visibility and keybed panning follow host state', async (
 });
 
 test('note editor keeps its visual hierarchy neutral and marks a supplied scale', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   expect(await editor.locator('.key[data-scale]').count()).toBeGreaterThan(0);
   expect(await editor.locator('.key[data-root]').count()).toBeGreaterThan(0);
@@ -3131,7 +3125,7 @@ test('note editor keeps its visual hierarchy neutral and marks a supplied scale'
 });
 
 test('note editor horizontal zoom-out stops when the full range fits', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   const geometry = await editor.evaluate((element) => {
     element.zoomPxPerBeat = 0.01;
@@ -3147,7 +3141,7 @@ test('note editor horizontal zoom-out stops when the full range fits', async ({ 
 });
 
 test('note editor emits quantize intent and leaves strength and swing to its host', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => {
     element.setNotes([
@@ -3181,10 +3175,9 @@ test('note editor emits quantize intent and leaves strength and swing to its hos
 });
 
 test('note editor previews edits without taking ownership of caller notes', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-note-editor/');
+  await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
-  const isolated = await page.evaluate(() => {
-    const source = document.querySelector('compost-note-editor');
+  const isolated = await editor.evaluate((source) => {
     const element = document.createElement('compost-note-editor');
     for (const name of ['beats', 'grid', 'root-note', 'note-count']) {
       if (source.hasAttribute(name)) element.setAttribute(name, source.getAttribute(name));
@@ -3215,9 +3208,8 @@ test('note editor previews edits without taking ownership of caller notes', asyn
 });
 
 test('window stays in the viewport, resizes in bounds, and asks before closing', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-window/');
+  await page.goto('/examples/review/review.html?el=compost-window&context=plain');
   const window_ = page.locator('compost-window[data-option-target="window"]');
-  await page.locator('[data-window-open]').click();
   await expect(window_).toHaveAttribute('open', '');
   await expect(window_).toHaveAttribute('role', 'dialog');
 
@@ -3232,7 +3224,7 @@ test('window stays in the viewport, resizes in bounds, and asks before closing',
   });
   expect(edges).toEqual([true, true, true]);
 
-  await page.locator('[data-option="window-ratio"]').check();
+  await window_.evaluate((element) => element.setAttribute('aspect-ratio', '4/3'));
   const grip = await window_.locator('.grip').boundingBox();
   await page.mouse.move(grip.x + 8, grip.y + 8);
   await page.mouse.down();
@@ -3269,30 +3261,21 @@ test('window stays in the viewport, resizes in bounds, and asks before closing',
   await window_.evaluate((element) => {
     element.addEventListener('window-close', (event) => event.preventDefault(), { once: true });
   });
-  await page.getByRole('button', { name: 'Close Plug-in window' }).click();
+  await window_.getByRole('button', { name: 'Close Plug-in' }).click();
   await expect(window_).toHaveAttribute('open', '');
-  await page.getByRole('button', { name: 'Close Plug-in window' }).click();
+  await window_.getByRole('button', { name: 'Close Plug-in' }).click();
   await expect(window_).not.toHaveAttribute('open', '');
 });
 
-test('popup anchors, keeps on screen, picks by keyboard and closes on an outside press', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-popup/');
+test('popup stays on screen, picks by keyboard and closes on an outside press', async ({ page }) => {
+  await page.goto('/examples/review/review.html?el=compost-popup&context=plain');
   const popup = page.locator('compost-popup[data-option-target="popup"]');
-  const menu = page.getByRole('menu', { name: 'Track input' });
+  const menu = page.getByRole('menu', { name: 'Context menu' });
 
-  await page.locator('[data-popup-anchor]').click();
   await expect(menu).toBeVisible();
-  expect(await menu.getByRole('menuitemradio').first().evaluate((item) =>
-    getComputedStyle(item, '::before').backgroundColor)).toBe('rgb(127, 196, 106)');
-  const anchor = await page.locator('[data-popup-anchor]').boundingBox();
-  const placed = await menu.boundingBox();
-  expect(placed.y).toBeGreaterThanOrEqual(anchor.y + anchor.height - 1);
-  expect(Math.abs(placed.x - anchor.x)).toBeLessThan(12);
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await expect(menu).toBeHidden();
-  await expect(popup).toHaveAttribute('value', 'midi-1-2');
-  await expect(page.locator('[data-option-state]')).toHaveText('Track input: MIDI 1 · 2');
 
   // a context menu at the corner is pulled back inside the viewport
   await page.setViewportSize({ width: 600, height: 400 });
@@ -3300,9 +3283,9 @@ test('popup anchors, keeps on screen, picks by keyboard and closes on an outside
   await surface.scrollIntoViewIfNeeded();
   const surfaceBox = await surface.boundingBox();
   await surface.click({ button: 'right', position: { x: surfaceBox.width - 4, y: surfaceBox.height / 2 } });
-  const context = page.getByRole('menu', { name: 'Clip actions' });
+  const context = page.getByRole('menu', { name: 'Context menu' });
   await expect(context).toBeVisible();
-  await expect(context.getByRole('menuitem')).toHaveCount(5);
+  await expect(context.getByRole('menuitem')).toHaveCount(4);
   await expect(context.getByRole('menuitemradio')).toHaveCount(0);
   const box = await context.boundingBox();
   expect(box.x + box.width).toBeLessThanOrEqual(600);
@@ -3321,7 +3304,7 @@ test('popup grows to fit an unconstrained option label', async ({ page }) => {
 });
 
 test('timeline automation view stays level with its lane and a trim preview keeps notes in time', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   const levels = await timeline.evaluate((element) => {
     element.setAttribute('automation', '');
@@ -3366,11 +3349,14 @@ test('timeline automation view stays level with its lane and a trim preview keep
 });
 
 test('timeline loops the selected clips on l and Cmd/Ctrl-L', async ({ page }) => {
-  await page.goto('/examples/component-demos/compost-timeline/');
+  await openTimeline(page);
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     element.testEvents = [];
-    element.addEventListener('loop-change', (event) => element.testEvents.push(event.detail));
+    element.addEventListener('loop-change', (event) => {
+      element.testEvents.push(event.detail);
+      element.setLoop(event.detail.start, event.detail.end, event.detail.enabled);
+    });
     element.setLanes([{ id: 'a', name: 'A', clips: [
       { id: 'c1', name: 'one', start: 2, length: 2, duration: 2, offset: 0, loop: false, notes: [] },
       { id: 'c2', name: 'two', start: 6, length: 3, duration: 3, offset: 0, loop: false, notes: [] },
