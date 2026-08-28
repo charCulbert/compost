@@ -938,6 +938,9 @@ export class CompostTimeline extends HTMLElement {
 
   /** Readonly renders and navigates but emits no mutating intent (README, Events). */
   get readonly() { return this.hasAttribute('readonly'); }
+  set readonly(value) { this.toggleAttribute('readonly', Boolean(value)); }
+  get disabled() { return this.hasAttribute('disabled'); }
+  set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
 
   beginRename(clipId) {
     if (this.hasAttribute('disabled') || this.readonly || !this.findClip(clipId)) return;

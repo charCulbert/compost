@@ -187,7 +187,7 @@ export class CompostNumberBox extends HTMLElement {
           cursor: default;
           opacity: 0.45;
         }
-        :host([data-midi-map-target-active]) .box {
+        :host([midi-map-state~="active"]) .box {
           outline: 2px solid var(--_accent);
           outline-offset: 2px;
         }
@@ -205,10 +205,10 @@ export class CompostNumberBox extends HTMLElement {
           text-align: center;
           white-space: nowrap;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label {
+        :host([midi-map-state~="mode"][midi-map-state~="label"]) .midi-map-label {
           display: block;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
+        :host([midi-map-state~="mode"][midi-map-state~="label"]) .midi-map-label::after {
           content: var(--midi-map-label);
         }
       </style>
@@ -257,6 +257,10 @@ export class CompostNumberBox extends HTMLElement {
 
   get disabled() {
     return this.hasAttribute('disabled');
+  }
+
+  set disabled(value) {
+    this.toggleAttribute('disabled', Boolean(value));
   }
 
   get parameterKind() { return this.getAttribute('parameter-kind') || 'continuous'; }

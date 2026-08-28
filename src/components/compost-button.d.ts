@@ -9,12 +9,12 @@ export interface ButtonTriggerDetail {
 }
 
 /**
- * `<compost-button>`: a momentary or switch button. A momentary press emits
+ * `<compost-button>`: a trigger or switch button. A trigger press emits
  * `button-trigger` plus a parameter gesture; a switch toggles `pressed` and
  * emits `change` inside a parameter gesture.
  */
 export class CircleButton extends HTMLElement {
-  get mode(): 'switch' | 'momentary';
+  get mode(): 'switch' | 'trigger';
   get pressed(): boolean;
   set pressed(value: boolean);
   /** 1 while pressed, 0 otherwise; setting maps onto `pressed`. */
@@ -22,12 +22,14 @@ export class CircleButton extends HTMLElement {
   set value(value: number);
   get parameterID(): string;
   get parameterKind(): 'discrete' | 'trigger';
-  /** True for a momentary button, whose value never rests at 1. */
+  /** True for a trigger button, whose value never rests at 1. */
   get transientParameter(): boolean;
+  get disabled(): boolean;
+  set disabled(value: boolean);
 
-  /** Sets the switch state, or fires a momentary trigger at >= 0.5. */
+  /** Sets the switch state, or fires a trigger at >= 0.5. */
   setValue(value: number, shouldEmit?: boolean, source?: string): void;
-  /** Fires the momentary action and its events. */
+  /** Fires the trigger action and its events. */
   trigger(source?: string): void;
 
   focus(options?: FocusOptions): void;

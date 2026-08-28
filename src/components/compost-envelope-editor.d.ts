@@ -49,6 +49,10 @@ export class CompostEnvelopeEditor extends HTMLElement {
   /** Which grid lines are visible: all, time divisions only, or none. */
   gridLines: 'all' | 'time' | 'off';
   draw: boolean;
+  get readonly(): boolean;
+  set readonly(value: boolean);
+  get disabled(): boolean;
+  set disabled(value: boolean);
   /** The painted time section, or null. */
   selection: {start: number, end: number} | null;
 

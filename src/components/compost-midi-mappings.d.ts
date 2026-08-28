@@ -16,6 +16,8 @@ export class MIDIMappingsEditor extends HTMLElement {
   /** The mappings model this editor edits, or null. */
   get mappings(): MIDIMappings | null;
   set mappings(value: MIDIMappings | null);
+  get disabled(): boolean;
+  set disabled(value: boolean);
 
   /** Clears one mapping through the model's request path. */
   clearMapping(parameterID: string): void;

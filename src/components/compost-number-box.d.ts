@@ -34,6 +34,7 @@ export class CompostNumberBox extends HTMLElement {
   set value(value: number | string | null);
   get allowEmpty(): boolean;
   get disabled(): boolean;
+  set disabled(value: boolean);
   get parameterKind(): string;
 
   /** Sets the value, snapped and clamped; emits `parameter-edit` by default. */

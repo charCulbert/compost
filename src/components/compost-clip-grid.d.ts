@@ -67,6 +67,7 @@ export class CompostClipGrid extends HTMLElement {
   set recordQueued(index: number | null);
   get armed(): boolean;
   get disabled(): boolean;
+  set disabled(value: boolean);
   /** The stop slot's state: '' (idle), 'active' or 'queued'. */
   get stopState(): '' | 'active' | 'queued';
 

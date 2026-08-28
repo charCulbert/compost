@@ -223,6 +223,11 @@ export class CompostEnvelopeEditor extends HTMLElement {
     else this.removeAttribute('grid-lines');
   }
 
+  get readonly() { return this.hasAttribute('readonly'); }
+  set readonly(value) { this.toggleAttribute('readonly', Boolean(value)); }
+  get disabled() { return this.hasAttribute('disabled'); }
+  set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
+
   setSelection(start, end) {
     const low = Math.max(0, Math.min(Number(start), Number(end)));
     const high = Math.min(this.duration, Math.max(Number(start), Number(end)));

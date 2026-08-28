@@ -111,7 +111,9 @@ export function formatValue(
     return bounds.maxLabel;
   }
 
-  return `${formatNumber(value, step, displayFractionDigits)}${unit}`;
+  const suffix = String(unit ?? '');
+  const separator = suffix && /^[\p{L}]/u.test(suffix) ? ' ' : '';
+  return `${formatNumber(value, step, displayFractionDigits)}${separator}${suffix}`;
 }
 
 export function parameterEventDetail(control, value, extra = {}) {

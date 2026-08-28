@@ -31,6 +31,8 @@ test('continuous values default to sensible display precision', () => {
   assert.equal(formatNumber(0.68471234, 0), '0.68');
   // Guessed precision never shows as trailing zeros; stepped precision does.
   assert.equal(formatValue(800, 0, ' Hz'), '800 Hz');
+  assert.equal(formatValue(800, 0, 'Hz'), '800 Hz');
+  assert.equal(formatValue(50, 1, '%'), '50%');
   assert.equal(formatNumber(0.6, 0), '0.6');
   assert.equal(formatNumber(100, 0), '100');
   assert.equal(formatNumber(1, 0.1), '1.0');

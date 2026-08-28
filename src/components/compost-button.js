@@ -61,14 +61,14 @@ export class CircleButton extends HTMLElement {
           outline: 2px solid currentColor;
           outline-offset: 2px;
         }
-        :host([data-midi-map-target-active]) button {
+        :host([midi-map-state~="active"]) button {
           outline: 2px solid var(--_accent);
           outline-offset: 2px;
         }
-        :host([data-midi-map-target-active][data-midi-map-pulse]) button {
+        :host([midi-map-state~="active"][midi-map-state~="pulse"]) button {
           outline-offset: 4px;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
+        :host([midi-map-state~="mode"][midi-map-state~="label"]) .midi-map-label::after {
           content: var(--midi-map-label);
           position: absolute;
           left: 50%;
@@ -100,7 +100,7 @@ export class CircleButton extends HTMLElement {
           text-align: center;
           line-height: 1;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .content {
+        :host([midi-map-state~="mode"][midi-map-state~="label"]) .content {
           transform: translateY(-0.45em);
         }
         slot {
@@ -188,7 +188,7 @@ export class CircleButton extends HTMLElement {
   }
 
   get mode() {
-    return this.getAttribute('mode') === 'switch' ? 'switch' : 'momentary';
+    return this.getAttribute('mode') === 'switch' ? 'switch' : 'trigger';
   }
 
   get pressed() {
@@ -215,6 +215,14 @@ export class CircleButton extends HTMLElement {
 
   get transientParameter() {
     return this.mode !== 'switch';
+  }
+
+  get disabled() {
+    return this.hasAttribute('disabled');
+  }
+
+  set disabled(value) {
+    this.toggleAttribute('disabled', Boolean(value));
   }
 
   setValue(value, shouldEmit = true, source = 'api') {
@@ -288,7 +296,7 @@ export class CircleButton extends HTMLElement {
   refresh() {
     const label = this.getAttribute('label') || '';
     this.fallback.textContent = label;
-    this.button.disabled = this.hasAttribute('disabled');
+    this.button.disabled = this.disabled;
     this.button.setAttribute('aria-label', this.getAttribute('aria-label') || label || this.textContent.trim() || 'Button');
 
     if (this.hasAttribute('aria-description')) {

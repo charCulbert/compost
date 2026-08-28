@@ -100,9 +100,6 @@ export class MIDIMappingsEditor extends HTMLElement {
           outline: 2px solid var(--compost-midi-mappings-learn-color);
           outline-offset: 2px;
         }
-        button[data-midi-map-pulse] {
-          background: var(--compost-midi-mappings-field-fill);
-        }
         button:disabled {
           cursor: default;
           opacity: 0.45;
@@ -344,6 +341,9 @@ export class MIDIMappingsEditor extends HTMLElement {
     this.connectController();
     this.refresh();
   }
+
+  get disabled() { return this.hasAttribute('disabled'); }
+  set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
 
   connectController() {
     if (!this.isConnected || !this._mappings) return;

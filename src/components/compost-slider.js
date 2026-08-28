@@ -103,11 +103,11 @@ export class ParameterSlider extends HTMLElement {
           outline: 2px solid currentColor;
           outline-offset: 2px;
         }
-        :host([data-midi-map-target-active]) {
+        :host([midi-map-state~="active"]) {
           outline: 2px solid var(--_accent);
           outline-offset: 2px;
         }
-        :host([data-midi-map-target-active][data-midi-map-pulse]) {
+        :host([midi-map-state~="active"][midi-map-state~="pulse"]) {
           outline-offset: 4px;
         }
         .panel {
@@ -228,7 +228,7 @@ export class ParameterSlider extends HTMLElement {
         :host([disabled]) output {
           cursor: default;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
+        :host([midi-map-state~="mode"][midi-map-state~="label"]) .midi-map-label::after {
           content: var(--midi-map-label);
           position: absolute;
           left: 50%;
@@ -333,6 +333,10 @@ export class ParameterSlider extends HTMLElement {
 
   get disabled() {
     return this.hasAttribute('disabled');
+  }
+
+  set disabled(value) {
+    this.toggleAttribute('disabled', Boolean(value));
   }
 
   get parameterKind() { return this.getAttribute('parameter-kind') || 'continuous'; }
@@ -645,10 +649,10 @@ export class ParameterSlider extends HTMLElement {
     this.setAttribute('aria-valuetext', valueText);
     this.setAttribute('aria-orientation', this.orientation);
     this.setAttribute('aria-disabled', this.disabled ? 'true' : 'false');
-    this.refreshEditableValue(valueText);
+    this.refreshEditableValue();
   }
 
-  refreshEditableValue(valueText) {
+  refreshEditableValue() {
     if (!this.editable) {
       this.output.removeAttribute('role');
       this.output.removeAttribute('tabindex');

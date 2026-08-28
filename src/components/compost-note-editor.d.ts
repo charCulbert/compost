@@ -98,6 +98,9 @@ export class CompostNoteEditor extends HTMLElement {
   /** The grid step, in beats. */
   get step(): number;
   get readonly(): boolean;
+  set readonly(value: boolean);
+  get disabled(): boolean;
+  set disabled(value: boolean);
   get selectedIds(): string[];
   get pxPerBeat(): number;
 

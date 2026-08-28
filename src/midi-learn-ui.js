@@ -3,6 +3,16 @@ import { formatMIDIMapping, normaliseMIDIMapping } from './midi-mapping.js';
 export const MAPPABLE_SELECTOR = '[parameter-id], [midi-map-target]';
 
 let mapDescriptionID = 0;
+const MIDI_MAP_STATE_ATTRIBUTE = 'midi-map-state';
+
+function setMIDIMapState(target, token, enabled) {
+  if (!target) return;
+  const tokens = new Set(String(target.getAttribute?.(MIDI_MAP_STATE_ATTRIBUTE) || '').split(/\s+/u).filter(Boolean));
+  if (enabled) tokens.add(token);
+  else tokens.delete(token);
+  if (tokens.size) target.setAttribute?.(MIDI_MAP_STATE_ATTRIBUTE, [...tokens].join(' '));
+  else target.removeAttribute?.(MIDI_MAP_STATE_ATTRIBUTE);
+}
 
 const TEXT_EDITING_INPUT_TYPES = new Set([
   'email',
@@ -467,7 +477,7 @@ export class MIDILearnUI {
     this.highlightedTarget = target;
     this.visualFrame = requestAnimationFrame(() => {
       if (this.highlightedTarget === target) {
-        this.highlightedTarget.setAttribute?.('data-midi-map-target-active', '');
+        setMIDIMapState(this.highlightedTarget, 'active', true);
       }
     });
   }
@@ -475,8 +485,8 @@ export class MIDILearnUI {
   clearTargetHighlight() {
     cancelAnimationFrame(this.visualFrame);
     this.visualFrame = 0;
-    this.highlightedTarget?.removeAttribute?.('data-midi-map-target-active');
-    this.highlightedTarget?.removeAttribute?.('data-midi-map-pulse');
+    setMIDIMapState(this.highlightedTarget, 'active', false);
+    setMIDIMapState(this.highlightedTarget, 'pulse', false);
     this.highlightedTarget = null;
   }
 
@@ -489,7 +499,7 @@ export class MIDILearnUI {
     this.visualFrame = requestAnimationFrame(() => {
       if (this.state !== state || this.highlightedTarget !== target) return;
 
-      this.highlightedTarget.setAttribute?.('data-midi-map-target-active', '');
+      setMIDIMapState(this.highlightedTarget, 'active', true);
       this.showMappingLabels();
       this.describeMappingTarget(this.highlightedTarget, this.mappingLabelForTarget(this.highlightedTarget));
       this.setPressed(true);
@@ -517,8 +527,7 @@ export class MIDILearnUI {
   }
 
   applyPulse() {
-    const method = this.pulseOn ? 'setAttribute' : 'removeAttribute';
-    this.highlightedTarget?.[method]?.('data-midi-map-pulse', '');
+    setMIDIMapState(this.highlightedTarget, 'pulse', this.pulseOn);
   }
 
   showMappingLabels() {
@@ -536,8 +545,8 @@ export class MIDILearnUI {
 
   clearMappingLabels() {
     for (const target of this.labelledTargets) {
-      target.removeAttribute?.('data-midi-map-mode');
-      target.removeAttribute?.('data-midi-map-label');
+      setMIDIMapState(target, 'mode', false);
+      setMIDIMapState(target, 'label', false);
       target.style?.removeProperty?.('--midi-map-label');
       this.restoreMappingTargetDescription(target);
     }
@@ -591,13 +600,13 @@ export class MIDILearnUI {
       ? `Mapped to ${mappingSpeechLabel}. Move a MIDI CC to remap. Delete clears. Escape exits.`
       : 'Move a MIDI CC to map. Escape exits.';
 
-    target.setAttribute?.('data-midi-map-mode', '');
+    setMIDIMapState(target, 'mode', true);
     target.setAttribute?.('aria-description', description);
     if (hasMapping) {
-      target.setAttribute?.('data-midi-map-label', '');
+      setMIDIMapState(target, 'label', true);
       target.style?.setProperty?.('--midi-map-label', JSON.stringify(mappingLabel));
     } else {
-      target.removeAttribute?.('data-midi-map-label');
+      setMIDIMapState(target, 'label', false);
       target.style?.removeProperty?.('--midi-map-label');
     }
     const describedByID = this.setShadowDescription(target, description);

@@ -533,6 +533,13 @@ export class CompostNoteEditor extends HTMLElement {
     return this.hasAttribute('readonly') || this.hasAttribute('disabled');
   }
 
+  set readonly(value) {
+    this.toggleAttribute('readonly', Boolean(value));
+  }
+
+  get disabled() { return this.hasAttribute('disabled'); }
+  set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
+
   get selectedIds() {
     return [...this.selection];
   }

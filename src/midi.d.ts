@@ -1,0 +1,15 @@
+export function chroma(note: number): number;
+export function isNaturalNote(note: number): boolean;
+export function noteName(note: number): string;
+export function midiNoteToFrequency(note: number, tuning?: number): number;
+export type MIDIMessageLike = number | ArrayLike<number>;
+export function isNoteOnMessage(message: MIDIMessageLike): boolean;
+export function isNoteOffMessage(message: MIDIMessageLike): boolean;
+export function isControlChangeMessage(message: MIDIMessageLike): boolean;
+export function channelFromMessage(message: MIDIMessageLike): number;
+export function noteFromMessage(message: MIDIMessageLike): number;
+export function controllerFromMessage(message: MIDIMessageLike): number;
+export function controllerValueFromMessage(message: MIDIMessageLike): number;
+export function packMIDIMessage(data: ArrayLike<number>): number;
+export function unpackMIDIMessage(message: MIDIMessageLike): [number, number, number];
+export function normaliseMIDIMessage(message: MIDIMessageLike): [number, number, number];

@@ -54,11 +54,11 @@ export class CompostSelect extends HTMLElement {
           min-inline-size: 8em;
           font: inherit;
         }
-        :host([data-midi-map-target-active]) select {
+        :host([midi-map-state~="active"]) select {
           outline: 2px solid var(--_accent);
           outline-offset: 2px;
         }
-        :host([data-midi-map-target-active][data-midi-map-pulse]) select {
+        :host([midi-map-state~="active"][midi-map-state~="pulse"]) select {
           outline-offset: 4px;
         }
         .midi-map-label {
@@ -75,10 +75,10 @@ export class CompostSelect extends HTMLElement {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label {
+        :host([midi-map-state~="mode"][midi-map-state~="label"]) .midi-map-label {
           display: block;
         }
-        :host([data-midi-map-mode][data-midi-map-label]) .midi-map-label::after {
+        :host([midi-map-state~="mode"][midi-map-state~="label"]) .midi-map-label::after {
           content: var(--midi-map-label);
         }
         slot { display: none; }

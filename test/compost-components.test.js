@@ -680,12 +680,12 @@ test('parameter lifecycle details always state whether the gesture was cancelled
   assert.equal(events.at(-1).detail.cancelled, true);
 });
 
-test('momentary button ignores silent backend reflection', () => {
+test('trigger button ignores silent backend reflection', () => {
   const button = Object.create(CircleButton.prototype);
   let triggers = 0;
   Object.assign(button, {
     wasMappedActive: false,
-    getAttribute(name) { return name === 'mode' ? 'momentary' : null; },
+    getAttribute(name) { return name === 'mode' ? 'trigger' : null; },
     trigger() { triggers += 1; },
   });
   button.setValue(1, false, 'backend');

@@ -86,6 +86,96 @@ export interface TimelineAutomationChangeDetail {
 }
 /** `time-delete`: Delete with a time selection. */
 export interface TimelineTimeDeleteDetail extends TimelineTimeSelection { removeTime: boolean }
+/** `time-select` and `time-select-input`; a null start clears the region. */
+export interface TimelineTimeSelectDetail { start: number | null, end?: number, laneIds?: string[] }
+/** `clip-open` and `clip-context`. */
+export interface TimelineClipPointDetail { id: string, altKey?: boolean, clientX: number, clientY: number }
+/** `clip-rename` and `locator-rename`. */
+export interface TimelineRenameDetail { id: string, name: string }
+/** `clip-delete`, `clip-duplicate` and `clip-join`. */
+export interface TimelineClipIDsDetail { ids: string[] }
+/** `clip-split`, with one beat or the edges of a time region. */
+export interface TimelineClipSplitDetail { ids: string[], beat?: number, beats?: number[], laneIds?: string[] }
+/** `clip-nudge`. */
+export interface TimelineClipNudgeDetail { ids: string[], deltaBeats: number }
+/** `loop-toggle` and `draw-toggle`. */
+export interface TimelineToggleDetail { enabled: boolean }
+/** `locator-create`. */
+export interface TimelineBeatDetail { beat: number }
+/** `locator-move`. */
+export interface TimelineLocatorMoveDetail { id: string, beat: number }
+/** `locator-jump`, `locator-delete`, `locator-prev` and `locator-next`. */
+export interface TimelineIDDetail { id: string }
+/** `lane-move`. */
+export interface TimelineLaneMoveDetail { laneId: string, toIndex: number }
+/** `lane-pick`. */
+export interface TimelineLanePickDetail { laneId: string, shiftKey: boolean }
+/** `lane-rename`. */
+export interface TimelineLaneRenameDetail { laneId: string, name: string }
+/** `lane-resize`; null restores the default height. */
+export interface TimelineLaneResizeDetail { laneId: string, height: number | null }
+/** `lanes-resize`. */
+export interface TimelineLanesResizeDetail { height: number }
+/** `time-insert`. */
+export interface TimelineTimeInsertDetail { beat: number, beats: number, laneIds: string[] }
+/** `automation-context`. */
+export interface TimelineAutomationContextDetail { laneId: string, automationId: string, clientX: number, clientY: number }
+/** Context-menu coordinates shared by timeline surfaces. */
+export interface TimelinePointDetail { clientX: number, clientY: number }
+export interface TimelineLanePointDetail extends TimelinePointDetail { laneId: string, beat?: number }
+export interface TimelineRulerPointDetail extends TimelinePointDetail { beat: number }
+/** `fit-request` has no parameters. */
+export type TimelineFitRequestDetail = Record<string, never>;
+
+export interface TimelineEventDetailMap {
+  'automation-change': TimelineAutomationChangeDetail;
+  'automation-context': TimelineAutomationContextDetail;
+  'automation-input': TimelineAutomationChangeDetail;
+  'clip-context': TimelineClipPointDetail;
+  'clip-delete': TimelineClipIDsDetail;
+  'clip-duplicate': TimelineClipIDsDetail;
+  'clip-join': TimelineClipIDsDetail;
+  'clip-move': TimelineClipMoveDetail;
+  'clip-nudge': TimelineClipNudgeDetail;
+  'clip-open': TimelineClipPointDetail;
+  'clip-rename': TimelineRenameDetail;
+  'clip-select': TimelineClipSelectDetail;
+  'clip-split': TimelineClipSplitDetail;
+  'clip-trim': TimelineClipTrimDetail;
+  'clip-trim-input': TimelineClipTrimDetail;
+  'draw-toggle': TimelineToggleDetail;
+  'fit-request': TimelineFitRequestDetail;
+  'lane-context': TimelineLanePointDetail;
+  'lane-create': TimelineLaneCreateDetail;
+  'lane-header-context': TimelineLanePointDetail;
+  'lane-move': TimelineLaneMoveDetail;
+  'lane-pick': TimelineLanePickDetail;
+  'lane-rename': TimelineLaneRenameDetail;
+  'lane-resize': TimelineLaneResizeDetail;
+  'lanes-context': TimelinePointDetail;
+  'lanes-create': TimelinePointDetail;
+  'lanes-resize': TimelineLanesResizeDetail;
+  'locator-context': TimelineClipPointDetail;
+  'locator-create': TimelineBeatDetail;
+  'locator-delete': TimelineIDDetail;
+  'locator-jump': TimelineIDDetail;
+  'locator-move': TimelineLocatorMoveDetail;
+  'locator-next': TimelineIDDetail;
+  'locator-prev': TimelineIDDetail;
+  'locator-rename': TimelineRenameDetail;
+  'loop-change': TimelineLoopDetail;
+  'loop-input': TimelineLoopDetail;
+  'loop-toggle': TimelineToggleDetail;
+  'ruler-context': TimelineRulerPointDetail;
+  seek: TimelineSeekDetail;
+  'time-delete': TimelineTimeDeleteDetail;
+  'time-duplicate': TimelineTimeDuplicateDetail;
+  'time-insert': TimelineTimeInsertDetail;
+  'time-select': TimelineTimeSelectDetail;
+  'time-select-input': TimelineTimeSelectDetail;
+  'timeline-context': TimelinePointDetail;
+  'view-change': TimelineViewChangeDetail;
+}
 
 // ---- Module helpers -------------------------------------------------------
 
@@ -245,6 +335,9 @@ export class CompostTimeline extends HTMLElement {
   set selected(value: string[]);
   /** Readonly renders and navigates but emits no mutating intent. */
   get readonly(): boolean;
+  set readonly(value: boolean);
+  get disabled(): boolean;
+  set disabled(value: boolean);
 
   /** Scrolls the view to a beat. Shadows Element.scrollTo, whose signatures
    * remain callable but scroll to beat 0. */

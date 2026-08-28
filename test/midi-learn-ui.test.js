@@ -17,6 +17,10 @@ function setup() {
   return { target, secondTarget, mappings, ui: new MIDILearnUI({ mappings, root, button, status }), status };
 }
 
+function hasMIDIMapState(target, state) {
+  return String(target.getAttribute('midi-map-state') || '').split(/\s+/u).includes(state);
+}
+
 test('MIDILearnUI clears a selected mapping with Delete while staying in map mode', async () => {
   const { target, mappings, ui, status } = setup();
   mappings.applyMapping({ parameterID: 'gain', cc: 7, channel: 1 });
@@ -83,7 +87,7 @@ test('MIDILearnUI focus starts learning and announces confirmed mappings', async
   ui.handleFocusIn({ target, composedPath: () => [target] });
 
   assert.equal(ui.state, 'learning');
-  assert.equal(target.hasAttribute('data-midi-map-target-active'), true);
+  assert.equal(hasMIDIMapState(target, 'active'), true);
   assert.equal(target.getAttribute('aria-description'), 'Move a MIDI CC to map. Escape exits.');
   await tick();
   assert.match(status.textContent, /Gain.*Move a CC to map/u);
@@ -93,11 +97,11 @@ test('MIDILearnUI focus starts learning and announces confirmed mappings', async
   assert.match(status.textContent, /Gain\. Mapped to MIDI channel 2, CC 74\. Move a CC to remap/u);
   assert.equal(ui.mappingLabelForTarget(target), 'ch 2 CC 74');
   assert.equal(ui.state, 'learning');
-  assert.equal(target.hasAttribute('data-midi-map-target-active'), true);
+  assert.equal(hasMIDIMapState(target, 'active'), true);
   assert.match(target.getAttribute('aria-description'), /Mapped to MIDI channel 2, CC 74/u);
 
   ui.handleFocusOut({ relatedTarget: null });
-  assert.equal(target.hasAttribute('data-midi-map-target-active'), true);
+  assert.equal(hasMIDIMapState(target, 'active'), true);
   ui.disconnect();
 });
 
@@ -110,7 +114,7 @@ test('MIDILearnUI can mirror a plug-in target without stealing focus', () => {
   assert.equal(ui.selectTarget(target, { focus: false }), true);
   assert.equal(ui.state, 'learning');
   assert.equal(focusCount, 0);
-  assert.equal(target.hasAttribute('data-midi-map-target-active'), true);
+  assert.equal(hasMIDIMapState(target, 'active'), true);
   ui.disconnect();
 });
 
@@ -136,18 +140,18 @@ test('MIDILearnUI maps two plug-in targets in one map-mode run', () => {
   assert.equal(ui.selectTarget(target, { focus: false }), true);
   mappings.applyMapping({ parameterID: 'gain', cc: 7, channel: null });
   assert.equal(ui.state, 'learning');
-  assert.equal(target.hasAttribute('data-midi-map-target-active'), true);
+  assert.equal(hasMIDIMapState(target, 'active'), true);
 
   assert.equal(ui.selectTarget(secondTarget, { focus: false }), true);
   assert.equal(ui.state, 'learning');
-  assert.equal(target.hasAttribute('data-midi-map-target-active'), false);
-  assert.equal(secondTarget.hasAttribute('data-midi-map-target-active'), true);
+  assert.equal(hasMIDIMapState(target, 'active'), false);
+  assert.equal(hasMIDIMapState(secondTarget, 'active'), true);
 
   mappings.applyMapping({ parameterID: 'tone', cc: 74, channel: null });
   assert.equal(ui.state, 'learning');
   assert.equal(mappings.get('gain').cc, 7);
   assert.equal(mappings.get('tone').cc, 74);
-  assert.equal(secondTarget.hasAttribute('data-midi-map-target-active'), true);
+  assert.equal(hasMIDIMapState(secondTarget, 'active'), true);
   ui.disconnect();
 });
 

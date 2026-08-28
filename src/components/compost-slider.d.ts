@@ -30,6 +30,7 @@ export class ParameterSlider extends HTMLElement {
   set value(value: number);
   get editable(): boolean;
   get disabled(): boolean;
+  set disabled(value: boolean);
   get parameterKind(): string;
   get orientation(): 'horizontal' | 'vertical';
   /** 'position' jumps to the pointer; 'relative' drags from the current value. */

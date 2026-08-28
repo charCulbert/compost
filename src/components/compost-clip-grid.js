@@ -275,6 +275,7 @@ export class CompostClipGrid extends HTMLElement {
   get armed() { return this.hasAttribute('armed'); }
 
   get disabled() { return this.hasAttribute('disabled'); }
+  set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
 
   /** The stop slot's state: '' (idle), 'active' (something is playing), 'queued'. */
   get stopState() {
