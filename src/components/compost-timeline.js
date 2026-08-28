@@ -1911,8 +1911,7 @@ export class CompostTimeline extends HTMLElement {
     return effectiveAutomationStep(Boolean(automation?.stepped), automation?.step ?? automation?.valueStep);
   }
 
-  /** Shift-click stretches the region in kind: from its start, or from the earliest
-   * selected clip when there is none, to the clicked beat; a lane click adds its lane. */
+  /** Shift-click grows the region to include the clicked beat and lane. */
   /** @param {PointerEvent} event @param {any} drag @returns {boolean} */
   extendTimeSelection(event, drag) {
     const current = this._timeSelection;
@@ -1924,13 +1923,58 @@ export class CompostTimeline extends HTMLElement {
     const laneIds = drag.allLanes ? this._lanes.map((lane) => lane.id)
       : current ? [...new Set([...current.laneIds, ...this.laneIdsForSpan(current.laneIds[0] ?? drag.laneId, drag.laneId)])]
         : [...new Set([...selectedClips.map(({ lane }) => lane.id), ...this.laneIdsForSpan(selectedClips[0].lane.id, drag.laneId)])];
-    const region = extendSelectionRegion(current, beat, anchor, laneIds, this.worldEnd());
+    const region = current
+      ? normalizeSelectionRegion(Math.min(current.start, beat), Math.max(current.end, beat), laneIds, this.worldEnd())
+      : extendSelectionRegion(current, beat, anchor, laneIds, this.worldEnd());
     if (!region) return false;
     this.setTimeSelection(region.start, region.end, region.items ?? laneIds);
     if (this._selected.length) {
       this._selected = [];
       this.emitSelection();
     }
+    this.dispatchEvent(eventOf('time-select', this.timeSelection));
+    return true;
+  }
+
+  /** Move a time selection with arrows; Shift grows its time or lane extent. */
+  handleTimeSelectionArrow(event) {
+    const selection = this._timeSelection;
+    if (!selection || event.altKey || event.metaKey || event.ctrlKey
+        || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return false;
+    event.preventDefault();
+    let { start, end } = selection;
+    let laneIds = [...selection.laneIds];
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const direction = event.key === 'ArrowLeft' ? -1 : 1;
+      const step = this.currentGridStep();
+      if (event.shiftKey) {
+        if (direction < 0) start = Math.max(0, start - step);
+        else end = Math.min(this.worldEnd(), end + step);
+      } else {
+        const delta = direction < 0 ? -Math.min(step, start) : Math.min(step, this.worldEnd() - end);
+        start += delta;
+        end += delta;
+      }
+    } else {
+      const direction = event.key === 'ArrowUp' ? -1 : 1;
+      const indexes = laneIds.map((id) => this._lanes.findIndex((lane) => lane.id === id))
+        .filter((index) => index >= 0).sort((a, b) => a - b);
+      if (!indexes.length) return true;
+      if (event.shiftKey) {
+        const next = (direction < 0 ? indexes[0] : indexes.at(-1)) + direction;
+        if (next >= 0 && next < this._lanes.length) indexes.push(next);
+      } else {
+        const moved = indexes.map((index) => index + direction);
+        if (moved.some((index) => index < 0 || index >= this._lanes.length)) return true;
+        indexes.splice(0, indexes.length, ...moved);
+      }
+      const selected = new Set(indexes);
+      laneIds = this._lanes.filter((_, index) => selected.has(index)).map((lane) => lane.id);
+    }
+    const next = normalizeTimeSelection(start, end, laneIds, this.worldEnd());
+    if (!next || (next.start === selection.start && next.end === selection.end
+        && next.laneIds.join('\0') === selection.laneIds.join('\0'))) return true;
+    this.setTimeSelection(next.start, next.end, next.laneIds);
     this.dispatchEvent(eventOf('time-select', this.timeSelection));
     return true;
   }
@@ -1993,6 +2037,9 @@ export class CompostTimeline extends HTMLElement {
   }
 
   startTimeSelection(event, laneId, allLanes = false) {
+    this.focus({ preventScroll: true });
+    this.focusedClip = null;
+    this.focusedLane = null;
     this.drag = {
       pointerId: event.pointerId, type: 'time-selection', laneId,
       allLanes, startX: event.clientX, startY: event.clientY,
@@ -2604,6 +2651,7 @@ export class CompostTimeline extends HTMLElement {
           this.automationValueStep(automationBody.automation)));
       return;
     }
+    if (selection && source === this && this.handleTimeSelectionArrow(event)) return;
     if (selection) {
       if (!this.readonly && (event.metaKey || event.ctrlKey) && key === 'd') {
         event.preventDefault();

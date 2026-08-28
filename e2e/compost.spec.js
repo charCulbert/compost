@@ -953,6 +953,47 @@ test('timeline regions extend on Shift-click, span every lane from the ruler and
   expect(events.at(-1)).toEqual({ type: 'time-select', detail: { start: null } });
 });
 
+test('timeline time selections expand by lane and move with the arrow keys', async ({ page }) => {
+  await openTimeline(page);
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setAttribute('snap', 'grid');
+    element.setLanes(['a', 'b', 'c', 'd'].map((id) => ({ id, name: id.toUpperCase(), clips: [] })));
+    element.setTimeSelection(2, 4, ['b']);
+    element.testEvents = [];
+    element.addEventListener('time-select', (event) => element.testEvents.push(event.detail));
+  });
+  const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
+  const lanes = await timeline.locator('.lanes-wrap').boundingBox();
+  const laneD = await timeline.locator('.lane[data-lane-id="d"]').boundingBox();
+
+  await page.keyboard.down('Shift');
+  await page.mouse.click(lanes.x + 3 * pxPerBeat, laneD.y + laneD.height / 2);
+  await page.keyboard.up('Shift');
+  expect(await timeline.evaluate((element) => element.timeSelection))
+    .toEqual({ start: 2, end: 4, laneIds: ['b', 'c', 'd'] });
+
+  await timeline.evaluate((element) => element.setTimeSelection(2, 4, ['b']));
+  await timeline.focus();
+  await page.keyboard.press('Shift+ArrowDown');
+  expect(await timeline.evaluate((element) => element.timeSelection))
+    .toEqual({ start: 2, end: 4, laneIds: ['b', 'c'] });
+  await page.keyboard.press('Shift+ArrowRight');
+  expect(await timeline.evaluate((element) => element.timeSelection))
+    .toEqual({ start: 2, end: 5, laneIds: ['b', 'c'] });
+  await page.keyboard.press('ArrowDown');
+  expect(await timeline.evaluate((element) => element.timeSelection))
+    .toEqual({ start: 2, end: 5, laneIds: ['c', 'd'] });
+  await page.keyboard.press('ArrowRight');
+  expect(await timeline.evaluate((element) => element.timeSelection))
+    .toEqual({ start: 3, end: 6, laneIds: ['c', 'd'] });
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Shift+ArrowUp');
+  expect(await timeline.evaluate((element) => ({ selection: element.timeSelection, event: element.testEvents.at(-1) })))
+    .toEqual({ selection: { start: 2, end: 5, laneIds: ['b', 'c', 'd'] },
+      event: { start: 2, end: 5, laneIds: ['b', 'c', 'd'] } });
+});
+
 test('timeline clips snap to their neighbours and locators', async ({ page }) => {
   await openTimeline(page);
   const timeline = page.locator('compost-timeline');

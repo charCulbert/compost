@@ -94,6 +94,8 @@ header it slots in.
 `time-duplicate` asks the host to copy the exact selected span, including partial
 clips, immediately after itself. Clip overlap and audio-source trim limits are
 also host policy; the timeline draws the clip state handed back to it.
+Arrow keys move a timeline time selection by one grid step or lane;
+Shift+Arrow grows its time or lane extent instead.
 
 ## Talking to a backend
 
