@@ -157,6 +157,18 @@ export class CompostEnvelopeEditor extends HTMLElement {
     this.surface.addEventListener('lostpointercapture', (event) => {
       if (this.drag && this.drag.pointerId === event.pointerId) this.endPointer(event);
     });
+    // iOS arms its double-tap-and-drag text-selection loupe at the second
+    // touchstart, before the touchend default can be cancelled, so cancel it
+    // as soon as a tap lands close behind a completed tap.
+    this.surface.addEventListener('touchstart', (event) => {
+      const touch = event.changedTouches?.[0];
+      const previous = this.lastTouchTap;
+      if (!touch || event.touches?.length !== 1) return;
+      if (previous && performance.now() - previous.time <= DOUBLE_TAP_MS
+          && Math.hypot(touch.clientX - previous.x, touch.clientY - previous.y) <= DOUBLE_TAP_DISTANCE) {
+        event.preventDefault();
+      }
+    }, { passive: false });
     this.surface.addEventListener('touchend', (event) => event.preventDefault(), { passive: false });
     this.surface.addEventListener('dblclick', (event) => {
       if (performance.now() >= this.suppressDoubleClickUntil) this.addAtPointer(event);

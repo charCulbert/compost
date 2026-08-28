@@ -19,12 +19,12 @@ async function dispatchTouchDoubleTap(locator) {
       target.dispatchEvent(event);
       return event.defaultPrevented;
     };
-    dispatch('touchstart', [touch], [touch]);
+    const firstStartPrevented = dispatch('touchstart', [touch], [touch]);
     const firstPrevented = dispatch('touchend', [], [touch]);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    dispatch('touchstart', [touch], [touch]);
+    const secondStartPrevented = dispatch('touchstart', [touch], [touch]);
     const secondPrevented = dispatch('touchend', [], [touch]);
-    return { firstPrevented, secondPrevented };
+    return { firstStartPrevented, firstPrevented, secondStartPrevented, secondPrevented };
   });
 }
 
@@ -279,6 +279,32 @@ test('the envelope surface cancels the touch default that zooms iOS pages', asyn
   expect(prevented).toBe(true);
 });
 
+test('the envelope surface cancels the double-tap-drag selection default on the second tap', async ({ page }) => {
+  await page.goto('/examples/compost-envelope-editor/');
+  const startPrevented = await page.locator('compost-envelope-editor').evaluate((element) => {
+    const surface = element.shadowRoot.querySelector('.surface');
+    const box = surface.getBoundingClientRect();
+    const options = { bubbles: true, composed: true, pointerType: 'touch',
+      isPrimary: true, button: 0, clientX: box.left + box.width * .5,
+      clientY: box.top + box.height * .5 };
+    const touchstart = () => {
+      const event = new Event('touchstart', { bubbles: true, composed: true, cancelable: true });
+      Object.defineProperties(event, {
+        touches: { value: [options] },
+        changedTouches: { value: [options] },
+      });
+      surface.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const first = touchstart();
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, pointerId: 61 }));
+    surface.dispatchEvent(new PointerEvent('pointerup', { ...options, pointerId: 61 }));
+    const second = touchstart();
+    return { first, second };
+  });
+  expect(startPrevented).toEqual({ first: false, second: true });
+});
+
 test('double-tap component actions cancel the iOS zoom default', async ({ page }) => {
   await openNoteEditor(page);
   let activationCount = 0;
@@ -288,7 +314,8 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
   }));
   let result = await dispatchTouchDoubleTap(noteGrid);
   activationCount = await page.evaluate(() => window.__touchDoubleActivations || 0);
-  expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
+  expect(result).toEqual({ firstStartPrevented: false, firstPrevented: false,
+    secondStartPrevented: true, secondPrevented: true });
   expect(activationCount).toBe(1);
 
   await openTimeline(page);
@@ -296,7 +323,8 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
   await timeline.evaluate((element) => element.setLanes([{ id: 'lane', name: 'Lane', clips: [] }]));
   const timelineLane = timeline.locator('.lane').first();
   result = await dispatchTouchDoubleTap(timelineLane);
-  expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
+  expect(result).toEqual({ firstStartPrevented: false, firstPrevented: false,
+    secondStartPrevented: true, secondPrevented: true });
 
   await page.goto('/examples/compost-clip-grid/');
   const clipName = page.locator('compost-clip-grid').first().locator('.name').first();
@@ -305,7 +333,8 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
   }));
   result = await dispatchTouchDoubleTap(clipName);
   activationCount = await page.evaluate(() => window.__touchDoubleActivations || 0);
-  expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
+  expect(result).toEqual({ firstStartPrevented: false, firstPrevented: false,
+    secondStartPrevented: true, secondPrevented: true });
   expect(activationCount).toBe(1);
 
   for (const [demo, component, surface] of [
@@ -315,7 +344,8 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
   ]) {
     await page.goto(`/examples/${demo}/`);
     result = await dispatchTouchDoubleTap(page.locator(component).first().locator(surface));
-    expect(result).toEqual({ firstPrevented: false, secondPrevented: true });
+    expect(result).toEqual({ firstStartPrevented: false, firstPrevented: false,
+      secondStartPrevented: true, secondPrevented: true });
   }
 });
 

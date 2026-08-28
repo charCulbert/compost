@@ -24,13 +24,24 @@ export function installTouchDoubleClick(element, { dispatch = true } = {}) {
     }
     const touch = changedTouch(event);
     if (!touch) return;
+    // iOS treats double-tap-and-drag as a text-selection gesture and shows its
+    // magnifier loupe. The gesture arms at the second touchstart, before any
+    // touchend can cancel it, so cancel that default right here. Controls that
+    // dispatch no clicks only need the taps to be close together; click-based
+    // elements keep quick taps on a different target working.
+    const target = event.composedPath()[0];
+    if (previous && performance.now() - previous.time <= maxDelay
+        && Math.hypot(touch.clientX - previous.x, touch.clientY - previous.y) <= maxDistance
+        && (dispatch === false || target === previous.target)) {
+      event.preventDefault();
+    }
     start = {
       identifier: touch.identifier,
       x: touch.clientX,
       y: touch.clientY,
       target: event.composedPath()[0],
     };
-  }, { passive: true });
+  }, { passive: false });
 
   element.addEventListener('touchmove', (event) => {
     if (!start) return;
