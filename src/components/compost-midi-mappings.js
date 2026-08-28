@@ -357,6 +357,8 @@ export class CompostMIDIMappings extends HTMLElement {
       onStateChange: (state) => {
         this.dispatchEvent(new CustomEvent('midi-map-mode-change', {
           detail: { active: state !== 'idle', state },
+          bubbles: true,
+          composed: true,
         }));
       },
     });

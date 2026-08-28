@@ -793,13 +793,17 @@ test('MIDI monitor stays quiet by default and renders bounded messages', async (
 test('MIDI mapping panel does not clip its map-mode focus ring', async ({ page }) => {
   await page.goto('/examples/compost-midi-mappings/');
   const editor = page.locator('compost-midi-mappings');
-  await editor.getByRole('button', { name: 'Map MIDI' }).focus();
+  const mapButton = editor.getByRole('button', { name: 'Map MIDI' });
+  await mapButton.focus();
 
   const overflow = await editor.evaluate((element) => ({
     panel: getComputedStyle(element.shadowRoot.querySelector('.panel')).overflowX,
     table: getComputedStyle(element.shadowRoot.querySelector('.table-scroll')).overflowX,
   }));
   expect(overflow).toEqual({ panel: 'visible', table: 'auto' });
+
+  await mapButton.click();
+  await expect(page.locator('section.plain output')).toContainText('midi-map-mode-change');
 });
 
 test('clip grid example host applies launch, stop and record intents', async ({ page }) => {
