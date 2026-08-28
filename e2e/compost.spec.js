@@ -719,6 +719,13 @@ test('clip grid review host applies launch, stop and record intents', async ({ p
   await expect(grid.getByRole('button', { name: /^take\.1/u })).toHaveCount(1, { timeout: 3000 });
 });
 
+test('clip grid lets one clip override the track accent', async ({ page }) => {
+  await page.goto('/examples/review/review.html?el=compost-clip-grid&context=plain');
+  const row = page.locator('compost-clip-grid').locator('.row').nth(1);
+  await expect(row).toHaveCSS('--compost-clip-grid-accent', '#d15a40');
+  await expect(row.locator('.name')).toHaveCSS('color', 'rgb(209, 90, 64)');
+});
+
 test('clip grid slow mouse click renames without hijacking open or touch', async ({ page }) => {
   await page.goto('/examples/review/review.html?el=compost-clip-grid&context=plain');
   const grid = page.locator('compost-clip-grid');

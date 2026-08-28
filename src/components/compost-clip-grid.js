@@ -7,7 +7,7 @@ let nextGridID = 1;
 const ELLIPSIS_MIN_CHARS = 7;
 
 /** @typedef {'stopped'|'playing'|'recording'} ClipState */
-/** @typedef {{name: string, state?: ClipState, queued?: boolean, loop?: boolean, progress?: number}} ClipSpec */
+/** @typedef {{name: string, color?: string, state?: ClipState, queued?: boolean, loop?: boolean, progress?: number}} ClipSpec */
 
 /** @param {string} fill @param {string} [stroke] */
 const triangle = (fill, stroke = 'none') => `<svg viewBox="0 0 7 8" aria-hidden="true"><path d="M1 .5 6 4 1 7.5Z" fill="${fill}" stroke="${stroke}" stroke-linejoin="round"/></svg>`;
@@ -180,6 +180,7 @@ export class CompostClipGrid extends HTMLElement {
         .row[data-state="playing"] .name,
         .row[data-queued] .name,
         .row[data-state="recording"] .name { color: var(--compost-clip-grid-accent); }
+        .row[data-color] .name { color: var(--compost-clip-grid-accent); }
         .preview { flex: none; width: 2.27em; height: 1.27em; color: var(--compost-clip-grid-muted); }
         .row[data-state="playing"] .preview { color: var(--compost-clip-grid-accent); }
         .preview[hidden] { display: none !important; }
@@ -342,6 +343,10 @@ export class CompostClipGrid extends HTMLElement {
       row.part.add('row');
       row.dataset.index = String(index);
       if (clip) {
+        if (clip.color) {
+          row.dataset.color = '';
+          row.style.setProperty('--compost-clip-grid-accent', clip.color);
+        }
         const state = clip.state ?? 'stopped';
         row.dataset.state = state;
         row.part.add(state);

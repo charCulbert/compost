@@ -3,6 +3,8 @@ export type ClipState = 'stopped' | 'playing' | 'recording';
 /** One slot's clip; a null slot is empty. */
 export interface ClipSpec {
   name: string;
+  /** Optional per-clip accent; otherwise the grid's accent is inherited. */
+  color?: string;
   state?: ClipState;
   /** Whether this clip is waiting to launch while `state` remains current. */
   queued?: boolean;
