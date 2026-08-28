@@ -26,6 +26,7 @@ const MIN_ROWS = 13;
 const MAX_ROWS = 128;
 const MAX_PX_PER_BEAT = 600;
 const DOUBLE_CLICK_MS = 500;
+const PREVIEW_PULSE_MS = 160;
 
 /** @typedef {import('../piano-roll-model.js').RollNote} RollNote */
 
@@ -93,6 +94,8 @@ export class CompostNoteEditor extends HTMLElement {
     this.zoomPxPerBeat = 0;
     /** @type {RollNote[]} */ this._notes = [];
     /** @type {RollNote[]|null} */ this._preview = null;
+    this.activePreview = null;
+    this.previewTimer = 0;
     /** @type {Set<string>} */ this.selection = new Set();
     /** @type {number[]} */ this.visibleKeys = [];
     /** @type {any} */ this.drag = null;
@@ -436,6 +439,7 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this.endPreview();
     this.resizeObserver?.disconnect();
     window.removeEventListener('keydown', this.handleModifierKey, true);
     window.removeEventListener('keyup', this.handleModifierKey, true);
@@ -652,7 +656,7 @@ export class CompostNoteEditor extends HTMLElement {
     };
     this.selection = new Set([created.id]);
     this.commit([...this._notes, created], [created.id]);
-    this.preview(created.note);
+    this.preview(created.note, PREVIEW_PULSE_MS);
     return created;
   }
 
@@ -1023,18 +1027,27 @@ export class CompostNoteEditor extends HTMLElement {
   }
 
   /** @param {number} note */
-  preview(note) {
+  preview(note, duration = 0) {
+    this.endPreview();
+    const detail = { note, velocity: this.defaultVelocity, channel: this.defaultChannel };
+    this.activePreview = detail;
     this.dispatchEvent(new CustomEvent('note-preview', {
       bubbles: true, composed: true,
-      detail: { note, velocity: this.defaultVelocity, channel: this.defaultChannel },
+      detail,
     }));
+    if (duration > 0) this.previewTimer = setTimeout(() => this.endPreview(note), duration);
   }
 
   /** Ends a held keybed preview. */
-  endPreview(note) {
+  endPreview(note = null) {
+    if (!this.activePreview || note !== null && this.activePreview.note !== note) return;
+    clearTimeout(this.previewTimer);
+    this.previewTimer = 0;
+    const detail = this.activePreview;
+    this.activePreview = null;
     this.dispatchEvent(new CustomEvent('note-preview-end', {
       bubbles: true, composed: true,
-      detail: { note, velocity: this.defaultVelocity, channel: this.defaultChannel },
+      detail,
     }));
   }
 
@@ -1206,7 +1219,7 @@ export class CompostNoteEditor extends HTMLElement {
         this.selection = new Set([created.id]);
         this.drag = { pointerId: event.pointerId, mode: 'len', note: created, moved: true, created: true,
           x: event.clientX, y: event.clientY, grabBeat: this.xToBeat(point.x),
-          ids: [created.id], selectionBefore, regionBefore };
+          ids: [created.id], selectionBefore, regionBefore, previewing: true };
         this.preview(created.note);
       } else {
         this.startSelection(event, 'box', point);
@@ -1243,6 +1256,7 @@ export class CompostNoteEditor extends HTMLElement {
     };
     if (copying) this.setCopyDrag(this.drag, true);
     if (mode === 'move' && !copying) {
+      this.drag.previewing = true;
       this.preview(note.note);
       if (event.pointerType === 'touch') {
         this.longPress.start(() => {
@@ -1359,6 +1373,7 @@ export class CompostNoteEditor extends HTMLElement {
     const drag = this.drag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     this.longPress.cancel();
+    if (drag.previewing) this.endPreview();
     this.drag = null;
     this.tip.hidden = true;
     this.marquee.style.display = 'none';
@@ -1497,7 +1512,7 @@ export class CompostNoteEditor extends HTMLElement {
     };
     this.selection = new Set([created.id]);
     this.commit([...this._notes, created], [created.id]);
-    this.preview(created.note);
+    this.preview(created.note, PREVIEW_PULSE_MS);
   }
 
   /** @param {MouseEvent} event */

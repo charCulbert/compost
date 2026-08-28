@@ -3174,6 +3174,41 @@ test('note editor emits quantize intent and leaves strength and swing to its hos
   expect(await editor.evaluate((element) => element.quantizeEvents.length)).toBe(count);
 });
 
+test('note editor closes previews after note creation, release, and cancellation', async ({ page }) => {
+  await openNoteEditor(page);
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => {
+    element.setNotes([]);
+    element.previewEvents = [];
+    element.addEventListener('note-preview', ({ detail }) => element.previewEvents.push(['start', detail.note]));
+    element.addEventListener('note-preview-end', ({ detail }) => element.previewEvents.push(['end', detail.note]));
+  });
+  const grid = await editor.locator('.grid').boundingBox();
+  await page.mouse.dblclick(grid.x + grid.width / 3, grid.y + grid.height / 2);
+  await page.waitForTimeout(200);
+  expect(await editor.evaluate((element) => element.previewEvents.map(([type]) => type)))
+    .toEqual(['start', 'end']);
+
+  await editor.evaluate((element) => { element.previewEvents = []; });
+  const note = await editor.locator('.note').boundingBox();
+  await page.mouse.move(note.x + note.width / 2, note.y + note.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(note.x + note.width, note.y + note.height / 2, { steps: 2 });
+  await page.mouse.up();
+  expect(await editor.evaluate((element) => element.previewEvents.map(([type]) => type)))
+    .toEqual(['start', 'end']);
+
+  await editor.evaluate((element) => { element.previewEvents = []; });
+  const moved = await editor.locator('.note').boundingBox();
+  await page.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2);
+  await page.mouse.down();
+  await editor.evaluate((element) => {
+    element.endPointer(new PointerEvent('pointercancel', { pointerId: element.drag.pointerId }));
+  });
+  expect(await editor.evaluate((element) => element.previewEvents.map(([type]) => type)))
+    .toEqual(['start', 'end']);
+});
+
 test('note editor previews edits without taking ownership of caller notes', async ({ page }) => {
   await openNoteEditor(page);
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
