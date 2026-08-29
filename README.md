@@ -2,7 +2,8 @@
 
 Compost is a collection of Web Components and utilities I find useful for making
 UIs for audio apps, either ones that run in the browser or as the web UI of a
-native plugin. The elements do the interaction; your app owns the data.
+native plugin. Elements manage presentation and interaction, and emit UI intent
+through DOM events. Application data and policy remain outside the elements.
 
 ## What's in it
 
