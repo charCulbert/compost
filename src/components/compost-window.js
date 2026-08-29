@@ -500,7 +500,9 @@ export class CompostWindow extends HTMLElement {
     const size = constrainedSize({
       width: this.resize.width + event.clientX - this.resize.x,
       height: this.resize.height + event.clientY - this.resize.y,
-      current: this.contentSize,
+      // Keep the aspect-ratio comparison in the same pointerdown-relative frame
+      // as the requested dimensions; the rendered size may already be constrained.
+      current: { width: this.resize.width, height: this.resize.height },
       minWidth: this.minWidth, minHeight: this.minHeight,
       maxWidth: Math.min(this.maxWidth, window.innerWidth - this.offsetLeft - chrome.width),
       maxHeight: Math.min(this.maxHeight, window.innerHeight - this.offsetTop - chrome.height),

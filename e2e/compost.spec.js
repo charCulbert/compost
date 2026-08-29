@@ -3986,6 +3986,30 @@ test('window stays in the viewport, resizes in bounds, and asks before closing',
   await expect(window_).not.toHaveAttribute('open', '');
 });
 
+test('aspect-ratio resizing stays anchored to pointerdown', async ({ page }) => {
+  await page.goto('/examples/compost-window/');
+  const window_ = page.locator('compost-window[data-option-target="window"]');
+  await expect(window_).toHaveAttribute('open', '');
+  await window_.evaluate((element) => {
+    element.setAttribute('aspect-ratio', '4/3');
+    element.setContentSize(300, 225);
+    element.moveTo(32, 32);
+  });
+
+  const grip = await window_.locator('.grip').boundingBox();
+  const origin = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
+  await page.mouse.move(origin.x, origin.y);
+  await page.mouse.down();
+  await page.mouse.move(origin.x + 100, origin.y);
+  const first = await window_.evaluate((element) => element.contentSize);
+  await page.mouse.move(origin.x + 101, origin.y + 1);
+  const second = await window_.evaluate((element) => element.contentSize);
+  await page.mouse.up();
+
+  expect(first).toEqual({ width: 400, height: 300 });
+  expect(second).toEqual({ width: 401, height: 301 });
+});
+
 test('popup stays on screen, picks by keyboard and closes on an outside press', async ({ page }) => {
   await page.goto('/examples/compost-popup/');
   const popup = page.locator('compost-popup[data-option-target="popup"]');
