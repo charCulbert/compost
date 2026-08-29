@@ -432,6 +432,12 @@ export class CompostEnvelopeEditor extends HTMLElement {
     const curveY = this.y(envelopeValueAtTime(this._points, rawTime,
       this.min, this.max, this.scale, this.stepped), rect.height);
     const distance = event.clientY - rect.top - curveY;
+    const first = this._points[0].time;
+    const last = this._points.at(-1).time;
+    if (event.pointerType === 'touch' && Math.abs(distance) <= TOUCH_SEGMENT_DISTANCE
+        && rawTime >= first && rawTime <= last) {
+      return { kind: 'segment', time: rawTime };
+    }
     if (Math.abs(distance) <= POINT_PREVIEW_DISTANCE) {
       const time = this.timeAtPointer(event, this.freeTime(event));
       return {
@@ -440,12 +446,6 @@ export class CompostEnvelopeEditor extends HTMLElement {
         value: envelopeValueAtTime(this._points, time,
           this.min, this.max, this.scale, this.stepped),
       };
-    }
-    const first = this._points[0].time;
-    const last = this._points.at(-1).time;
-    if (event.pointerType === 'touch' && Math.abs(distance) <= TOUCH_SEGMENT_DISTANCE
-        && rawTime >= first && rawTime <= last) {
-      return { kind: 'segment', time: rawTime };
     }
     if (distance > POINT_PREVIEW_DISTANCE && distance <= SEGMENT_HANDLE_DISTANCE
         && rawTime >= first && rawTime <= last) {
@@ -522,7 +522,12 @@ export class CompostEnvelopeEditor extends HTMLElement {
       deletePoint: Boolean(point && event.altKey),
       created: createdOnDoubleTap,
     };
-    this.segmentHighlight.setAttribute('d', '');
+    this.segmentHighlight.setAttribute('d', mode === 'segment'
+      ? this.segmentPath(this.drag.segmentIndex, origin) : '');
+    if (mode === 'segment') {
+      this.showReadout(curveTarget.time, envelopeValueAtTime(origin, curveTarget.time,
+        this.min, this.max, this.scale, this.stepped), false);
+    }
     this.pointPreview.hidden = true;
     delete this.surface.dataset.hoverTarget;
     this.longPress.cancel();

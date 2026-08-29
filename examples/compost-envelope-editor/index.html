@@ -28,7 +28,7 @@
           </div>
           <compost-envelope-editor label="Gain automation over 4 beats" duration="4"
             style="height: 11em"></compost-envelope-editor>
-          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: tap near a segment to select it; drag near it with one finger to move the whole segment vertically. Keep that finger down and move a second finger vertically to bend it. Long-press opens its context action; double-tap the line adds a point. Mouse: double-click adds, Alt-click removes, Option-drag bends, Shift is fine movement, and Command/Ctrl inverts snapping.</small>
+          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: touch down near a segment to highlight it; tap selects it, and drag moves the whole segment vertically. Keep that finger down and move a second finger vertically to bend it. Long-press opens its context action; double-tap the line adds a point. Mouse: double-click adds, Alt-click removes, Option-drag bends, Shift is fine movement, and Command/Ctrl inverts snapping.</small>
         </div>
         </div>
         <output>last event: —</output>
@@ -42,8 +42,8 @@
       editor.points = [
         { time: 0, value: 0 },
         { time: .25, value: 1 },
-        { time: 1.25, value: .65 },
-        { time: 2.5, value: .65 },
+        { time: 1.25, value: .65, curve: .4 },
+        { time: 2.5, value: .45 },
         { time: 4, value: 0 },
       ];
       editor.addEventListener('envelope-change', (event) => { editor.points = event.detail.points; });

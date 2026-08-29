@@ -181,11 +181,13 @@ test('the envelope segment touch target extends above and below its line', async
       clientY: rect.top + element.y(.5) - 16,
     };
     surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, buttons: 1 }));
+    const highlight = element.shadowRoot.querySelector('.segment-highlight').getAttribute('d');
     surface.dispatchEvent(new PointerEvent('pointerup', { ...options, buttons: 0 }));
-    return selected;
+    return { selected, highlight };
   });
 
-  expect(selection).toEqual({ start: 1, end: 3 });
+  expect(selection.selected).toEqual({ start: 1, end: 3 });
+  expect(selection.highlight).not.toBe('');
 });
 
 test('one touch near an envelope segment moves the whole segment', async ({ page }) => {
@@ -205,7 +207,7 @@ test('one touch near an envelope segment moves the whole segment', async ({ page
     const options = {
       bubbles: true, composed: true, pointerType: 'touch', isPrimary: true,
       pointerId: 78, button: 0, clientX: rect.left + element.x(2),
-      clientY: rect.top + element.y(.5) - 16,
+      clientY: rect.top + element.y(.5),
     };
     surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, buttons: 1 }));
     surface.dispatchEvent(new PointerEvent('pointermove', {
@@ -255,6 +257,7 @@ test('a second touch bends the envelope segment held by the first', async ({ pag
     const points = changes.at(-1) ?? element.points;
     return {
       curve: points[1].curve ?? 0,
+      storedCurve: element.points[1].curve ?? 0,
       before: points[1].value,
       after: points[2].value,
       changeCount: changes.length,
@@ -262,6 +265,7 @@ test('a second touch bends the envelope segment held by the first', async ({ pag
   });
 
   expect(Math.abs(result.curve)).toBeGreaterThan(.1);
+  expect(result.storedCurve).toBe(result.curve);
   expect(result).toMatchObject({ before: .2, after: .8, changeCount: 1 });
 });
 
