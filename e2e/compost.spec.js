@@ -253,6 +253,9 @@ test('a second touch bends the envelope segment held by the first', async ({ pag
       ...second, buttons: 1, clientY: second.clientY - 72,
     }));
     surface.dispatchEvent(new PointerEvent('pointerup', { ...second, buttons: 0 }));
+    surface.dispatchEvent(new PointerEvent('pointermove', {
+      ...first, buttons: 1, clientY: first.clientY - 32,
+    }));
     surface.dispatchEvent(new PointerEvent('pointerup', { ...first, buttons: 0 }));
     const points = changes.at(-1) ?? element.points;
     return {
@@ -266,7 +269,9 @@ test('a second touch bends the envelope segment held by the first', async ({ pag
 
   expect(Math.abs(result.curve)).toBeGreaterThan(.1);
   expect(result.storedCurve).toBe(result.curve);
-  expect(result).toMatchObject({ before: .2, after: .8, changeCount: 1 });
+  expect(result.before).toBeGreaterThan(.2);
+  expect(result.after).toBeGreaterThan(.8);
+  expect(result.changeCount).toBe(1);
 });
 
 test('a touch long-press reports envelope context', async ({ page }) => {

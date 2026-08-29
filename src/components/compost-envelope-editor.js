@@ -465,6 +465,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
       this.drag.mode = 'segment';
       this.drag.curvePointerId = event.pointerId;
       this.drag.curveStartY = event.clientY;
+      this.drag.curveOrigin = this.drag.preview ?? this.drag.origin;
       this.surface.setPointerCapture?.(event.pointerId);
       return;
     }
@@ -510,6 +511,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
       segmentIndex: this.segmentIndex(curveTarget?.time ?? time),
       startX: event.clientX,
       startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
       startTime: time,
       originSelection: this.selection ? { ...this.selection } : null,
       originSelectionPointIndexes: [...this.selectionPointIndexes],
@@ -578,13 +581,14 @@ export class CompostEnvelopeEditor extends HTMLElement {
       return;
     }
     if (drag.curvePointerId === event.pointerId) {
-      const before = drag.origin[drag.segmentIndex];
-      const after = drag.origin[drag.segmentIndex + 1];
+      const origin = drag.curveOrigin ?? drag.origin;
+      const before = origin[drag.segmentIndex];
+      const after = origin[drag.segmentIndex + 1];
       const direction = Math.sign(after.value - before.value);
       const height = Math.max(1, this.surface.getBoundingClientRect().height);
       const curve = clamp((Number(before.curve) || 0)
         + (event.clientY - drag.curveStartY) / height * 2 * direction, -1, 1);
-      const points = drag.origin.map((point, index) => index === drag.segmentIndex
+      const points = origin.map((point, index) => index === drag.segmentIndex
         ? { ...point, curve: Math.abs(curve) < 1e-9 ? 0 : curve }
         : { ...point });
       drag.moved = true;
@@ -595,6 +599,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
       return;
     }
     if (drag.pointerId !== event.pointerId) return;
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
     if (drag.curvePointerId != null) return;
     if (event.buttons & 1) drag.pressedSeen = true;
     else if (drag.pressedSeen && event.pointerType !== 'touch') {
@@ -692,6 +698,10 @@ export class CompostEnvelopeEditor extends HTMLElement {
     const drag = this.drag;
     if (drag?.curvePointerId === event.pointerId) {
       drag.curvePointerId = null;
+      drag.origin = drag.preview ?? drag.origin;
+      drag.startX = drag.lastX;
+      drag.startY = drag.lastY;
+      drag.curveOrigin = null;
       return;
     }
     this.finishTouchTap(event);
