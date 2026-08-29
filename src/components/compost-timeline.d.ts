@@ -270,7 +270,8 @@ export function moveAutomationRange(points: TimelineAutomationPoint[], start: nu
  *
  * Event details name the intent's subject: clip and locator events carry
  * `id`/`ids`, lane events carry `laneId`.
- * A two-finger pinch zooms time and pans time or lanes.
+ * A two-finger pinch zooms time and pans time or lanes. Touch long-press
+ * emits the context intent for the surface under the finger.
  *
  * @attribute label
  * @attribute time-signature - meter as N/D

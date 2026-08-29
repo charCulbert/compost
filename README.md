@@ -53,6 +53,8 @@ sends `parameter-end` with `cancelled: true`.
 
 Right-click, long-press or Shift+F10 on anything fires a `<thing>-context`
 event with `clientX` / `clientY`; you decide what the menu contains.
+On touch, context means one-finger long-press; two fingers remain available
+for editor pan and zoom gestures.
 `compost-piano` sends `note-down` and `note-up`.
 
 The same modifiers work across editors: Command/Ctrl inverts time snapping,

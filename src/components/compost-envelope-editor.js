@@ -28,6 +28,7 @@ import {
 const eventOf = (type, detail) => new CustomEvent(type, { bubbles: true, composed: true, detail });
 const POINT_PREVIEW_DISTANCE = 3;
 const SEGMENT_HANDLE_DISTANCE = 10;
+const TOUCH_SEGMENT_DISTANCE = 22;
 
 /**
  * A generic time/value envelope surface. The caller owns the points and what
@@ -442,6 +443,10 @@ export class CompostEnvelopeEditor extends HTMLElement {
     }
     const first = this._points[0].time;
     const last = this._points.at(-1).time;
+    if (event.pointerType === 'touch' && Math.abs(distance) <= TOUCH_SEGMENT_DISTANCE
+        && rawTime >= first && rawTime <= last) {
+      return { kind: 'segment', time: rawTime };
+    }
     if (distance > POINT_PREVIEW_DISTANCE && distance <= SEGMENT_HANDLE_DISTANCE
         && rawTime >= first && rawTime <= last) {
       return { kind: 'segment', time: rawTime };
@@ -451,6 +456,18 @@ export class CompostEnvelopeEditor extends HTMLElement {
 
   startPointer(event) {
     if (this.hasAttribute('disabled') || this.hasAttribute('readonly') || event.button !== 0) return;
+    if (event.pointerType === 'touch' && this.drag && !this.stepped
+        && event.pointerId !== this.drag.pointerId
+        && (this.drag.mode === 'insert' || this.drag.mode === 'segment')) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.longPress.cancel();
+      this.drag.mode = 'segment';
+      this.drag.curvePointerId = event.pointerId;
+      this.drag.curveStartY = event.clientY;
+      this.surface.setPointerCapture?.(event.pointerId);
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     let point = this.pointFromEvent(event);
@@ -555,7 +572,25 @@ export class CompostEnvelopeEditor extends HTMLElement {
       if (Number.isFinite(time) && Number.isFinite(value)) this.showReadout(time, value, false);
       return;
     }
+    if (drag.curvePointerId === event.pointerId) {
+      const before = drag.origin[drag.segmentIndex];
+      const after = drag.origin[drag.segmentIndex + 1];
+      const direction = Math.sign(after.value - before.value);
+      const height = Math.max(1, this.surface.getBoundingClientRect().height);
+      const curve = clamp((Number(before.curve) || 0)
+        + (event.clientY - drag.curveStartY) / height * 2 * direction, -1, 1);
+      const points = drag.origin.map((point, index) => index === drag.segmentIndex
+        ? { ...point, curve: Math.abs(curve) < 1e-9 ? 0 : curve }
+        : { ...point });
+      drag.moved = true;
+      drag.preview = points;
+      this.render(points);
+      this.segmentHighlight.setAttribute('d', this.segmentPath(drag.segmentIndex, points));
+      this.dispatchEvent(eventOf('envelope-input', { points }));
+      return;
+    }
     if (drag.pointerId !== event.pointerId) return;
+    if (drag.curvePointerId != null) return;
     if (event.buttons & 1) drag.pressedSeen = true;
     else if (drag.pressedSeen && event.pointerType !== 'touch') {
       // The primary button was released out where the release never arrived;
@@ -649,8 +684,12 @@ export class CompostEnvelopeEditor extends HTMLElement {
   }
 
   endPointer(event) {
-    this.finishTouchTap(event);
     const drag = this.drag;
+    if (drag?.curvePointerId === event.pointerId) {
+      drag.curvePointerId = null;
+      return;
+    }
+    this.finishTouchTap(event);
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.stopPropagation();
     this.drag = null;

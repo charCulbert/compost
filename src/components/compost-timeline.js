@@ -2053,6 +2053,19 @@ export class CompostTimeline extends HTMLElement {
     };
   }
 
+  startContextLongPress(event) {
+    if (event.pointerType !== 'touch') return;
+    const target = event.composedPath()[0];
+    this.longPress.start(() => {
+      if (this.pinch || this.drag?.moved || !(target instanceof EventTarget)) return;
+      this.cancelActiveDrag();
+      target.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true, composed: true, cancelable: true,
+        clientX: event.clientX, clientY: event.clientY,
+      }));
+    });
+  }
+
   startPointer(event) {
     if (this.hasAttribute('disabled') || event.button !== 0) return;
     if (event.pointerType === 'touch') {
@@ -2074,6 +2087,7 @@ export class CompostTimeline extends HTMLElement {
     const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
       && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
     if (loopPart instanceof HTMLElement) return;
+    this.startContextLongPress(event);
     const locator = this.locatorFromEvent(event);
     if (locator) {
       event.preventDefault();

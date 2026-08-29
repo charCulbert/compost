@@ -42,6 +42,18 @@ async function performTouchDoubleTap(page, locator) {
   }
 }
 
+async function performTouchLongPress(page, locator, position = {}) {
+  const box = await locator.boundingBox();
+  const client = await page.context().newCDPSession(page);
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  const x = box.x + (position.x ?? box.width / 2);
+  const y = box.y + (position.y ?? box.height / 2);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart',
+    touchPoints: [{ x, y, radiusX: 8, radiusY: 8, force: 1, id: 301 }] });
+  await page.waitForTimeout(600);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
 async function openTimeline(page) {
   await page.goto('/examples/compost-timeline/');
   const timeline = page.locator('compost-timeline');
@@ -147,6 +159,121 @@ test('a touch tap selects an envelope segment without adding a point', async ({ 
   });
 
   expect(result).toEqual({ selection: { start: 1, end: 3 }, pointCount: 4 });
+});
+
+test('the envelope segment touch target extends above and below its line', async ({ page }) => {
+  await page.goto('/examples/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  const selection = await editor.evaluate((element) => {
+    element.points = [
+      { time: 0, value: 0 },
+      { time: 1, value: .5 },
+      { time: 3, value: .5 },
+      { time: 4, value: 0 },
+    ];
+    let selected = null;
+    element.addEventListener('envelope-selection', ({ detail }) => { selected = detail; });
+    const surface = element.shadowRoot.querySelector('.surface');
+    const rect = surface.getBoundingClientRect();
+    const options = {
+      bubbles: true, composed: true, pointerType: 'touch', isPrimary: true,
+      pointerId: 75, button: 0, clientX: rect.left + element.x(2),
+      clientY: rect.top + element.y(.5) - 16,
+    };
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, buttons: 1 }));
+    surface.dispatchEvent(new PointerEvent('pointerup', { ...options, buttons: 0 }));
+    return selected;
+  });
+
+  expect(selection).toEqual({ start: 1, end: 3 });
+});
+
+test('one touch near an envelope segment moves the whole segment', async ({ page }) => {
+  await page.goto('/examples/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  const result = await editor.evaluate((element) => {
+    element.points = [
+      { time: 0, value: 0 },
+      { time: 1, value: .5 },
+      { time: 3, value: .5 },
+      { time: 4, value: 0 },
+    ];
+    let committed = null;
+    element.addEventListener('envelope-change', ({ detail }) => { committed = detail.points; });
+    const surface = element.shadowRoot.querySelector('.surface');
+    const rect = surface.getBoundingClientRect();
+    const options = {
+      bubbles: true, composed: true, pointerType: 'touch', isPrimary: true,
+      pointerId: 78, button: 0, clientX: rect.left + element.x(2),
+      clientY: rect.top + element.y(.5) - 16,
+    };
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...options, buttons: 1 }));
+    surface.dispatchEvent(new PointerEvent('pointermove', {
+      ...options, buttons: 1, clientY: options.clientY - 40,
+    }));
+    surface.dispatchEvent(new PointerEvent('pointerup', {
+      ...options, buttons: 0, clientY: options.clientY - 40,
+    }));
+    return committed;
+  });
+
+  expect(result[1].value).toBeGreaterThan(.5);
+  expect(result[2].value).toBeGreaterThan(.5);
+  expect(result.map(({ time }) => time)).toEqual([0, 1, 3, 4]);
+});
+
+test('a second touch bends the envelope segment held by the first', async ({ page }) => {
+  await page.goto('/examples/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  const result = await editor.evaluate((element) => {
+    element.points = [
+      { time: 0, value: 0 },
+      { time: 1, value: .2 },
+      { time: 3, value: .8 },
+      { time: 4, value: 0 },
+    ];
+    const changes = [];
+    element.addEventListener('envelope-change', ({ detail }) => changes.push(detail.points));
+    const surface = element.shadowRoot.querySelector('.surface');
+    const rect = surface.getBoundingClientRect();
+    const first = {
+      bubbles: true, composed: true, pointerType: 'touch', isPrimary: true,
+      pointerId: 76, button: 0, clientX: rect.left + element.x(2),
+      clientY: rect.top + element.y(.5),
+    };
+    const second = {
+      ...first, isPrimary: false, pointerId: 77,
+      clientX: first.clientX + 40, clientY: first.clientY + 24,
+    };
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...first, buttons: 1 }));
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...second, buttons: 1 }));
+    surface.dispatchEvent(new PointerEvent('pointermove', {
+      ...second, buttons: 1, clientY: second.clientY - 72,
+    }));
+    surface.dispatchEvent(new PointerEvent('pointerup', { ...second, buttons: 0 }));
+    surface.dispatchEvent(new PointerEvent('pointerup', { ...first, buttons: 0 }));
+    const points = changes.at(-1) ?? element.points;
+    return {
+      curve: points[1].curve ?? 0,
+      before: points[1].value,
+      after: points[2].value,
+      changeCount: changes.length,
+    };
+  });
+
+  expect(Math.abs(result.curve)).toBeGreaterThan(.1);
+  expect(result).toMatchObject({ before: .2, after: .8, changeCount: 1 });
+});
+
+test('a touch long-press reports envelope context', async ({ page }) => {
+  await page.goto('/examples/compost-envelope-editor/');
+  const editor = page.locator('compost-envelope-editor');
+  await editor.evaluate((element) => {
+    element.testContexts = [];
+    element.addEventListener('envelope-context', (event) => element.testContexts.push(event.detail));
+  });
+  await performTouchLongPress(page, editor.locator('.surface'));
+  expect(await editor.evaluate((element) => element.testContexts)).toHaveLength(1);
 });
 
 test('envelope points can be moved by a touch pointer', async ({ page }) => {
@@ -373,6 +500,17 @@ test('double-tap component actions cancel the iOS zoom default', async ({ page }
     expect(result).toEqual({ firstStartPrevented: false, firstPrevented: false,
       secondStartPrevented: true, secondPrevented: true });
   }
+});
+
+test('a touch long-press reports clip-grid context', async ({ page }) => {
+  await page.goto('/examples/compost-clip-grid/');
+  const grid = page.locator('compost-clip-grid').first();
+  await grid.evaluate((element) => {
+    element.testContexts = [];
+    element.addEventListener('clip-context', (event) => element.testContexts.push(event.detail));
+  });
+  await performTouchLongPress(page, grid.locator('.name').first());
+  expect(await grid.evaluate((element) => element.testContexts)).toHaveLength(1);
 });
 
 test('touch double-tap resets knobs and sliders', async ({ page }) => {
@@ -2221,6 +2359,23 @@ test('timeline generic header intents stay local', async ({ page }) => {
   expect(events.some((event) => event.type === 'lane-move')).toBe(true);
 });
 
+test('a touch long-press reports timeline context on empty lanes and the ruler', async ({ page }) => {
+  await openTimeline(page);
+  const timeline = page.locator('compost-timeline');
+  await timeline.evaluate((element) => {
+    element.setLanes([{ id: 'lane', name: 'Lane', clips: [] }]);
+    element.testContexts = [];
+    for (const type of ['lane-context', 'ruler-context']) {
+      element.addEventListener(type, (event) => element.testContexts.push({ type, detail: event.detail }));
+    }
+  });
+  await performTouchLongPress(page, timeline.locator('.lane[data-lane-id="lane"]'));
+  await performTouchLongPress(page, timeline.locator('.ruler-wrap'));
+
+  expect(await timeline.evaluate((element) => element.testContexts.map(({ type }) => type)))
+    .toEqual(['lane-context', 'ruler-context']);
+});
+
 test('a real double-click on an empty MIDI lane emits one lane-create', async ({ page }) => {
   await openTimeline(page);
   const timeline = page.locator('compost-timeline');
@@ -3110,6 +3265,22 @@ test('note editor reports context intent for notes and empty grid', async ({ pag
   await editor.locator('.note').first().click({ button: 'right' });
   const grid = await editor.locator('.grid').boundingBox();
   await page.mouse.click(grid.x + grid.width - 4, grid.y + grid.height - 4, { button: 'right' });
+  expect(await editor.evaluate((element) => element.testContexts.map(({ id }) => id ?? null)))
+    .toEqual(['demo-editor-note-1', null]);
+});
+
+test('a touch long-press reports note-editor context on a note or empty grid', async ({ page }) => {
+  await openNoteEditor(page);
+  const editor = page.locator('compost-note-editor[data-option-target="editor"]');
+  await editor.evaluate((element) => {
+    element.testContexts = [];
+    element.addEventListener('note-context', (event) => element.testContexts.push(event.detail));
+  });
+  await performTouchLongPress(page, editor.locator('.note').first());
+  const grid = editor.locator('.gridwrap');
+  const box = await grid.boundingBox();
+  await performTouchLongPress(page, grid, { x: box.width - 8, y: box.height - 8 });
+
   expect(await editor.evaluate((element) => element.testContexts.map(({ id }) => id ?? null)))
     .toEqual(['demo-editor-note-1', null]);
 });

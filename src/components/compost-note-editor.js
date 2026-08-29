@@ -1291,6 +1291,23 @@ export class CompostNoteEditor extends HTMLElement {
       this.beats, this.step, 'off'), drag.ids);
   }
 
+  startContextLongPress(event, id) {
+    if (event.pointerType !== 'touch') return;
+    this.longPress.start(() => {
+      if (!this.drag || this.drag.moved) return;
+      this.pointers.delete(event.pointerId);
+      if (this.pointers.size === 0) this.pinch = null;
+      this.endPointer({
+        type: 'pointercancel', pointerId: event.pointerId,
+        clientX: event.clientX, clientY: event.clientY,
+      });
+      this.dispatchEvent(new CustomEvent('note-context', {
+        bubbles: true, composed: true,
+        detail: { id, clientX: event.clientX, clientY: event.clientY },
+      }));
+    });
+  }
+
   /** @param {PointerEvent} event */
   startPointer(event) {
     if (this.readonly || event.button !== 0 || this.drag) return;
@@ -1319,8 +1336,10 @@ export class CompostNoteEditor extends HTMLElement {
         this.preview(created.note);
       } else {
         this.startSelection(event, 'box', point);
+        this.startContextLongPress(event, undefined);
         return;
       }
+      this.startContextLongPress(event, undefined);
       this.gridElement.setPointerCapture(event.pointerId);
       this.renderNotes();
       return;
@@ -1354,17 +1373,8 @@ export class CompostNoteEditor extends HTMLElement {
     if (mode === 'move' && !copying) {
       this.drag.previewing = true;
       this.preview(note.note);
-      if (event.pointerType === 'touch') {
-        this.longPress.start(() => {
-          if (!this.drag || this.drag.moved) return;
-          this.endPointer({ pointerId: event.pointerId, type: 'pointercancel' });
-          this.dispatchEvent(new CustomEvent('note-context', {
-            bubbles: true, composed: true,
-            detail: { id: note.id, clientX: event.clientX, clientY: event.clientY },
-          }));
-        });
-      }
     }
+    this.startContextLongPress(event, note.id);
     this.setAttribute('data-drag', copying ? 'copy' : mode);
     if (mode !== 'vel') this.gridElement.setPointerCapture(event.pointerId);
     this.renderNotes();
@@ -1378,6 +1388,9 @@ export class CompostNoteEditor extends HTMLElement {
     const target = drag.target ?? this.gridElement;
     if (!target.hasPointerCapture(event.pointerId)) target.setPointerCapture(event.pointerId);
     const point = this.gridPoint(event);
+    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > DRAG_SLOP) {
+      this.longPress.cancel();
+    }
     if (drag.mode === 'marq') {
       if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= drag.slop) return;
       if (!drag.moved) {
