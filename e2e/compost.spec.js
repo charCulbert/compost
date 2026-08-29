@@ -745,6 +745,11 @@ test('monosynth editors omit unlabeled time and boundary markers', async ({ page
   const envelopeEditor = page.locator('compost-envelope-editor');
 
   await expect(noteEditor).not.toHaveAttribute('loop', '');
+  expect(await noteEditor.evaluate((editor) => ({
+    beats: editor.beats,
+    rangeEnd: editor.rangeEnd,
+    loopEnd: editor.loopEnd,
+  }))).toEqual({ beats: 4, rangeEnd: 4, loopEnd: 4 });
   expect(await noteEditor.evaluate((editor) => [
     'range-start', 'range-end', 'range-start-line', 'range-end-line',
     'loop', 'loop-start', 'loop-end',

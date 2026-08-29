@@ -117,6 +117,8 @@ test('the Mono Synth uses current editor and one-channel scope contracts', () =>
   assert.match(main, /scope\.setSamples\(data\.samples\)/u);
   assert.match(main, /parameterID === 'phaseReset'/u);
   assert.match(main, /noteEditor\.addEventListener\('notes-change'/u);
+  assert.match(main, /loopStart: noteEditor\.rangeStart/u);
+  assert.match(main, /loopEnd: noteEditor\.rangeEnd/u);
   assert.match(main, /envelopeEditor\.addEventListener\('envelope-change'/u);
   assert.match(main, /type: 'pitchEnvelope'/u);
   assert.match(main, /kickNotes/u);

@@ -307,8 +307,8 @@ function postPitchEnvelope(points) {
 function postSequence() {
   audio?.synth.port.postMessage({
     type: 'sequence', notes,
-    loopStart: 0,
-    loopEnd: 4,
+    loopStart: noteEditor.rangeStart,
+    loopEnd: noteEditor.rangeEnd,
   });
 }
 

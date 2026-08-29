@@ -484,8 +484,8 @@ export class CompostNoteEditor extends HTMLElement {
     this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
     const rawStart = Math.max(0, numberAttr(this, 'start', this.rangeStart));
     const rawEnd = Math.max(rawStart + MIN_DURATION, numberAttr(this, 'end', this.rangeEnd));
-    const rawLoopStart = Math.max(0, numberAttr(this, 'loop-start', this.loopStart));
-    const rawLoopEnd = Math.max(rawLoopStart + MIN_DURATION, numberAttr(this, 'loop-end', this.loopEnd));
+    const rawLoopStart = Math.max(0, numberAttr(this, 'loop-start', rawStart));
+    const rawLoopEnd = Math.max(rawLoopStart + MIN_DURATION, numberAttr(this, 'loop-end', rawEnd));
     this.rangeStart = rawStart;
     this.rangeEnd = rawEnd;
     this.loopStart = rawLoopStart;
