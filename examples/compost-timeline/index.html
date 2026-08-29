@@ -339,7 +339,9 @@
             return;
           }
           const length = timeline.loopEnd - timeline.loopStart;
-          const beat = loop.checked
+          const loopReached = loop.checked && transportBeat >= timeline.loopStart
+            && timeline.playhead < timeline.loopEnd;
+          const beat = loopReached
             ? timeline.loopStart + ((transportBeat - timeline.loopStart) % length + length) % length
             : transportBeat;
           timeline.setPlayhead(beat);

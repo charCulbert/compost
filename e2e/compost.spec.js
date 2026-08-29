@@ -61,6 +61,7 @@ async function openTimeline(page) {
     const isolated = document.createElement('compost-timeline');
     for (const attribute of element.attributes) isolated.setAttribute(attribute.name, attribute.value);
     isolated.style.cssText = element.style.cssText;
+    isolated.style.removeProperty('--compost-timeline-header-width');
     isolated.setAttribute('time-signature', '4/4');
     isolated.setAttribute('grid', '1/4');
     isolated.setAttribute('snap', 'off');
@@ -1499,6 +1500,36 @@ test('timeline follow anchors the playhead at the viewport centre while playing'
   // a seek back to the start still pulls the view back
   await timeline.evaluate((element) => element.setPlayhead(0.5));
   expect(await timeline.evaluate((element) => element.scrollBeat)).toBe(0);
+});
+
+test('timeline demo enters a loop from before but ignores one behind the playhead', async ({ page }) => {
+  await page.goto('/examples/compost-timeline/');
+  const timeline = page.locator('compost-timeline');
+  const play = page.locator('[data-timeline-play]');
+  await timeline.evaluate((element) => {
+    element.setLoop(1, 1.5, true);
+    element.dispatchEvent(new CustomEvent('seek', {
+      bubbles: true, composed: true, detail: { beat: .5 },
+    }));
+  });
+
+  await play.click();
+  await page.waitForTimeout(60);
+  expect(await timeline.evaluate((element) => element.playhead)).toBeLessThan(1);
+  await expect.poll(() => timeline.evaluate((element) => element.playhead), { timeout: 1000 })
+    .toBeGreaterThanOrEqual(1);
+  expect(await timeline.evaluate((element) => element.playhead)).toBeLessThan(1.5);
+  await play.click();
+
+  await timeline.evaluate((element) => {
+    element.dispatchEvent(new CustomEvent('seek', {
+      bubbles: true, composed: true, detail: { beat: 2 },
+    }));
+  });
+  await play.click();
+  await page.waitForTimeout(100);
+  expect(await timeline.evaluate((element) => element.playhead)).toBeGreaterThan(2);
+  await play.click();
 });
 
 test('timeline loop band moves the whole loop, clamps at zero and shows grabbing', async ({ page }) => {
