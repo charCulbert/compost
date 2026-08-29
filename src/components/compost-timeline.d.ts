@@ -226,9 +226,11 @@ export interface AutomationEditOptions {
 }
 
 /** Convert an automation value to a y coordinate in a sub-row. */
-export function automationValueToY(value: number, min: number | {min: number, max: number}, max: number, height: number, scale?: 'linear' | 'gain'): number;
+export function automationValueToY(value: number, range: {min: number, max: number}, height: number, scale?: 'linear' | 'gain'): number;
+export function automationValueToY(value: number, min: number, max: number, height: number, scale?: 'linear' | 'gain'): number;
 /** Convert a y coordinate in a sub-row to an automation value. */
-export function automationValueFromY(y: number, min: number | {min: number, max: number}, max: number, height: number, scale?: 'linear' | 'gain'): number;
+export function automationValueFromY(y: number, range: {min: number, max: number}, height: number, scale?: 'linear' | 'gain'): number;
+export function automationValueFromY(y: number, min: number, max: number, height: number, scale?: 'linear' | 'gain'): number;
 /** Add a point and return a new beat-sorted, range-clamped array. */
 export function addAutomationPoint(points: TimelineAutomationPoint[], point: TimelineAutomationPoint, min?: number | {min: number, max: number}, max?: number): TimelineAutomationPoint[];
 /** Move one point without allowing it to cross its neighbours. */
@@ -357,11 +359,8 @@ export class CompostTimeline extends HTMLElement {
   get disabled(): boolean;
   set disabled(value: boolean);
 
-  /** Scrolls the view to a beat. Shadows Element.scrollTo, whose signatures
-   * remain callable but scroll to beat 0. */
-  scrollTo(beat: number): void;
-  scrollTo(options?: ScrollToOptions): void;
-  scrollTo(x: number, y: number): void;
+  /** Scroll the timeline view to a beat. */
+  scrollToBeat(beat: number): void;
   zoomToFit(endBeat: number): void;
   /** Convert a viewport x coordinate into an unsnapped timeline beat. */
   beatAtPoint(clientX: number): number;

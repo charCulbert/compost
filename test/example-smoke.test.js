@@ -15,6 +15,13 @@ test('the no-cache example server and checker share port 8000 by default', () =>
   assert.match(read('examples/serve.py'), /else 8000/u);
   assert.match(read('examples/check-example.mjs'), /process\.argv\[3\] \|\| '8000'/u);
   assert.match(read('examples/check-example.mjs'), /const root = resolve\(here, '\.\.'\)/u);
+  assert.match(read('examples/check-example.mjs'), /process\.exitCode = 1/u);
+});
+
+test('the Pages assembly only copies tracked site directories', () => {
+  const workflow = read('.github/workflows/pages.yml');
+  assert.match(workflow, /cp -R examples src _site\//u);
+  assert.doesNotMatch(workflow, /cp -R docs/u);
 });
 
 test('every element example is its own page sharing the common shell', () => {
@@ -45,6 +52,21 @@ test('the shared example readout includes every literal component event', () => 
   const emitted = [...componentSource.matchAll(/(?:new CustomEvent|eventOf)\('([^']+)'/gu)]
     .map((match) => match[1]);
   for (const type of new Set(emitted)) assert.equal(declared.has(type), true, type);
+  for (const type of ['locator-prev', 'locator-next']) assert.equal(declared.has(type), true, type);
+  assert.match(helper, /const elements = s\.querySelectorAll\(id\)/u);
+  assert.match(helper, /for \(const element of elements\)/u);
+  assert.match(helper, /element\.addEventListener\(type/u);
+  assert.doesNotMatch(helper, /s\.addEventListener\(type/u);
+});
+
+test('example instructions match number-box pointer behavior', () => {
+  const page = read('examples/compost-number-box/index.html');
+  assert.match(page, /double-click to reset/u);
+  assert.doesNotMatch(page, /double-click to type/u);
+});
+
+test('browser tests contain no diagnostic logging', () => {
+  assert.doesNotMatch(read('e2e/compost.spec.js'), /console\.log\('U-22 rows'/u);
 });
 
 test('every example page shares the light and dark color-scheme toggle', () => {

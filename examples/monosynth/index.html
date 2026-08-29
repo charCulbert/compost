@@ -110,6 +110,7 @@
       .transport button { min-height: 2.25em; border: 1px solid currentColor; background: Canvas; color: CanvasText; font: inherit; }
       .transport compost-number-box { width: 5.5em; }
       .pitch-envelope { display: block; width: 100%; height: 8em; }
+      .gesture-help { display: block; padding: .45em .625em .625em; color: var(--muted); font-size: .6875em; }
       .note-editor { display: block; width: 100%; height: 15em; border-top: 1px solid var(--line); }
       .note-editor::part(range-start), .note-editor::part(range-end),
       .note-editor::part(range-start-line), .note-editor::part(range-end-line) { display: none; }
@@ -202,6 +203,7 @@
               </div>
               <div class="editor-heading"><h2>Pitch envelope</h2><p>One second · semitones</p></div>
               <compost-envelope-editor class="pitch-envelope" label="Pitch envelope" duration="1" min="-12" max="12" step="1"></compost-envelope-editor>
+              <small class="gesture-help">Touch: hold the sloped line, then move a second finger vertically inside the editor to bend it. Mouse: Option-drag the sloped line.</small>
             </div>
 
             <div class="scope-stack">

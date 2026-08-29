@@ -56,6 +56,7 @@ async function performTouchLongPress(page, locator, position = {}) {
 
 async function openTimeline(page) {
   await page.goto('/examples/compost-timeline/');
+  await page.evaluate(() => customElements.whenDefined('compost-timeline'));
   const timeline = page.locator('compost-timeline');
   await timeline.evaluate((element) => {
     const isolated = document.createElement('compost-timeline');
@@ -72,6 +73,7 @@ async function openTimeline(page) {
 
 async function openNoteEditor(page) {
   await page.goto('/examples/compost-note-editor/');
+  await page.evaluate(() => customElements.whenDefined('compost-note-editor'));
   const editor = page.locator('compost-note-editor[data-option-target="editor"]');
   await editor.evaluate((element) => {
     element.setAttribute('time-signature', '4/4');
@@ -570,6 +572,13 @@ test('knob keyboard edits use a complete parameter gesture', async ({ page }) =>
   ]);
 });
 
+test('example readouts follow every component instance', async ({ page }) => {
+  await page.goto('/examples/compost-button/');
+  const buttons = page.locator('compost-button');
+  await buttons.nth(1).click();
+  await expect(page.locator('section.plain output')).toContainText('parameter-end');
+});
+
 test('select supports native selection', async ({ page }) => {
   await page.goto('/examples/compost-select/');
   const select = page.locator('compost-select[parameter-id="osc-waveform"]');
@@ -669,6 +678,65 @@ test('monosynth drawer only takes its panel width while open', async ({ page }) 
 
   await expect.poll(() => drawer.evaluate((element) => element.getBoundingClientRect().width))
     .toBeGreaterThan(closedWidth * 2);
+});
+
+test('monosynth uses a compact top drawer on narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/examples/monosynth/');
+  const drawer = page.locator('.midi-drawer');
+
+  await expect(drawer).toHaveAttribute('edge', 'top');
+  const closedHeight = await drawer.evaluate((element) => element.getBoundingClientRect().height);
+  expect(closedHeight).toBeLessThan(80);
+
+  await drawer.evaluate((element) => { element.open = true; });
+  await expect.poll(() => drawer.evaluate((element) => element.getBoundingClientRect().height))
+    .toBeGreaterThan(closedHeight * 2);
+});
+
+test('monosynth exposes a grabbable pitch segment and commits mouse bends', async ({ page }) => {
+  await page.goto('/examples/monosynth/');
+  await page.locator('compost-audio').evaluate((element) => {
+    element.context = { state: 'running', close: async () => {} };
+    element.refresh();
+  });
+  const editor = page.locator('compost-envelope-editor');
+  const surface = editor.locator('.surface');
+  const before = await editor.evaluate((element) => ({
+    curve: element.points[0].curve ?? 0,
+    segmentWidth: element.x(element.points[1].time) - element.x(element.points[0].time),
+    ...(() => {
+      const path = element.shadowRoot.querySelector('.line-hit');
+      const targetX = element.x((element.points[0].time + element.points[1].time) / 2);
+      let low = 0;
+      let high = path.getTotalLength();
+      for (let index = 0; index < 16; index += 1) {
+        const middle = (low + high) / 2;
+        if (path.getPointAtLength(middle).x < targetX) low = middle;
+        else high = middle;
+      }
+      const point = path.getPointAtLength((low + high) / 2);
+      return { x: point.x, y: point.y };
+    })(),
+  }));
+  expect(before.segmentWidth).toBeGreaterThanOrEqual(44);
+  const box = await surface.boundingBox();
+  const hit = await editor.evaluate((element, point) => {
+    const target = element.shadowRoot.elementFromPoint(point.x, point.y);
+    return { x: point.x, y: point.y, name: target?.localName, className: target?.getAttribute('class') };
+  }, { x: box.x + before.x, y: box.y + before.y });
+  expect(hit).toMatchObject({ name: 'path', className: 'line-hit' });
+
+  await page.mouse.move(box.x + before.x, box.y + before.y);
+  await page.keyboard.down('Alt');
+  await page.mouse.down();
+  expect(await editor.evaluate((element) => element.drag?.mode)).toBe('segment');
+  await page.mouse.move(box.x + before.x, box.y + before.y - 48, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+
+  await expect.poll(() => editor.evaluate((element) => element.points[0].curve ?? 0))
+    .not.toBe(before.curve);
 });
 
 test('monosynth editors omit unlabeled time and boundary markers', async ({ page }) => {
@@ -3135,7 +3203,6 @@ test('note editor moves, trims, velocity-drags and edits playback markers throug
     element.refresh();
     return { visible: element.visibleKeys.length, rowHeight: element.rowHeight, asked: element.noteCount };
   });
-  console.log('U-22 rows', JSON.stringify(rows));
   expect(rows.visible).toBe(rows.asked);
   expect(rows.rowHeight).toBeLessThan(4);
   await editor.evaluate((element) => {

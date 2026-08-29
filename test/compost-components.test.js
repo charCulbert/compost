@@ -329,7 +329,7 @@ test('note editor Cmd/Ctrl inverts snapping and Shift provides precise pointer t
   assert.equal(editor.gestureFactor({ shiftKey: true }), 0.25);
 });
 
-test('envelope curve hover distinguishes point insertion from the segment handle below it', () => {
+test('envelope curve hover distinguishes point insertion from the segment handle around it', () => {
   const editor = Object.create(CompostEnvelopeEditor.prototype);
   Object.assign(editor, {
     duration: 1,
@@ -345,7 +345,8 @@ test('envelope curve hover distinguishes point insertion from the segment handle
 
   assert.equal(editor.curveTargetAtPointer({ clientX: 50, clientY: 50, altKey: false }).kind, 'point');
   assert.equal(editor.curveTargetAtPointer({ clientX: 50, clientY: 56, altKey: false }).kind, 'segment');
-  assert.equal(editor.curveTargetAtPointer({ clientX: 50, clientY: 44, altKey: false }), null);
+  assert.equal(editor.curveTargetAtPointer({ clientX: 50, clientY: 44, altKey: false }).kind, 'segment');
+  assert.equal(editor.curveTargetAtPointer({ clientX: 50, clientY: 50, altKey: true }).kind, 'segment');
 });
 
 test('envelope Cmd+D duplicates the selected range and advances its selection', () => {

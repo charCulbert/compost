@@ -861,7 +861,7 @@ export class CompostTimeline extends HTMLElement {
     this.announce.textContent = this._selected.length ? `${this._selected.length} clip${this._selected.length === 1 ? '' : 's'} selected` : '';
   }
 
-  scrollTo(beat) {
+  scrollToBeat(beat) {
     const width = this.lanesWrap?.clientWidth || 0;
     this.scrollBeat = Math.max(0, Number(beat) || 0);
     if (width) this.paintScroll();

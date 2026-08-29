@@ -20,7 +20,7 @@ const values = {
 const displayValues = { scopeRange: 1, scopeOffset: 0 };
 let pitchEnvelope = [
   { time: 0, value: 12, curve: -.35 },
-  { time: .05, value: -12 },
+  { time: .15, value: -12 },
   { time: 1, value: -12 },
 ];
 const melodicNotes = [
@@ -144,12 +144,20 @@ envelopeEditor.addEventListener('envelope-change', ({ detail }) => {
 
 function syncDrawerLayout() {
   document.body.toggleAttribute('data-midi-drawer-open', midiDrawer.open);
-  document.documentElement.style.setProperty('--midi-drawer-space', midiDrawer.open ? `${midiDrawer.getBoundingClientRect().width}px` : '0px');
+  const occupiesLeftEdge = midiDrawer.open && midiDrawer.getAttribute('edge') === 'left';
+  document.documentElement.style.setProperty('--midi-drawer-space', occupiesLeftEdge ? `${midiDrawer.getBoundingClientRect().width}px` : '0px');
+}
+
+const narrowLayout = matchMedia('(max-width: 44em)');
+function syncDrawerEdge() {
+  midiDrawer.setAttribute('edge', narrowLayout.matches ? 'top' : 'left');
+  requestAnimationFrame(syncDrawerLayout);
 }
 
 midiDrawer.addEventListener('toggle', () => requestAnimationFrame(syncDrawerLayout));
 midiDrawer.addEventListener('drawer-resize', () => requestAnimationFrame(syncDrawerLayout));
-syncDrawerLayout();
+narrowLayout.addEventListener('change', syncDrawerEdge);
+syncDrawerEdge();
 mappingsView.addEventListener('midi-map-mode-change', ({ detail }) => {
   mapToggle.setAttribute('aria-pressed', String(detail.active));
   if (detail.active) midiDrawer.open = true;
@@ -266,7 +274,7 @@ function applyPreset(name) {
     kick: {
       waveShape: 0, transpose: 0, amplitude: .8, offset: 0,
       adsr: [.001, .08, .07, .08],
-      pitch: [[0, 12, -.35], [.05, -12], [1, -12]],
+      pitch: [[0, 12, -.35], [.15, -12], [1, -12]],
       notes: kickNotes,
       rootNote: 45,
     },

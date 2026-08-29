@@ -98,3 +98,24 @@ test('moved public types remain available from their original modules', () => {
   assert.match(noteEditorDeclaration, /export function rulerLabels\(/u);
   assert.match(parameterControllerDeclaration, /export type \{ ParameterKind \} from '\.\/utils\.js'/u);
 });
+
+test('public envelope geometry declarations match their object-range overloads', () => {
+  for (const file of ['src/envelope-model.d.ts', 'src/components/compost-timeline.d.ts']) {
+    const declaration = fs.readFileSync(path.join(root, file), 'utf8');
+    assert.match(declaration,
+      /ValueToY\(value: number, range: \{min: number, max: number\}, height: number, scale\?: 'linear' \| 'gain'\)/u,
+      file);
+    assert.match(declaration,
+      /ValueFromY\(y: number, range: \{min: number, max: number\}, height: number, scale\?: 'linear' \| 'gain'\)/u,
+      file);
+  }
+});
+
+test('timeline preserves Element.scrollTo and exposes beat scrolling explicitly', () => {
+  const source = fs.readFileSync(path.join(root, 'src/components/compost-timeline.js'), 'utf8');
+  const declaration = fs.readFileSync(path.join(root, 'src/components/compost-timeline.d.ts'), 'utf8');
+  assert.doesNotMatch(source, /^  scrollTo\(/mu);
+  assert.match(source, /^  scrollToBeat\(beat\)/mu);
+  assert.match(declaration, /scrollToBeat\(beat: number\): void/u);
+  assert.doesNotMatch(declaration, /scroll to beat 0/u);
+});

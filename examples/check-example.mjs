@@ -27,7 +27,7 @@ const page = await (await browser.newContext({ viewport: { width: 1000, height: 
 const errors = [];
 page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 page.on('pageerror', (error) => errors.push(String(error)));
-await page.goto(`http://127.0.0.1:${port}/examples/${el}/`);
+const response = await page.goto(`http://127.0.0.1:${port}/examples/${el}/`);
 await page.waitForTimeout(500);
 const info = await page.evaluate((el) => [...document.querySelectorAll('section')].map((section) => {
   const element = section.querySelector(el);
@@ -51,3 +51,4 @@ const focused = await page.evaluate(() => {
 await page.screenshot({ path: resolve(here, `${el}.png`), fullPage: true });
 console.log(JSON.stringify({ errors, focused, info }, null, 1));
 await browser.close();
+if (!response?.ok() || errors.length || info.some(({ missing }) => missing)) process.exitCode = 1;

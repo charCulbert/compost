@@ -438,6 +438,10 @@ export class CompostEnvelopeEditor extends HTMLElement {
         && rawTime >= first && rawTime <= last) {
       return { kind: 'segment', time: rawTime };
     }
+    if (event.altKey && Math.abs(distance) <= SEGMENT_HANDLE_DISTANCE
+        && rawTime >= first && rawTime <= last) {
+      return { kind: 'segment', time: rawTime };
+    }
     if (Math.abs(distance) <= POINT_PREVIEW_DISTANCE) {
       const time = this.timeAtPointer(event, this.freeTime(event));
       return {
@@ -447,7 +451,8 @@ export class CompostEnvelopeEditor extends HTMLElement {
           this.min, this.max, this.scale, this.stepped),
       };
     }
-    if (distance > POINT_PREVIEW_DISTANCE && distance <= SEGMENT_HANDLE_DISTANCE
+    if (Math.abs(distance) > POINT_PREVIEW_DISTANCE
+        && Math.abs(distance) <= SEGMENT_HANDLE_DISTANCE
         && rawTime >= first && rawTime <= last) {
       return { kind: 'segment', time: rawTime };
     }

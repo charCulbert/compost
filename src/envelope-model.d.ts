@@ -18,7 +18,9 @@ export interface EnvelopeMoveOptions {
 }
 
 export function envelopeRange(min: number, max: number): {min: number, max: number};
+export function envelopeValueToY(value: number, range: {min: number, max: number}, height: number, scale?: 'linear' | 'gain'): number;
 export function envelopeValueToY(value: number, min: number, max: number, height: number, scale?: 'linear' | 'gain'): number;
+export function envelopeValueFromY(y: number, range: {min: number, max: number}, height: number, scale?: 'linear' | 'gain'): number;
 export function envelopeValueFromY(y: number, min: number, max: number, height: number, scale?: 'linear' | 'gain'): number;
 export function addEnvelopePoint(points: EnvelopeModelPoint[], point: EnvelopeModelPoint, min?: number, max?: number): EnvelopeModelPoint[];
 export function moveEnvelopePoint(points: EnvelopeModelPoint[], index: number, point: EnvelopeModelPoint, min?: number, max?: number): EnvelopeModelPoint[];
