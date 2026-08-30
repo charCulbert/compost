@@ -88,21 +88,28 @@ data and are not represented by either element. Grid resolution stays fixed by
 default; `adaptive-grid` lets zoom choose the effective step in both editors.
 `compost-note-editor` emits `note-quantize` with the selected IDs, grid step
 and whether lengths were requested; the host applies its own strength and swing.
-`compost-timeline` never moves automation with a clip; a host that wants that
-shifts the lane's points when it applies `clip-move`.
+`compost-timeline` never moves automation with arrangement material; a host
+that wants that shifts the lane's points when it applies `time-move`.
 With the timeline's `automation` attribute present, each lane shows its one
 automation curve over dimmed clips when the host has chosen a parameter; lanes
 without one remain ordinary clip lanes. In an automated lane the curve owns
 the whole row and dimmed clips are display-only context. Otherwise a clip's
-name strip selects, moves, opens and renames it while its body selects time;
-right-click asks for its menu anywhere in its box. The host chooses that curve through
+name strip moves the selected arrangement material, opens and renames it while
+its body selects time; right-click asks for its menu anywhere in its box. The
+host chooses that curve through
 `lane.automation` or `setLaneAutomation()`, usually from a menu in the lane
 header it slots in.
+The timeline has one arrangement selection: a beat interval across contiguous
+lanes. Equal edges are a lane-scoped edit cursor. Clicking a clip selects its
+exact bounds; dragging a clip title moves every intersecting material slice and
+emits `time-move-input` followed by `time-move`. The host owns splitting,
+mutation, collision policy and whether automation follows the move.
 `time-duplicate` asks the host to copy the exact selected span, including partial
 clips, immediately after itself. Clip overlap and audio-source trim limits are
 also host policy; the timeline draws the clip state handed back to it.
 Arrow keys move a timeline time selection by one grid step or lane;
-Shift+Arrow grows its time or lane extent instead.
+Shift+Arrow grows its time or lane extent instead. Command/Ctrl+A selects the
+finite occupied arrangement bounds, including empty lanes between them.
 
 ## Talking to a backend
 

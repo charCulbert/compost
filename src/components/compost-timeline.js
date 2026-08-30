@@ -1,12 +1,21 @@
-import { createLongPress, DRAG_SLOP } from '../internal/gestures.js';
-import { installTouchDoubleClick } from '../internal/touch-double-click.js';
-import { clamp, defineElement, numberAttr } from '../utils.js';
-import { rulerLabels } from '../internal/time-ruler.js';
-import { gridStepForView, gridStepOf, snapModeWith, snapTime, timeGridLines, timeSignatureOf } from '../time-grid.js';
-import { extendSelectionRegion } from '../selection-region.js';
-import './compost-envelope-editor.js';
-import { normalizeSelectionRegion } from '../selection-region.js';
-import { effectiveEnvelopeStep, envelopeRangeEdgeValues, flattenEnvelopeRange } from '../envelope-model.js';
+import { createLongPress, DRAG_SLOP } from "../internal/gestures.js";
+import { rulerLabels } from "../internal/time-ruler.js";
+import { installTouchDoubleClick } from "../internal/touch-double-click.js";
+import {
+	gridStepForView,
+	gridStepOf,
+	snapModeWith,
+	snapTime,
+	timeGridLines,
+	timeSignatureOf,
+} from "../time-grid.js";
+import { clamp, defineElement, numberAttr } from "../utils.js";
+import "./compost-envelope-editor.js";
+import {
+	effectiveEnvelopeStep,
+	envelopeRangeEdgeValues,
+	flattenEnvelopeRange,
+} from "../envelope-model.js";
 
 // A numerical guard, not a tick or musical-grid resolution.
 const MIN_CLIP_LENGTH = 1e-9;
@@ -20,8 +29,8 @@ const DEFAULT_THIN_LANE_HEIGHT_EM = 2.5;
 /** How close, in px, a drag has to come to another clip's edge, a locator or the loop to snap to it. */
 const ANCHOR_REACH_PX = 8;
 /** The grab zone at a clip's edge, in em of the element's font, by pointer type. */
-const MOUSE_TRIM_EDGE_EM = .4;
-const TOUCH_TRIM_EDGE_EM = .75;
+const MOUSE_TRIM_EDGE_EM = 0.4;
+const TOUCH_TRIM_EDGE_EM = 0.75;
 
 /** @typedef {{id: string, beat: number, name: string}} TimelineLocator */
 /** @typedef {{start: number, end: number, laneIds: string[]}} TimelineTimeSelection */
@@ -38,51 +47,91 @@ const TOUCH_TRIM_EDGE_EM = .75;
  * state?: 'idle'|'recording'|'overridden'|'playing', value?: number}} AutomationLaneView */
 
 /** @param {number} value @param {number} min @param {number} max */
-const finiteClamp = (value, min, max) => clamp(Number.isFinite(value) ? value : min, min, max);
+const finiteClamp = (value, min, max) =>
+	clamp(Number.isFinite(value) ? value : min, min, max);
 
 /** A timeline grid step, expressed in beats. */
 /** @param {number} beatsPerBar @param {string|number} grid */
 function gridStep(beatsPerBar, grid) {
-  return gridStepOf(beatsPerBar || DEFAULT_BEATS_PER_BAR, grid);
+	return gridStepOf(beatsPerBar || DEFAULT_BEATS_PER_BAR, grid);
 }
 
 /** Snap a beat to the timeline grid, or leave it free when snapping is off. */
 /** @param {number} beat @param {number} beatsPerBar @param {string|number} grid @param {string} snap */
 export function snapBeat(beat, beatsPerBar, grid, snap) {
-  return snapTime(beat, { step: gridStep(beatsPerBar, grid), mode: snap === 'off' ? 'off' : 'grid' });
+	return snapTime(beat, {
+		step: gridStep(beatsPerBar, grid),
+		mode: snap === "off" ? "off" : "grid",
+	});
 }
 
 /** Return stable, finite, beat-sorted locators without duplicate ids. */
 /** @param {TimelineLocator[]} locators */
 export function sortLocators(locators) {
-  const seen = new Set();
-  return (Array.isArray(locators) ? locators : []).map((locator, index) => ({
-    id: String(locator?.id ?? ''),
-    beat: Number(locator?.beat),
-    name: String(locator?.name ?? ''),
-    index,
-  })).filter((locator) => locator.id && Number.isFinite(locator.beat) && locator.beat >= 0 && !seen.has(locator.id) && seen.add(locator.id))
-    .sort((a, b) => a.beat - b.beat || a.index - b.index)
-    .map(({ id, beat, name }) => ({ id, beat, name }));
+	const seen = new Set();
+	return (Array.isArray(locators) ? locators : [])
+		.map((locator, index) => ({
+			id: String(locator?.id ?? ""),
+			beat: Number(locator?.beat),
+			name: String(locator?.name ?? ""),
+			index,
+		}))
+		.filter(
+			(locator) =>
+				locator.id &&
+				Number.isFinite(locator.beat) &&
+				locator.beat >= 0 &&
+				!seen.has(locator.id) &&
+				seen.add(locator.id),
+		)
+		.sort((a, b) => a.beat - b.beat || a.index - b.index)
+		.map(({ id, beat, name }) => ({ id, beat, name }));
 }
 
-/** Clamp and normalise a time selection; equal or absent edges clear it. */
+/** Clamp and normalise a time selection, including a collapsed edit cursor. */
 /** @param {number|null} start @param {number|null} end @param {string[]} laneIds @param {number} [maxBeat] */
-export function normalizeTimeSelection(start, end, laneIds = [], maxBeat = Number.POSITIVE_INFINITY) {
-  if (start === null || start === undefined || end === null || end === undefined) return null;
-  const region = normalizeSelectionRegion(start, end,
-    (Array.isArray(laneIds) ? laneIds : []).map(String), maxBeat);
-  return region ? { start: region.start, end: region.end, laneIds: region.items ?? [] } : null;
+export function normalizeTimeSelection(
+	start,
+	end,
+	laneIds = [],
+	maxBeat = Number.POSITIVE_INFINITY,
+) {
+	if (
+		start === null ||
+		start === undefined ||
+		end === null ||
+		end === undefined
+	)
+		return null;
+	const first = Number(start);
+	const last = Number(end);
+	if (!Number.isFinite(first) || !Number.isFinite(last)) return null;
+	const limit = Number.isFinite(Number(maxBeat))
+		? Math.max(0, Number(maxBeat))
+		: Number.POSITIVE_INFINITY;
+	const lanes = [
+		...new Set(
+			(Array.isArray(laneIds) ? laneIds : []).map(String).filter(Boolean),
+		),
+	];
+	if (!lanes.length) return null;
+	return {
+		start: clamp(Math.min(first, last), 0, limit),
+		end: clamp(Math.max(first, last), 0, limit),
+		laneIds: lanes,
+	};
 }
 
 /** Convert a clip's beat geometry into pixels relative to the visible left edge. */
 /** @param {{start: number, length: number}} clip @param {number} pxPerBeat @param {number} scrollBeat */
 export function clipBox(clip, pxPerBeat, scrollBeat) {
-  const px = Number.isFinite(Number(pxPerBeat)) ? Number(pxPerBeat) : DEFAULT_PX_PER_BEAT;
-  const scroll = Number.isFinite(Number(scrollBeat)) ? Number(scrollBeat) : 0;
-  const start = Number(clip?.start) || 0;
-  const length = Math.max(0, Number(clip?.length) || 0);
-  return { left: (start - scroll) * px, width: Math.max(1, length * px) };
+	const px = Number.isFinite(Number(pxPerBeat))
+		? Number(pxPerBeat)
+		: DEFAULT_PX_PER_BEAT;
+	const scroll = Number.isFinite(Number(scrollBeat)) ? Number(scrollBeat) : 0;
+	const start = Number(clip?.start) || 0;
+	const length = Math.max(0, Number(clip?.length) || 0);
+	return { left: (start - scroll) * px, width: Math.max(1, length * px) };
 }
 
 /** Return the content-wrap positions of a looping clip, in beats from its start. */
@@ -91,134 +140,186 @@ export function clipBox(clip, pxPerBeat, scrollBeat) {
  * time, so a left trim moves the offset (wrapping for a loop, clamping otherwise).
  * @param {TimelineClip} clip @param {number} start @param {number} end */
 export function previewTrimmedClip(clip, start, end) {
-  const duration = Math.max(MIN_CLIP_LENGTH, Number(clip?.duration) || Number(clip?.length) || 1);
-  const delta = start - (Number(clip?.start) || 0);
-  let offset = (Number(clip?.offset) || 0) + delta;
-  if (clip?.loop === false) offset = Math.max(0, Math.min(duration - MIN_CLIP_LENGTH, offset));
-  else offset = ((offset % duration) + duration) % duration;
-  return { ...clip, start, length: Math.max(MIN_CLIP_LENGTH, end - start), offset };
+	const duration = Math.max(
+		MIN_CLIP_LENGTH,
+		Number(clip?.duration) || Number(clip?.length) || 1,
+	);
+	const delta = start - (Number(clip?.start) || 0);
+	let offset = (Number(clip?.offset) || 0) + delta;
+	if (clip?.loop === false)
+		offset = Math.max(0, Math.min(duration - MIN_CLIP_LENGTH, offset));
+	else offset = ((offset % duration) + duration) % duration;
+	return {
+		...clip,
+		start,
+		length: Math.max(MIN_CLIP_LENGTH, end - start),
+		offset,
+	};
 }
 
 export function loopPassLines(clip, pxPerBeat = Number.POSITIVE_INFINITY) {
-  if (clip?.loop === false) return [];
-  const length = Math.max(0, Number(clip?.length) || 0);
-  const duration = Number(clip?.duration) || 0;
-  if (!(length > 0) || !(duration > 0)) return [];
-  const offset = ((Number(clip?.offset) || 0) % duration + duration) % duration;
-  const spacing = duration * (Number.isFinite(Number(pxPerBeat)) ? Math.max(0, Number(pxPerBeat)) : Number.POSITIVE_INFINITY);
-  const stride = spacing > 0 && spacing < 8 ? Math.max(1, Math.ceil(8 / spacing)) : 1;
-  const lines = [];
-  let line = duration - offset;
-  let index = 0;
-  if (line <= MIN_CLIP_LENGTH) line = duration;
-  for (; line < length - MIN_CLIP_LENGTH; line += duration, index += 1) {
-    if (index % stride === 0) lines.push(line);
-  }
-  return lines;
+	if (clip?.loop === false) return [];
+	const length = Math.max(0, Number(clip?.length) || 0);
+	const duration = Number(clip?.duration) || 0;
+	if (!(length > 0) || !(duration > 0)) return [];
+	const offset =
+		(((Number(clip?.offset) || 0) % duration) + duration) % duration;
+	const spacing =
+		duration *
+		(Number.isFinite(Number(pxPerBeat))
+			? Math.max(0, Number(pxPerBeat))
+			: Number.POSITIVE_INFINITY);
+	const stride =
+		spacing > 0 && spacing < 8 ? Math.max(1, Math.ceil(8 / spacing)) : 1;
+	const lines = [];
+	let line = duration - offset;
+	let index = 0;
+	if (line <= MIN_CLIP_LENGTH) line = duration;
+	for (; line < length - MIN_CLIP_LENGTH; line += duration, index += 1) {
+		if (index % stride === 0) lines.push(line);
+	}
+	return lines;
 }
 
 /** Return the visible dash opacity for an optional MIDI velocity. */
 export function clipNoteOpacity(velocity) {
-  if (velocity === null || velocity === undefined || velocity === '') return .55;
-  const value = Number(velocity);
-  return Number.isFinite(value) ? .3 + .6 * finiteClamp(value, 0, 127) / 127 : .55;
+	if (velocity === null || velocity === undefined || velocity === "")
+		return 0.55;
+	const value = Number(velocity);
+	return Number.isFinite(value)
+		? 0.3 + (0.6 * finiteClamp(value, 0, 127)) / 127
+		: 0.55;
 }
 
 /** How many bars fit comfortably between ruler labels at this zoom. */
 /** @param {number} pxPerBeat @param {number} beatsPerBar */
 export function rulerStep(pxPerBeat, beatsPerBar) {
-  const px = Math.max(0, Number(pxPerBeat) || 0);
-  const bar = Math.max(MIN_CLIP_LENGTH, Number(beatsPerBar) || DEFAULT_BEATS_PER_BAR);
-  let bars = 1;
-  while (bars < 8 && px * bar * bars < 80) bars *= 2;
-  return bars;
+	const px = Math.max(0, Number(pxPerBeat) || 0);
+	const bar = Math.max(
+		MIN_CLIP_LENGTH,
+		Number(beatsPerBar) || DEFAULT_BEATS_PER_BAR,
+	);
+	let bars = 1;
+	while (bars < 8 && px * bar * bars < 80) bars *= 2;
+	return bars;
 }
 
-const toEnvelopePoints = (points) => (Array.isArray(points) ? points : []).map(({ beat, ...point }) => ({
-  ...point,
-  time: Number(beat),
-}));
+const toEnvelopePoints = (points) =>
+	(Array.isArray(points) ? points : []).map(({ beat, ...point }) => ({
+		...point,
+		time: Number(beat),
+	}));
 
-const fromEnvelopePoints = (points) => (Array.isArray(points) ? points : []).map(({ time, ...point }) => ({
-  ...point,
-  beat: Number(time),
-}));
+const fromEnvelopePoints = (points) =>
+	(Array.isArray(points) ? points : []).map(({ time, ...point }) => ({
+		...point,
+		beat: Number(time),
+	}));
 
 function cloneAutomation(automation) {
-  return automation && typeof automation === 'object' && !Array.isArray(automation) ? {
-    ...automation,
-    points: Array.isArray(automation.points) ? automation.points.map((point) => ({ ...point })) : [],
-  } : null;
+	return automation &&
+		typeof automation === "object" &&
+		!Array.isArray(automation)
+		? {
+				...automation,
+				points: Array.isArray(automation.points)
+					? automation.points.map((point) => ({ ...point }))
+					: [],
+			}
+		: null;
 }
 
 /** @param {Event} event @param {string} className */
 function pathElement(event, className) {
-  return event.composedPath().find((node) => node instanceof Element
-    && node.classList.contains(className));
+	return event
+		.composedPath()
+		.find(
+			(node) => node instanceof Element && node.classList.contains(className),
+		);
 }
 
 /** @param {string} type @param {object} detail */
 function eventOf(type, detail) {
-  return new CustomEvent(type, { bubbles: true, composed: true, detail });
+	return new CustomEvent(type, { bubbles: true, composed: true, detail });
 }
 
 export class CompostTimeline extends HTMLElement {
-  static get observedAttributes() {
-    return ['label', 'time-signature', 'grid', 'adaptive-grid', 'snap', 'follow', 'loop-enabled', 'disabled', 'readonly', 'lane-height', 'automation', 'draw'];
-  }
+	static get observedAttributes() {
+		return [
+			"label",
+			"time-signature",
+			"grid",
+			"adaptive-grid",
+			"snap",
+			"follow",
+			"loop-enabled",
+			"disabled",
+			"readonly",
+			"lane-height",
+			"automation",
+			"draw",
+		];
+	}
 
-  constructor() {
-    super();
+	constructor() {
+		super();
 
-    this.label = 'Timeline';
-    this.beatsPerBar = DEFAULT_BEATS_PER_BAR;
-    this.beatLength = 1;
-    this.pulseLength = null;
-    this.timeSignature = '4/4';
-    this.grid = '1/4';
-    this.adaptiveGrid = false;
-    this.snapMode = 'grid';
-    this.follow = false;
-    this.fontSize = 16;
-    this.laneHeight = 64;
-    this.thinLaneHeight = 32;
-    this.automation = false;
-    this.draw = false;
-    this._pxPerBeat = DEFAULT_PX_PER_BEAT;
-    this._scrollBeat = 0;
-    this._playhead = 0;
-    this._loopStart = 0;
-    this._loopEnd = DEFAULT_LOOP_END;
-    this._loopEnabled = false;
-    /** @type {TimelineLane[]} */ this._lanes = [];
-    /** @type {Map<string, HTMLElement>} */ this._laneHeaders = new Map();
-    /** @type {Map<string, HTMLElement>} */ this._clipPreviews = new Map();
-    /** @type {string[]} */ this._selected = [];
-    /** @type {string|null} */ this.focusedClip = null;
-    /** @type {string|null} */ this.focusedLane = null;
-    /** @type {string|null} */ this.renaming = null;
-    /** @type {string|null} */ this.renamingLane = null;
-    /** @type {string|null} */ this.renamingLocator = null;
-    this.renameTimer = null;
-    /** @type {TimelineLocator[]} */ this._locators = [];
-    /** @type {TimelineTimeSelection|null} */ this._timeSelection = null;
-    /** @type {HTMLElement|null} */ this.timeSelectionWorld = null;
-    /** @type {any} */ this.drag = null;
-    /** @type {Map<number, {x: number, y: number}>} */ this.pointers = new Map();
-    /** @type {any} */ this.pinch = null;
-    this.viewChangeTimer = null;
-    /** @type {{pxPerBeat: number, scrollBeat: number}[]} */ this.zoomHistory = [];
-    this.longPress = createLongPress();
-    this.resizeObserver = null;
-    // Alt can be pressed or released while a clip is in flight: it decides copy or move
-    this.handleModifierKey = (event) => {
-      if (this.drag?.type !== 'move' || !this.drag.moved) return;
-      this.drag.copy = Boolean(event.altKey);
-      this.paintCopyState();
-    };
+		this.label = "Timeline";
+		this.beatsPerBar = DEFAULT_BEATS_PER_BAR;
+		this.beatLength = 1;
+		this.pulseLength = null;
+		this.timeSignature = "4/4";
+		this.grid = "1/4";
+		this.adaptiveGrid = false;
+		this.snapMode = "grid";
+		this.follow = false;
+		this.fontSize = 16;
+		this.laneHeight = 64;
+		this.thinLaneHeight = 32;
+		this.automation = false;
+		this.draw = false;
+		this._pxPerBeat = DEFAULT_PX_PER_BEAT;
+		this._scrollBeat = 0;
+		this._playhead = 0;
+		this._loopStart = 0;
+		this._loopEnd = DEFAULT_LOOP_END;
+		this._loopEnabled = false;
+		/** @type {TimelineLane[]} */ this._lanes = [];
+		/** @type {Map<string, HTMLElement>} */ this._laneHeaders = new Map();
+		/** @type {Map<string, HTMLElement>} */ this._clipPreviews = new Map();
+		/** @type {string|null} */ this.focusedClip = null;
+		/** @type {string|null} */ this.focusedLane = null;
+		/** @type {string|null} */ this.renaming = null;
+		/** @type {string|null} */ this.renamingLane = null;
+		/** @type {string|null} */ this.renamingLocator = null;
+		this.renameTimer = null;
+		/** @type {TimelineLocator[]} */ this._locators = [];
+		/** @type {TimelineTimeSelection|null} */ this._timeSelection = null;
+		/** @type {HTMLElement|null} */ this.timeSelectionWorld = null;
+		/** @type {any} */ this.drag = null;
+		/** @type {Map<number, {x: number, y: number}>} */ this.pointers =
+			new Map();
+		/** @type {any} */ this.pinch = null;
+		this.viewChangeTimer = null;
+		/** @type {{pxPerBeat: number, scrollBeat: number}[]} */ this.zoomHistory =
+			[];
+		this.longPress = createLongPress();
+		this.resizeObserver = null;
+		// Alt can be pressed or released while material is in flight: it decides copy or move.
+		this.handleModifierKey = (event) => {
+			if (event.key === "Escape" && this.drag?.type === "move") {
+				event.preventDefault();
+				this.cancelActiveDrag();
+				return;
+			}
+			if (this.drag?.type !== "move" || !this.drag.moved) return;
+			this.drag.copy = Boolean(event.altKey);
+			this.paintCopyState();
+			this.emitTimeMove("time-move-input");
+		};
 
-    this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `
+		this.root = this.attachShadow({ mode: "open" });
+		this.root.innerHTML = `
       <style>
         :host {
           --compost-timeline-bg: Canvas;
@@ -262,6 +363,7 @@ export class CompostTimeline extends HTMLElement {
         .ruler-locator-name { display: inline-block; min-width: 1px; }
         .ruler-locator-editor { box-sizing: border-box; width: 7em; border: 1px solid currentColor; outline: 2px solid currentColor; outline-offset: -2px; background: var(--compost-timeline-bg); color: currentColor; font: inherit; padding: 0 .125em; }
         .ruler-time-selection { position: absolute; display: none; z-index: 2; top: 1em; height: 1.1em; background: color-mix(in srgb, var(--compost-timeline-select) 10%, transparent); box-shadow: inset 1px 0 0 var(--compost-timeline-select), inset -1px 0 0 var(--compost-timeline-select); pointer-events: none; }
+        .ruler-time-selection[data-cursor] { width: 2px !important; background: var(--compost-timeline-select); box-shadow: none; }
         .ruler-band { position: absolute; top: 2.35em; height: .75em; z-index: 2; box-sizing: border-box; background: var(--compost-timeline-select); box-shadow: inset 0 0 0 1px currentColor; color: AccentColorText; cursor: grab; }
         :host([data-loop-drag]) .ruler-band, :host([data-loop-drag]) .ruler-handle { cursor: grabbing; }
         .ruler-band[hidden], .ruler-handle[hidden], .timeline-line[hidden] { display: none; }
@@ -289,6 +391,7 @@ export class CompostTimeline extends HTMLElement {
         .lanes-world { position: relative; min-height: 100%; }
         .time-selection-world { position: absolute; inset: 0 auto auto 0; z-index: 3; pointer-events: none; }
         .time-selection { position: absolute; background: color-mix(in srgb, CanvasText 12%, transparent); box-shadow: inset 1px 0 0 var(--compost-timeline-select), inset -1px 0 0 var(--compost-timeline-select); pointer-events: none; }
+        .time-selection[data-cursor] { width: 2px !important; background: var(--compost-timeline-select); box-shadow: none; }
         .grid-world { position: absolute; inset: 0 auto auto 0; z-index: 1; pointer-events: none; }
         .grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-timeline-line); }
         .grid-line.beat { background: var(--compost-timeline-beat-line); }
@@ -305,7 +408,7 @@ export class CompostTimeline extends HTMLElement {
         .lane-base[data-state="overridden"] .automation-editor::part(line) { stroke-dasharray: 3 3; }
         .lane-base[data-state="recording"] .lane-automation { color: var(--compost-timeline-select); }
         .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid var(--compost-timeline-text); border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: var(--lane-ink, AccentColorText); cursor: default; touch-action: none; }
-        .clip[data-selected], .clip:focus-visible { z-index: 3; border-width: 2px; border-color: CanvasText; outline: none; }
+        .clip:focus-visible { z-index: 3; border-width: 2px; border-color: CanvasText; outline: none; }
         .clip[data-state="queued"]::after { content: "▷"; position: absolute; right: .25em; bottom: .1em; z-index: 3; font-size: .8em; line-height: 1; }
         .clip[data-state="recording"] { box-shadow: inset -.15em 0 var(--compost-timeline-select); }
         .clip[data-muted], .clip[data-state="muted"] { background: transparent; color: var(--clip-color, var(--compost-timeline-select)); }
@@ -334,2531 +437,3699 @@ export class CompostTimeline extends HTMLElement {
           <div class="ruler" part="ruler-content"><div class="ruler-world" part="ruler-grid"></div><div class="ruler-time-selection" part="time-selection"></div><div class="ruler-band" part="loop"></div><div class="ruler-handle start" part="loop-handle loop-start" role="slider" tabindex="0" aria-label="Loop start"></div><div class="ruler-handle end" part="loop-handle loop-end" role="slider" tabindex="0" aria-label="Loop end"></div><div class="ruler-playhead" part="playhead"></div></div>
         </div>
         <div class="header-wrap" part="headers"><div class="headers" part="header-list" role="list"></div><div class="lane-drop-line" part="lane-drop-line"></div></div>
-        <div class="lanes-wrap" part="lanes"><div class="lanes-world" part="lane-list" role="list"></div><div class="timeline-line loop loop-start-line" part="loop-start-line"></div><div class="timeline-line loop loop-end-line" part="loop-end-line"></div><div class="playhead" part="playhead"></div></div>
+        <div class="lanes-wrap" part="lanes"><div class="lanes-world" part="lane-list" role="list"></div><div class="timeline-line loop loop-start-line" part="loop-start-line"></div><div class="timeline-line loop loop-end-line" part="loop-end-line"></div><div class="timeline-line playhead" part="playhead"></div></div>
       </div>
       <div class="announce" aria-live="polite"></div>`;
 
-    /** @param {string} selector @returns {HTMLElement} */
-    const part = (selector) => /** @type {HTMLElement} */ (this.root.querySelector(selector));
-    this.frame = part('.frame');
-    this.rulerWrap = part('.ruler-wrap');
-    this.ruler = part('.ruler');
-    this.rulerWorld = part('.ruler-world');
-    this.rulerTimeSelection = part('.ruler-time-selection');
-    this.rulerBand = part('.ruler-band');
-    this.rulerStart = part('.ruler-handle.start');
-    this.rulerEnd = part('.ruler-handle.end');
-    this.rulerPlayhead = part('.ruler-playhead');
-    this.headerWrap = part('.header-wrap');
-    this.headers = part('.headers');
-    this.laneDropLine = part('.lane-drop-line');
-    this.lanesWrap = part('.lanes-wrap');
-    this.lanesWorld = part('.lanes-world');
-    this.loopStartLine = part('.loop-start-line');
-    this.loopEndLine = part('.loop-end-line');
-    this.playheadElement = part('.playhead');
-    this.announce = part('.announce');
-
-    this.addEventListener('pointerdown', (event) => this.startPointer(event));
-    this.addEventListener('pointermove', (event) => this.movePointer(event));
-    this.addEventListener('pointerup', (event) => this.endPointer(event));
-    this.addEventListener('pointercancel', (event) => this.cancelPointer(event));
-    // A clip's title strip owns object gestures. In automation view it is found
-    // geometrically because the envelope owns the pointer surface beneath it.
-    this.addEventListener('pointerdown', (event) => this.startClipStrip(event), true);
-    this.addEventListener('dblclick', (event) => {
-      const found = this.hasAttribute('disabled') ? null : this.clipStripFromEvent(event);
-      if (!found) return;
-      clearTimeout(this.renameTimer);
-      this.renameTimer = null;
-      event.__compostTimelineHandled = true;
-      event.stopPropagation();
-      event.preventDefault();
-      this.dispatchEvent(eventOf('clip-open', { id: found.clip.id, altKey: event.altKey, clientX: event.clientX, clientY: event.clientY }));
-    }, true);
-    this.addEventListener('contextmenu', (event) => {
-      if (pathElement(event, 'lane-automation')) return;
-      const found = this.hasAttribute('disabled') ? null : this.clipAtPoint(event);
-      if (!found) return;
-      event.__compostTimelineHandled = true;
-      event.stopPropagation();
-      event.preventDefault();
-      if (!this._selected.includes(found.clip.id)) this.selectOne(found.clip.id);
-      this.dispatchEvent(eventOf('clip-context', { id: found.clip.id, clientX: event.clientX, clientY: event.clientY }));
-    }, true);
-    this.addEventListener('dblclick', (event) => {
-      if (event.__compostTimelineHandled) return;
-      event.__compostTimelineHandled = true;
-      this.handleDoubleClick(event);
-    });
-    installTouchDoubleClick(this);
-    this.addEventListener('contextmenu', (event) => {
-      if (event.__compostTimelineHandled) return;
-      event.__compostTimelineHandled = true;
-      this.handleContextMenu(event);
-    });
-    this.addEventListener('keydown', (event) => this.handleKey(event));
-    // Some browsers keep secondary mouse events inside a shadow root. Relay
-    // those events at the root while marking composed events so they do not
-    // run twice on the host listener above.
-    for (const [type, method] of [['dblclick', 'handleDoubleClick'], ['contextmenu', 'handleContextMenu']]) {
-      this.root.addEventListener(type, (event) => {
-        if (event.__compostTimelineHandled) return;
-        event.__compostTimelineHandled = true;
-        this[method](event);
-      });
-    }
-    this.lanesWrap.addEventListener('wheel', (event) => this.handleWheel(event), { passive: false });
-    this.rulerWrap.addEventListener('wheel', (event) => this.handleWheel(event), { passive: false });
-    this.lanesWrap.addEventListener('scroll', () => this.paintLaneScroll());
-    for (const [node, kind] of [[this.rulerStart, 'start'], [this.rulerEnd, 'end'], [this.rulerBand, 'move']]) {
-      node.addEventListener('pointerdown', (event) => this.startLoopDrag(event, kind));
-      node.addEventListener('pointermove', (event) => this.moveLoopDrag(event));
-      node.addEventListener('pointerup', (event) => this.endLoopDrag(event));
-      node.addEventListener('pointercancel', (event) => this.cancelLoopDrag(event));
-    }
-    this.resizeObserver = typeof ResizeObserver === 'function'
-      ? new ResizeObserver(() => this.render()) : null;
-  }
-
-  connectedCallback() {
-    if (!this.hasAttribute('tabindex')) this.tabIndex = 0;
-    this.setAttribute('role', 'region');
-    this.syncAttributes();
-    this.render();
-    this.resizeObserver?.observe(this);
-    window.addEventListener('keydown', this.handleModifierKey, true);
-    window.addEventListener('keyup', this.handleModifierKey, true);
-  }
-
-  disconnectedCallback() {
-    window.removeEventListener('keydown', this.handleModifierKey, true);
-    window.removeEventListener('keyup', this.handleModifierKey, true);
-    this.resizeObserver?.disconnect();
-    this.cancelActiveDrag({ clearPointers: true });
-    this.longPress.cancel();
-    clearTimeout(this.renameTimer);
-    this.renameTimer = null;
-    clearTimeout(this.viewChangeTimer);
-    this.viewChangeTimer = null;
-  }
-
-  attributeChangedCallback() {
-    if (!this.isConnected) return;
-    this.syncAttributes();
-    this.render();
-  }
-
-  syncAttributes() {
-    this.label = this.getAttribute('label') || this.label;
-    const meter = timeSignatureOf(this.getAttribute('time-signature'));
-    this.timeSignature = meter.text;
-    this.beatsPerBar = meter.barLength;
-    this.beatLength = meter.beatLength;
-    this.pulseLength = meter.pulseLength;
-    this.grid = this.getAttribute('grid')?.trim() || this.grid;
-    this.adaptiveGrid = this.hasAttribute('adaptive-grid');
-    this.snapMode = this.getAttribute('snap') === 'off' ? 'off' : 'grid';
-    this.follow = this.hasAttribute('follow');
-    this.automation = this.hasAttribute('automation');
-    this.draw = this.hasAttribute('draw');
-    const style = getComputedStyle(this);
-    const fontSize = Number.parseFloat(style.fontSize) || 16;
-    this.fontSize = fontSize;
-    const rawLaneHeight = style.getPropertyValue('--compost-timeline-lane-height').trim();
-    const parsedLaneHeight = Number.parseFloat(rawLaneHeight);
-    const cssLaneHeight = rawLaneHeight.endsWith('em') ? parsedLaneHeight * fontSize
-      : rawLaneHeight.endsWith('rem') ? parsedLaneHeight * (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
-        : parsedLaneHeight;
-    const defaultLaneHeight = fontSize * DEFAULT_LANE_HEIGHT_EM;
-    this.laneHeight = Math.max(24, this.hasAttribute('lane-height')
-      ? numberAttr(this, 'lane-height', this.laneHeight)
-      : (Number.isFinite(cssLaneHeight) ? cssLaneHeight : defaultLaneHeight));
-    const rawThinHeight = style.getPropertyValue('--compost-timeline-thin-lane-height').trim();
-    const parsedThinHeight = Number.parseFloat(rawThinHeight);
-    const cssThinHeight = rawThinHeight.endsWith('em') ? parsedThinHeight * fontSize
-      : rawThinHeight.endsWith('rem') ? parsedThinHeight * (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
-        : parsedThinHeight;
-    this.thinLaneHeight = Math.max(24, Number.isFinite(cssThinHeight)
-      ? cssThinHeight : fontSize * DEFAULT_THIN_LANE_HEIGHT_EM);
-    this._loopEnabled = this.hasAttribute('loop-enabled');
-    this.setAttribute('aria-label', this.label);
-    this.style.setProperty('--compost-timeline-row-height', `${this.laneHeight}px`);
-  }
-
-  get lanes() {
-    return this._lanes.map((lane) => ({
-      ...lane,
-      automation: cloneAutomation(lane.automation),
-      clips: lane.clips.map((clip) => ({ ...clip, notes: clip.notes?.map((note) => ({ ...note })) })),
-    }));
-  }
-
-  /** Replace all lanes and clips; this never emits a model intent. */
-  /** @param {TimelineLane[]} lanes */
-  setLanes(lanes) {
-    this._lanes = Array.isArray(lanes) ? lanes.map((lane) => ({
-      ...lane,
-      compact: Boolean(lane.compact),
-      picked: Boolean(lane.picked),
-      dimmed: Boolean(lane.dimmed),
-      automation: cloneAutomation(lane.automation),
-      clips: Array.isArray(lane.clips) ? lane.clips.map((clip) => ({ ...clip, notes: clip.notes?.map((note) => ({ ...note })) })) : [],
-    })) : [];
-    const ids = new Set(this._lanes.flatMap((lane) => lane.clips.map((clip) => clip.id)));
-    for (const [id, preview] of this._clipPreviews) {
-      if (ids.has(id)) continue;
-      if (preview.parentElement === this) preview.remove();
-      this._clipPreviews.delete(id);
-    }
-    this._selected = this._selected.filter((id) => ids.has(id));
-    if (this._timeSelection) {
-      this._timeSelection.laneIds = this._timeSelection.laneIds.filter((id) => this._lanes.some((lane) => lane.id === id));
-      if (!this._timeSelection.laneIds.length) this._timeSelection = null;
-    }
-    if (this.focusedClip && !ids.has(this.focusedClip)) this.focusedClip = null;
-    this.render();
-  }
-
-  /** Attach caller-owned lane headers through native slots. Compost owns the
-   * aligned wrapper; the caller owns every control and policy inside it.
-   * @param {Map<string, HTMLElement>|Record<string, HTMLElement>} headers */
-  setLaneHeaders(headers) {
-    const entries = headers instanceof Map ? [...headers.entries()] : Object.entries(headers || {});
-    const next = new Map(entries.filter(([laneId, element]) => String(laneId) && element instanceof HTMLElement)
-      .map(([laneId, element]) => [String(laneId), element]));
-    for (const [laneId, element] of this._laneHeaders) {
-      if (next.get(laneId) !== element && element.parentElement === this) element.remove();
-    }
-    this._laneHeaders = next;
-    for (const [laneId, element] of next) this.attachLaneHeader(laneId, element);
-    this.render();
-  }
-
-  /** Replace one caller-owned lane header. Passing null restores the generic fallback.
-   * @param {string} laneId @param {HTMLElement|null} element */
-  setLaneHeader(laneId, element) {
-    const id = String(laneId);
-    const previous = this._laneHeaders.get(id);
-    if (previous?.parentElement === this) previous.remove();
-    if (element instanceof HTMLElement) {
-      this._laneHeaders.set(id, element);
-      this.attachLaneHeader(id, element);
-    } else this._laneHeaders.delete(id);
-    this.render();
-  }
-
-  /** @param {string} laneId @param {HTMLElement} element */
-  attachLaneHeader(laneId, element) {
-    element.slot = `lane-header-${encodeURIComponent(laneId)}`;
-    element.dataset.timelineLaneId = laneId;
-    if (element.parentElement !== this) this.append(element);
-  }
-
-  /** Attach caller-owned clip preview content through a native slot. Passing
-   * null restores the built-in structured-note preview.
-   * @param {string} clipId @param {HTMLElement|null} element */
-  setClipPreview(clipId, element) {
-    const id = String(clipId);
-    const previous = this._clipPreviews.get(id);
-    if (previous?.parentElement === this) previous.remove();
-    if (element instanceof HTMLElement) {
-      element.slot = `clip-preview-${encodeURIComponent(id)}`;
-      element.dataset.timelineClipId = id;
-      this._clipPreviews.set(id, element);
-      if (element.parentElement !== this) this.append(element);
-    } else this._clipPreviews.delete(id);
-    const found = this.findClip(id);
-    if (found) {
-      const clip = this.lanesWorld.querySelector(`.clip[data-id="${CSS.escape(id)}"]`);
-      if (clip instanceof HTMLElement) this.paintClipContent(clip, found.clip);
-    }
-  }
-
-  get locators() {
-    return this._locators.map((locator) => ({ ...locator }));
-  }
-
-  /** Replace the ruler locators; the host remains the source of truth. */
-  /** @param {TimelineLocator[]} locators */
-  setLocators(locators) {
-    this._locators = sortLocators(locators);
-    if (this.renamingLocator && !this._locators.some((locator) => locator.id === this.renamingLocator)) this.renamingLocator = null;
-    this.render();
-  }
-
-  get timeSelection() {
-    return this._timeSelection ? { ...this._timeSelection, laneIds: [...this._timeSelection.laneIds] } : null;
-  }
-
-  /** Restore or clear the host-owned cross-lane time selection. */
-  /** @param {number|null} start @param {number|null} end @param {string[]} [laneIds] */
-  setTimeSelection(start, end, laneIds) {
-    const ids = laneIds === undefined ? this._lanes.map((lane) => lane.id) : laneIds;
-    this._timeSelection = normalizeTimeSelection(start, end, ids, this.worldEnd());
-    this.paintTimeSelection();
-  }
-
-  /** Replace one lane's clips without changing the lane order. */
-  /** @param {string} laneId @param {TimelineClip[]} clips */
-  setLaneClips(laneId, clips) {
-    const lane = this._lanes.find((entry) => entry.id === laneId);
-    if (!lane) return;
-    lane.clips = Array.isArray(clips) ? clips.map((clip) => ({ ...clip })) : [];
-    this.render();
-  }
-
-  /** Update generic lane emphasis without rebuilding its clips. */
-  /** @param {string} laneId @param {boolean} dimmed */
-  setLaneDimmed(laneId, dimmed) {
-    const lane = this._lanes.find((entry) => entry.id === laneId);
-    if (!lane) return;
-    lane.dimmed = Boolean(dimmed);
-    const body = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(laneId)}"]`);
-    body?.toggleAttribute('data-dimmed', lane.dimmed);
-  }
-
-  /** Update the automation curve shown for one lane. */
-  /** @param {string} laneId @param {AutomationLaneView|null} automation */
-  setLaneAutomation(laneId, automation) {
-    const lane = this._lanes.find((entry) => entry.id === laneId);
-    if (!lane) return;
-    lane.automation = cloneAutomation(automation);
-    const previousWidth = Number.parseFloat(this.lanesWorld.style.width);
-    const previousEnd = Number.isFinite(previousWidth) && this._pxPerBeat > 0 ? previousWidth / this._pxPerBeat : null;
-    const end = this.worldEnd();
-    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`);
-    const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(laneId)}"]`);
-    const shown = this.automationFor(lane);
-    if (header instanceof HTMLElement) {
-      header.querySelector('.lane-automation-label')?.remove();
-      if (shown) {
-        const label = this.renderAutomationLabel(lane);
-        const fallback = header.querySelector('.lane-header-fallback');
-        if (fallback) fallback.append(label);
-        else header.insertBefore(label, header.querySelector('.lane-resize'));
-      }
-    }
-    if (row instanceof HTMLElement) {
-      row.toggleAttribute('data-automation-view', Boolean(shown));
-      const base = row.querySelector('.lane-base');
-      if (base instanceof HTMLElement) {
-        base.querySelector('.lane-automation')?.remove();
-        delete base.dataset.state;
-        if (shown) {
-          base.dataset.state = shown.state || 'idle';
-          base.append(this.renderLaneAutomation(lane, shown, end));
-        }
-      }
-    }
-    const grid = this.lanesWorld.querySelector('.grid-world');
-    if (previousEnd === null || Math.abs(previousEnd - end) > MIN_CLIP_LENGTH) {
-      this.rulerWorld.style.width = `${end * this._pxPerBeat}px`;
-      this.lanesWorld.style.width = `${end * this._pxPerBeat}px`;
-      this.rulerWorld.replaceChildren(this.rulerGrid(end));
-      this.renderRulerLabels(end);
-      if (grid instanceof HTMLElement) {
-        grid.style.width = `${end * this._pxPerBeat}px`;
-        grid.replaceChildren(this.rulerGrid(end, true));
-      }
-    }
-    this.paintSelection();
-    this.paintTimeSelection();
-  }
-
-  get playhead() { return this._playhead; }
-
-  /** Move only the playhead; clip geometry is not rebuilt. An unchanged beat
-    * never re-anchors the view, so hosts that tick setPlayhead while paused
-    * cannot undo the user's scroll. */
-  /** @param {number} beat */
-  setPlayhead(beat) {
-    const next = Math.max(0, Number(beat) || 0);
-    const moved = next !== this._playhead;
-    this._playhead = next;
-    this.paintPlayhead();
-    if (moved && this.follow) this.keepPlayheadVisible();
-  }
-
-  get loopStart() { return this._loopStart; }
-  get loopEnd() { return this._loopEnd; }
-
-  /** @param {number} start @param {number} end @param {boolean} enabled @param {boolean} [emit] */
-  setLoop(start, end, enabled, emit = false) {
-    this._loopStart = Math.max(0, Number(start) || 0);
-    this._loopEnd = Math.max(this._loopStart + MIN_CLIP_LENGTH, Number(end) || this._loopStart + 1);
-    this._loopEnabled = Boolean(enabled);
-    this.toggleAttribute('loop-enabled', this._loopEnabled);
-    this.paintLoop();
-    if (emit) this.dispatchEvent(eventOf('loop-change', {
-      start: this._loopStart, end: this._loopEnd, enabled: this._loopEnabled,
-    }));
-  }
-
-  get pxPerBeat() { return this._pxPerBeat; }
-  set pxPerBeat(value) {
-    const next = finiteClamp(Number(value), MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
-    if (next === this._pxPerBeat) return;
-    this._pxPerBeat = next;
-    this.render();
-    this.scheduleViewChange();
-  }
-
-  get scrollBeat() { return this._scrollBeat; }
-  set scrollBeat(value) {
-    const next = Math.max(0, Number(value) || 0);
-    if (next === this._scrollBeat) return;
-    this._scrollBeat = next;
-    this.paintScroll();
-    this.scheduleViewChange();
-  }
-
-  get selected() { return [...this._selected]; }
-  set selected(value) {
-    const ids = Array.isArray(value) ? value.map(String) : [];
-    this._selected = [...new Set(ids)];
-    this.paintSelection();
-    this.announce.textContent = this._selected.length ? `${this._selected.length} clip${this._selected.length === 1 ? '' : 's'} selected` : '';
-  }
-
-  scrollToBeat(beat) {
-    const width = this.lanesWrap?.clientWidth || 0;
-    this.scrollBeat = Math.max(0, Number(beat) || 0);
-    if (width) this.paintScroll();
-  }
-
-  zoomToFit(endBeat) {
-    const width = Math.max(1, this.lanesWrap.clientWidth || this.clientWidth || 1);
-    const end = Math.max(MIN_CLIP_LENGTH, Number(endBeat) || 1);
-    this._pxPerBeat = finiteClamp(width / end, MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
-    this._scrollBeat = 0;
-    this.render();
-    this.scheduleViewChange();
-  }
-
-  /** Convert a viewport x coordinate into an unsnapped timeline beat. */
-  /** @param {number} clientX */
-  beatAtPoint(clientX) {
-    const rect = this.rulerWrap.getBoundingClientRect();
-    return Math.max(0, this._scrollBeat + (Number(clientX) - rect.left) / this._pxPerBeat);
-  }
-
-  /** @param {TimelineLane} lane */
-  automationFor(lane) {
-    return this.automation ? lane?.automation ?? null : null;
-  }
-
-  /** @param {TimelineLane} lane */
-  laneRowHeightFor(lane) {
-    const custom = Number(lane?.height);
-    if (Number.isFinite(custom) && custom > 0) return Math.max(24, custom);
-    return lane?.compact ? this.thinLaneHeight : this.laneHeight;
-  }
-
-  /** @param {TimelineLane} lane */
-  laneHeightFor(lane) {
-    return this.laneRowHeightFor(lane);
-  }
-
-  totalLaneHeight() {
-    return Math.max(1, this._lanes.reduce((height, lane) => height + this.laneHeightFor(lane), 0));
-  }
-
-  /** Return the lane id under a viewport y coordinate. */
-  /** @param {number} clientY */
-  laneAtPoint(clientY) {
-    const rect = this.lanesWrap.getBoundingClientRect();
-    const y = Number(clientY) - rect.top + this.lanesWrap.scrollTop;
-    let offset = 0;
-    for (const lane of this._lanes) {
-      const height = this.laneHeightFor(lane);
-      if (y >= offset && y < offset + height) return lane.id;
-      offset += height;
-    }
-    return null;
-  }
-
-  /** Return the nearest lane when a cross-lane drag leaves the visible stack. */
-  /** @param {number} clientY */
-  laneAtOrNearestPoint(clientY) {
-    if (!this._lanes.length) return null;
-    const rect = this.lanesWrap.getBoundingClientRect();
-    const y = Number(clientY) - rect.top + this.lanesWrap.scrollTop;
-    if (y <= 0) return this._lanes[0].id;
-    let offset = 0;
-    for (const lane of this._lanes) {
-      const height = this.laneHeightFor(lane);
-      if (y < offset + height) return lane.id;
-      offset += height;
-    }
-    return this._lanes.at(-1).id;
-  }
-
-  /** Readonly renders and navigates but emits no mutating intent (README, Events). */
-  get readonly() { return this.hasAttribute('readonly'); }
-  set readonly(value) { this.toggleAttribute('readonly', Boolean(value)); }
-  get disabled() { return this.hasAttribute('disabled'); }
-  set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
-
-  beginRename(clipId) {
-    if (this.hasAttribute('disabled') || this.readonly || !this.findClip(clipId)) return;
-    this.renaming = String(clipId);
-    this.render();
-  }
-
-  beginLaneRename(laneId) {
-    const id = String(laneId);
-    if (this.hasAttribute('disabled') || this.readonly || !this._lanes.some((lane) => lane.id === id)) return;
-    this.renamingLane = id;
-    this.focusedLane = id;
-    this.render();
-  }
-
-  focusClip(clipId) {
-    const id = String(clipId);
-    this.focusedClip = id;
-    this.focusedLane = null;
-    const element = this.clipElements().find((node) => node.dataset.id === id);
-    if (element) {
-      element.focus({ preventScroll: true });
-      this.ensureClipVisible(id);
-    }
-  }
-
-  // ---- Rendering --------------------------------------------------------------
-
-  /** @returns {{lane: TimelineLane, clip: TimelineClip}|null} */
-  findClip(id) {
-    for (const lane of this._lanes) {
-      const clip = lane.clips.find((entry) => entry.id === id);
-      if (clip) return { lane, clip };
-    }
-    return null;
-  }
-
-  clipElements() {
-    return /** @type {HTMLElement[]} */ ([...this.lanesWorld.querySelectorAll('.clip:not([data-ghost])')]);
-  }
-
-  pointForClip(id) {
-    const element = this.clipElements().find((node) => node.dataset.id === id);
-    if (!element) return { clientX: 0, clientY: 0 };
-    const rect = element.getBoundingClientRect();
-    return { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
-  }
-
-  pointForLaneHeader(id) {
-    const element = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(id)}"]`);
-    if (!element) return { clientX: 0, clientY: 0 };
-    const rect = element.getBoundingClientRect();
-    return { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
-  }
-
-  laneHeaderFromEvent(event) {
-    const header = pathElement(event, 'lane-header');
-    if (!(header instanceof HTMLElement)) return null;
-    const lane = this._lanes.find((entry) => entry.id === header.dataset.laneId);
-    return lane ? { header, lane } : null;
-  }
-
-  locatorFromEvent(event) {
-    const element = pathElement(event, 'ruler-locator');
-    if (!(element instanceof HTMLElement)) return null;
-    const locator = this._locators.find((entry) => entry.id === element.dataset.locatorId);
-    return locator ? { element, locator } : null;
-  }
-
-  rulerRowAtPoint(clientY) {
-    const rect = this.rulerWrap.getBoundingClientRect();
-    const fontSize = Number.parseFloat(getComputedStyle(this).fontSize) || 16;
-    const y = Number(clientY) - rect.top;
-    if (y < fontSize) return 1;
-    if (y < fontSize * 2.35) return 2;
-    return 3;
-  }
-
-  laneIdsForSpan(startLaneId, endLaneId) {
-    const first = this._lanes.findIndex((lane) => lane.id === startLaneId);
-    const last = this._lanes.findIndex((lane) => lane.id === endLaneId);
-    if (first < 0) return [];
-    const end = last < 0 ? first : last;
-    const low = Math.min(first, end);
-    const high = Math.max(first, end);
-    return this._lanes.slice(low, high + 1).map((lane) => lane.id);
-  }
-
-  clipsInsideTimeSelection(selection) {
-    if (!selection) return [];
-    const laneIds = new Set(selection.laneIds);
-    return this._lanes.flatMap((lane) => {
-      if (!laneIds.has(lane.id)) return [];
-      return lane.clips.filter((clip) => {
-        const start = Number(clip.start) || 0;
-        const end = start + (Number(clip.length) || 0);
-        return start >= selection.start - MIN_CLIP_LENGTH && end <= selection.end + MIN_CLIP_LENGTH;
-      }).map((clip) => clip.id);
-    });
-  }
-
-  /** Paint the time selection; a gesture passes its preview instead of the host's. */
-  /** @param {TimelineTimeSelection|null} [selection] */
-  paintTimeSelection(selection = this._timeSelection) {
-    if (!(this.rulerTimeSelection instanceof HTMLElement)) return;
-    for (const old of this.lanesWorld.querySelectorAll('.time-selection-world')) old.remove();
-    for (const surface of this.lanesWorld.querySelectorAll('.lane-automation')) {
-      const editor = surface.querySelector('compost-envelope-editor');
-      if (!editor) continue;
-      if (selection?.laneIds.includes(String(surface.dataset.laneId))) editor.setSelection(selection.start, selection.end);
-      else editor.setSelection(undefined, undefined);
-    }
-    if (!selection) {
-      this.rulerTimeSelection.style.display = 'none';
-      this.timeSelectionWorld = null;
-      return;
-    }
-    const left = (selection.start - this._scrollBeat) * this._pxPerBeat;
-    const width = Math.max(1, (selection.end - selection.start) * this._pxPerBeat);
-    this.rulerTimeSelection.style.left = `${left}px`;
-    this.rulerTimeSelection.style.width = `${width}px`;
-    this.rulerTimeSelection.style.display = 'block';
-    const world = document.createElement('div');
-    world.className = 'time-selection-world';
-    world.style.width = `${this.lanesWorld.clientWidth || this.worldEnd() * this._pxPerBeat}px`;
-    world.style.height = `${this.totalLaneHeight()}px`;
-    const ids = new Set(selection.laneIds);
-    let top = 0;
-    for (const lane of this._lanes) {
-      const height = this.laneHeightFor(lane);
-      if (ids.has(lane.id)) {
-        const overlay = document.createElement('div');
-        overlay.className = 'time-selection';
-        overlay.part.add('time-selection');
-        overlay.dataset.laneId = lane.id;
-        overlay.style.left = `${selection.start * this._pxPerBeat}px`;
-        overlay.style.top = `${top}px`;
-        overlay.style.width = `${width}px`;
-        overlay.style.height = `${height}px`;
-        world.append(overlay);
-      }
-      top += height;
-    }
-    this.lanesWorld.append(world);
-    this.timeSelectionWorld = world;
-  }
-
-  laneIndexFromHeaderPoint(clientY) {
-    const headers = [...this.headers.querySelectorAll('.lane-header')];
-    const hit = headers.find((header) => {
-      const rect = header.getBoundingClientRect();
-      return clientY >= rect.top && clientY <= rect.bottom;
-    });
-    if (!hit) return clientY < (headers[0]?.getBoundingClientRect().top ?? 0) ? 0 : this._lanes.length;
-    const index = this._lanes.findIndex((lane) => lane.id === hit.dataset.laneId);
-    const rect = hit.getBoundingClientRect();
-    return index + (clientY > rect.top + rect.height / 2 ? 1 : 0);
-  }
-
-  paintLaneDropLine(toIndex) {
-    if (!(this.laneDropLine instanceof HTMLElement)) return;
-    const headers = [...this.headers.querySelectorAll('.lane-header')];
-    const target = headers[Math.max(0, Math.min(headers.length - 1, toIndex))];
-    // the line is absolutely positioned in the header-wrap, whose top stays put
-    // while the headers themselves translate with the lane scroll
-    const wrapRect = this.headerWrap.getBoundingClientRect();
-    let top = 0;
-    if (target instanceof HTMLElement) {
-      const rect = target.getBoundingClientRect();
-      top = (toIndex >= headers.length ? rect.bottom : rect.top) - wrapRect.top;
-    } else if (headers.length) {
-      const rect = headers.at(-1).getBoundingClientRect();
-      top = rect.bottom - wrapRect.top;
-    }
-    this.laneDropLine.style.top = `${top}px`;
-    this.laneDropLine.style.display = 'block';
-  }
-
-  clearLaneDropLine() {
-    if (this.laneDropLine instanceof HTMLElement) this.laneDropLine.style.display = 'none';
-  }
-
-  worldEnd() {
-    const last = this._lanes.reduce((end, lane) => {
-      const clipEnd = lane.clips.reduce((clipMax, clip) => Math.max(clipMax, (Number(clip.start) || 0) + (Number(clip.length) || 0)), 0);
-      const automationEnd = lane.automation?.points?.reduce(
-        (pointMax, point) => Math.max(pointMax, Number(point.beat) || 0), 0) || 0;
-      return Math.max(end, clipEnd, automationEnd);
-    }, 0);
-    const locatorEnd = this._locators.at(-1)?.beat || 0;
-    // The world reaches one viewport past the view plus a margin, so follow
-    // scrolling over fresh ground has room before the next grow.
-    const visible = this._scrollBeat + Math.max(16, (this.lanesWrap.clientWidth || 320) / this._pxPerBeat) + 16;
-    return Math.max(16, last, locatorEnd, this._loopEnd, visible);
-  }
-
-  render() {
-    if (!this.root) return;
-    this.rulerWorld.replaceChildren();
-    this.headers.replaceChildren();
-    this.lanesWorld.replaceChildren();
-    const end = this.worldEnd();
-    const width = end * this._pxPerBeat;
-    this.rulerWorld.style.width = `${width}px`;
-    this.lanesWorld.style.width = `${width}px`;
-    this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
-    this.rulerWorld.append(this.rulerGrid(end));
-    this.renderRulerLabels(end);
-    this.renderLanes();
-    this.paintScroll();
-    this.paintLaneScroll();
-    this.paintPlayhead();
-    this.paintLoop();
-    this.paintTimeSelection();
-  }
-
-  /** @param {number} end */
-  rulerGrid(end, lanes = false) {
-    const fragment = document.createDocumentFragment();
-    const stepBars = rulerStep(this._pxPerBeat, this.beatsPerBar);
-    const step = lanes && !this.adaptiveGrid && this._pxPerBeat < 48 ? this.beatLength : this.currentGridStep();
-    for (const { time: beat, kind } of timeGridLines(end, {
-      gridStep: step, beatLength: this.beatLength,
-      pulseLength: this.pulseLength, barLength: this.beatsPerBar,
-    })) {
-      if (lanes && beat < MIN_CLIP_LENGTH) continue;
-      const line = document.createElement('div');
-      line.className = `grid-line ${kind}`;
-      line.part.add('grid-line', `${kind}-line`);
-      line.style.left = `${beat * this._pxPerBeat}px`;
-      fragment.append(line);
-    }
-    // The ruler labels are separate from the grid so zooming does not alter the lane paint.
-    this.rulerWorld.dataset.stepBars = String(stepBars);
-    return fragment;
-  }
-
-  /** @param {number} end */
-  renderRulerLabels(end) {
-    const stepBars = rulerStep(this._pxPerBeat, this.beatsPerBar);
-    const fragment = document.createDocumentFragment();
-    for (const { beat, text } of rulerLabels(end,
-      { barLength: this.beatsPerBar, beatLength: this.beatLength }, this._pxPerBeat,
-      this.currentGridStep())) {
-      const label = document.createElement('div');
-      label.className = 'ruler-label';
-      label.part.add('ruler-label');
-      label.dataset.bar = '';
-      label.style.left = `${beat * this._pxPerBeat}px`;
-      label.textContent = text;
-      fragment.append(label);
-    }
-    this.rulerWorld.append(fragment);
-    this.renderLocators();
-  }
-
-  renderLocators() {
-    for (const locator of this._locators) {
-      const element = document.createElement('span');
-      element.className = 'ruler-locator';
-      element.part.add('locator');
-      element.dataset.locatorId = locator.id;
-      element.style.left = `${locator.beat * this._pxPerBeat}px`;
-      element.setAttribute('role', 'button');
-      element.tabIndex = 0;
-      element.setAttribute('aria-label', `${locator.name || locator.id} locator at beat ${locator.beat}`);
-      if (this.renamingLocator === locator.id) {
-        const input = document.createElement('input');
-        input.className = 'ruler-locator-editor';
-        input.value = locator.name;
-        input.setAttribute('aria-label', `Rename ${locator.name || locator.id}`);
-        const finish = (commit) => {
-          if (this.renamingLocator !== locator.id) return;
-          this.renamingLocator = null;
-          const name = input.value.trim();
-          this.render();
-          if (commit && name && name !== locator.name) this.dispatchEvent(eventOf('locator-rename', { id: locator.id, name }));
-        };
-        input.addEventListener('keydown', (event) => {
-          event.stopPropagation();
-          if (event.key === 'Enter') finish(true);
-          if (event.key === 'Escape') finish(false);
-        });
-        input.addEventListener('blur', () => finish(true));
-        input.addEventListener('pointerdown', (event) => event.stopPropagation());
-        element.append(input);
-        requestAnimationFrame(() => { input.focus(); input.select(); });
-      } else {
-        const name = document.createElement('span');
-        name.className = 'ruler-locator-name';
-        name.textContent = locator.name;
-        element.append(name);
-      }
-      this.rulerWorld.append(element);
-    }
-  }
-
-  /** @param {TimelineLane} lane */
-  renderLaneHeader(lane) {
-    const header = document.createElement('div');
-    header.className = 'lane-header';
-    header.dataset.laneId = lane.id;
-    header.toggleAttribute('data-compact', Boolean(lane.compact));
-    header.part.add('lane-header');
-    header.setAttribute('role', 'listitem');
-    header.tabIndex = -1;
-    header.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
-    header.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
-    header.style.height = `${this.laneHeightFor(lane)}px`;
-
-    if (this._laneHeaders.has(lane.id)) {
-      const slot = document.createElement('slot');
-      slot.className = 'lane-header-content';
-      slot.name = `lane-header-${encodeURIComponent(lane.id)}`;
-      header.append(slot);
-      if (this.automationFor(lane)) header.append(this.renderAutomationLabel(lane));
-      header.append(this.renderLaneResizeHandle(lane));
-      return header;
-    }
-
-    const main = document.createElement('div');
-    main.className = 'lane-header-content lane-header-fallback';
-    main.part.add('lane-header-fallback');
-    main.append(this.renderLaneName(lane));
-    if (this.automationFor(lane)) main.append(this.renderAutomationLabel(lane));
-    header.append(main);
-    header.append(this.renderLaneResizeHandle(lane));
-    return header;
-  }
-
-  /** @param {TimelineLane} lane */
-  renderAutomationLabel(lane) {
-    const label = document.createElement('span');
-    label.className = 'lane-automation-label';
-    label.part.add('lane-automation-label');
-    label.textContent = lane.automation?.label || lane.automation?.id || '';
-    return label;
-  }
-
-  /** A grab edge along the header's bottom border: drag sets the lane's own row
-   * height (lane.height), double-click clears it back to the shared default.
-   * @param {TimelineLane} lane */
-  renderLaneResizeHandle(lane) {
-    const handle = document.createElement('div');
-    handle.className = 'lane-resize';
-    handle.part.add('lane-resize');
-    handle.tabIndex = 0;
-    handle.setAttribute('role', 'separator');
-    handle.setAttribute('aria-label', `Resize ${lane.name || lane.id}`);
-    handle.setAttribute('aria-orientation', 'horizontal');
-    handle.setAttribute('aria-valuemin', '24');
-    handle.setAttribute('aria-valuemax', '400');
-    handle.title = 'Drag or use Arrow keys to resize; double-click or Home resets';
-    /** @type {{pointerId:number,startY:number,startHeight:number,startCustomHeight:number|null,all:boolean,startHeights:Map<string,number|null>}|null} */ let drag = null;
-    const apply = (/** @type {number|undefined} */ height, all = false) => {
-      for (const target of all ? this._lanes : [lane]) this.previewLaneHeight(target, height);
-      handle.setAttribute('aria-valuenow', String(this.laneRowHeightFor(lane)));
-    };
-    const customHeightOf = (/** @type {TimelineLane} */ target) => {
-      const custom = Number(target.height);
-      return Number.isFinite(custom) && custom > 0 ? custom : null;
-    };
-    handle.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-      // Alt sizes every lane from this one, as Ableton and Pro Tools do
-      drag = { pointerId: event.pointerId, startY: event.clientY, startHeight: this.laneRowHeightFor(lane),
-        startCustomHeight: customHeightOf(lane), all: Boolean(event.altKey),
-        startHeights: new Map(this._lanes.map((target) => [target.id, customHeightOf(target)])) };
-      handle.setPointerCapture?.(event.pointerId);
-    });
-    handle.addEventListener('pointermove', (event) => {
-      if (!drag || event.pointerId !== drag.pointerId) return;
-      drag.all ||= Boolean(event.altKey);
-      const delta = (event.clientY - drag.startY) * this.gestureFactor(event);
-      apply(clamp(drag.startHeight + delta, 24, 400), drag.all);
-    });
-    const end = (/** @type {PointerEvent} */ event) => {
-      if (!drag || event.pointerId !== drag.pointerId) return;
-      const finished = drag;
-      drag = null;
-      if (event.type === 'pointercancel') {
-        for (const target of this._lanes) this.previewLaneHeight(target, finished.startHeights.get(target.id) ?? undefined);
-        return;
-      }
-      if (this.laneRowHeightFor(lane) !== finished.startHeight) {
-        const height = this.laneRowHeightFor(lane);
-        for (const target of finished.all ? this._lanes : [lane]) {
-          this.dispatchEvent(eventOf('lane-resize', { laneId: target.id, height }));
-        }
-        this.render();
-      }
-    };
-    handle.addEventListener('pointerup', end);
-    handle.addEventListener('pointercancel', end);
-    handle.addEventListener('dblclick', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      apply(undefined);
-      this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: null }));
-      this.render();
-    });
-    handle.addEventListener('keydown', (event) => {
-      if (event.key === 'Home') {
-        event.preventDefault();
-        apply(undefined);
-        this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: null }));
-        return;
-      }
-      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-      event.preventDefault();
-      const direction = event.key === 'ArrowUp' ? 1 : -1;
-      const em = Number.parseFloat(getComputedStyle(this).fontSize) || 16;
-      const step = em * .25 * (event.shiftKey ? .25 : 1);
-      apply(clamp(this.laneRowHeightFor(lane) + direction * step, 24, 400));
-      this.dispatchEvent(eventOf('lane-resize', { laneId: lane.id, height: this.laneRowHeightFor(lane) }));
-    });
-    apply(lane.height);
-    return handle;
-  }
-
-  /** Size one lane's row in place, without rebuilding it. */
-  /** @param {TimelineLane} lane @param {number|undefined} height */
-  previewLaneHeight(lane, height) {
-    if (height === undefined) delete lane.height;
-    else lane.height = height;
-    const header = this.headers.querySelector(`.lane-header[data-lane-id="${CSS.escape(lane.id)}"]`);
-    const row = this.lanesWorld.querySelector(`.lane[data-lane-id="${CSS.escape(lane.id)}"]`);
-    for (const element of [header, row]) {
-      if (!(element instanceof HTMLElement)) continue;
-      element.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
-      element.style.height = `${this.laneHeightFor(lane)}px`;
-    }
-    const handle = header?.querySelector('.lane-resize');
-    handle?.setAttribute('aria-valuenow', String(this.laneRowHeightFor(lane)));
-    this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
-    const grid = this.lanesWorld.querySelector('.grid-world');
-    if (grid instanceof HTMLElement) grid.style.height = `${this.totalLaneHeight()}px`;
-  }
-
-  /** @param {TimelineLane} lane */
-  renderLaneName(lane) {
-    if (this.renamingLane === lane.id) {
-      const input = document.createElement('input');
-      input.className = 'lane-name-editor';
-      input.value = lane.name || '';
-      input.setAttribute('aria-label', `Rename ${lane.name || lane.id}`);
-      const finish = (commit) => {
-        if (this.renamingLane !== lane.id) return;
-        this.renamingLane = null;
-        const name = input.value.trim();
-        this.render();
-        if (commit && name && name !== lane.name) this.dispatchEvent(eventOf('lane-rename', { laneId: lane.id, name }));
-      };
-      input.addEventListener('keydown', (event) => {
-        event.stopPropagation();
-        if (event.key === 'Enter') finish(true);
-        if (event.key === 'Escape') finish(false);
-      });
-      input.addEventListener('blur', () => finish(true));
-      input.addEventListener('pointerdown', (event) => event.stopPropagation());
-      requestAnimationFrame(() => { input.focus(); input.select(); });
-      return input;
-    }
-    const name = document.createElement('span');
-    name.className = 'lane-name';
-    name.part.add('lane-name');
-    name.textContent = lane.name || lane.id;
-    name.tabIndex = 0;
-    name.toggleAttribute('data-picked', Boolean(lane.picked));
-    name.setAttribute('role', 'button');
-    name.setAttribute('aria-label', `${lane.name || lane.id} lane`);
-    name.addEventListener('focus', () => { this.focusedLane = lane.id; this.focusedClip = null; });
-    return name;
-  }
-
-  /** @param {TimelineLane} lane */
-  renderLaneBase(lane, end = this.worldEnd()) {
-    const base = document.createElement('div');
-    base.className = 'lane-base';
-    base.part.add('lane-content');
-    for (const clip of lane.clips) base.append(this.renderClip(clip, lane));
-    const automation = this.automationFor(lane);
-    if (!automation) return base;
-    base.dataset.state = automation.state || 'idle';
-    base.append(this.renderLaneAutomation(lane, automation, end));
-    return base;
-  }
-
-  /** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {number} end */
-  renderLaneAutomation(lane, automation, end) {
-    const surface = document.createElement('div');
-    surface.className = 'lane-automation';
-    surface.dataset.laneId = lane.id;
-    surface.dataset.automationId = automation.id;
-    surface.toggleAttribute('data-draw', this.draw);
-    surface.setAttribute('role', 'group');
-    surface.setAttribute('aria-label', `${automation.label || automation.id} automation for ${lane.name || lane.id}`);
-    surface.tabIndex = 0;
-    const editor = document.createElement('compost-envelope-editor');
-    editor.className = 'automation-editor';
-    editor.part.add('automation-editor');
-    editor.setAttribute('grid-lines', 'off');
-    editor.setAttribute('label', `${automation.label || automation.id} automation for ${lane.name || lane.id}`);
-    editor.setAttribute('duration', String(end));
-    editor.setAttribute('min', String(automation.min));
-    editor.setAttribute('max', String(automation.max));
-    editor.setAttribute('grid', String(this.currentGridStep()));
-    editor.setAttribute('snap', this.snapMode);
-    if (automation.scale === 'gain') editor.setAttribute('scale', 'gain');
-    if (automation.stepped) editor.setAttribute('stepped', '');
-    const valueStep = this.automationValueStep(automation);
-    if (valueStep > 0) editor.setAttribute('step', String(valueStep));
-    if (this.draw) editor.setAttribute('draw', '');
-    if (this.hasAttribute('disabled')) editor.setAttribute('disabled', '');
-    if (this.readonly) editor.setAttribute('readonly', '');
-    editor.duration = end;
-    editor.min = Number(automation.min);
-    editor.max = Number(automation.max);
-    editor.scale = automation.scale === 'gain' ? 'gain' : 'linear';
-    editor.stepped = Boolean(automation.stepped);
-    editor.step = valueStep;
-    editor.snapMode = this.snapMode;
-    editor.grid = this.currentGridStep();
-    editor.draw = this.draw;
-    editor.points = toEnvelopePoints(automation.points);
-    const selection = this.automationSelectionFor(lane.id);
-    editor.setSelection(selection?.start, selection?.end);
-    editor.addEventListener('envelope-input', (event) => {
-      event.stopPropagation();
-      this.dispatchEvent(eventOf('automation-input', {
-        laneId: lane.id,
-        automationId: automation.id,
-        points: fromEnvelopePoints(event.detail.points),
-      }));
-    });
-    editor.addEventListener('envelope-change', (event) => {
-      event.stopPropagation();
-      this.commitAutomationChange(lane, automation, fromEnvelopePoints(event.detail.points));
-    });
-    editor.addEventListener('envelope-context', (event) => {
-      event.stopPropagation();
-      this.dispatchEvent(eventOf('automation-context', {
-        laneId: lane.id,
-        automationId: automation.id,
-        pointIndex: event.detail.pointIndex,
-        beat: event.detail.time,
-        value: event.detail.value,
-        clientX: event.detail.clientX,
-        clientY: event.detail.clientY,
-      }));
-    });
-    surface.append(editor);
-    const hint = document.createElement('span');
-    hint.className = 'automation-draw-hint';
-    hint.textContent = '✎ draw';
-    surface.append(hint);
-    return surface;
-  }
-
-  /** @param {TimelineLane} lane @param {number} end */
-  renderLaneBody(lane, end) {
-    const row = document.createElement('div');
-    row.className = 'lane';
-    row.part.add('lane');
-    row.dataset.laneId = lane.id;
-    row.toggleAttribute('data-compact', Boolean(lane.compact));
-    row.setAttribute('role', 'listitem');
-    row.setAttribute('aria-label', lane.name || lane.id);
-    row.toggleAttribute('data-dimmed', Boolean(lane.dimmed));
-    row.toggleAttribute('data-automation-view', Boolean(this.automationFor(lane)));
-    row.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
-    if (lane.ink) row.style.setProperty('--lane-ink', lane.ink); else row.style.removeProperty('--lane-ink');
-    row.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
-    row.style.height = `${this.laneHeightFor(lane)}px`;
-    row.append(this.renderLaneBase(lane, end));
-    return row;
-  }
-
-  renderLanes() {
-    const headerFragment = document.createDocumentFragment();
-    const laneFragment = document.createDocumentFragment();
-    const end = this.worldEnd();
-    this._lanes.forEach((lane) => {
-      headerFragment.append(this.renderLaneHeader(lane));
-      laneFragment.append(this.renderLaneBody(lane, end));
-    });
-    this.headers.append(headerFragment);
-    this.lanesWorld.append(laneFragment);
-    const grid = document.createElement('div');
-    grid.className = 'grid-world';
-    grid.style.width = `${end * this._pxPerBeat}px`;
-    grid.style.height = `${this.totalLaneHeight()}px`;
-    grid.append(this.rulerGrid(end, true));
-    this.lanesWorld.append(grid);
-    this.paintSelection();
-  }
-
-  /** @param {TimelineClip} clip @param {TimelineLane} lane */
-  renderClip(clip, lane) {
-    const element = document.createElement('div');
-    element.className = 'clip';
-    element.part.add('clip');
-    element.dataset.id = clip.id;
-    element.dataset.state = clip.state || 'stopped';
-    element.tabIndex = this.focusedClip === clip.id ? 0 : -1;
-    element.setAttribute('role', 'button');
-    element.style.setProperty('--clip-color', clip.color || lane.color || 'var(--compost-timeline-select)');
-    element.toggleAttribute('data-muted', Boolean(clip.muted));
-    const start = Number(clip.start) || 0;
-    const end = start + Math.max(0, Number(clip.length) || 0);
-    element.setAttribute('aria-label', `${clip.name || 'clip'}, bar ${Math.floor(start / this.beatsPerBar) + 1} to ${Math.max(Math.floor((end - MIN_CLIP_LENGTH) / this.beatsPerBar) + 1, 1)}, lane ${lane.name || lane.id}`);
-    const box = clipBox(clip, this._pxPerBeat, 0);
-    element.style.left = `${box.left}px`;
-    element.style.width = `${box.width}px`;
-    this.paintClipContent(element, clip);
-    if (this.renaming === clip.id) {
-      const input = document.createElement('input');
-      input.className = 'clip-editor';
-      input.value = clip.name || '';
-      input.setAttribute('aria-label', `Rename ${clip.name || 'clip'}`);
-      let closed = false;
-      const finish = (commit) => {
-        if (closed) return;
-        closed = true;
-        this.renaming = null;
-        const name = input.value.trim();
-        this.render();
-        if (commit && name && name !== clip.name) this.dispatchEvent(eventOf('clip-rename', { id: clip.id, name }));
-      };
-      input.addEventListener('keydown', (event) => {
-        event.stopPropagation();
-        if (event.key === 'Enter') finish(true);
-        if (event.key === 'Escape') finish(false);
-      });
-      input.addEventListener('blur', () => finish(true));
-      input.addEventListener('pointerdown', (event) => event.stopPropagation());
-      element.append(input);
-      requestAnimationFrame(() => { input.focus(); input.select(); });
-    } else {
-      const name = document.createElement('span');
-      name.className = 'clip-name';
-      name.part.add('clip-name');
-      name.textContent = clip.name || 'clip';
-      element.append(name);
-    }
-    return element;
-  }
-
-  /** The clip's body: notes, extent and loop points, positioned in beats of the
-   * clip's own length. A trim preview repaints this with the previewed geometry so
-   * the notes stay where they are in time instead of stretching with the box.
-   * @param {HTMLElement} element @param {TimelineClip} clip */
-  paintClipContent(element, clip) {
-    for (const old of element.querySelectorAll('.clip-notes, .clip-preview, .clip-extent, .clip-loop-line')) old.remove();
-    const anchor = element.querySelector('.clip-name, .clip-editor');
-    const place = (node) => anchor ? element.insertBefore(node, anchor) : element.append(node);
-    const duration = Math.max(MIN_CLIP_LENGTH, Number(clip.duration) || Number(clip.length) || 1);
-    const length = Math.max(MIN_CLIP_LENGTH, Number(clip.length) || duration);
-    const offset = ((Number(clip.offset) || 0) % duration + duration) % duration;
-    if (this._clipPreviews.has(clip.id)) {
-      const preview = document.createElement('slot');
-      preview.className = 'clip-preview';
-      preview.name = `clip-preview-${encodeURIComponent(clip.id)}`;
-      preview.part.add('clip-preview');
-      place(preview);
-    } else {
-      const notes = document.createElement('span');
-      notes.className = 'clip-notes';
-      notes.part.add('clip-preview');
-      for (const note of (clip.notes || []).slice(0, 200)) {
-        const noteStart = Number(note.start) || 0;
-        const noteDuration = Number(note.duration) || .1;
-        const starts = [];
-        if (clip.loop === false) starts.push(noteStart - offset);
-        else {
-          let start = noteStart - offset;
-          while (start < 0) start += duration;
-          for (; start < length; start += duration) starts.push(start);
-        }
-        for (const start of starts) {
-          if (start < 0 || start >= length) continue;
-          const mark = document.createElement('span');
-          mark.className = 'clip-note';
-          mark.part.add('clip-preview-mark');
-          mark.style.opacity = String(clipNoteOpacity(note.velocity));
-          mark.style.left = `${Math.max(0, Math.min(100, start / length * 100))}%`;
-          mark.style.width = `${Math.max(2, Math.min(30, noteDuration / length * 100))}%`;
-          mark.style.bottom = `${Math.max(2, Math.min(90, ((Number(note.note) || 0) / 127) * 90))}%`;
-          notes.append(mark);
-        }
-      }
-      place(notes);
-    }
-    const extent = document.createElement('span');
-    extent.className = 'clip-extent';
-    extent.part.add('clip-extent');
-    place(extent);
-    for (const line of loopPassLines(clip, this._pxPerBeat)) {
-      const mark = document.createElement('span');
-      mark.className = 'clip-loop-line';
-      mark.part.add('clip-loop');
-      mark.title = 'loop point';
-      mark.style.left = `${line * this._pxPerBeat - 1}px`;
-      place(mark);
-    }
-  }
-
-  /** Mark the selected clips; a gesture passes its preview instead of the selection. */
-  /** @param {string[]} [ids] */
-  paintSelection(ids = this._selected) {
-    for (const element of this.clipElements()) {
-      if (ids.includes(element.dataset.id)) element.dataset.selected = '';
-      else delete element.dataset.selected;
-    }
-  }
-
-  clearClipDragVisuals() {
-    for (const clip of this.clipElements()) {
-      clip.style.transform = '';
-      clip.removeAttribute('data-dragging');
-    }
-    this.clearClipGhosts();
-    this.removeAttribute('data-drag-copy');
-  }
-
-  /** A moved clip leaves a faded original behind; a copied one leaves it in place
-    * and drags a translucent ghost instead, so the source stays visible. */
-  paintCopyState() {
-    const drag = this.drag;
-    if (!drag || drag.type !== 'move') return;
-    this.toggleAttribute('data-drag-copy', Boolean(drag.copy));
-    for (const item of drag.selected) {
-      const element = this.clipElements().find((node) => node.dataset.id === item.clip.id);
-      element?.toggleAttribute('data-dragging', !drag.copy);
-    }
-    if (!drag.copy) this.clearClipGhosts();
-  }
-
-  /** Paint, or repaint after a copy/move flip, where the dragged clips sit. */
-  paintMovePreview() {
-    const drag = this.drag;
-    if (!drag || drag.type !== 'move' || !drag.moved) return;
-    for (const item of drag.selected) {
-      const element = this.clipElements().find((node) => node.dataset.id === item.clip.id);
-      if (!element) continue;
-      const vertical = this.laneOffsetForPoint(drag.lastClientY, item.lane.id);
-      const target = drag.copy ? this.clipGhost(item, element) : element;
-      if (!target) continue;
-      target.style.transform = `translate(${(drag.previewDelta ?? 0) * this._pxPerBeat}px, ${vertical}px)`;
-      if (target !== element) element.style.transform = '';
-    }
-  }
-
-  /** The translucent stand-in that follows the pointer while a clip is copied. */
-  clipGhost(item, element) {
-    const drag = this.drag;
-    if (!drag) return null;
-    let ghost = drag.ghosts.get(item.clip.id);
-    if (!ghost) {
-      ghost = /** @type {HTMLElement} */ (element.cloneNode(true));
-      ghost.setAttribute('data-ghost', '');
-      ghost.removeAttribute('data-selected');
-      element.after(ghost);
-      drag.ghosts.set(item.clip.id, ghost);
-    }
-    return ghost;
-  }
-
-  clearClipGhosts() {
-    for (const ghost of this.lanesWorld.querySelectorAll('.clip[data-ghost]')) ghost.remove();
-    this.drag?.ghosts?.clear();
-  }
-
-  paintScroll() {
-    const width = this.lanesWrap?.clientWidth || 0;
-    // Scrolling over fresh ground (follow running past the drawn world) grows
-    // the world first; render() paints the scroll transform itself.
-    if (width && this._scrollBeat + width / this._pxPerBeat > this.drawnEndBeat()) {
-      this.render();
-      return;
-    }
-    const offset = `${(-this._scrollBeat * this._pxPerBeat).toFixed(2)}px`;
-    this.rulerWorld.style.transform = `translateX(${offset})`;
-    this.lanesWorld.style.transform = `translateX(${offset})`;
-    this.paintPlayhead();
-    this.paintLoop();
-    this.paintTimeSelection();
-  }
-
-  /** The world length actually drawn, in beats, as opposed to worldEnd(). */
-  drawnEndBeat() {
-    const width = Number.parseFloat(this.lanesWorld?.style.width);
-    return Number.isFinite(width) && this._pxPerBeat > 0 ? width / this._pxPerBeat : 0;
-  }
-
-  paintLaneScroll() {
-    this.headers.style.transform = `translateY(${-this.lanesWrap.scrollTop}px)`;
-  }
-
-  paintPlayhead() {
-    if (!this.playheadElement || !this.rulerPlayhead) return;
-    const left = (this._playhead - this._scrollBeat) * this._pxPerBeat;
-    this.playheadElement.style.left = `${left.toFixed(2)}px`;
-    this.rulerPlayhead.style.left = `${left.toFixed(2)}px`;
-    this.rulerWrap.setAttribute('aria-label', `Timeline ruler, playhead at beat ${this._playhead.toFixed(2)}`);
-  }
-
-  /** Paint the loop brace; a gesture passes its preview instead of the host's loop. */
-  paintLoop(start = this._loopStart, end = this._loopEnd, enabled = this._loopEnabled) {
-    const left = (start - this._scrollBeat) * this._pxPerBeat;
-    const width = Math.max(1, (end - start) * this._pxPerBeat);
-    this.rulerBand.style.left = `${left}px`;
-    this.rulerBand.style.width = `${width}px`;
-    this.rulerBand.hidden = !enabled;
-    this.rulerStart.hidden = !enabled;
-    this.rulerEnd.hidden = !enabled;
-    this.rulerStart.style.left = `${left - 1}px`;
-    this.rulerEnd.style.left = `${left + width - 5}px`;
-    const viewportWidth = this.lanesWrap.clientWidth;
-    for (const [line, beat] of [[this.loopStartLine, start], [this.loopEndLine, end]]) {
-      const x = (beat - this._scrollBeat) * this._pxPerBeat;
-      line.style.left = `${x}px`;
-      line.hidden = !enabled || x < 0 || x > viewportWidth;
-    }
-    this.rulerStart.title = `Loop start, beat ${start}`;
-    this.rulerEnd.title = `Loop end, beat ${end}`;
-    for (const [handle, value] of [[this.rulerStart, start], [this.rulerEnd, end]]) {
-      handle.setAttribute('aria-valuemin', '0');
-      handle.setAttribute('aria-valuemax', String(this.worldEnd()));
-      handle.setAttribute('aria-valuenow', String(value));
-      handle.setAttribute('aria-valuetext', `beat ${Math.round(value * 100) / 100}`);
-    }
-  }
-
-  keepPlayheadVisible() {
-    const width = this.lanesWrap.clientWidth || 0;
-    if (!width) return;
-    const visible = width / this._pxPerBeat;
-    const anchor = visible / 2;
-    if (this._playhead < this._scrollBeat + .5) this.scrollBeat = Math.max(0, this._playhead - 1);
-    else if (this._playhead > this._scrollBeat + anchor) this.scrollBeat = Math.max(0, this._playhead - anchor);
-  }
-
-  ensureClipVisible(id) {
-    const found = this.findClip(id);
-    if (!found) return;
-    const start = Number(found.clip.start) || 0;
-    const end = start + (Number(found.clip.length) || 0);
-    const visible = (this.lanesWrap.clientWidth || 0) / this._pxPerBeat;
-    if (start < this._scrollBeat) this.scrollBeat = start;
-    else if (end > this._scrollBeat + visible) this.scrollBeat = Math.max(0, end - visible);
-  }
-
-  scheduleViewChange() {
-    clearTimeout(this.viewChangeTimer);
-    this.viewChangeTimer = setTimeout(() => {
-      this.dispatchEvent(eventOf('view-change', { pxPerBeat: this._pxPerBeat, scrollBeat: this._scrollBeat }));
-    }, 150);
-  }
-
-  emitSelection() {
-    this.paintSelection();
-    this.announce.textContent = this._selected.length ? `${this._selected.length} clip${this._selected.length === 1 ? '' : 's'} selected` : 'No clips selected';
-    this.dispatchEvent(eventOf('clip-select', { ids: this.selected }));
-  }
-
-  selectOne(id, additive = false) {
-    if (additive) {
-      this._selected = this._selected.includes(id) ? this._selected.filter((entry) => entry !== id) : [...this._selected, id];
-    } else this._selected = [id];
-    this.focusedClip = id;
-    this.focusedLane = null;
-    this.emitSelection();
-  }
-
-  // ---- Pointer gestures -------------------------------------------------------
-
-  clipFromEvent(event) {
-    const element = pathElement(event, 'clip');
-    return element ? this.findClip(element.dataset.id) && { element, ...this.findClip(element.dataset.id) } : null;
-  }
-
-  /** Find a clip geometrically when an overlay owns the event target. */
-  clipAtPoint(event, stripOnly = false) {
-    const direct = this.clipFromEvent(event);
-    if (direct) {
-      if (!stripOnly) return direct;
-      const name = direct.element.querySelector('.clip-name, .clip-editor')?.getBoundingClientRect();
-      return name && event.clientY >= name.top && event.clientY <= name.bottom ? direct : null;
-    }
-    const lane = pathElement(event, 'lane');
-    if (!(lane instanceof HTMLElement)) return null;
-    for (const element of lane.querySelectorAll('.clip:not([data-ghost])')) {
-      const rect = element.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right) continue;
-      if (event.clientY < rect.top || event.clientY > rect.bottom) continue;
-      if (stripOnly) {
-        const name = element.querySelector('.clip-name, .clip-editor')?.getBoundingClientRect();
-        if (!name || event.clientY < name.top || event.clientY > name.bottom) continue;
-      }
-      const found = this.findClip(element.dataset.id);
-      return found ? { element, ...found } : null;
-    }
-    return null;
-  }
-
-  clipStripFromEvent(event) {
-    if (this.draw || pathElement(event, 'lane-automation')) return null;
-    return this.clipAtPoint(event, true);
-  }
-
-  startClipObjectDrag(event, found) {
-    clearTimeout(this.renameTimer);
-    this.renameTimer = null;
-    const rect = found.element.getBoundingClientRect();
-    const edge = this.trimEdgePx(event.pointerType);
-    const mode = this.readonly ? 'move'
-      : event.clientX - rect.left <= edge ? 'trim-left'
-        : rect.right - event.clientX <= edge ? 'trim-right' : 'move';
-    const wasSelected = this._selected.includes(found.clip.id);
-    const additive = event.shiftKey;
-    if (!additive && !wasSelected) this.selectOne(found.clip.id);
-    else if (additive) this.selectOne(found.clip.id, true);
-    const ids = this._selected.length ? [...this._selected] : [found.clip.id];
-    this.focusedClip = found.clip.id;
-    found.element.style.cursor = mode === 'move' ? 'grab' : 'ew-resize';
-    this.drag = {
-      pointerId: event.pointerId, type: mode, clipId: found.clip.id, laneId: found.lane.id,
-      startX: event.clientX, startY: event.clientY, origin: { ...found.clip }, ids,
-      copy: Boolean(event.altKey), moved: false, element: found.element, ghosts: new Map(), lastClientY: event.clientY,
-      selected: ids.map((id) => this.findClip(id)).filter(Boolean),
-      renameCandidate: mode === 'move' && event.pointerType === 'mouse' && wasSelected,
-    };
-    found.element.setPointerCapture?.(event.pointerId);
-    this.longPress.start(() => {
-      if (!this.drag || this.drag.moved || this.drag.type !== 'move') return;
-      this.dispatchEvent(eventOf('clip-context', { id: found.clip.id, clientX: event.clientX, clientY: event.clientY }));
-      this.endPointer({ pointerId: event.pointerId });
-    });
-  }
-
-  startClipStrip(event) {
-    if (this.hasAttribute('disabled') || event.button !== 0) return;
-    if (event.composedPath().some((node) => node instanceof HTMLElement
-      && node.matches('button, input, select, textarea, [data-timeline-interactive]'))) return;
-    const found = this.clipStripFromEvent(event);
-    if (!found) return;
-    event.stopPropagation();
-    event.preventDefault();
-    this.startClipObjectDrag(event, found);
-  }
-
-  automationFromEvent(event) {
-    const editor = pathElement(event, 'lane-automation');
-    if (!(editor instanceof HTMLElement)) return null;
-    const lane = this._lanes.find((entry) => entry.id === editor.dataset.laneId);
-    const automation = lane && this.automationFor(lane);
-    if (!lane || !automation) return null;
-    return {
-      row: editor,
-      lane,
-      automation,
-    };
-  }
-
-  updatePointerCursor(event) {
-    if (event.pointerType === 'touch' || pathElement(event, 'lane-automation')) return;
-    const found = this.clipAtPoint(event);
-    if (!found) return;
-    const rect = found.element.getBoundingClientRect();
-    const edge = this.trimEdgePx(event.pointerType);
-    found.element.style.cursor = event.clientX - rect.left <= edge || rect.right - event.clientX <= edge
-      ? 'ew-resize' : 'default';
-  }
-
-  startPinch() {
-    const points = [...this.pointers.values()];
-    if (points.length < 2) return;
-    const [first, second] = points;
-    const centerX = (first.x + second.x) / 2;
-    const centerY = (first.y + second.y) / 2;
-    this.pinch = {
-      distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
-      centerX,
-      centerY,
-      pxPerBeat: this._pxPerBeat,
-      beat: this.beatAtPoint(centerX),
-      scrollTop: this.lanesWrap.scrollTop,
-    };
-  }
-
-  movePinch() {
-    if (!this.pinch || this.pointers.size < 2) return;
-    const points = [...this.pointers.values()];
-    const [first, second] = points;
-    const centerX = (first.x + second.x) / 2;
-    const centerY = (first.y + second.y) / 2;
-    const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
-    const nextPxPerBeat = finiteClamp(this.pinch.pxPerBeat * distance / this.pinch.distance, MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
-    const rect = this.rulerWrap.getBoundingClientRect();
-    this._pxPerBeat = nextPxPerBeat;
-    this._scrollBeat = Math.max(0, this.pinch.beat - (centerX - rect.left) / nextPxPerBeat);
-    const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
-    this.lanesWrap.scrollTop = clamp(this.pinch.scrollTop - (centerY - this.pinch.centerY), 0, maximum);
-    this.paintLaneScroll();
-    this.render();
-    this.scheduleViewChange();
-  }
-
-  automationValueStep(automation) {
-    return effectiveEnvelopeStep(Boolean(automation?.stepped), automation?.step ?? automation?.valueStep);
-  }
-
-  /** Shift-click grows the region to include the clicked beat and lane. */
-  /** @param {PointerEvent} event @param {any} drag @returns {boolean} */
-  extendTimeSelection(event, drag) {
-    const current = this._timeSelection;
-    const selectedClips = this._selected.map((id) => this.findClip(id)).filter(Boolean);
-    const anchor = current ? undefined
-      : selectedClips.length ? Math.min(...selectedClips.map(({ clip }) => Number(clip.start) || 0)) : null;
-    if (!current && anchor === null) return false;
-    const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
-    const laneIds = drag.allLanes ? this._lanes.map((lane) => lane.id)
-      : current ? [...new Set([...current.laneIds, ...this.laneIdsForSpan(current.laneIds[0] ?? drag.laneId, drag.laneId)])]
-        : [...new Set([...selectedClips.map(({ lane }) => lane.id), ...this.laneIdsForSpan(selectedClips[0].lane.id, drag.laneId)])];
-    const region = current
-      ? normalizeSelectionRegion(Math.min(current.start, beat), Math.max(current.end, beat), laneIds, this.worldEnd())
-      : extendSelectionRegion(current, beat, anchor, laneIds, this.worldEnd());
-    if (!region) return false;
-    this.setTimeSelection(region.start, region.end, region.items ?? laneIds);
-    if (this._selected.length) {
-      this._selected = [];
-      this.emitSelection();
-    }
-    this.dispatchEvent(eventOf('time-select', this.timeSelection));
-    return true;
-  }
-
-  /** Move a time selection with arrows; Shift grows its time or lane extent. */
-  handleTimeSelectionArrow(event) {
-    const selection = this._timeSelection;
-    if (!selection || event.altKey || event.metaKey || event.ctrlKey
-        || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return false;
-    event.preventDefault();
-    let { start, end } = selection;
-    let laneIds = [...selection.laneIds];
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      const direction = event.key === 'ArrowLeft' ? -1 : 1;
-      const step = this.currentGridStep();
-      if (event.shiftKey) {
-        if (direction < 0) start = Math.max(0, start - step);
-        else end = Math.min(this.worldEnd(), end + step);
-      } else {
-        const delta = direction < 0 ? -Math.min(step, start) : Math.min(step, this.worldEnd() - end);
-        start += delta;
-        end += delta;
-      }
-    } else {
-      const direction = event.key === 'ArrowUp' ? -1 : 1;
-      const indexes = laneIds.map((id) => this._lanes.findIndex((lane) => lane.id === id))
-        .filter((index) => index >= 0).sort((a, b) => a - b);
-      if (!indexes.length) return true;
-      if (event.shiftKey) {
-        const next = (direction < 0 ? indexes[0] : indexes.at(-1)) + direction;
-        if (next >= 0 && next < this._lanes.length) indexes.push(next);
-      } else {
-        const moved = indexes.map((index) => index + direction);
-        if (moved.some((index) => index < 0 || index >= this._lanes.length)) return true;
-        indexes.splice(0, indexes.length, ...moved);
-      }
-      const selected = new Set(indexes);
-      laneIds = this._lanes.filter((_, index) => selected.has(index)).map((lane) => lane.id);
-    }
-    const next = normalizeTimeSelection(start, end, laneIds, this.worldEnd());
-    if (!next || (next.start === selection.start && next.end === selection.end
-        && next.laneIds.join('\0') === selection.laneIds.join('\0'))) return true;
-    this.setTimeSelection(next.start, next.end, next.laneIds);
-    this.dispatchEvent(eventOf('time-select', this.timeSelection));
-    return true;
-  }
-
-  selectAllClips() {
-    this._selected = this._lanes.flatMap((lane) => lane.clips.map((clip) => clip.id));
-    this.emitSelection();
-  }
-
-  /** The grab zone at a clip's edge, in px, scaled with the element's font. */
-  /** @param {string} [pointerType] */
-  trimEdgePx(pointerType) {
-    const fontSize = Number.parseFloat(getComputedStyle(this).fontSize) || this.fontSize;
-    return fontSize * (pointerType === 'touch' ? TOUCH_TRIM_EDGE_EM : MOUSE_TRIM_EDGE_EM);
-  }
-
-  /** How far, in beats, an anchor pulls: a few pixels at the current zoom. */
-  snapReach() {
-    return ANCHOR_REACH_PX / this._pxPerBeat;
-  }
-
-  /** The times a drag also snaps to: other clips' edges, locators and the loop bounds. */
-  /** @param {{laneIds?: string[]|null, excludeIds?: string[]}} [options] */
-  snapAnchors({ laneIds = null, excludeIds = [] } = {}) {
-    const skip = new Set(excludeIds);
-    const lanes = laneIds ? this._lanes.filter((lane) => laneIds.includes(lane.id)) : this._lanes;
-    const edges = lanes.flatMap((lane) => lane.clips.filter((clip) => !skip.has(clip.id)).flatMap((clip) => {
-      const start = Number(clip.start) || 0;
-      return [start, start + Math.max(0, Number(clip.length) || 0)];
-    }));
-    const locators = this._locators.map((locator) => locator.beat);
-    return [...edges, ...locators, this._loopStart, this._loopEnd];
-  }
-
-  /** The snap mode for one gesture: Cmd/Ctrl inverts whatever the host set. */
-  /** @param {{metaKey?: boolean, ctrlKey?: boolean}} event */
-  snapModeFor(event) {
-    return snapModeWith(this.snapMode, Boolean(event?.metaKey || event?.ctrlKey));
-  }
-
-  currentGridStep() {
-    return gridStepForView(this.beatsPerBar, this.grid, this._pxPerBeat, this.adaptiveGrid);
-  }
-
-  creationBeatFor(event) {
-    const beat = this.beatAtPoint(event.clientX);
-    if (this.snapModeFor(event) === 'off') return Math.max(0, beat);
-    const step = this.currentGridStep();
-    return Math.max(0, Math.floor((beat + MIN_CLIP_LENGTH) / step) * step);
-  }
-
-  /** Shift uses the same quarter-speed precision as the other editors. */
-  gestureFactor(event) {
-    return event?.shiftKey ? .25 : 1;
-  }
-
-  automationSelectionFor(laneId) {
-    const selection = this._timeSelection;
-    return selection && selection.laneIds.includes(String(laneId)) ? selection : null;
-  }
-
-  startTimeSelection(event, laneId, allLanes = false) {
-    this.focus({ preventScroll: true });
-    this.focusedClip = null;
-    this.focusedLane = null;
-    this.drag = {
-      pointerId: event.pointerId, type: 'time-selection', laneId,
-      allLanes, startX: event.clientX, startY: event.clientY,
-      startBeat: this.beatAtPoint(event.clientX),
-      startScrollBeat: this._scrollBeat, startScrollTop: this.lanesWrap.scrollTop,
-      originSelection: this.timeSelection, originSelected: [...this._selected], moved: false,
-    };
-  }
-
-  startContextLongPress(event) {
-    if (event.pointerType !== 'touch') return;
-    const target = event.composedPath()[0];
-    this.longPress.start(() => {
-      if (this.pinch || this.drag?.moved || !(target instanceof EventTarget)) return;
-      this.cancelActiveDrag();
-      target.dispatchEvent(new MouseEvent('contextmenu', {
-        bubbles: true, composed: true, cancelable: true,
-        clientX: event.clientX, clientY: event.clientY,
-      }));
-    });
-  }
-
-  startPointer(event) {
-    if (this.hasAttribute('disabled') || event.button !== 0) return;
-    if (event.pointerType === 'touch') {
-      this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (this.pointers.size >= 2) {
-        this.longPress.cancel();
-        this.cancelActiveDrag();
-        this.clearClipDragVisuals();
-        this.startPinch();
-        event.preventDefault();
-        return;
-      }
-    }
-    if (this.drag) return;
-    clearTimeout(this.renameTimer);
-    this.renameTimer = null;
-    if (event.composedPath().some((node) => node instanceof HTMLElement
-      && node.matches('button, input, select, textarea, [data-timeline-interactive]'))) return;
-    const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
-      && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
-    if (loopPart instanceof HTMLElement) return;
-    this.startContextLongPress(event);
-    const locator = this.locatorFromEvent(event);
-    if (locator) {
-      event.preventDefault();
-      const name = pathElement(event, 'ruler-locator-name');
-      const wasFocused = this.root.activeElement === locator.element;
-      locator.element.focus({ preventScroll: true });
-      this.drag = {
-        pointerId: event.pointerId, type: 'locator', locatorId: locator.locator.id,
-        element: locator.element, startX: event.clientX, startY: event.clientY, startBeat: locator.locator.beat, moved: false,
-        renameCandidate: event.pointerType === 'mouse' && name instanceof HTMLElement && wasFocused,
-      };
-      if (event.isTrusted) locator.element.setPointerCapture?.(event.pointerId);
-      return;
-    }
-    const onRuler = event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('ruler-wrap'));
-    if (onRuler) {
-      const row = this.rulerRowAtPoint(event.clientY);
-      const beat = this.beatAtPoint(event.clientX);
-      if (row === 1) {
-        this.drag = { pointerId: event.pointerId, type: 'ruler-locator-row', startX: event.clientX, startY: event.clientY, startBeat: beat, moved: false };
-        return;
-      }
-      if (row === 2) {
-        this.dispatchEvent(eventOf('seek', {
-          beat: snapBeat(beat, this.beatsPerBar, this.grid, this.snapModeFor(event)), source: 'ruler',
-        }));
-        this.drag = { pointerId: event.pointerId, type: 'ruler-seek', startX: event.clientX, startY: event.clientY, moved: false };
-        if (event.isTrusted) this.rulerWrap.setPointerCapture?.(event.pointerId);
-        return;
-      }
-      // the loop row: a drag makes a region on every lane, a click seeks
-      this.startTimeSelection(event, this._lanes[0]?.id ?? null, true);
-      if (event.isTrusted) this.rulerWrap.setPointerCapture?.(event.pointerId);
-      return;
-    }
-    const header = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane-header'));
-    if (header instanceof HTMLElement) {
-      header.focus({ preventScroll: true });
-      this.focusedLane = header.dataset.laneId || null;
-      this.focusedClip = null;
-      this.drag = { pointerId: event.pointerId, type: 'lane-header', laneId: header.dataset.laneId, startX: event.clientX, startY: event.clientY, moved: false, toIndex: this._lanes.findIndex((lane) => lane.id === header.dataset.laneId) };
-      if (event.isTrusted) header.setPointerCapture?.(event.pointerId);
-      this.longPress.start(() => {
-        if (!this.drag || this.drag.type !== 'lane-header' || this.drag.moved) return;
-        this.dispatchEvent(eventOf('lane-header-context', { laneId: header.dataset.laneId, clientX: event.clientX, clientY: event.clientY }));
-        this.drag = null;
-      });
-      return;
-    }
-    const found = this.clipFromEvent(event);
-    if (found) {
-      event.preventDefault();
-      const rect = found.element.getBoundingClientRect();
-      const edge = this.trimEdgePx(event.pointerType);
-      if (event.clientX - rect.left <= edge || rect.right - event.clientX <= edge) {
-        this.startClipObjectDrag(event, found);
-      } else if (!this.draw) {
-        this.startTimeSelection(event, found.lane.id);
-        if (event.isTrusted) found.element.setPointerCapture?.(event.pointerId);
-      }
-      return;
-    }
-    const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
-    if (lane instanceof HTMLElement) {
-      if (this.draw) return;
-      this.startTimeSelection(event, lane.dataset.laneId);
-      if (event.isTrusted) lane.setPointerCapture?.(event.pointerId);
-      return;
-    }
-  }
-
-  movePointer(event) {
-    if (event.pointerType === 'touch' && this.pointers.has(event.pointerId)) {
-      this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (this.pinch) {
-        this.movePinch();
-        return;
-      }
-    }
-    const drag = this.drag;
-    if (!drag || event.pointerId !== drag.pointerId) {
-      if (!drag) this.updatePointerCursor(event);
-      return;
-    }
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
-    const slop = event.pointerType === 'touch' ? DRAG_SLOP * 2 : DRAG_SLOP;
-    if (!drag.moved && Math.hypot(dx, dy) > slop) drag.moved = true;
-    if (drag.type === 'locator') {
-      if (!drag.moved || this.readonly) return;
-      const rawBeat = drag.startBeat
-        + (this.beatAtPoint(event.clientX) - drag.startBeat) * this.gestureFactor(event);
-      const beat = snapTime(rawBeat, {
-        step: this.currentGridStep(), mode: this.snapModeFor(event), origin: drag.startBeat,
-        anchors: this.snapAnchors().filter((anchor) => anchor !== drag.startBeat), reach: this.snapReach(),
-      });
-      drag.previewBeat = Math.min(beat, this.worldEnd());
-      drag.element.style.left = `${drag.previewBeat * this._pxPerBeat}px`;
-      return;
-    }
-    if (drag.type === 'ruler-locator-row') return;
-    if (drag.type === 'ruler-seek') {
-      const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
-      this.dispatchEvent(eventOf('seek', { beat, source: 'ruler' }));
-      return;
-    }
-    if (drag.type === 'time-selection') {
-      if (event.pointerType === 'touch' && drag.moved && Math.abs(dy) > Math.abs(dx)) {
-        drag.type = 'scroll-lanes';
-        const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
-        this.lanesWrap.scrollTop = clamp(drag.startScrollTop - dy, 0, maximum);
-        this.paintLaneScroll();
-        return;
-      }
-      if (event.pointerType === 'touch' && drag.moved && Math.abs(dx) > Math.abs(dy)) {
-        drag.type = 'scroll-time';
-        drag.startScrollBeat = this._scrollBeat;
-        this.scrollBeat = Math.max(0, drag.startScrollBeat - dx / this._pxPerBeat);
-        return;
-      }
-      if (!drag.moved) return;
-      const currentLane = this.laneAtOrNearestPoint(event.clientY) || drag.laneId;
-      const laneIds = drag.allLanes ? this._lanes.map((lane) => lane.id) : this.laneIdsForSpan(drag.laneId, currentLane);
-      const snapOptions = {
-        step: this.currentGridStep(), mode: this.snapModeFor(event),
-        anchors: this.snapAnchors({ laneIds }), reach: this.snapReach(),
-      };
-      const start = snapTime(drag.startBeat, snapOptions);
-      const end = snapTime(this.beatAtPoint(event.clientX), snapOptions);
-      drag.previewSelection = normalizeTimeSelection(start, end, laneIds, this.worldEnd());
-      this.paintTimeSelection(drag.previewSelection);
-      this.dispatchEvent(eventOf('time-select-input', drag.previewSelection || { start, end, laneIds }));
-      return;
-    }
-    if (drag.type === 'lane-header') {
-      if (!drag.moved || this.readonly) return;
-      drag.toIndex = this.laneIndexFromHeaderPoint(event.clientY);
-      this.paintLaneDropLine(drag.toIndex);
-      return;
-    }
-    if (drag.type === 'scroll-time') {
-      this.scrollBeat = Math.max(0, drag.startScrollBeat - dx / this._pxPerBeat);
-      return;
-    }
-    if (drag.type === 'scroll-lanes') {
-      const maximum = Math.max(0, this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight);
-      this.lanesWrap.scrollTop = clamp(drag.startScrollTop - dy, 0, maximum);
-      this.paintLaneScroll();
-      return;
-    }
-    if (drag.type === 'trim-left' || drag.type === 'trim-right') {
-      const origin = drag.origin;
-      const originEdge = drag.type === 'trim-left' ? origin.start : origin.start + origin.length;
-      const pointerBeat = this._scrollBeat + (event.clientX - this.rulerWrap.getBoundingClientRect().left) / this._pxPerBeat;
-      const rawBeat = originEdge + (pointerBeat - originEdge) * this.gestureFactor(event);
-      const edgeBeat = snapTime(rawBeat, {
-        step: this.currentGridStep(), mode: this.snapModeFor(event), origin: originEdge,
-        anchors: this.snapAnchors({ laneIds: [drag.laneId], excludeIds: [drag.clipId] }), reach: this.snapReach(),
-      });
-      const delta = edgeBeat - originEdge;
-      // every selected clip takes the same change of edge as the one being dragged
-      drag.previews = drag.selected.map((item) => {
-        const clipStart = Number(item.clip.start) || 0;
-        const clipEnd = clipStart + Math.max(0, Number(item.clip.length) || 0);
-        const start = drag.type === 'trim-left' ? clamp(clipStart + delta, 0, clipEnd - MIN_CLIP_LENGTH) : clipStart;
-        const end = drag.type === 'trim-right' ? Math.max(clipEnd + delta, clipStart + MIN_CLIP_LENGTH) : clipEnd;
-        return { id: item.clip.id, start, end, clip: item.clip };
-      });
-      for (const preview of drag.previews) {
-        const element = this.clipElements().find((node) => node.dataset.id === preview.id);
-        if (!element) continue;
-        element.style.left = `${preview.start * this._pxPerBeat}px`;
-        element.style.width = `${Math.max(1, (preview.end - preview.start) * this._pxPerBeat)}px`;
-        this.paintClipContent(element, previewTrimmedClip(preview.clip, preview.start, preview.end));
-        this.dispatchEvent(eventOf('clip-trim-input', { id: preview.id, start: preview.start, end: preview.end }));
-      }
-      return;
-    }
-    if (drag.type === 'move') {
-      if (!drag.moved || this.readonly) return;
-      const targetLane = this.laneAtPoint(event.clientY);
-      const raw = dx / this._pxPerBeat;
-      const originStart = Number(drag.origin.start) || 0;
-      const length = Math.max(0, Number(drag.origin.length) || 0);
-      const edges = this.snapAnchors({ laneIds: [targetLane || drag.laneId], excludeIds: drag.ids });
-      const delta = snapTime(originStart + raw, {
-        step: this.currentGridStep(), mode: this.snapModeFor(event), origin: originStart,
-        anchors: [...edges, ...edges.map((edge) => edge - length)], reach: this.snapReach(),
-      }) - originStart;
-      drag.previewDelta = delta;
-      drag.copy = Boolean(event.altKey);
-      drag.lastClientY = event.clientY;
-      this.paintCopyState();
-      this.paintMovePreview();
-    }
-  }
-
-  /** @param {number} clientY @param {string} originalLaneId */
-  laneOffsetForPoint(clientY, originalLaneId) {
-    const target = this.laneAtPoint(clientY);
-    if (!target || target === originalLaneId) return 0;
-    const from = this._lanes.findIndex((lane) => lane.id === originalLaneId);
-    const to = this._lanes.findIndex((lane) => lane.id === target);
-    if (to < 0 || from < 0) return 0;
-    if (to > from) return this._lanes.slice(from, to).reduce((offset, lane) => offset + this.laneHeightFor(lane), 0);
-    return -this._lanes.slice(to, from).reduce((offset, lane) => offset + this.laneHeightFor(lane), 0);
-  }
-
-  /** Restore a gesture preview without emitting a host intent. */
-  /** @param {any} [options] */
-  cancelActiveDrag(options = {}) {
-    const drag = this.drag;
-    this.longPress.cancel();
-    clearTimeout(this.viewChangeTimer);
-    this.viewChangeTimer = null;
-    this.drag = null;
-    if (drag) {
-      if (drag.type === 'locator' && drag.element instanceof HTMLElement) {
-        drag.element.style.left = `${drag.startBeat * this._pxPerBeat}px`;
-      }
-      if (drag.type === 'time-selection' || drag.type === 'scroll-time') {
-        this.paintTimeSelection();
-        this.paintSelection();
-        this.scrollBeat = drag.startScrollBeat ?? this._scrollBeat;
-      }
-      if (drag.type === 'trim-left' || drag.type === 'trim-right') this.render();
-      if (drag.type === 'loop') this.paintLoop();
-      this.clearLaneDropLine();
-    }
-    this.clearClipDragVisuals();
-    if (options.clearPointers) {
-      this.pointers.clear();
-      this.pinch = null;
-    }
-  }
-
-  /** A cancelled pointer never commits its pending gesture. */
-  cancelPointer() {
-    this.cancelActiveDrag({ clearPointers: true });
-  }
-
-  endPointer(event) {
-    if (event.pointerType === 'touch' || this.pointers.has(event.pointerId)) {
-      this.pointers.delete(event.pointerId);
-      if (this.pinch) {
-        if (this.pointers.size < 2) this.pinch = null;
-        return;
-      }
-    }
-    const drag = this.drag;
-    if (!drag || event.pointerId !== drag.pointerId) {
-      this.clearClipDragVisuals();
-      return;
-    }
-    this.longPress.cancel();
-    this.drag = null;
-    this.clearClipDragVisuals();
-    if (drag.type === 'lane-header') {
-      this.clearLaneDropLine();
-      const index = this._lanes.findIndex((lane) => lane.id === drag.laneId);
-      if (drag.moved) { if (!this.readonly) this.dispatchEvent(eventOf('lane-move', { laneId: drag.laneId, toIndex: clamp(Number(drag.toIndex) || 0, 0, this._lanes.length - 1) })); }
-      else if (index >= 0) this.dispatchEvent(eventOf('lane-pick', { laneId: drag.laneId, shiftKey: Boolean(event.shiftKey) }));
-      return;
-    }
-    if (drag.type === 'locator') {
-      if (drag.moved) {
-        if (!this.readonly) this.dispatchEvent(eventOf('locator-move', {
-          id: drag.locatorId,
-          beat: drag.previewBeat ?? drag.startBeat,
-        }));
-        return;
-      }
-      else {
-        this.dispatchEvent(eventOf('locator-jump', { id: drag.locatorId }));
-        if (drag.renameCandidate) {
-          this.renameTimer = setTimeout(() => {
-            this.renameTimer = null;
-            if (this.readonly) return;
-            this.renamingLocator = drag.locatorId;
-            this.render();
-          }, 350);
-        }
-      }
-      return;
-    }
-    if (drag.type === 'ruler-locator-row') return;
-    if (drag.type === 'ruler-seek') return;
-    if (drag.type === 'time-selection') {
-      if (drag.moved && drag.previewSelection) {
-        const selection = drag.previewSelection;
-        this.setTimeSelection(selection.start, selection.end, selection.laneIds);
-        if (this._selected.length) {
-          this._selected = [];
-          this.emitSelection();
-        }
-        this.dispatchEvent(eventOf('time-select', this.timeSelection));
-      } else if (drag.moved) {
-        this.setTimeSelection(null, null);
-        this._selected = [];
-        this.emitSelection();
-        this.dispatchEvent(eventOf('time-select', { start: drag.startBeat, end: drag.startBeat, laneIds: [drag.laneId] }));
-      } else if (event.shiftKey && this.extendTimeSelection(event, drag)) {
-        return;
-      } else {
-        this.setTimeSelection(null, null);
-        this.dispatchEvent(eventOf('time-select', { start: null }));
-        if (this._selected.length) {
-          this._selected = [];
-          this.emitSelection();
-        }
-        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
-        this.dispatchEvent(eventOf('seek', { beat, source: drag.allLanes ? 'ruler' : 'lane' }));
-      }
-      return;
-    }
-    if (drag.type === 'scroll-time' || drag.type === 'scroll-lanes') return;
-    this.clearClipDragVisuals();
-    if (drag.element) drag.element.style.cursor = 'default';
-    if (drag.type === 'trim-left' || drag.type === 'trim-right') {
-      if (drag.previews) {
-        for (const { id, start, end } of drag.previews) this.dispatchEvent(eventOf('clip-trim', { id, start, end }));
-      } else this.render();
-      return;
-    }
-    if (drag.type === 'move' && drag.moved && !this.readonly) {
-      const targetLane = this.laneAtPoint(event.clientY) || drag.laneId;
-      const deltaBeats = drag.previewDelta ?? 0;
-      this.dispatchEvent(eventOf('clip-move', { ids: drag.ids, laneId: targetLane, deltaBeats, copy: Boolean(drag.copy) }));
-      return;
-    }
-    if (drag.type === 'move') {
-      this.paintSelection();
-      if (drag.renameCandidate) {
-        this.renameTimer = setTimeout(() => {
-          this.renameTimer = null;
-          this.beginRename(drag.clipId);
-        }, 350);
-      }
-    }
-  }
-
-  startLoopDrag(event, kind) {
-    if (this.hasAttribute('disabled') || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    this.drag = {
-      pointerId: event.pointerId, type: 'loop', kind, startX: event.clientX,
-      start: this._loopStart, end: this._loopEnd, loopEnabled: this._loopEnabled,
-      px: this._pxPerBeat, node: event.currentTarget,
-    };
-    this.setAttribute('data-loop-drag', '');
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }
-
-  moveLoopDrag(event) {
-    const drag = this.drag;
-    if (!drag || drag.type !== 'loop' || event.pointerId !== drag.pointerId) return;
-    const delta = (event.clientX - drag.startX) / drag.px * this.gestureFactor(event);
-    const mode = this.snapModeFor(event);
-    const step = this.currentGridStep();
-    const anchors = this.snapAnchors().filter((anchor) => anchor !== drag.start && anchor !== drag.end);
-    const snapValue = (value, origin) => snapTime(value, { step, mode, origin, anchors, reach: this.snapReach() });
-    let start = drag.start;
-    let end = drag.end;
-    if (drag.kind === 'start') start = Math.min(snapValue(drag.start + delta, drag.start), end - MIN_CLIP_LENGTH);
-    else if (drag.kind === 'end') end = Math.max(snapValue(drag.end + delta, drag.end), start + MIN_CLIP_LENGTH);
-    else { start = Math.max(0, snapValue(drag.start + delta, drag.start)); end = start + (drag.end - drag.start); }
-    drag.preview = { start, end };
-    this.paintLoop(start, end);
-    this.dispatchEvent(eventOf('loop-input', { start, end, enabled: this._loopEnabled }));
-  }
-
-  endLoopDrag(event) {
-    const drag = this.drag;
-    if (!drag || drag.type !== 'loop' || event.pointerId !== drag.pointerId) return;
-    this.drag = null;
-    this.removeAttribute('data-loop-drag');
-    const preview = drag.preview ?? { start: drag.start, end: drag.end };
-    this.paintLoop();
-    this.dispatchEvent(eventOf('loop-change', { ...preview, enabled: this._loopEnabled }));
-  }
-
-  cancelLoopDrag(event) {
-    if (!this.drag || this.drag.type !== 'loop' || event.pointerId !== this.drag.pointerId) return;
-    this.removeAttribute('data-loop-drag');
-    this.cancelActiveDrag();
-  }
-
-  /** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {{beat:number,value:number}[]} points */
-  /** Report an automation edit; the host applies it and hands the points back. */
-  commitAutomationChange(lane, automation, points) {
-    if (this.readonly) return;
-    this.dispatchEvent(eventOf('automation-change', {
-      laneId: lane.id,
-      automationId: automation.id,
-      points: points.map((point) => ({ ...point })),
-    }));
-  }
-
-  // ---- Click, keyboard, wheel -------------------------------------------------
-
-  handleDoubleClick(event) {
-    if (this.hasAttribute('disabled')) return;
-    const loopPart = event.composedPath().find((node) => node instanceof HTMLElement
-      && (node.classList.contains('ruler-band') || node.classList.contains('ruler-handle')));
-    if (loopPart instanceof HTMLElement) {
-      if (loopPart.classList.contains('ruler-band')) {
-        this.dispatchEvent(eventOf('loop-toggle', { enabled: !this._loopEnabled }));
-      }
-      return;
-    }
-    const locator = this.locatorFromEvent(event);
-    if (locator) {
-      clearTimeout(this.renameTimer);
-      this.renameTimer = null;
-      return;
-    }
-    if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('ruler-wrap'))) {
-      if (this.rulerRowAtPoint(event.clientY) === 1) {
-        if (this.readonly) return;
-        event.preventDefault();
-        const beat = snapBeat(this.beatAtPoint(event.clientX), this.beatsPerBar, this.grid, this.snapModeFor(event));
-        this.dispatchEvent(eventOf('locator-create', { beat }));
-      } else if (this.rulerRowAtPoint(event.clientY) === 2) {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('fit-request', {}));
-      }
-      return;
-    }
-    const laneName = pathElement(event, 'lane-name');
-    if (laneName instanceof HTMLElement) {
-      const lane = this._lanes.find((entry) => entry.id === laneName.closest('.lane-header')?.dataset.laneId);
-      if (lane) {
-        event.preventDefault();
-        this.beginLaneRename(lane.id);
-      }
-      return;
-    }
-    if (this.clipAtPoint(event)) return;
-    if (this.readonly) return;
-    const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
-    if (lane instanceof HTMLElement) {
-      this.dispatchEvent(eventOf('lane-create', {
-        laneId: lane.dataset.laneId,
-        beat: this.creationBeatFor(event),
-        length: this.currentGridStep(),
-      }));
-    } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('header-wrap'))) {
-      this.dispatchEvent(eventOf('lanes-create', { clientX: event.clientX, clientY: event.clientY }));
-    }
-  }
-
-  handleContextMenu(event) {
-    if (this.hasAttribute('disabled')) return;
-    const locator = this.locatorFromEvent(event);
-    if (locator) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('locator-context', { id: locator.locator.id, clientX: event.clientX, clientY: event.clientY }));
-      return;
-    }
-    const automation = this.automationFromEvent(event);
-    if (automation) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('automation-context', {
-        laneId: automation.lane.id, automationId: automation.automation.id,
-        clientX: event.clientX, clientY: event.clientY,
-      }));
-      return;
-    }
-    const found = this.clipFromEvent(event);
-    if (found) {
-      event.preventDefault();
-      this.selectOne(found.clip.id);
-      this.dispatchEvent(eventOf('clip-context', { id: found.clip.id, clientX: event.clientX, clientY: event.clientY }));
-      return;
-    }
-    const header = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane-header'));
-    if (header instanceof HTMLElement) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('lane-header-context', { laneId: header.dataset.laneId, clientX: event.clientX, clientY: event.clientY }));
-      return;
-    }
-    const lane = event.composedPath().find((node) => node instanceof HTMLElement && node.classList.contains('lane'));
-    if (lane instanceof HTMLElement) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('lane-context', { laneId: lane.dataset.laneId, beat: this.beatAtPoint(event.clientX), clientX: event.clientX, clientY: event.clientY }));
-    } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('header-wrap'))) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('lanes-context', { clientX: event.clientX, clientY: event.clientY }));
-    } else if (event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('ruler-wrap'))) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('ruler-context', { beat: this.beatAtPoint(event.clientX), clientX: event.clientX, clientY: event.clientY }));
-    } else {
-      // every remaining point of the surface still resolves to a context
-      // intent, so callers never need a native contextmenu fallback
-      event.preventDefault();
-      this.dispatchEvent(eventOf('timeline-context', { clientX: event.clientX, clientY: event.clientY }));
-    }
-  }
-
-  entryClip(key) {
-    const clips = this._lanes.flatMap((lane) => lane.clips);
-    if (!clips.length) return null;
-    if (key === 'Home' || key === 'ArrowLeft' || key === 'ArrowUp') return clips[0];
-    if (key === 'End') return clips[clips.length - 1];
-    return clips.reduce((nearest, clip) => Math.abs((Number(clip.start) || 0) - this._playhead)
-      < Math.abs((Number(nearest.start) || 0) - this._playhead) ? clip : nearest, clips[0]);
-  }
-
-  handleKey(event) {
-    if (this.hasAttribute('disabled')) return;
-    const source = event.composedPath()[0];
-    if (source instanceof HTMLInputElement || source instanceof HTMLTextAreaElement) return;
-    const key = event.key.toLowerCase();
-    const automationBody = this.automationFromEvent(event);
-    const envelopeEditor = event.composedPath().some((node) => node instanceof HTMLElement
-      && node.localName === 'compost-envelope-editor');
-    if (!this.readonly && !event.altKey && !event.metaKey && !event.ctrlKey && key === 'b') {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('draw-toggle', { enabled: !this.draw }));
-      return;
-    }
-    if (envelopeEditor && !(this.draw && (event.key === 'Delete' || event.key === 'Backspace'))) return;
-    const keyStep = this.currentGridStep() * (event.shiftKey ? 1 / 16 : 1);
-    const loopHandle = pathElement(event, 'ruler-handle');
-    if (loopHandle instanceof HTMLElement && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-      event.preventDefault();
-      if (this.readonly) return;
-      const delta = keyStep * (event.key === 'ArrowRight' ? 1 : -1);
-      const start = loopHandle.classList.contains('start')
-        ? clamp(this._loopStart + delta, 0, this._loopEnd - MIN_CLIP_LENGTH) : this._loopStart;
-      const end = loopHandle.classList.contains('end')
-        ? Math.max(this._loopEnd + delta, this._loopStart + MIN_CLIP_LENGTH) : this._loopEnd;
-      this.dispatchEvent(eventOf('loop-change', { start, end, enabled: this._loopEnabled }));
-      return;
-    }
-    const locatorTarget = this.locatorFromEvent(event);
-    if (locatorTarget) {
-      if (event.key === 'F2' && !this.readonly) {
-        event.preventDefault();
-        this.renamingLocator = locatorTarget.locator.id;
-        this.render();
-        return;
-      } else if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('locator-jump', { id: locatorTarget.locator.id }));
-        return;
-      } else if (!this.readonly && (event.key === 'Delete' || event.key === 'Backspace')) {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('locator-delete', { id: locatorTarget.locator.id }));
-        return;
-      } else if (!this.readonly && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-        event.preventDefault();
-        const beat = Math.max(0, locatorTarget.locator.beat + keyStep * (event.key === 'ArrowRight' ? 1 : -1));
-        this.dispatchEvent(eventOf('locator-move', { id: locatorTarget.locator.id, beat }));
-        return;
-      }
-    }
-    if (this.draw && automationBody && event.key.startsWith('Arrow')) {
-      event.preventDefault();
-      return;
-    }
-    const selection = this._timeSelection;
-    const automationSelection = !this.draw && automationBody
-      ? this.automationSelectionFor(automationBody.lane.id) : null;
-    if (automationSelection && (event.key === 'Delete' || event.key === 'Backspace')) {
-      event.preventDefault();
-      const points = toEnvelopePoints(automationBody.automation.points);
-      const values = envelopeRangeEdgeValues(points,
-        automationSelection.start, automationSelection.end, {
-          min: automationBody.automation.min,
-          max: automationBody.automation.max,
-          scale: automationBody.automation.scale,
-          stepped: automationBody.automation.stepped,
-          step: this.automationValueStep(automationBody.automation),
-        });
-      this.commitAutomationChange(automationBody.lane, automationBody.automation,
-        fromEnvelopePoints(flattenEnvelopeRange(points, automationSelection.start, automationSelection.end, values,
-          { min: automationBody.automation.min, max: automationBody.automation.max }, undefined,
-          this.automationValueStep(automationBody.automation))));
-      return;
-    }
-    if (selection && source === this && this.handleTimeSelectionArrow(event)) return;
-    if (selection) {
-      if (!this.readonly && (event.metaKey || event.ctrlKey) && key === 'd') {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('time-duplicate', {
-          start: selection.start,
-          end: selection.end,
-          laneIds: [...selection.laneIds],
-          to: selection.end,
-        }));
-        return;
-      }
-      if (key === 'l' && !event.altKey && !event.shiftKey) {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('loop-change', { start: selection.start, end: selection.end, enabled: true }));
-        return;
-      }
-      if (!this.readonly && (event.key === 'Delete' || event.key === 'Backspace')) {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('time-delete', {
-          start: selection.start,
-          end: selection.end,
-          laneIds: [...selection.laneIds],
-          removeTime: Boolean(event.shiftKey),
-        }));
-        return;
-      }
-      if (!this.readonly && (event.metaKey || event.ctrlKey) && key === 'e') {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('clip-split', {
-          ids: this.clipsInsideTimeSelection(selection),
-          beats: [selection.start, selection.end],
-          laneIds: [...selection.laneIds],
-        }));
-        return;
-      }
-    }
-    if (event.key === ',' || event.key === '.') {
-      const current = this._playhead;
-      const candidates = this._locators.filter((locator) => event.key === ',' ? locator.beat < current : locator.beat > current);
-      const locator = event.key === ',' ? candidates.at(-1) : candidates[0];
-      if (locator) {
-        event.preventDefault();
-        this.dispatchEvent(eventOf(event.key === ',' ? 'locator-prev' : 'locator-next', { id: locator.id }));
-      }
-      return;
-    }
-    const headerTarget = this.laneHeaderFromEvent(event);
-    const onAutomationSurface = event.composedPath().some((node) => node instanceof HTMLElement && node.classList.contains('lane-automation'));
-    const onHeaderControl = event.composedPath().some((node) => node instanceof HTMLElement
-      && node.matches('button, input, select, textarea, [data-timeline-interactive]'));
-    if (headerTarget && !onAutomationSurface && !onHeaderControl) {
-      const index = this._lanes.indexOf(headerTarget.lane);
-      if (event.shiftKey && event.key === 'F10') {
-        event.preventDefault();
-        const point = this.pointForLaneHeader(headerTarget.lane.id);
-        this.dispatchEvent(eventOf('lane-header-context', { laneId: headerTarget.lane.id, ...point }));
-        return;
-      }
-      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-        event.preventDefault();
-        const toIndex = clamp(index + (event.key === 'ArrowUp' ? -1 : 1), 0, this._lanes.length - 1);
-        if (toIndex !== index && !this.readonly) this.dispatchEvent(eventOf('lane-move', { laneId: headerTarget.lane.id, toIndex }));
-        return;
-      }
-      if (event.key === 'Enter' || event.key === 'F2') {
-        event.preventDefault();
-        this.beginLaneRename(headerTarget.lane.id);
-        return;
-      }
-    }
-    if (event.shiftKey && event.key === 'F10' && automationBody) {
-      event.preventDefault();
-      const rect = automationBody.row.getBoundingClientRect();
-      this.dispatchEvent(eventOf('automation-context', {
-        laneId: automationBody.lane.id,
-        automationId: automationBody.automation.id,
-        clientX: rect.left + rect.width / 2,
-        clientY: rect.top + rect.height / 2,
-      }));
-      return;
-    }
-    const current = this.focusedClip || this._selected[0];
-    const found = current ? this.findClip(current) : null;
-    const meta = event.metaKey || event.ctrlKey;
-    // loop the selection: Cmd/Ctrl-L as in Ableton, and plain `l` because the browser
-    // keeps Cmd-L for its address bar
-    if (key === 'l' && !event.altKey && !event.shiftKey) {
-      const ids = this._selected.length ? this._selected : found ? [found.clip.id] : [];
-      const clips = ids.map((id) => this.findClip(id)?.clip).filter(Boolean);
-      if (clips.length) {
-        event.preventDefault();
-        const start = Math.min(...clips.map((clip) => Number(clip.start) || 0));
-        const end = Math.max(...clips.map((clip) => (Number(clip.start) || 0) + (Number(clip.length) || 0)));
-        if (end > start + MIN_CLIP_LENGTH) this.dispatchEvent(eventOf('loop-change', { start, end, enabled: true }));
-      }
-      return;
-    }
-    if (event.shiftKey && event.key === 'F10') {
-      if (found) {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('clip-context', { id: found.clip.id, ...this.pointForClip(found.clip.id) }));
-      }
-      else if (this.focusedLane) {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('lane-header-context', { laneId: this.focusedLane, ...this.pointForLaneHeader(this.focusedLane) }));
-      }
-      return;
-    }
-    if (meta && key === 'a') {
-      event.preventDefault();
-      this.selectAllClips();
-      return;
-    }
-    if (!meta && !event.altKey && (key === 'z' || key === 'x')) {
-      event.preventDefault();
-      this.zoomToFocus(key);
-      return;
-    }
-    if (!this.readonly && meta && key === 'i') {
-      // insert time: the region's span on its lanes, or one bar at the playhead on every lane
-      event.preventDefault();
-      this.dispatchEvent(eventOf('time-insert', selection
-        ? { beat: selection.start, beats: selection.end - selection.start, laneIds: [...selection.laneIds] }
-        : { beat: this._playhead, beats: this.beatsPerBar, laneIds: this._lanes.map((lane) => lane.id) }));
-      return;
-    }
-    if (!this.readonly && meta && key === 'j') {
-      const ids = this._selected.length ? this._selected : found ? [found.clip.id] : [];
-      const clips = ids.map((id) => this.findClip(id)).filter(Boolean)
-        .sort((a, b) => (Number(a.clip.start) || 0) - (Number(b.clip.start) || 0));
-      if (clips.length >= 2) {
-        event.preventDefault();
-        this.dispatchEvent(eventOf('clip-join', { ids: clips.map(({ clip }) => clip.id) }));
-      }
-      return;
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this._selected = [];
-      this.focusedClip = null;
-      this.focusedLane = null;
-      this.emitSelection();
-      if (this._timeSelection) {
-        this.setTimeSelection(null, null);
-        this.dispatchEvent(eventOf('time-select', { start: null }));
-      }
-      return;
-    }
-    if (!found) {
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
-        const entry = this.entryClip(event.key);
-        if (entry) {
-          event.preventDefault();
-          this.selectOne(entry.id);
-          this.focusClip(entry.id);
-        }
-        return;
-      }
-      if (event.key === '[' || event.key === ']') { event.preventDefault(); this.zoomBy(event.key === ']' ? 1.16 : .86); }
-      return;
-    }
-    if (!this.readonly && event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-      event.preventDefault();
-      const step = keyStep * (event.key === 'ArrowRight' ? 1 : -1);
-      this.dispatchEvent(eventOf('clip-nudge', { ids: this.selected.length ? this.selected : [found.clip.id], deltaBeats: step }));
-      return;
-    }
-    if (!this.readonly && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-      event.preventDefault();
-      const laneIndex = this._lanes.indexOf(found.lane);
-      const target = this._lanes[laneIndex + (event.key === 'ArrowUp' ? -1 : 1)];
-      if (!target) return;
-      this.dispatchEvent(eventOf('clip-move', {
-        ids: this.selected.length ? this.selected : [found.clip.id], laneId: target.id, deltaBeats: 0, copy: false,
-      }));
-      return;
-    }
-    const adjacent = this.adjacentClip(found, event.key);
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
-      if (!adjacent) return;
-      event.preventDefault();
-      if (event.shiftKey) this.selectOne(adjacent.id, true);
-      else this.selectOne(adjacent.id);
-      this.focusClip(adjacent.id);
-      return;
-    }
-    if (event.key === 'Enter' || (!meta && !event.altKey && event.key.toLowerCase() === 'e')) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('clip-open', { id: found.clip.id, altKey: event.altKey, ...this.pointForClip(found.clip.id) }));
-    } else if (event.key === 'F2') {
-      event.preventDefault();
-      this.beginRename(found.clip.id);
-    } else if (!this.readonly && (event.key === 'Delete' || event.key === 'Backspace')) {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('clip-delete', { ids: this.selected.length ? this.selected : [found.clip.id] }));
-    } else if (!this.readonly && meta && event.key.toLowerCase() === 'd') {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('clip-duplicate', { ids: this.selected.length ? this.selected : [found.clip.id] }));
-    } else if (!this.readonly && meta && event.key.toLowerCase() === 'e') {
-      event.preventDefault();
-      this.dispatchEvent(eventOf('clip-split', { ids: this.selected.length ? this.selected : [found.clip.id], beat: this._playhead }));
-    } else if (event.key === '[' || event.key === ']') {
-      event.preventDefault();
-      this.zoomBy(event.key === ']' ? 1.16 : .86);
-    }
-  }
-
-  /** @param {{lane: TimelineLane, clip: TimelineClip}} found @param {string} key */
-  adjacentClip(found, key) {
-    const laneIndex = this._lanes.indexOf(found.lane);
-    const clips = found.lane.clips;
-    const index = clips.indexOf(found.clip);
-    if (key === 'Home') return clips[0];
-    if (key === 'End') return clips[clips.length - 1];
-    if (key === 'ArrowLeft') return clips[index - 1] || clips[index];
-    if (key === 'ArrowRight') return clips[index + 1] || clips[index];
-    if (key === 'ArrowUp' || key === 'ArrowDown') {
-      const other = this._lanes[laneIndex + (key === 'ArrowUp' ? -1 : 1)];
-      if (!other?.clips.length) return null;
-      const center = (Number(found.clip.start) || 0) + (Number(found.clip.length) || 0) / 2;
-      return other.clips.reduce((best, clip) => Math.abs((clip.start + clip.length / 2) - center) < Math.abs((best.start + best.length / 2) - center) ? clip : best);
-    }
-    return null;
-  }
-
-  /** z: zoom to the region, else the selected clips, else ask the host to fit; x: back. */
-  /** @param {string} key */
-  zoomToFocus(key) {
-    if (key === 'x') {
-      const previous = this.zoomHistory.pop();
-      if (!previous) return;
-      this._pxPerBeat = previous.pxPerBeat;
-      this._scrollBeat = previous.scrollBeat;
-      this.render();
-      this.scheduleViewChange();
-      return;
-    }
-    const selection = this._timeSelection;
-    const clips = this._selected.map((id) => this.findClip(id)?.clip).filter(Boolean);
-    const range = selection ? { start: selection.start, end: selection.end }
-      : clips.length ? {
-        start: Math.min(...clips.map((clip) => Number(clip.start) || 0)),
-        end: Math.max(...clips.map((clip) => (Number(clip.start) || 0) + (Number(clip.length) || 0))),
-      } : null;
-    if (!range || !(range.end > range.start + MIN_CLIP_LENGTH)) {
-      this.dispatchEvent(eventOf('fit-request', {}));
-      return;
-    }
-    this.zoomHistory.push({ pxPerBeat: this._pxPerBeat, scrollBeat: this._scrollBeat });
-    const width = Math.max(1, this.lanesWrap.clientWidth || this.clientWidth || 1);
-    this._pxPerBeat = finiteClamp(width / (range.end - range.start), MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
-    this._scrollBeat = range.start;
-    this.render();
-    this.scheduleViewChange();
-  }
-
-  zoomBy(multiplier) {
-    const at = this._playhead;
-    const old = this._pxPerBeat;
-    this._pxPerBeat = finiteClamp(old * multiplier, MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
-    this._scrollBeat = Math.max(0, at - ((at - this._scrollBeat) * old) / this._pxPerBeat);
-    this.render();
-    this.scheduleViewChange();
-  }
-
-  handleWheel(event) {
-    event.preventDefault();
-    if (event.altKey) {
-      const current = this._lanes.length ? this.laneRowHeightFor(this._lanes[0]) : this.laneHeight;
-      const height = clamp(Math.round(current * (event.deltaY > 0 ? .86 : 1.16)), 24, 400);
-      for (const lane of this._lanes) this.previewLaneHeight(lane, height);
-      this.paintTimeSelection();
-      this.dispatchEvent(eventOf('lanes-resize', { height }));
-      return;
-    }
-    if (event.metaKey || event.ctrlKey) {
-      const old = this._pxPerBeat;
-      const rect = this.rulerWrap.getBoundingClientRect();
-      const at = this._scrollBeat + (event.clientX - rect.left) / old;
-      this._pxPerBeat = finiteClamp(old * (event.deltaY > 0 ? .86 : 1.16), MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
-      this._scrollBeat = Math.max(0, at - (event.clientX - rect.left) / this._pxPerBeat);
-      this.render();
-      this.scheduleViewChange();
-    } else if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-      this.scrollBeat = Math.max(0, this._scrollBeat + (event.deltaX || event.deltaY) / this._pxPerBeat);
-    } else {
-      this.lanesWrap.scrollTop = Math.max(0, this.lanesWrap.scrollTop + event.deltaY);
-    }
-  }
+		/** @param {string} selector @returns {HTMLElement} */
+		const part = (selector) =>
+			/** @type {HTMLElement} */ (this.root.querySelector(selector));
+		this.frame = part(".frame");
+		this.rulerWrap = part(".ruler-wrap");
+		this.ruler = part(".ruler");
+		this.rulerWorld = part(".ruler-world");
+		this.rulerTimeSelection = part(".ruler-time-selection");
+		this.rulerBand = part(".ruler-band");
+		this.rulerStart = part(".ruler-handle.start");
+		this.rulerEnd = part(".ruler-handle.end");
+		this.rulerPlayhead = part(".ruler-playhead");
+		this.headerWrap = part(".header-wrap");
+		this.headers = part(".headers");
+		this.laneDropLine = part(".lane-drop-line");
+		this.lanesWrap = part(".lanes-wrap");
+		this.lanesWorld = part(".lanes-world");
+		this.loopStartLine = part(".loop-start-line");
+		this.loopEndLine = part(".loop-end-line");
+		this.playheadElement = part(".playhead");
+		this.announce = part(".announce");
+
+		this.addEventListener("pointerdown", (event) => this.startPointer(event));
+		this.addEventListener("pointermove", (event) => this.movePointer(event));
+		this.addEventListener("pointerup", (event) => this.endPointer(event));
+		this.addEventListener("pointercancel", (event) =>
+			this.cancelPointer(event),
+		);
+		// A clip's title strip owns object gestures. In automation view it is found
+		// geometrically because the envelope owns the pointer surface beneath it.
+		this.addEventListener(
+			"pointerdown",
+			(event) => this.startClipStrip(event),
+			true,
+		);
+		this.addEventListener(
+			"dblclick",
+			(event) => {
+				const found = this.hasAttribute("disabled")
+					? null
+					: this.clipStripFromEvent(event);
+				if (!found) return;
+				clearTimeout(this.renameTimer);
+				this.renameTimer = null;
+				event.__compostTimelineHandled = true;
+				event.stopPropagation();
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("clip-open", {
+						id: found.clip.id,
+						altKey: event.altKey,
+						clientX: event.clientX,
+						clientY: event.clientY,
+					}),
+				);
+			},
+			true,
+		);
+		this.addEventListener(
+			"contextmenu",
+			(event) => {
+				if (pathElement(event, "lane-automation")) return;
+				const found = this.hasAttribute("disabled")
+					? null
+					: this.clipAtPoint(event);
+				if (!found) return;
+				event.__compostTimelineHandled = true;
+				event.stopPropagation();
+				event.preventDefault();
+				if (
+					!this.timeSelectionContains(
+						found.lane.id,
+						this.beatAtPoint(event.clientX),
+					)
+				)
+					this.selectClipBounds(found);
+				this.dispatchEvent(
+					eventOf("clip-context", {
+						id: found.clip.id,
+						clientX: event.clientX,
+						clientY: event.clientY,
+					}),
+				);
+			},
+			true,
+		);
+		this.addEventListener("dblclick", (event) => {
+			if (event.__compostTimelineHandled) return;
+			event.__compostTimelineHandled = true;
+			this.handleDoubleClick(event);
+		});
+		installTouchDoubleClick(this);
+		this.addEventListener("contextmenu", (event) => {
+			if (event.__compostTimelineHandled) return;
+			event.__compostTimelineHandled = true;
+			this.handleContextMenu(event);
+		});
+		this.addEventListener("keydown", (event) => this.handleKey(event));
+		// Some browsers keep secondary mouse events inside a shadow root. Relay
+		// those events at the root while marking composed events so they do not
+		// run twice on the host listener above.
+		for (const [type, method] of [
+			["dblclick", "handleDoubleClick"],
+			["contextmenu", "handleContextMenu"],
+		]) {
+			this.root.addEventListener(type, (event) => {
+				if (event.__compostTimelineHandled) return;
+				event.__compostTimelineHandled = true;
+				this[method](event);
+			});
+		}
+		this.lanesWrap.addEventListener(
+			"wheel",
+			(event) => this.handleWheel(event),
+			{ passive: false },
+		);
+		this.rulerWrap.addEventListener(
+			"wheel",
+			(event) => this.handleWheel(event),
+			{ passive: false },
+		);
+		this.lanesWrap.addEventListener("scroll", () => this.paintLaneScroll());
+		for (const [node, kind] of [
+			[this.rulerStart, "start"],
+			[this.rulerEnd, "end"],
+			[this.rulerBand, "move"],
+		]) {
+			node.addEventListener("pointerdown", (event) =>
+				this.startLoopDrag(event, kind),
+			);
+			node.addEventListener("pointermove", (event) => this.moveLoopDrag(event));
+			node.addEventListener("pointerup", (event) => this.endLoopDrag(event));
+			node.addEventListener("pointercancel", (event) =>
+				this.cancelLoopDrag(event),
+			);
+		}
+		this.resizeObserver =
+			typeof ResizeObserver === "function"
+				? new ResizeObserver(() => this.render())
+				: null;
+	}
+
+	connectedCallback() {
+		if (!this.hasAttribute("tabindex")) this.tabIndex = 0;
+		this.setAttribute("role", "region");
+		this.syncAttributes();
+		this.render();
+		this.resizeObserver?.observe(this);
+		window.addEventListener("keydown", this.handleModifierKey, true);
+		window.addEventListener("keyup", this.handleModifierKey, true);
+	}
+
+	disconnectedCallback() {
+		window.removeEventListener("keydown", this.handleModifierKey, true);
+		window.removeEventListener("keyup", this.handleModifierKey, true);
+		this.resizeObserver?.disconnect();
+		this.cancelActiveDrag({ clearPointers: true });
+		this.longPress.cancel();
+		clearTimeout(this.renameTimer);
+		this.renameTimer = null;
+		clearTimeout(this.viewChangeTimer);
+		this.viewChangeTimer = null;
+	}
+
+	attributeChangedCallback() {
+		if (!this.isConnected) return;
+		this.syncAttributes();
+		this.render();
+	}
+
+	syncAttributes() {
+		this.label = this.getAttribute("label") || this.label;
+		const meter = timeSignatureOf(this.getAttribute("time-signature"));
+		this.timeSignature = meter.text;
+		this.beatsPerBar = meter.barLength;
+		this.beatLength = meter.beatLength;
+		this.pulseLength = meter.pulseLength;
+		this.grid = this.getAttribute("grid")?.trim() || this.grid;
+		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
+		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
+		this.follow = this.hasAttribute("follow");
+		this.automation = this.hasAttribute("automation");
+		this.draw = this.hasAttribute("draw");
+		const style = getComputedStyle(this);
+		const fontSize = Number.parseFloat(style.fontSize) || 16;
+		this.fontSize = fontSize;
+		const rawLaneHeight = style
+			.getPropertyValue("--compost-timeline-lane-height")
+			.trim();
+		const parsedLaneHeight = Number.parseFloat(rawLaneHeight);
+		const cssLaneHeight = rawLaneHeight.endsWith("em")
+			? parsedLaneHeight * fontSize
+			: rawLaneHeight.endsWith("rem")
+				? parsedLaneHeight *
+					(Number.parseFloat(
+						getComputedStyle(document.documentElement).fontSize,
+					) || 16)
+				: parsedLaneHeight;
+		const defaultLaneHeight = fontSize * DEFAULT_LANE_HEIGHT_EM;
+		this.laneHeight = Math.max(
+			24,
+			this.hasAttribute("lane-height")
+				? numberAttr(this, "lane-height", this.laneHeight)
+				: Number.isFinite(cssLaneHeight)
+					? cssLaneHeight
+					: defaultLaneHeight,
+		);
+		const rawThinHeight = style
+			.getPropertyValue("--compost-timeline-thin-lane-height")
+			.trim();
+		const parsedThinHeight = Number.parseFloat(rawThinHeight);
+		const cssThinHeight = rawThinHeight.endsWith("em")
+			? parsedThinHeight * fontSize
+			: rawThinHeight.endsWith("rem")
+				? parsedThinHeight *
+					(Number.parseFloat(
+						getComputedStyle(document.documentElement).fontSize,
+					) || 16)
+				: parsedThinHeight;
+		this.thinLaneHeight = Math.max(
+			24,
+			Number.isFinite(cssThinHeight)
+				? cssThinHeight
+				: fontSize * DEFAULT_THIN_LANE_HEIGHT_EM,
+		);
+		this._loopEnabled = this.hasAttribute("loop-enabled");
+		this.setAttribute("aria-label", this.label);
+		this.style.setProperty(
+			"--compost-timeline-row-height",
+			`${this.laneHeight}px`,
+		);
+	}
+
+	get lanes() {
+		return this._lanes.map((lane) => ({
+			...lane,
+			automation: cloneAutomation(lane.automation),
+			clips: lane.clips.map((clip) => ({
+				...clip,
+				notes: clip.notes?.map((note) => ({ ...note })),
+			})),
+		}));
+	}
+
+	/** Replace all lanes and clips; this never emits a model intent. */
+	/** @param {TimelineLane[]} lanes */
+	setLanes(lanes) {
+		this._lanes = Array.isArray(lanes)
+			? lanes.map((lane) => ({
+					...lane,
+					compact: Boolean(lane.compact),
+					picked: Boolean(lane.picked),
+					dimmed: Boolean(lane.dimmed),
+					automation: cloneAutomation(lane.automation),
+					clips: Array.isArray(lane.clips)
+						? lane.clips.map((clip) => ({
+								...clip,
+								notes: clip.notes?.map((note) => ({ ...note })),
+							}))
+						: [],
+				}))
+			: [];
+		const ids = new Set(
+			this._lanes.flatMap((lane) => lane.clips.map((clip) => clip.id)),
+		);
+		for (const [id, preview] of this._clipPreviews) {
+			if (ids.has(id)) continue;
+			if (preview.parentElement === this) preview.remove();
+			this._clipPreviews.delete(id);
+		}
+		if (this._timeSelection) {
+			this._timeSelection.laneIds = this._timeSelection.laneIds.filter((id) =>
+				this._lanes.some((lane) => lane.id === id),
+			);
+			if (!this._timeSelection.laneIds.length) this._timeSelection = null;
+		}
+		if (this.focusedClip && !ids.has(this.focusedClip)) this.focusedClip = null;
+		this.render();
+	}
+
+	/** Attach caller-owned lane headers through native slots. Compost owns the
+	 * aligned wrapper; the caller owns every control and policy inside it.
+	 * @param {Map<string, HTMLElement>|Record<string, HTMLElement>} headers */
+	setLaneHeaders(headers) {
+		const entries =
+			headers instanceof Map
+				? [...headers.entries()]
+				: Object.entries(headers || {});
+		const next = new Map(
+			entries
+				.filter(
+					([laneId, element]) =>
+						String(laneId) && element instanceof HTMLElement,
+				)
+				.map(([laneId, element]) => [String(laneId), element]),
+		);
+		for (const [laneId, element] of this._laneHeaders) {
+			if (next.get(laneId) !== element && element.parentElement === this)
+				element.remove();
+		}
+		this._laneHeaders = next;
+		for (const [laneId, element] of next)
+			this.attachLaneHeader(laneId, element);
+		this.render();
+	}
+
+	/** Replace one caller-owned lane header. Passing null restores the generic fallback.
+	 * @param {string} laneId @param {HTMLElement|null} element */
+	setLaneHeader(laneId, element) {
+		const id = String(laneId);
+		const previous = this._laneHeaders.get(id);
+		if (previous === element && element instanceof HTMLElement) {
+			this.attachLaneHeader(id, element);
+			return;
+		}
+		if (previous?.parentElement === this) previous.remove();
+		if (element instanceof HTMLElement) {
+			this._laneHeaders.set(id, element);
+			this.attachLaneHeader(id, element);
+		} else this._laneHeaders.delete(id);
+		this.render();
+	}
+
+	/** @param {string} laneId @param {HTMLElement} element */
+	attachLaneHeader(laneId, element) {
+		element.slot = `lane-header-${encodeURIComponent(laneId)}`;
+		element.dataset.timelineLaneId = laneId;
+		if (element.parentElement !== this) this.append(element);
+	}
+
+	/** Attach caller-owned clip preview content through a native slot. Passing
+	 * null restores the built-in structured-note preview.
+	 * @param {string} clipId @param {HTMLElement|null} element */
+	setClipPreview(clipId, element) {
+		const id = String(clipId);
+		const previous = this._clipPreviews.get(id);
+		if (previous?.parentElement === this) previous.remove();
+		if (element instanceof HTMLElement) {
+			element.slot = `clip-preview-${encodeURIComponent(id)}`;
+			element.dataset.timelineClipId = id;
+			this._clipPreviews.set(id, element);
+			if (element.parentElement !== this) this.append(element);
+		} else this._clipPreviews.delete(id);
+		const found = this.findClip(id);
+		if (found) {
+			const clip = this.lanesWorld.querySelector(
+				`.clip[data-id="${CSS.escape(id)}"]`,
+			);
+			if (clip instanceof HTMLElement) this.paintClipContent(clip, found.clip);
+		}
+	}
+
+	get locators() {
+		return this._locators.map((locator) => ({ ...locator }));
+	}
+
+	/** Replace the ruler locators; the host remains the source of truth. */
+	/** @param {TimelineLocator[]} locators */
+	setLocators(locators) {
+		this._locators = sortLocators(locators);
+		if (
+			this.renamingLocator &&
+			!this._locators.some((locator) => locator.id === this.renamingLocator)
+		)
+			this.renamingLocator = null;
+		this.render();
+	}
+
+	get timeSelection() {
+		return this._timeSelection
+			? { ...this._timeSelection, laneIds: [...this._timeSelection.laneIds] }
+			: null;
+	}
+
+	/** Restore or clear the host-owned contiguous cross-lane time selection. */
+	/** @param {number|null} start @param {number|null} end @param {string[]} [laneIds] */
+	setTimeSelection(start, end, laneIds) {
+		const requested =
+			laneIds === undefined ? this._lanes.map((lane) => lane.id) : laneIds;
+		const indexes = (Array.isArray(requested) ? requested : [])
+			.map((id) => this._lanes.findIndex((lane) => lane.id === String(id)))
+			.filter((index) => index >= 0);
+		const ids = indexes.length
+			? this._lanes
+					.slice(Math.min(...indexes), Math.max(...indexes) + 1)
+					.map((lane) => lane.id)
+			: [];
+		this._timeSelection = normalizeTimeSelection(
+			start,
+			end,
+			ids,
+			this.worldEnd(),
+		);
+		this.paintTimeSelection();
+	}
+
+	/** Replace one lane's clips without changing the lane order. */
+	/** @param {string} laneId @param {TimelineClip[]} clips */
+	setLaneClips(laneId, clips) {
+		const lane = this._lanes.find((entry) => entry.id === laneId);
+		if (!lane) return;
+		lane.clips = Array.isArray(clips) ? clips.map((clip) => ({ ...clip })) : [];
+		this.render();
+	}
+
+	/** Update generic lane emphasis without rebuilding its clips. */
+	/** @param {string} laneId @param {boolean} dimmed */
+	setLaneDimmed(laneId, dimmed) {
+		const lane = this._lanes.find((entry) => entry.id === laneId);
+		if (!lane) return;
+		lane.dimmed = Boolean(dimmed);
+		const body = this.lanesWorld.querySelector(
+			`.lane[data-lane-id="${CSS.escape(laneId)}"]`,
+		);
+		body?.toggleAttribute("data-dimmed", lane.dimmed);
+	}
+
+	/** Update the automation curve shown for one lane. */
+	/** @param {string} laneId @param {AutomationLaneView|null} automation */
+	setLaneAutomation(laneId, automation) {
+		const lane = this._lanes.find((entry) => entry.id === laneId);
+		if (!lane) return;
+		lane.automation = cloneAutomation(automation);
+		const previousWidth = Number.parseFloat(this.lanesWorld.style.width);
+		const previousEnd =
+			Number.isFinite(previousWidth) && this._pxPerBeat > 0
+				? previousWidth / this._pxPerBeat
+				: null;
+		const end = this.worldEnd();
+		const header = this.headers.querySelector(
+			`.lane-header[data-lane-id="${CSS.escape(laneId)}"]`,
+		);
+		const row = this.lanesWorld.querySelector(
+			`.lane[data-lane-id="${CSS.escape(laneId)}"]`,
+		);
+		const shown = this.automationFor(lane);
+		if (header instanceof HTMLElement) {
+			header.querySelector(".lane-automation-label")?.remove();
+			if (shown) {
+				const label = this.renderAutomationLabel(lane);
+				const fallback = header.querySelector(".lane-header-fallback");
+				if (fallback) fallback.append(label);
+				else header.insertBefore(label, header.querySelector(".lane-resize"));
+			}
+		}
+		if (row instanceof HTMLElement) {
+			row.toggleAttribute("data-automation-view", Boolean(shown));
+			const base = row.querySelector(".lane-base");
+			if (base instanceof HTMLElement) {
+				base.querySelector(".lane-automation")?.remove();
+				delete base.dataset.state;
+				if (shown) {
+					base.dataset.state = shown.state || "idle";
+					base.append(this.renderLaneAutomation(lane, shown, end));
+				}
+			}
+		}
+		const grid = this.lanesWorld.querySelector(".grid-world");
+		if (previousEnd === null || Math.abs(previousEnd - end) > MIN_CLIP_LENGTH) {
+			this.rulerWorld.style.width = `${end * this._pxPerBeat}px`;
+			this.lanesWorld.style.width = `${end * this._pxPerBeat}px`;
+			this.rulerWorld.replaceChildren(this.rulerGrid(end));
+			this.renderRulerLabels(end);
+			if (grid instanceof HTMLElement) {
+				grid.style.width = `${end * this._pxPerBeat}px`;
+				grid.replaceChildren(this.rulerGrid(end, true));
+			}
+		}
+		this.paintTimeSelection();
+	}
+
+	get playhead() {
+		return this._playhead;
+	}
+
+	/** Move only the playhead; clip geometry is not rebuilt. An unchanged beat
+	 * never re-anchors the view, so hosts that tick setPlayhead while paused
+	 * cannot undo the user's scroll. */
+	/** @param {number} beat */
+	setPlayhead(beat) {
+		const next = Math.max(0, Number(beat) || 0);
+		const moved = next !== this._playhead;
+		this._playhead = next;
+		this.paintPlayhead();
+		if (moved && this.follow) this.keepPlayheadVisible();
+	}
+
+	get loopStart() {
+		return this._loopStart;
+	}
+	get loopEnd() {
+		return this._loopEnd;
+	}
+
+	/** @param {number} start @param {number} end @param {boolean} enabled @param {boolean} [emit] */
+	setLoop(start, end, enabled, emit = false) {
+		this._loopStart = Math.max(0, Number(start) || 0);
+		this._loopEnd = Math.max(
+			this._loopStart + MIN_CLIP_LENGTH,
+			Number(end) || this._loopStart + 1,
+		);
+		this._loopEnabled = Boolean(enabled);
+		this.toggleAttribute("loop-enabled", this._loopEnabled);
+		this.paintLoop();
+		if (emit)
+			this.dispatchEvent(
+				eventOf("loop-change", {
+					start: this._loopStart,
+					end: this._loopEnd,
+					enabled: this._loopEnabled,
+				}),
+			);
+	}
+
+	get pxPerBeat() {
+		return this._pxPerBeat;
+	}
+	set pxPerBeat(value) {
+		const next = finiteClamp(Number(value), MIN_PX_PER_BEAT, MAX_PX_PER_BEAT);
+		if (next === this._pxPerBeat) return;
+		this._pxPerBeat = next;
+		this.render();
+		this.scheduleViewChange();
+	}
+
+	get scrollBeat() {
+		return this._scrollBeat;
+	}
+	set scrollBeat(value) {
+		const next = Math.max(0, Number(value) || 0);
+		if (next === this._scrollBeat) return;
+		this._scrollBeat = next;
+		this.paintScroll();
+		this.scheduleViewChange();
+	}
+
+	scrollToBeat(beat) {
+		const width = this.lanesWrap?.clientWidth || 0;
+		this.scrollBeat = Math.max(0, Number(beat) || 0);
+		if (width) this.paintScroll();
+	}
+
+	zoomToFit(endBeat) {
+		const width = Math.max(
+			1,
+			this.lanesWrap.clientWidth || this.clientWidth || 1,
+		);
+		const end = Math.max(MIN_CLIP_LENGTH, Number(endBeat) || 1);
+		this._pxPerBeat = finiteClamp(
+			width / end,
+			MIN_PX_PER_BEAT,
+			MAX_PX_PER_BEAT,
+		);
+		this._scrollBeat = 0;
+		this.render();
+		this.scheduleViewChange();
+	}
+
+	/** Convert a viewport x coordinate into an unsnapped timeline beat. */
+	/** @param {number} clientX */
+	beatAtPoint(clientX) {
+		const rect = this.rulerWrap.getBoundingClientRect();
+		return Math.max(
+			0,
+			this._scrollBeat + (Number(clientX) - rect.left) / this._pxPerBeat,
+		);
+	}
+
+	/** @param {TimelineLane} lane */
+	automationFor(lane) {
+		return this.automation ? (lane?.automation ?? null) : null;
+	}
+
+	/** @param {TimelineLane} lane */
+	laneRowHeightFor(lane) {
+		const custom = Number(lane?.height);
+		if (Number.isFinite(custom) && custom > 0) return Math.max(24, custom);
+		return lane?.compact ? this.thinLaneHeight : this.laneHeight;
+	}
+
+	/** @param {TimelineLane} lane */
+	laneHeightFor(lane) {
+		return this.laneRowHeightFor(lane);
+	}
+
+	totalLaneHeight() {
+		return Math.max(
+			1,
+			this._lanes.reduce(
+				(height, lane) => height + this.laneHeightFor(lane),
+				0,
+			),
+		);
+	}
+
+	/** Return the lane id under a viewport y coordinate. */
+	/** @param {number} clientY */
+	laneAtPoint(clientY) {
+		const rect = this.lanesWrap.getBoundingClientRect();
+		const y = Number(clientY) - rect.top + this.lanesWrap.scrollTop;
+		let offset = 0;
+		for (const lane of this._lanes) {
+			const height = this.laneHeightFor(lane);
+			if (y >= offset && y < offset + height) return lane.id;
+			offset += height;
+		}
+		return null;
+	}
+
+	/** Return the nearest lane when a cross-lane drag leaves the visible stack. */
+	/** @param {number} clientY */
+	laneAtOrNearestPoint(clientY) {
+		if (!this._lanes.length) return null;
+		const rect = this.lanesWrap.getBoundingClientRect();
+		const y = Number(clientY) - rect.top + this.lanesWrap.scrollTop;
+		if (y <= 0) return this._lanes[0].id;
+		let offset = 0;
+		for (const lane of this._lanes) {
+			const height = this.laneHeightFor(lane);
+			if (y < offset + height) return lane.id;
+			offset += height;
+		}
+		return this._lanes.at(-1).id;
+	}
+
+	/** Readonly renders and navigates but emits no mutating intent (README, Events). */
+	get readonly() {
+		return this.hasAttribute("readonly");
+	}
+	set readonly(value) {
+		this.toggleAttribute("readonly", Boolean(value));
+	}
+	get disabled() {
+		return this.hasAttribute("disabled");
+	}
+	set disabled(value) {
+		this.toggleAttribute("disabled", Boolean(value));
+	}
+
+	beginRename(clipId) {
+		if (
+			this.hasAttribute("disabled") ||
+			this.readonly ||
+			!this.findClip(clipId)
+		)
+			return;
+		this.renaming = String(clipId);
+		this.render();
+	}
+
+	beginLaneRename(laneId) {
+		const id = String(laneId);
+		if (
+			this.hasAttribute("disabled") ||
+			this.readonly ||
+			!this._lanes.some((lane) => lane.id === id)
+		)
+			return;
+		this.renamingLane = id;
+		this.focusedLane = id;
+		this.render();
+	}
+
+	focusClip(clipId) {
+		const id = String(clipId);
+		this.focusedClip = id;
+		this.focusedLane = null;
+		const element = this.clipElements().find((node) => node.dataset.id === id);
+		if (element) {
+			element.focus({ preventScroll: true });
+			this.ensureClipVisible(id);
+		}
+	}
+
+	// ---- Rendering --------------------------------------------------------------
+
+	/** @returns {{lane: TimelineLane, clip: TimelineClip}|null} */
+	findClip(id) {
+		for (const lane of this._lanes) {
+			const clip = lane.clips.find((entry) => entry.id === id);
+			if (clip) return { lane, clip };
+		}
+		return null;
+	}
+
+	clipElements() {
+		return /** @type {HTMLElement[]} */ ([
+			...this.lanesWorld.querySelectorAll(".clip:not([data-ghost])"),
+		]);
+	}
+
+	pointForClip(id) {
+		const element = this.clipElements().find((node) => node.dataset.id === id);
+		if (!element) return { clientX: 0, clientY: 0 };
+		const rect = element.getBoundingClientRect();
+		return {
+			clientX: rect.left + rect.width / 2,
+			clientY: rect.top + rect.height / 2,
+		};
+	}
+
+	pointForLaneHeader(id) {
+		const element = this.headers.querySelector(
+			`.lane-header[data-lane-id="${CSS.escape(id)}"]`,
+		);
+		if (!element) return { clientX: 0, clientY: 0 };
+		const rect = element.getBoundingClientRect();
+		return {
+			clientX: rect.left + rect.width / 2,
+			clientY: rect.top + rect.height / 2,
+		};
+	}
+
+	laneHeaderFromEvent(event) {
+		const header = pathElement(event, "lane-header");
+		if (!(header instanceof HTMLElement)) return null;
+		const lane = this._lanes.find(
+			(entry) => entry.id === header.dataset.laneId,
+		);
+		return lane ? { header, lane } : null;
+	}
+
+	locatorFromEvent(event) {
+		const element = pathElement(event, "ruler-locator");
+		if (!(element instanceof HTMLElement)) return null;
+		const locator = this._locators.find(
+			(entry) => entry.id === element.dataset.locatorId,
+		);
+		return locator ? { element, locator } : null;
+	}
+
+	rulerRowAtPoint(clientY) {
+		const rect = this.rulerWrap.getBoundingClientRect();
+		const fontSize = Number.parseFloat(getComputedStyle(this).fontSize) || 16;
+		const y = Number(clientY) - rect.top;
+		if (y < fontSize) return 1;
+		if (y < fontSize * 2.35) return 2;
+		return 3;
+	}
+
+	laneIdsForSpan(startLaneId, endLaneId) {
+		const first = this._lanes.findIndex((lane) => lane.id === startLaneId);
+		const last = this._lanes.findIndex((lane) => lane.id === endLaneId);
+		if (first < 0) return [];
+		const end = last < 0 ? first : last;
+		const low = Math.min(first, end);
+		const high = Math.max(first, end);
+		return this._lanes.slice(low, high + 1).map((lane) => lane.id);
+	}
+
+	clipsInsideTimeSelection(selection) {
+		if (!selection) return [];
+		const laneIds = new Set(selection.laneIds);
+		return this._lanes.flatMap((lane) => {
+			if (!laneIds.has(lane.id)) return [];
+			return lane.clips
+				.filter((clip) => {
+					const start = Number(clip.start) || 0;
+					const end = start + (Number(clip.length) || 0);
+					return (
+						start >= selection.start - MIN_CLIP_LENGTH &&
+						end <= selection.end + MIN_CLIP_LENGTH
+					);
+				})
+				.map((clip) => clip.id);
+		});
+	}
+
+	clipsIntersectingTimeSelection(selection) {
+		if (!selection || selection.end <= selection.start) return [];
+		const laneIds = new Set(selection.laneIds);
+		return this._lanes.flatMap((lane) =>
+			laneIds.has(lane.id)
+				? lane.clips
+						.filter((clip) => {
+							const start = Number(clip.start) || 0;
+							const end = start + (Number(clip.length) || 0);
+							return end > selection.start && start < selection.end;
+						})
+						.map((clip) => clip.id)
+				: [],
+		);
+	}
+
+	timeSelectionContains(laneId, beat) {
+		const selection = this._timeSelection;
+		return Boolean(
+			selection &&
+				selection.end > selection.start &&
+				selection.laneIds.includes(laneId) &&
+				beat >= selection.start &&
+				beat <= selection.end,
+		);
+	}
+
+	commitTimeSelection(start, end, laneIds) {
+		this.setTimeSelection(start, end, laneIds);
+		const selection = this.timeSelection;
+		if (!selection) return;
+		this.announce.textContent =
+			selection.start === selection.end
+				? `Edit cursor at beat ${selection.start}`
+				: `Time selected from beat ${selection.start} to ${selection.end}`;
+		this.dispatchEvent(eventOf("time-select", selection));
+	}
+
+	selectClipBounds(found, extend = false) {
+		const start = Number(found.clip.start) || 0;
+		const end = start + Math.max(0, Number(found.clip.length) || 0);
+		const current = this._timeSelection;
+		const laneIds =
+			extend && current
+				? this.laneIdsForSpan(current.laneIds[0], found.lane.id).concat(
+						this.laneIdsForSpan(current.laneIds.at(-1), found.lane.id),
+					)
+				: [found.lane.id];
+		this.commitTimeSelection(
+			extend && current ? Math.min(current.start, start) : start,
+			extend && current ? Math.max(current.end, end) : end,
+			laneIds,
+		);
+	}
+
+	/** Paint the time selection; a gesture passes its preview instead of the host's. */
+	/** @param {TimelineTimeSelection|null} [selection] */
+	paintTimeSelection(selection = this._timeSelection) {
+		if (!(this.rulerTimeSelection instanceof HTMLElement)) return;
+		for (const old of this.lanesWorld.querySelectorAll(".time-selection-world"))
+			old.remove();
+		for (const surface of this.lanesWorld.querySelectorAll(
+			".lane-automation",
+		)) {
+			const editor = surface.querySelector("compost-envelope-editor");
+			if (!editor) continue;
+			if (selection?.laneIds.includes(String(surface.dataset.laneId)))
+				editor.setSelection(selection.start, selection.end);
+			else editor.setSelection(undefined, undefined);
+		}
+		if (!selection) {
+			this.rulerTimeSelection.style.display = "none";
+			this.timeSelectionWorld = null;
+			return;
+		}
+		const left = (selection.start - this._scrollBeat) * this._pxPerBeat;
+		const cursor = selection.start === selection.end;
+		const width = cursor
+			? 2
+			: Math.max(1, (selection.end - selection.start) * this._pxPerBeat);
+		this.rulerTimeSelection.toggleAttribute("data-cursor", cursor);
+		this.rulerTimeSelection.style.left = `${left}px`;
+		this.rulerTimeSelection.style.width = `${width}px`;
+		this.rulerTimeSelection.style.display = "block";
+		const world = document.createElement("div");
+		world.className = "time-selection-world";
+		world.style.width = `${this.lanesWorld.clientWidth || this.worldEnd() * this._pxPerBeat}px`;
+		world.style.height = `${this.totalLaneHeight()}px`;
+		const ids = new Set(selection.laneIds);
+		let top = 0;
+		for (const lane of this._lanes) {
+			const height = this.laneHeightFor(lane);
+			if (ids.has(lane.id)) {
+				const overlay = document.createElement("div");
+				overlay.className = "time-selection";
+				overlay.part.add("time-selection");
+				if (cursor) {
+					overlay.part.add("cursor");
+					overlay.dataset.cursor = "";
+				}
+				overlay.dataset.laneId = lane.id;
+				overlay.style.left = `${selection.start * this._pxPerBeat}px`;
+				overlay.style.top = `${top}px`;
+				overlay.style.width = `${width}px`;
+				overlay.style.height = `${height}px`;
+				world.append(overlay);
+			}
+			top += height;
+		}
+		this.lanesWorld.append(world);
+		this.timeSelectionWorld = world;
+	}
+
+	laneIndexFromHeaderPoint(clientY) {
+		const headers = [...this.headers.querySelectorAll(".lane-header")];
+		const hit = headers.find((header) => {
+			const rect = header.getBoundingClientRect();
+			return clientY >= rect.top && clientY <= rect.bottom;
+		});
+		if (!hit)
+			return clientY < (headers[0]?.getBoundingClientRect().top ?? 0)
+				? 0
+				: this._lanes.length;
+		const index = this._lanes.findIndex(
+			(lane) => lane.id === hit.dataset.laneId,
+		);
+		const rect = hit.getBoundingClientRect();
+		return index + (clientY > rect.top + rect.height / 2 ? 1 : 0);
+	}
+
+	paintLaneDropLine(toIndex) {
+		if (!(this.laneDropLine instanceof HTMLElement)) return;
+		const headers = [...this.headers.querySelectorAll(".lane-header")];
+		const target = headers[Math.max(0, Math.min(headers.length - 1, toIndex))];
+		// the line is absolutely positioned in the header-wrap, whose top stays put
+		// while the headers themselves translate with the lane scroll
+		const wrapRect = this.headerWrap.getBoundingClientRect();
+		let top = 0;
+		if (target instanceof HTMLElement) {
+			const rect = target.getBoundingClientRect();
+			top = (toIndex >= headers.length ? rect.bottom : rect.top) - wrapRect.top;
+		} else if (headers.length) {
+			const rect = headers.at(-1).getBoundingClientRect();
+			top = rect.bottom - wrapRect.top;
+		}
+		this.laneDropLine.style.top = `${top}px`;
+		this.laneDropLine.style.display = "block";
+	}
+
+	clearLaneDropLine() {
+		if (this.laneDropLine instanceof HTMLElement)
+			this.laneDropLine.style.display = "none";
+	}
+
+	worldEnd() {
+		const last = this._lanes.reduce((end, lane) => {
+			const clipEnd = lane.clips.reduce(
+				(clipMax, clip) =>
+					Math.max(
+						clipMax,
+						(Number(clip.start) || 0) + (Number(clip.length) || 0),
+					),
+				0,
+			);
+			const automationEnd =
+				lane.automation?.points?.reduce(
+					(pointMax, point) => Math.max(pointMax, Number(point.beat) || 0),
+					0,
+				) || 0;
+			return Math.max(end, clipEnd, automationEnd);
+		}, 0);
+		const locatorEnd = this._locators.at(-1)?.beat || 0;
+		// The world reaches one viewport past the view plus a margin, so follow
+		// scrolling over fresh ground has room before the next grow.
+		const visible =
+			this._scrollBeat +
+			Math.max(16, (this.lanesWrap.clientWidth || 320) / this._pxPerBeat) +
+			16;
+		return Math.max(16, last, locatorEnd, this._loopEnd, visible);
+	}
+
+	render() {
+		if (!this.root) return;
+		this.rulerWorld.replaceChildren();
+		this.headers.replaceChildren();
+		this.lanesWorld.replaceChildren();
+		const end = this.worldEnd();
+		const width = end * this._pxPerBeat;
+		this.rulerWorld.style.width = `${width}px`;
+		this.lanesWorld.style.width = `${width}px`;
+		this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
+		this.rulerWorld.append(this.rulerGrid(end));
+		this.renderRulerLabels(end);
+		this.renderLanes();
+		this.paintScroll();
+		this.paintLaneScroll();
+		this.paintPlayhead();
+		this.paintLoop();
+		this.paintTimeSelection();
+	}
+
+	/** @param {number} end */
+	rulerGrid(end, lanes = false) {
+		const fragment = document.createDocumentFragment();
+		const stepBars = rulerStep(this._pxPerBeat, this.beatsPerBar);
+		const step =
+			lanes && !this.adaptiveGrid && this._pxPerBeat < 48
+				? this.beatLength
+				: this.currentGridStep();
+		for (const { time: beat, kind } of timeGridLines(end, {
+			gridStep: step,
+			beatLength: this.beatLength,
+			pulseLength: this.pulseLength,
+			barLength: this.beatsPerBar,
+		})) {
+			if (lanes && beat < MIN_CLIP_LENGTH) continue;
+			const line = document.createElement("div");
+			line.className = `grid-line ${kind}`;
+			line.part.add("grid-line", `${kind}-line`);
+			line.style.left = `${beat * this._pxPerBeat}px`;
+			fragment.append(line);
+		}
+		// The ruler labels are separate from the grid so zooming does not alter the lane paint.
+		this.rulerWorld.dataset.stepBars = String(stepBars);
+		return fragment;
+	}
+
+	/** @param {number} end */
+	renderRulerLabels(end) {
+		const fragment = document.createDocumentFragment();
+		for (const { beat, text } of rulerLabels(
+			end,
+			{ barLength: this.beatsPerBar, beatLength: this.beatLength },
+			this._pxPerBeat,
+			this.currentGridStep(),
+		)) {
+			const label = document.createElement("div");
+			label.className = "ruler-label";
+			label.part.add("ruler-label");
+			label.dataset.bar = "";
+			label.style.left = `${beat * this._pxPerBeat}px`;
+			label.textContent = text;
+			fragment.append(label);
+		}
+		this.rulerWorld.append(fragment);
+		this.renderLocators();
+	}
+
+	renderLocators() {
+		for (const locator of this._locators) {
+			const element = document.createElement("span");
+			element.className = "ruler-locator";
+			element.part.add("locator");
+			element.dataset.locatorId = locator.id;
+			element.style.left = `${locator.beat * this._pxPerBeat}px`;
+			element.setAttribute("role", "button");
+			element.tabIndex = 0;
+			element.setAttribute(
+				"aria-label",
+				`${locator.name || locator.id} locator at beat ${locator.beat}`,
+			);
+			if (this.renamingLocator === locator.id) {
+				const input = document.createElement("input");
+				input.className = "ruler-locator-editor";
+				input.value = locator.name;
+				input.setAttribute(
+					"aria-label",
+					`Rename ${locator.name || locator.id}`,
+				);
+				const finish = (commit) => {
+					if (this.renamingLocator !== locator.id) return;
+					this.renamingLocator = null;
+					const name = input.value.trim();
+					this.render();
+					if (commit && name && name !== locator.name)
+						this.dispatchEvent(
+							eventOf("locator-rename", { id: locator.id, name }),
+						);
+				};
+				input.addEventListener("keydown", (event) => {
+					event.stopPropagation();
+					if (event.key === "Enter") finish(true);
+					if (event.key === "Escape") finish(false);
+				});
+				input.addEventListener("blur", () => finish(true));
+				input.addEventListener("pointerdown", (event) =>
+					event.stopPropagation(),
+				);
+				element.append(input);
+				requestAnimationFrame(() => {
+					input.focus();
+					input.select();
+				});
+			} else {
+				const name = document.createElement("span");
+				name.className = "ruler-locator-name";
+				name.textContent = locator.name;
+				element.append(name);
+			}
+			this.rulerWorld.append(element);
+		}
+	}
+
+	/** @param {TimelineLane} lane */
+	renderLaneHeader(lane) {
+		const header = document.createElement("div");
+		header.className = "lane-header";
+		header.dataset.laneId = lane.id;
+		header.toggleAttribute("data-compact", Boolean(lane.compact));
+		header.part.add("lane-header");
+		header.setAttribute("role", "listitem");
+		header.tabIndex = -1;
+		header.style.setProperty(
+			"--lane-color",
+			lane.color || "var(--compost-timeline-text)",
+		);
+		header.style.setProperty(
+			"--lane-row-height",
+			`${this.laneRowHeightFor(lane)}px`,
+		);
+		header.style.height = `${this.laneHeightFor(lane)}px`;
+
+		if (this._laneHeaders.has(lane.id)) {
+			const slot = document.createElement("slot");
+			slot.className = "lane-header-content";
+			slot.name = `lane-header-${encodeURIComponent(lane.id)}`;
+			header.append(slot);
+			if (this.automationFor(lane))
+				header.append(this.renderAutomationLabel(lane));
+			header.append(this.renderLaneResizeHandle(lane));
+			return header;
+		}
+
+		const main = document.createElement("div");
+		main.className = "lane-header-content lane-header-fallback";
+		main.part.add("lane-header-fallback");
+		main.append(this.renderLaneName(lane));
+		if (this.automationFor(lane)) main.append(this.renderAutomationLabel(lane));
+		header.append(main);
+		header.append(this.renderLaneResizeHandle(lane));
+		return header;
+	}
+
+	/** @param {TimelineLane} lane */
+	renderAutomationLabel(lane) {
+		const label = document.createElement("span");
+		label.className = "lane-automation-label";
+		label.part.add("lane-automation-label");
+		label.textContent = lane.automation?.label || lane.automation?.id || "";
+		return label;
+	}
+
+	/** A grab edge along the header's bottom border: drag sets the lane's own row
+	 * height (lane.height), double-click clears it back to the shared default.
+	 * @param {TimelineLane} lane */
+	renderLaneResizeHandle(lane) {
+		const handle = document.createElement("div");
+		handle.className = "lane-resize";
+		handle.part.add("lane-resize");
+		handle.tabIndex = 0;
+		handle.setAttribute("role", "separator");
+		handle.setAttribute("aria-label", `Resize ${lane.name || lane.id}`);
+		handle.setAttribute("aria-orientation", "horizontal");
+		handle.setAttribute("aria-valuemin", "24");
+		handle.setAttribute("aria-valuemax", "400");
+		handle.title =
+			"Drag or use Arrow keys to resize; double-click or Home resets";
+		/** @type {{pointerId:number,startY:number,startHeight:number,startCustomHeight:number|null,all:boolean,targetIds:string[],startHeights:Map<string,number|null>}|null} */ let drag =
+			null;
+		const pickedIds = () =>
+			lane.picked
+				? this._lanes
+						.filter((target) => target.picked)
+						.map((target) => target.id)
+				: [lane.id];
+		const targets = (all = false, ids = pickedIds()) =>
+			all
+				? this._lanes
+				: this._lanes.filter((target) => ids.includes(target.id));
+		const apply = (
+			/** @type {number|undefined} */ height,
+			all = false,
+			ids = pickedIds(),
+		) => {
+			for (const target of targets(all, ids))
+				this.previewLaneHeight(target, height);
+			handle.setAttribute("aria-valuenow", String(this.laneRowHeightFor(lane)));
+		};
+		const customHeightOf = (/** @type {TimelineLane} */ target) => {
+			const custom = Number(target.height);
+			return Number.isFinite(custom) && custom > 0 ? custom : null;
+		};
+		handle.addEventListener("pointerdown", (event) => {
+			if (event.button !== 0) return;
+			event.preventDefault();
+			event.stopPropagation();
+			// Alt sizes every lane from this one, as Ableton and Pro Tools do
+			drag = {
+				pointerId: event.pointerId,
+				startY: event.clientY,
+				startHeight: this.laneRowHeightFor(lane),
+				startCustomHeight: customHeightOf(lane),
+				all: Boolean(event.altKey),
+				targetIds: pickedIds(),
+				startHeights: new Map(
+					this._lanes.map((target) => [target.id, customHeightOf(target)]),
+				),
+			};
+			handle.setPointerCapture?.(event.pointerId);
+		});
+		handle.addEventListener("pointermove", (event) => {
+			if (!drag || event.pointerId !== drag.pointerId) return;
+			drag.all ||= Boolean(event.altKey);
+			const delta = (event.clientY - drag.startY) * this.gestureFactor(event);
+			apply(clamp(drag.startHeight + delta, 24, 400), drag.all, drag.targetIds);
+		});
+		const end = (/** @type {PointerEvent} */ event) => {
+			if (!drag || event.pointerId !== drag.pointerId) return;
+			const finished = drag;
+			drag = null;
+			if (event.type === "pointercancel") {
+				for (const target of this._lanes)
+					this.previewLaneHeight(
+						target,
+						finished.startHeights.get(target.id) ?? undefined,
+					);
+				return;
+			}
+			if (this.laneRowHeightFor(lane) !== finished.startHeight) {
+				const height = this.laneRowHeightFor(lane);
+				for (const target of targets(finished.all, finished.targetIds)) {
+					this.dispatchEvent(
+						eventOf("lane-resize", { laneId: target.id, height }),
+					);
+				}
+				this.render();
+			}
+		};
+		handle.addEventListener("pointerup", end);
+		handle.addEventListener("pointercancel", end);
+		handle.addEventListener("dblclick", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			const resized = targets();
+			apply(undefined);
+			for (const target of resized)
+				this.dispatchEvent(
+					eventOf("lane-resize", { laneId: target.id, height: null }),
+				);
+			this.render();
+		});
+		handle.addEventListener("keydown", (event) => {
+			if (event.key === "Home") {
+				event.preventDefault();
+				const resized = targets();
+				apply(undefined);
+				for (const target of resized)
+					this.dispatchEvent(
+						eventOf("lane-resize", { laneId: target.id, height: null }),
+					);
+				return;
+			}
+			if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+			event.preventDefault();
+			const direction = event.key === "ArrowUp" ? 1 : -1;
+			const em = Number.parseFloat(getComputedStyle(this).fontSize) || 16;
+			const step = em * 0.25 * (event.shiftKey ? 0.25 : 1);
+			const resized = targets();
+			apply(clamp(this.laneRowHeightFor(lane) + direction * step, 24, 400));
+			const height = this.laneRowHeightFor(lane);
+			for (const target of resized)
+				this.dispatchEvent(
+					eventOf("lane-resize", { laneId: target.id, height }),
+				);
+		});
+		this.previewLaneHeight(lane, lane.height);
+		handle.setAttribute("aria-valuenow", String(this.laneRowHeightFor(lane)));
+		return handle;
+	}
+
+	/** Size one lane's row in place, without rebuilding it. */
+	/** @param {TimelineLane} lane @param {number|undefined} height */
+	previewLaneHeight(lane, height) {
+		if (height === undefined) delete lane.height;
+		else lane.height = height;
+		const header = this.headers.querySelector(
+			`.lane-header[data-lane-id="${CSS.escape(lane.id)}"]`,
+		);
+		const row = this.lanesWorld.querySelector(
+			`.lane[data-lane-id="${CSS.escape(lane.id)}"]`,
+		);
+		for (const element of [header, row]) {
+			if (!(element instanceof HTMLElement)) continue;
+			element.style.setProperty(
+				"--lane-row-height",
+				`${this.laneRowHeightFor(lane)}px`,
+			);
+			element.style.height = `${this.laneHeightFor(lane)}px`;
+		}
+		const handle = header?.querySelector(".lane-resize");
+		handle?.setAttribute("aria-valuenow", String(this.laneRowHeightFor(lane)));
+		this.lanesWorld.style.minHeight = `${this.totalLaneHeight()}px`;
+		const grid = this.lanesWorld.querySelector(".grid-world");
+		if (grid instanceof HTMLElement)
+			grid.style.height = `${this.totalLaneHeight()}px`;
+	}
+
+	/** @param {TimelineLane} lane */
+	renderLaneName(lane) {
+		if (this.renamingLane === lane.id) {
+			const input = document.createElement("input");
+			input.className = "lane-name-editor";
+			input.value = lane.name || "";
+			input.setAttribute("aria-label", `Rename ${lane.name || lane.id}`);
+			const finish = (commit) => {
+				if (this.renamingLane !== lane.id) return;
+				this.renamingLane = null;
+				const name = input.value.trim();
+				this.render();
+				if (commit && name && name !== lane.name)
+					this.dispatchEvent(eventOf("lane-rename", { laneId: lane.id, name }));
+			};
+			input.addEventListener("keydown", (event) => {
+				event.stopPropagation();
+				if (event.key === "Enter") finish(true);
+				if (event.key === "Escape") finish(false);
+			});
+			input.addEventListener("blur", () => finish(true));
+			input.addEventListener("pointerdown", (event) => event.stopPropagation());
+			requestAnimationFrame(() => {
+				input.focus();
+				input.select();
+			});
+			return input;
+		}
+		const name = document.createElement("span");
+		name.className = "lane-name";
+		name.part.add("lane-name");
+		name.textContent = lane.name || lane.id;
+		name.tabIndex = 0;
+		name.toggleAttribute("data-picked", Boolean(lane.picked));
+		name.setAttribute("role", "button");
+		name.setAttribute("aria-label", `${lane.name || lane.id} lane`);
+		name.addEventListener("focus", () => {
+			this.focusedLane = lane.id;
+			this.focusedClip = null;
+		});
+		return name;
+	}
+
+	/** @param {TimelineLane} lane */
+	renderLaneBase(lane, end = this.worldEnd()) {
+		const base = document.createElement("div");
+		base.className = "lane-base";
+		base.part.add("lane-content");
+		for (const clip of lane.clips) base.append(this.renderClip(clip, lane));
+		const automation = this.automationFor(lane);
+		if (!automation) return base;
+		base.dataset.state = automation.state || "idle";
+		base.append(this.renderLaneAutomation(lane, automation, end));
+		return base;
+	}
+
+	/** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {number} end */
+	renderLaneAutomation(lane, automation, end) {
+		const surface = document.createElement("div");
+		surface.className = "lane-automation";
+		surface.dataset.laneId = lane.id;
+		surface.dataset.automationId = automation.id;
+		surface.toggleAttribute("data-draw", this.draw);
+		surface.setAttribute("role", "group");
+		surface.setAttribute(
+			"aria-label",
+			`${automation.label || automation.id} automation for ${lane.name || lane.id}`,
+		);
+		surface.tabIndex = 0;
+		const editor = document.createElement("compost-envelope-editor");
+		editor.className = "automation-editor";
+		editor.part.add("automation-editor");
+		editor.setAttribute("grid-lines", "off");
+		editor.setAttribute(
+			"label",
+			`${automation.label || automation.id} automation for ${lane.name || lane.id}`,
+		);
+		editor.setAttribute("duration", String(end));
+		editor.setAttribute("min", String(automation.min));
+		editor.setAttribute("max", String(automation.max));
+		editor.setAttribute("grid", String(this.currentGridStep()));
+		editor.setAttribute("snap", this.snapMode);
+		if (automation.scale === "gain") editor.setAttribute("scale", "gain");
+		if (automation.stepped) editor.setAttribute("stepped", "");
+		const valueStep = this.automationValueStep(automation);
+		if (valueStep > 0) editor.setAttribute("step", String(valueStep));
+		if (this.draw) editor.setAttribute("draw", "");
+		if (this.hasAttribute("disabled")) editor.setAttribute("disabled", "");
+		if (this.readonly) editor.setAttribute("readonly", "");
+		editor.duration = end;
+		editor.min = Number(automation.min);
+		editor.max = Number(automation.max);
+		editor.scale = automation.scale === "gain" ? "gain" : "linear";
+		editor.stepped = Boolean(automation.stepped);
+		editor.step = valueStep;
+		editor.snapMode = this.snapMode;
+		editor.grid = this.currentGridStep();
+		editor.draw = this.draw;
+		editor.points = toEnvelopePoints(automation.points);
+		const selection = this.automationSelectionFor(lane.id);
+		editor.setSelection(selection?.start, selection?.end);
+		editor.addEventListener("envelope-input", (event) => {
+			event.stopPropagation();
+			this.dispatchEvent(
+				eventOf("automation-input", {
+					laneId: lane.id,
+					automationId: automation.id,
+					points: fromEnvelopePoints(event.detail.points),
+				}),
+			);
+		});
+		editor.addEventListener("envelope-change", (event) => {
+			event.stopPropagation();
+			this.commitAutomationChange(
+				lane,
+				automation,
+				fromEnvelopePoints(event.detail.points),
+			);
+		});
+		editor.addEventListener("envelope-context", (event) => {
+			event.stopPropagation();
+			this.dispatchEvent(
+				eventOf("automation-context", {
+					laneId: lane.id,
+					automationId: automation.id,
+					pointIndex: event.detail.pointIndex,
+					beat: event.detail.time,
+					value: event.detail.value,
+					clientX: event.detail.clientX,
+					clientY: event.detail.clientY,
+				}),
+			);
+		});
+		surface.append(editor);
+		const hint = document.createElement("span");
+		hint.className = "automation-draw-hint";
+		hint.textContent = "✎ draw";
+		surface.append(hint);
+		return surface;
+	}
+
+	/** @param {TimelineLane} lane @param {number} end */
+	renderLaneBody(lane, end) {
+		const row = document.createElement("div");
+		row.className = "lane";
+		row.part.add("lane");
+		row.dataset.laneId = lane.id;
+		row.toggleAttribute("data-compact", Boolean(lane.compact));
+		row.setAttribute("role", "listitem");
+		row.setAttribute("aria-label", lane.name || lane.id);
+		row.toggleAttribute("data-dimmed", Boolean(lane.dimmed));
+		row.toggleAttribute(
+			"data-automation-view",
+			Boolean(this.automationFor(lane)),
+		);
+		row.style.setProperty(
+			"--lane-color",
+			lane.color || "var(--compost-timeline-text)",
+		);
+		if (lane.ink) row.style.setProperty("--lane-ink", lane.ink);
+		else row.style.removeProperty("--lane-ink");
+		row.style.setProperty(
+			"--lane-row-height",
+			`${this.laneRowHeightFor(lane)}px`,
+		);
+		row.style.height = `${this.laneHeightFor(lane)}px`;
+		row.append(this.renderLaneBase(lane, end));
+		return row;
+	}
+
+	renderLanes() {
+		const headerFragment = document.createDocumentFragment();
+		const laneFragment = document.createDocumentFragment();
+		const end = this.worldEnd();
+		this._lanes.forEach((lane) => {
+			headerFragment.append(this.renderLaneHeader(lane));
+			laneFragment.append(this.renderLaneBody(lane, end));
+		});
+		this.headers.append(headerFragment);
+		this.lanesWorld.append(laneFragment);
+		const grid = document.createElement("div");
+		grid.className = "grid-world";
+		grid.style.width = `${end * this._pxPerBeat}px`;
+		grid.style.height = `${this.totalLaneHeight()}px`;
+		grid.append(this.rulerGrid(end, true));
+		this.lanesWorld.append(grid);
+	}
+
+	/** @param {TimelineClip} clip @param {TimelineLane} lane */
+	renderClip(clip, lane) {
+		const element = document.createElement("div");
+		element.className = "clip";
+		element.part.add("clip");
+		element.dataset.id = clip.id;
+		element.dataset.state = clip.state || "stopped";
+		element.tabIndex = this.focusedClip === clip.id ? 0 : -1;
+		element.setAttribute("role", "button");
+		element.style.setProperty(
+			"--clip-color",
+			clip.color || lane.color || "var(--compost-timeline-select)",
+		);
+		element.toggleAttribute("data-muted", Boolean(clip.muted));
+		const start = Number(clip.start) || 0;
+		const end = start + Math.max(0, Number(clip.length) || 0);
+		element.setAttribute(
+			"aria-label",
+			`${clip.name || "clip"}, bar ${Math.floor(start / this.beatsPerBar) + 1} to ${Math.max(Math.floor((end - MIN_CLIP_LENGTH) / this.beatsPerBar) + 1, 1)}, lane ${lane.name || lane.id}`,
+		);
+		const box = clipBox(clip, this._pxPerBeat, 0);
+		element.style.left = `${box.left}px`;
+		element.style.width = `${box.width}px`;
+		this.paintClipContent(element, clip);
+		if (this.renaming === clip.id) {
+			const input = document.createElement("input");
+			input.className = "clip-editor";
+			input.value = clip.name || "";
+			input.setAttribute("aria-label", `Rename ${clip.name || "clip"}`);
+			let closed = false;
+			const finish = (commit) => {
+				if (closed) return;
+				closed = true;
+				this.renaming = null;
+				const name = input.value.trim();
+				this.render();
+				if (commit && name && name !== clip.name)
+					this.dispatchEvent(eventOf("clip-rename", { id: clip.id, name }));
+			};
+			input.addEventListener("keydown", (event) => {
+				event.stopPropagation();
+				if (event.key === "Enter") finish(true);
+				if (event.key === "Escape") finish(false);
+			});
+			input.addEventListener("blur", () => finish(true));
+			input.addEventListener("pointerdown", (event) => event.stopPropagation());
+			element.append(input);
+			requestAnimationFrame(() => {
+				input.focus();
+				input.select();
+			});
+		} else {
+			const name = document.createElement("span");
+			name.className = "clip-name";
+			name.part.add("clip-name");
+			name.textContent = clip.name || "clip";
+			element.append(name);
+		}
+		return element;
+	}
+
+	/** The clip's body: notes, extent and loop points, positioned in beats of the
+	 * clip's own length. A trim preview repaints this with the previewed geometry so
+	 * the notes stay where they are in time instead of stretching with the box.
+	 * @param {HTMLElement} element @param {TimelineClip} clip */
+	paintClipContent(element, clip) {
+		for (const old of element.querySelectorAll(
+			".clip-notes, .clip-preview, .clip-extent, .clip-loop-line",
+		))
+			old.remove();
+		const anchor = element.querySelector(".clip-name, .clip-editor");
+		const place = (node) =>
+			anchor ? element.insertBefore(node, anchor) : element.append(node);
+		const duration = Math.max(
+			MIN_CLIP_LENGTH,
+			Number(clip.duration) || Number(clip.length) || 1,
+		);
+		const length = Math.max(MIN_CLIP_LENGTH, Number(clip.length) || duration);
+		const offset =
+			(((Number(clip.offset) || 0) % duration) + duration) % duration;
+		if (this._clipPreviews.has(clip.id)) {
+			const preview = document.createElement("slot");
+			preview.className = "clip-preview";
+			preview.name = `clip-preview-${encodeURIComponent(clip.id)}`;
+			preview.part.add("clip-preview");
+			place(preview);
+		} else {
+			const notes = document.createElement("span");
+			notes.className = "clip-notes";
+			notes.part.add("clip-preview");
+			for (const note of (clip.notes || []).slice(0, 200)) {
+				const noteStart = Number(note.start) || 0;
+				const noteDuration = Number(note.duration) || 0.1;
+				const starts = [];
+				if (clip.loop === false) starts.push(noteStart - offset);
+				else {
+					let start = noteStart - offset;
+					while (start < 0) start += duration;
+					for (; start < length; start += duration) starts.push(start);
+				}
+				for (const start of starts) {
+					if (start < 0 || start >= length) continue;
+					const mark = document.createElement("span");
+					mark.className = "clip-note";
+					mark.part.add("clip-preview-mark");
+					mark.style.opacity = String(clipNoteOpacity(note.velocity));
+					mark.style.left = `${Math.max(0, Math.min(100, (start / length) * 100))}%`;
+					mark.style.width = `${Math.max(2, Math.min(30, (noteDuration / length) * 100))}%`;
+					mark.style.bottom = `${Math.max(2, Math.min(90, ((Number(note.note) || 0) / 127) * 90))}%`;
+					notes.append(mark);
+				}
+			}
+			place(notes);
+		}
+		const extent = document.createElement("span");
+		extent.className = "clip-extent";
+		extent.part.add("clip-extent");
+		place(extent);
+		for (const line of loopPassLines(clip, this._pxPerBeat)) {
+			const mark = document.createElement("span");
+			mark.className = "clip-loop-line";
+			mark.part.add("clip-loop");
+			mark.title = "loop point";
+			mark.style.left = `${line * this._pxPerBeat - 1}px`;
+			place(mark);
+		}
+	}
+
+	clearClipDragVisuals() {
+		this.removeAttribute("data-drag-copy");
+		this.paintTimeSelection();
+	}
+
+	paintCopyState() {
+		this.toggleAttribute("data-drag-copy", Boolean(this.drag?.copy));
+	}
+
+	paintMovePreview() {
+		const drag = this.drag;
+		if (drag?.type !== "move" || !drag.moved || !drag.preview) return;
+		this.paintTimeSelection(drag.preview);
+	}
+
+	emitTimeMove(name, drag = this.drag) {
+		if (drag?.type !== "move" || !drag.preview) return;
+		this.dispatchEvent(
+			eventOf(name, {
+				start: drag.source.start,
+				end: drag.source.end,
+				laneIds: [...drag.source.laneIds],
+				to: drag.preview.start,
+				toLaneIds: [...drag.preview.laneIds],
+				copy: Boolean(drag.copy),
+			}),
+		);
+	}
+
+	paintScroll() {
+		const width = this.lanesWrap?.clientWidth || 0;
+		// Scrolling over fresh ground (follow running past the drawn world) grows
+		// the world first; render() paints the scroll transform itself.
+		if (
+			width &&
+			this._scrollBeat + width / this._pxPerBeat > this.drawnEndBeat()
+		) {
+			this.render();
+			return;
+		}
+		const offset = `${(-this._scrollBeat * this._pxPerBeat).toFixed(2)}px`;
+		this.rulerWorld.style.transform = `translateX(${offset})`;
+		this.lanesWorld.style.transform = `translateX(${offset})`;
+		this.paintPlayhead();
+		this.paintLoop();
+		this.paintTimeSelection();
+	}
+
+	/** The world length actually drawn, in beats, as opposed to worldEnd(). */
+	drawnEndBeat() {
+		const width = Number.parseFloat(this.lanesWorld?.style.width);
+		return Number.isFinite(width) && this._pxPerBeat > 0
+			? width / this._pxPerBeat
+			: 0;
+	}
+
+	paintLaneScroll() {
+		this.headers.style.transform = `translateY(${-this.lanesWrap.scrollTop}px)`;
+	}
+
+	paintPlayhead() {
+		if (!this.playheadElement || !this.rulerPlayhead) return;
+		const left = (this._playhead - this._scrollBeat) * this._pxPerBeat;
+		this.playheadElement.style.left = `${left.toFixed(2)}px`;
+		this.rulerPlayhead.style.left = `${left.toFixed(2)}px`;
+		this.rulerWrap.setAttribute(
+			"aria-label",
+			`Timeline ruler, playhead at beat ${this._playhead.toFixed(2)}`,
+		);
+	}
+
+	/** Paint the loop brace; a gesture passes its preview instead of the host's loop. */
+	paintLoop(
+		start = this._loopStart,
+		end = this._loopEnd,
+		enabled = this._loopEnabled,
+	) {
+		const left = (start - this._scrollBeat) * this._pxPerBeat;
+		const width = Math.max(1, (end - start) * this._pxPerBeat);
+		this.rulerBand.style.left = `${left}px`;
+		this.rulerBand.style.width = `${width}px`;
+		this.rulerBand.hidden = !enabled;
+		this.rulerStart.hidden = !enabled;
+		this.rulerEnd.hidden = !enabled;
+		this.rulerStart.style.left = `${left - 1}px`;
+		this.rulerEnd.style.left = `${left + width - 5}px`;
+		const viewportWidth = this.lanesWrap.clientWidth;
+		for (const [line, beat] of [
+			[this.loopStartLine, start],
+			[this.loopEndLine, end],
+		]) {
+			const x = (beat - this._scrollBeat) * this._pxPerBeat;
+			line.style.left = `${x}px`;
+			line.hidden = !enabled || x < 0 || x > viewportWidth;
+		}
+		this.rulerStart.title = `Loop start, beat ${start}`;
+		this.rulerEnd.title = `Loop end, beat ${end}`;
+		for (const [handle, value] of [
+			[this.rulerStart, start],
+			[this.rulerEnd, end],
+		]) {
+			handle.setAttribute("aria-valuemin", "0");
+			handle.setAttribute("aria-valuemax", String(this.worldEnd()));
+			handle.setAttribute("aria-valuenow", String(value));
+			handle.setAttribute(
+				"aria-valuetext",
+				`beat ${Math.round(value * 100) / 100}`,
+			);
+		}
+	}
+
+	keepPlayheadVisible() {
+		const width = this.lanesWrap.clientWidth || 0;
+		if (!width) return;
+		const visible = width / this._pxPerBeat;
+		const anchor = visible / 2;
+		if (this._playhead < this._scrollBeat + 0.5)
+			this.scrollBeat = Math.max(0, this._playhead - 1);
+		else if (this._playhead > this._scrollBeat + anchor)
+			this.scrollBeat = Math.max(0, this._playhead - anchor);
+	}
+
+	ensureClipVisible(id) {
+		const found = this.findClip(id);
+		if (!found) return;
+		const start = Number(found.clip.start) || 0;
+		const end = start + (Number(found.clip.length) || 0);
+		const visible = (this.lanesWrap.clientWidth || 0) / this._pxPerBeat;
+		if (start < this._scrollBeat) this.scrollBeat = start;
+		else if (end > this._scrollBeat + visible)
+			this.scrollBeat = Math.max(0, end - visible);
+	}
+
+	scheduleViewChange() {
+		clearTimeout(this.viewChangeTimer);
+		this.viewChangeTimer = setTimeout(() => {
+			this.dispatchEvent(
+				eventOf("view-change", {
+					pxPerBeat: this._pxPerBeat,
+					scrollBeat: this._scrollBeat,
+				}),
+			);
+		}, 150);
+	}
+
+	// ---- Pointer gestures -------------------------------------------------------
+
+	clipFromEvent(event) {
+		const element = pathElement(event, "clip");
+		return element
+			? this.findClip(element.dataset.id) && {
+					element,
+					...this.findClip(element.dataset.id),
+				}
+			: null;
+	}
+
+	/** Find a clip geometrically when an overlay owns the event target. */
+	clipAtPoint(event, stripOnly = false) {
+		const direct = this.clipFromEvent(event);
+		if (direct) {
+			if (!stripOnly) return direct;
+			const name = direct.element
+				.querySelector(".clip-name, .clip-editor")
+				?.getBoundingClientRect();
+			return name && event.clientY >= name.top && event.clientY <= name.bottom
+				? direct
+				: null;
+		}
+		const lane = pathElement(event, "lane");
+		if (!(lane instanceof HTMLElement)) return null;
+		for (const element of lane.querySelectorAll(".clip:not([data-ghost])")) {
+			const rect = element.getBoundingClientRect();
+			if (event.clientX < rect.left || event.clientX > rect.right) continue;
+			if (event.clientY < rect.top || event.clientY > rect.bottom) continue;
+			if (stripOnly) {
+				const name = element
+					.querySelector(".clip-name, .clip-editor")
+					?.getBoundingClientRect();
+				if (!name || event.clientY < name.top || event.clientY > name.bottom)
+					continue;
+			}
+			const found = this.findClip(element.dataset.id);
+			return found ? { element, ...found } : null;
+		}
+		return null;
+	}
+
+	clipStripFromEvent(event) {
+		if (this.draw || pathElement(event, "lane-automation")) return null;
+		return this.clipAtPoint(event, true);
+	}
+
+	startClipObjectDrag(event, found) {
+		clearTimeout(this.renameTimer);
+		this.renameTimer = null;
+		const rect = found.element.getBoundingClientRect();
+		const edge = this.trimEdgePx(event.pointerType);
+		const mode = this.readonly
+			? "move"
+			: event.clientX - rect.left <= edge
+				? "trim-left"
+				: rect.right - event.clientX <= edge
+					? "trim-right"
+					: "move";
+		const beat = this.beatAtPoint(event.clientX);
+		const wasInside = this.timeSelectionContains(found.lane.id, beat);
+		const extend = Boolean(event.shiftKey || event.metaKey || event.ctrlKey);
+		if (mode === "move" && (!wasInside || extend))
+			this.selectClipBounds(found, extend);
+		this.focusedClip = found.clip.id;
+		found.element.style.cursor = mode === "move" ? "grab" : "ew-resize";
+		const source = this.timeSelection;
+		const sourceStartLane = source
+			? this._lanes.findIndex((lane) => lane.id === source.laneIds[0])
+			: -1;
+		const grabbedLane = this._lanes.indexOf(found.lane);
+		this.drag = {
+			pointerId: event.pointerId,
+			type: mode,
+			clipId: found.clip.id,
+			laneId: found.lane.id,
+			startX: event.clientX,
+			startY: event.clientY,
+			origin: { ...found.clip },
+			copy: Boolean(event.altKey),
+			moved: false,
+			element: found.element,
+			selected: [{ lane: found.lane, clip: found.clip }],
+			source,
+			grabbedLaneOffset: Math.max(0, grabbedLane - sourceStartLane),
+			excludeIds: this.clipsIntersectingTimeSelection(source),
+			renameCandidate:
+				mode === "move" && event.pointerType === "mouse" && wasInside,
+		};
+		found.element.setPointerCapture?.(event.pointerId);
+		this.longPress.start(() => {
+			if (!this.drag || this.drag.moved || this.drag.type !== "move") return;
+			this.dispatchEvent(
+				eventOf("clip-context", {
+					id: found.clip.id,
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+			this.endPointer({ pointerId: event.pointerId });
+		});
+	}
+
+	startClipStrip(event) {
+		if (this.hasAttribute("disabled") || event.button !== 0) return;
+		if (
+			event
+				.composedPath()
+				.some(
+					(node) =>
+						node instanceof HTMLElement &&
+						node.matches(
+							"button, input, select, textarea, [data-timeline-interactive]",
+						),
+				)
+		)
+			return;
+		const found = this.clipStripFromEvent(event);
+		if (!found) return;
+		event.stopPropagation();
+		event.preventDefault();
+		this.startClipObjectDrag(event, found);
+	}
+
+	automationFromEvent(event) {
+		const editor = pathElement(event, "lane-automation");
+		if (!(editor instanceof HTMLElement)) return null;
+		const lane = this._lanes.find(
+			(entry) => entry.id === editor.dataset.laneId,
+		);
+		const automation = lane && this.automationFor(lane);
+		if (!lane || !automation) return null;
+		return {
+			row: editor,
+			lane,
+			automation,
+		};
+	}
+
+	updatePointerCursor(event) {
+		if (event.pointerType === "touch" || pathElement(event, "lane-automation"))
+			return;
+		const found = this.clipAtPoint(event);
+		if (!found) return;
+		const rect = found.element.getBoundingClientRect();
+		const edge = this.trimEdgePx(event.pointerType);
+		found.element.style.cursor =
+			event.clientX - rect.left <= edge || rect.right - event.clientX <= edge
+				? "ew-resize"
+				: "default";
+	}
+
+	startPinch() {
+		const points = [...this.pointers.values()];
+		if (points.length < 2) return;
+		const [first, second] = points;
+		const centerX = (first.x + second.x) / 2;
+		const centerY = (first.y + second.y) / 2;
+		this.pinch = {
+			distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+			centerX,
+			centerY,
+			pxPerBeat: this._pxPerBeat,
+			beat: this.beatAtPoint(centerX),
+			scrollTop: this.lanesWrap.scrollTop,
+		};
+	}
+
+	movePinch() {
+		if (!this.pinch || this.pointers.size < 2) return;
+		const points = [...this.pointers.values()];
+		const [first, second] = points;
+		const centerX = (first.x + second.x) / 2;
+		const centerY = (first.y + second.y) / 2;
+		const distance = Math.max(
+			1,
+			Math.hypot(second.x - first.x, second.y - first.y),
+		);
+		const nextPxPerBeat = finiteClamp(
+			(this.pinch.pxPerBeat * distance) / this.pinch.distance,
+			MIN_PX_PER_BEAT,
+			MAX_PX_PER_BEAT,
+		);
+		const rect = this.rulerWrap.getBoundingClientRect();
+		this._pxPerBeat = nextPxPerBeat;
+		this._scrollBeat = Math.max(
+			0,
+			this.pinch.beat - (centerX - rect.left) / nextPxPerBeat,
+		);
+		const maximum = Math.max(
+			0,
+			this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight,
+		);
+		this.lanesWrap.scrollTop = clamp(
+			this.pinch.scrollTop - (centerY - this.pinch.centerY),
+			0,
+			maximum,
+		);
+		this.paintLaneScroll();
+		this.render();
+		this.scheduleViewChange();
+	}
+
+	automationValueStep(automation) {
+		return effectiveEnvelopeStep(
+			Boolean(automation?.stepped),
+			automation?.step ?? automation?.valueStep,
+		);
+	}
+
+	/** Shift or Cmd/Ctrl-click grows the rectangle to include the clicked beat and lane. */
+	/** @param {PointerEvent} event @param {any} drag @returns {boolean} */
+	extendTimeSelection(event, drag) {
+		const current = this._timeSelection;
+		if (!current) return false;
+		const beat = snapBeat(
+			this.beatAtPoint(event.clientX),
+			this.beatsPerBar,
+			this.grid,
+			this.snapMode,
+		);
+		const laneIds = drag.allLanes
+			? this._lanes.map((lane) => lane.id)
+			: this.laneIdsForSpan(current.laneIds[0], drag.laneId).concat(
+					this.laneIdsForSpan(current.laneIds.at(-1), drag.laneId),
+				);
+		this.commitTimeSelection(
+			Math.min(current.start, beat),
+			Math.max(current.end, beat),
+			laneIds,
+		);
+		return true;
+	}
+
+	/** Move a time selection with arrows; Shift grows its time or lane extent. */
+	handleTimeSelectionArrow(event) {
+		const selection = this._timeSelection;
+		if (
+			!selection ||
+			event.altKey ||
+			event.metaKey ||
+			event.ctrlKey ||
+			!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+		)
+			return false;
+		event.preventDefault();
+		let { start, end } = selection;
+		let laneIds = [...selection.laneIds];
+		if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+			const direction = event.key === "ArrowLeft" ? -1 : 1;
+			const step = this.currentGridStep();
+			if (event.shiftKey) {
+				if (direction < 0) start = Math.max(0, start - step);
+				else end = Math.min(this.worldEnd(), end + step);
+			} else {
+				const delta =
+					direction < 0
+						? -Math.min(step, start)
+						: Math.min(step, this.worldEnd() - end);
+				start += delta;
+				end += delta;
+			}
+		} else {
+			const direction = event.key === "ArrowUp" ? -1 : 1;
+			const indexes = laneIds
+				.map((id) => this._lanes.findIndex((lane) => lane.id === id))
+				.filter((index) => index >= 0)
+				.sort((a, b) => a - b);
+			if (!indexes.length) return true;
+			if (event.shiftKey) {
+				const next = (direction < 0 ? indexes[0] : indexes.at(-1)) + direction;
+				if (next >= 0 && next < this._lanes.length) indexes.push(next);
+			} else {
+				const moved = indexes.map((index) => index + direction);
+				if (moved.some((index) => index < 0 || index >= this._lanes.length))
+					return true;
+				indexes.splice(0, indexes.length, ...moved);
+			}
+			const selected = new Set(indexes);
+			laneIds = this._lanes
+				.filter((_, index) => selected.has(index))
+				.map((lane) => lane.id);
+		}
+		const next = normalizeTimeSelection(start, end, laneIds, this.worldEnd());
+		if (
+			!next ||
+			(next.start === selection.start &&
+				next.end === selection.end &&
+				next.laneIds.join("\0") === selection.laneIds.join("\0"))
+		)
+			return true;
+		this.setTimeSelection(next.start, next.end, next.laneIds);
+		this.dispatchEvent(eventOf("time-select", this.timeSelection));
+		return true;
+	}
+
+	selectArrangement() {
+		const occupied = this._lanes
+			.map((lane, index) => ({ lane, index }))
+			.filter(({ lane }) => lane.clips.length);
+		if (!occupied.length) {
+			this.setTimeSelection(null, null);
+			this.dispatchEvent(eventOf("time-select", { start: null }));
+			return;
+		}
+		const clips = occupied.flatMap(({ lane }) => lane.clips);
+		const start = Math.min(...clips.map((clip) => Number(clip.start) || 0));
+		const end = Math.max(
+			...clips.map(
+				(clip) =>
+					(Number(clip.start) || 0) + Math.max(0, Number(clip.length) || 0),
+			),
+		);
+		this.commitTimeSelection(
+			start,
+			end,
+			this._lanes
+				.slice(occupied[0].index, occupied.at(-1).index + 1)
+				.map((lane) => lane.id),
+		);
+	}
+
+	/** The grab zone at a clip's edge, in px, scaled with the element's font. */
+	/** @param {string} [pointerType] */
+	trimEdgePx(pointerType) {
+		const fontSize =
+			Number.parseFloat(getComputedStyle(this).fontSize) || this.fontSize;
+		return (
+			fontSize *
+			(pointerType === "touch" ? TOUCH_TRIM_EDGE_EM : MOUSE_TRIM_EDGE_EM)
+		);
+	}
+
+	/** How far, in beats, an anchor pulls: a few pixels at the current zoom. */
+	snapReach() {
+		return ANCHOR_REACH_PX / this._pxPerBeat;
+	}
+
+	/** The times a drag also snaps to: other clips' edges, locators and the loop bounds. */
+	/** @param {{laneIds?: string[]|null, excludeIds?: string[]}} [options] */
+	snapAnchors({ laneIds = null, excludeIds = [] } = {}) {
+		const skip = new Set(excludeIds);
+		const lanes = laneIds
+			? this._lanes.filter((lane) => laneIds.includes(lane.id))
+			: this._lanes;
+		const edges = lanes.flatMap((lane) =>
+			lane.clips
+				.filter((clip) => !skip.has(clip.id))
+				.flatMap((clip) => {
+					const start = Number(clip.start) || 0;
+					return [start, start + Math.max(0, Number(clip.length) || 0)];
+				}),
+		);
+		const locators = this._locators.map((locator) => locator.beat);
+		return [...edges, ...locators, this._loopStart, this._loopEnd];
+	}
+
+	/** The snap mode for one gesture: Cmd/Ctrl inverts whatever the host set. */
+	/** @param {{metaKey?: boolean, ctrlKey?: boolean}} event */
+	snapModeFor(event) {
+		return snapModeWith(
+			this.snapMode,
+			Boolean(event?.metaKey || event?.ctrlKey),
+		);
+	}
+
+	currentGridStep() {
+		return gridStepForView(
+			this.beatsPerBar,
+			this.grid,
+			this._pxPerBeat,
+			this.adaptiveGrid,
+		);
+	}
+
+	creationBeatFor(event) {
+		const beat = this.beatAtPoint(event.clientX);
+		if (this.snapModeFor(event) === "off") return Math.max(0, beat);
+		const step = this.currentGridStep();
+		return Math.max(0, Math.floor((beat + MIN_CLIP_LENGTH) / step) * step);
+	}
+
+	/** Shift uses the same quarter-speed precision as the other editors. */
+	gestureFactor(event) {
+		return event?.shiftKey ? 0.25 : 1;
+	}
+
+	automationSelectionFor(laneId) {
+		const selection = this._timeSelection;
+		return selection?.laneIds.includes(String(laneId)) ? selection : null;
+	}
+
+	startTimeSelection(event, laneId, allLanes = false, clip = null) {
+		this.focus({ preventScroll: true });
+		this.focusedClip = null;
+		this.focusedLane = null;
+		this.drag = {
+			pointerId: event.pointerId,
+			type: "time-selection",
+			laneId,
+			clip,
+			allLanes,
+			startX: event.clientX,
+			startY: event.clientY,
+			startBeat: this.beatAtPoint(event.clientX),
+			startScrollBeat: this._scrollBeat,
+			startScrollTop: this.lanesWrap.scrollTop,
+			originSelection: this.timeSelection,
+			moved: false,
+		};
+	}
+
+	startContextLongPress(event) {
+		if (event.pointerType !== "touch") return;
+		const target = event.composedPath()[0];
+		this.longPress.start(() => {
+			if (this.pinch || this.drag?.moved || !(target instanceof EventTarget))
+				return;
+			this.cancelActiveDrag();
+			target.dispatchEvent(
+				new MouseEvent("contextmenu", {
+					bubbles: true,
+					composed: true,
+					cancelable: true,
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+		});
+	}
+
+	startPointer(event) {
+		if (this.hasAttribute("disabled") || event.button !== 0) return;
+		if (event.pointerType === "touch") {
+			this.pointers.set(event.pointerId, {
+				x: event.clientX,
+				y: event.clientY,
+			});
+			if (this.pointers.size >= 2) {
+				this.longPress.cancel();
+				this.cancelActiveDrag();
+				this.clearClipDragVisuals();
+				this.startPinch();
+				event.preventDefault();
+				return;
+			}
+		}
+		if (this.drag) return;
+		clearTimeout(this.renameTimer);
+		this.renameTimer = null;
+		if (
+			event
+				.composedPath()
+				.some(
+					(node) =>
+						node instanceof HTMLElement &&
+						node.matches(
+							"button, input, select, textarea, [data-timeline-interactive]",
+						),
+				)
+		)
+			return;
+		const loopPart = event
+			.composedPath()
+			.find(
+				(node) =>
+					node instanceof HTMLElement &&
+					(node.classList.contains("ruler-band") ||
+						node.classList.contains("ruler-handle")),
+			);
+		if (loopPart instanceof HTMLElement) return;
+		this.startContextLongPress(event);
+		const locator = this.locatorFromEvent(event);
+		if (locator) {
+			event.preventDefault();
+			const name = pathElement(event, "ruler-locator-name");
+			const wasFocused = this.root.activeElement === locator.element;
+			locator.element.focus({ preventScroll: true });
+			this.drag = {
+				pointerId: event.pointerId,
+				type: "locator",
+				locatorId: locator.locator.id,
+				element: locator.element,
+				startX: event.clientX,
+				startY: event.clientY,
+				startBeat: locator.locator.beat,
+				moved: false,
+				renameCandidate:
+					event.pointerType === "mouse" &&
+					name instanceof HTMLElement &&
+					wasFocused,
+			};
+			if (event.isTrusted) locator.element.setPointerCapture?.(event.pointerId);
+			return;
+		}
+		const onRuler = event
+			.composedPath()
+			.some(
+				(node) =>
+					node instanceof HTMLElement && node.classList.contains("ruler-wrap"),
+			);
+		if (onRuler) {
+			const row = this.rulerRowAtPoint(event.clientY);
+			const beat = this.beatAtPoint(event.clientX);
+			if (row === 1) {
+				this.drag = {
+					pointerId: event.pointerId,
+					type: "ruler-locator-row",
+					startX: event.clientX,
+					startY: event.clientY,
+					startBeat: beat,
+					moved: false,
+				};
+				return;
+			}
+			if (row === 2) {
+				this.dispatchEvent(
+					eventOf("seek", {
+						beat: snapBeat(
+							beat,
+							this.beatsPerBar,
+							this.grid,
+							this.snapModeFor(event),
+						),
+						source: "ruler",
+					}),
+				);
+				this.drag = {
+					pointerId: event.pointerId,
+					type: "ruler-seek",
+					startX: event.clientX,
+					startY: event.clientY,
+					moved: false,
+				};
+				if (event.isTrusted)
+					this.rulerWrap.setPointerCapture?.(event.pointerId);
+				return;
+			}
+			// the loop row: a drag makes a region on every lane, a click seeks
+			this.startTimeSelection(event, this._lanes[0]?.id ?? null, true);
+			if (event.isTrusted) this.rulerWrap.setPointerCapture?.(event.pointerId);
+			return;
+		}
+		const header = event
+			.composedPath()
+			.find(
+				(node) =>
+					node instanceof HTMLElement && node.classList.contains("lane-header"),
+			);
+		if (header instanceof HTMLElement) {
+			header.focus({ preventScroll: true });
+			this.focusedLane = header.dataset.laneId || null;
+			this.focusedClip = null;
+			this.drag = {
+				pointerId: event.pointerId,
+				type: "lane-header",
+				laneId: header.dataset.laneId,
+				startX: event.clientX,
+				startY: event.clientY,
+				moved: false,
+				toIndex: this._lanes.findIndex(
+					(lane) => lane.id === header.dataset.laneId,
+				),
+			};
+			if (event.isTrusted) header.setPointerCapture?.(event.pointerId);
+			this.longPress.start(() => {
+				if (this.drag?.type !== "lane-header" || this.drag.moved) return;
+				this.dispatchEvent(
+					eventOf("lane-header-context", {
+						laneId: header.dataset.laneId,
+						clientX: event.clientX,
+						clientY: event.clientY,
+					}),
+				);
+				this.drag = null;
+			});
+			return;
+		}
+		const found = this.clipFromEvent(event);
+		if (found) {
+			event.preventDefault();
+			const rect = found.element.getBoundingClientRect();
+			const edge = this.trimEdgePx(event.pointerType);
+			if (
+				event.clientX - rect.left <= edge ||
+				rect.right - event.clientX <= edge
+			) {
+				this.startClipObjectDrag(event, found);
+			} else if (!this.draw) {
+				this.startTimeSelection(event, found.lane.id, false, found);
+				if (event.isTrusted) found.element.setPointerCapture?.(event.pointerId);
+			}
+			return;
+		}
+		const lane = event
+			.composedPath()
+			.find(
+				(node) =>
+					node instanceof HTMLElement && node.classList.contains("lane"),
+			);
+		if (lane instanceof HTMLElement) {
+			if (this.draw) return;
+			this.startTimeSelection(event, lane.dataset.laneId);
+			if (event.isTrusted) lane.setPointerCapture?.(event.pointerId);
+			return;
+		}
+	}
+
+	movePointer(event) {
+		if (event.pointerType === "touch" && this.pointers.has(event.pointerId)) {
+			this.pointers.set(event.pointerId, {
+				x: event.clientX,
+				y: event.clientY,
+			});
+			if (this.pinch) {
+				this.movePinch();
+				return;
+			}
+		}
+		const drag = this.drag;
+		if (!drag || event.pointerId !== drag.pointerId) {
+			if (!drag) this.updatePointerCursor(event);
+			return;
+		}
+		const dx = event.clientX - drag.startX;
+		const dy = event.clientY - drag.startY;
+		const slop = event.pointerType === "touch" ? DRAG_SLOP * 2 : DRAG_SLOP;
+		if (!drag.moved && Math.hypot(dx, dy) > slop) drag.moved = true;
+		if (drag.type === "locator") {
+			if (!drag.moved || this.readonly) return;
+			const rawBeat =
+				drag.startBeat +
+				(this.beatAtPoint(event.clientX) - drag.startBeat) *
+					this.gestureFactor(event);
+			const beat = snapTime(rawBeat, {
+				step: this.currentGridStep(),
+				mode: this.snapModeFor(event),
+				origin: drag.startBeat,
+				anchors: this.snapAnchors().filter(
+					(anchor) => anchor !== drag.startBeat,
+				),
+				reach: this.snapReach(),
+			});
+			drag.previewBeat = Math.min(beat, this.worldEnd());
+			drag.element.style.left = `${drag.previewBeat * this._pxPerBeat}px`;
+			return;
+		}
+		if (drag.type === "ruler-locator-row") return;
+		if (drag.type === "ruler-seek") {
+			const beat = snapBeat(
+				this.beatAtPoint(event.clientX),
+				this.beatsPerBar,
+				this.grid,
+				this.snapModeFor(event),
+			);
+			this.dispatchEvent(eventOf("seek", { beat, source: "ruler" }));
+			return;
+		}
+		if (drag.type === "time-selection") {
+			if (
+				event.pointerType === "touch" &&
+				drag.moved &&
+				Math.abs(dy) > Math.abs(dx)
+			) {
+				drag.type = "scroll-lanes";
+				const maximum = Math.max(
+					0,
+					this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight,
+				);
+				this.lanesWrap.scrollTop = clamp(drag.startScrollTop - dy, 0, maximum);
+				this.paintLaneScroll();
+				return;
+			}
+			if (
+				event.pointerType === "touch" &&
+				drag.moved &&
+				Math.abs(dx) > Math.abs(dy)
+			) {
+				drag.type = "scroll-time";
+				drag.startScrollBeat = this._scrollBeat;
+				this.scrollBeat = Math.max(
+					0,
+					drag.startScrollBeat - dx / this._pxPerBeat,
+				);
+				return;
+			}
+			if (!drag.moved) return;
+			const currentLane =
+				this.laneAtOrNearestPoint(event.clientY) || drag.laneId;
+			const laneIds = drag.allLanes
+				? this._lanes.map((lane) => lane.id)
+				: this.laneIdsForSpan(drag.laneId, currentLane);
+			const snapOptions = {
+				step: this.currentGridStep(),
+				mode: this.snapMode,
+				anchors: this.snapAnchors({ laneIds }),
+				reach: this.snapReach(),
+			};
+			const start = snapTime(drag.startBeat, snapOptions);
+			const end = snapTime(this.beatAtPoint(event.clientX), snapOptions);
+			drag.previewSelection = normalizeTimeSelection(
+				start,
+				end,
+				laneIds,
+				this.worldEnd(),
+			);
+			this.paintTimeSelection(drag.previewSelection);
+			this.dispatchEvent(
+				eventOf(
+					"time-select-input",
+					drag.previewSelection || { start, end, laneIds },
+				),
+			);
+			return;
+		}
+		if (drag.type === "lane-header") {
+			if (!drag.moved || this.readonly) return;
+			drag.toIndex = this.laneIndexFromHeaderPoint(event.clientY);
+			this.paintLaneDropLine(drag.toIndex);
+			return;
+		}
+		if (drag.type === "scroll-time") {
+			this.scrollBeat = Math.max(
+				0,
+				drag.startScrollBeat - dx / this._pxPerBeat,
+			);
+			return;
+		}
+		if (drag.type === "scroll-lanes") {
+			const maximum = Math.max(
+				0,
+				this.lanesWrap.scrollHeight - this.lanesWrap.clientHeight,
+			);
+			this.lanesWrap.scrollTop = clamp(drag.startScrollTop - dy, 0, maximum);
+			this.paintLaneScroll();
+			return;
+		}
+		if (drag.type === "trim-left" || drag.type === "trim-right") {
+			const origin = drag.origin;
+			const originEdge =
+				drag.type === "trim-left" ? origin.start : origin.start + origin.length;
+			const pointerBeat =
+				this._scrollBeat +
+				(event.clientX - this.rulerWrap.getBoundingClientRect().left) /
+					this._pxPerBeat;
+			const rawBeat =
+				originEdge + (pointerBeat - originEdge) * this.gestureFactor(event);
+			const edgeBeat = snapTime(rawBeat, {
+				step: this.currentGridStep(),
+				mode: this.snapModeFor(event),
+				origin: originEdge,
+				anchors: this.snapAnchors({
+					laneIds: [drag.laneId],
+					excludeIds: [drag.clipId],
+				}),
+				reach: this.snapReach(),
+			});
+			const delta = edgeBeat - originEdge;
+			// Trimming remains a direct clip operation; rectangle material moves are separate.
+			drag.previews = drag.selected.map((item) => {
+				const clipStart = Number(item.clip.start) || 0;
+				const clipEnd = clipStart + Math.max(0, Number(item.clip.length) || 0);
+				const start =
+					drag.type === "trim-left"
+						? clamp(clipStart + delta, 0, clipEnd - MIN_CLIP_LENGTH)
+						: clipStart;
+				const end =
+					drag.type === "trim-right"
+						? Math.max(clipEnd + delta, clipStart + MIN_CLIP_LENGTH)
+						: clipEnd;
+				return { id: item.clip.id, start, end, clip: item.clip };
+			});
+			for (const preview of drag.previews) {
+				const element = this.clipElements().find(
+					(node) => node.dataset.id === preview.id,
+				);
+				if (!element) continue;
+				element.style.left = `${preview.start * this._pxPerBeat}px`;
+				element.style.width = `${Math.max(1, (preview.end - preview.start) * this._pxPerBeat)}px`;
+				this.paintClipContent(
+					element,
+					previewTrimmedClip(preview.clip, preview.start, preview.end),
+				);
+				this.dispatchEvent(
+					eventOf("clip-trim-input", {
+						id: preview.id,
+						start: preview.start,
+						end: preview.end,
+					}),
+				);
+			}
+			return;
+		}
+		if (drag.type === "move") {
+			if (!drag.moved || this.readonly || !drag.source) return;
+			const source = drag.source;
+			const targetLaneId =
+				this.laneAtOrNearestPoint(event.clientY) || drag.laneId;
+			const targetIndex = this._lanes.findIndex(
+				(lane) => lane.id === targetLaneId,
+			);
+			const laneCount = source.laneIds.length;
+			const firstLane = clamp(
+				targetIndex - drag.grabbedLaneOffset,
+				0,
+				Math.max(0, this._lanes.length - laneCount),
+			);
+			const toLaneIds = this._lanes
+				.slice(firstLane, firstLane + laneCount)
+				.map((lane) => lane.id);
+			const length = source.end - source.start;
+			const edges = this.snapAnchors({
+				laneIds: toLaneIds,
+				excludeIds: drag.excludeIds,
+			});
+			const to = Math.max(
+				0,
+				snapTime(source.start + dx / this._pxPerBeat, {
+					step: this.currentGridStep(),
+					mode: this.snapMode,
+					origin: source.start,
+					anchors: [...edges, ...edges.map((edge) => edge - length)],
+					reach: this.snapReach(),
+				}),
+			);
+			drag.preview = {
+				start: to,
+				end: to + length,
+				laneIds: toLaneIds,
+			};
+			drag.copy = Boolean(event.altKey);
+			this.paintCopyState();
+			this.paintMovePreview();
+			this.emitTimeMove("time-move-input");
+		}
+	}
+
+	/** @param {number} clientY @param {string} originalLaneId */
+	laneOffsetForPoint(clientY, originalLaneId) {
+		const target = this.laneAtPoint(clientY);
+		if (!target || target === originalLaneId) return 0;
+		const from = this._lanes.findIndex((lane) => lane.id === originalLaneId);
+		const to = this._lanes.findIndex((lane) => lane.id === target);
+		if (to < 0 || from < 0) return 0;
+		if (to > from)
+			return this._lanes
+				.slice(from, to)
+				.reduce((offset, lane) => offset + this.laneHeightFor(lane), 0);
+		return -this._lanes
+			.slice(to, from)
+			.reduce((offset, lane) => offset + this.laneHeightFor(lane), 0);
+	}
+
+	/** Restore a gesture preview without emitting a host intent. */
+	/** @param {any} [options] */
+	cancelActiveDrag(options = {}) {
+		const drag = this.drag;
+		this.longPress.cancel();
+		clearTimeout(this.viewChangeTimer);
+		this.viewChangeTimer = null;
+		this.drag = null;
+		if (drag) {
+			if (drag.type === "locator" && drag.element instanceof HTMLElement) {
+				drag.element.style.left = `${drag.startBeat * this._pxPerBeat}px`;
+			}
+			if (
+				drag.type === "time-selection" ||
+				drag.type === "scroll-time" ||
+				drag.type === "move"
+			) {
+				this.paintTimeSelection();
+				this.scrollBeat = drag.startScrollBeat ?? this._scrollBeat;
+			}
+			if (drag.type === "trim-left" || drag.type === "trim-right")
+				this.render();
+			if (drag.type === "loop") this.paintLoop();
+			this.clearLaneDropLine();
+		}
+		this.clearClipDragVisuals();
+		if (options.clearPointers) {
+			this.pointers.clear();
+			this.pinch = null;
+		}
+	}
+
+	/** A cancelled pointer never commits its pending gesture. */
+	cancelPointer() {
+		this.cancelActiveDrag({ clearPointers: true });
+	}
+
+	endPointer(event) {
+		if (event.pointerType === "touch" || this.pointers.has(event.pointerId)) {
+			this.pointers.delete(event.pointerId);
+			if (this.pinch) {
+				if (this.pointers.size < 2) this.pinch = null;
+				return;
+			}
+		}
+		const drag = this.drag;
+		if (!drag || event.pointerId !== drag.pointerId) {
+			this.clearClipDragVisuals();
+			return;
+		}
+		this.longPress.cancel();
+		this.drag = null;
+		this.clearClipDragVisuals();
+		if (drag.type === "lane-header") {
+			this.clearLaneDropLine();
+			const index = this._lanes.findIndex((lane) => lane.id === drag.laneId);
+			if (drag.moved) {
+				if (!this.readonly)
+					this.dispatchEvent(
+						eventOf("lane-move", {
+							laneId: drag.laneId,
+							toIndex: clamp(
+								Number(drag.toIndex) || 0,
+								0,
+								this._lanes.length - 1,
+							),
+						}),
+					);
+			} else if (index >= 0)
+				this.dispatchEvent(
+					eventOf("lane-pick", {
+						laneId: drag.laneId,
+						shiftKey: Boolean(event.shiftKey),
+					}),
+				);
+			return;
+		}
+		if (drag.type === "locator") {
+			if (drag.moved) {
+				if (!this.readonly)
+					this.dispatchEvent(
+						eventOf("locator-move", {
+							id: drag.locatorId,
+							beat: drag.previewBeat ?? drag.startBeat,
+						}),
+					);
+				return;
+			} else {
+				this.dispatchEvent(eventOf("locator-jump", { id: drag.locatorId }));
+				if (drag.renameCandidate) {
+					this.renameTimer = setTimeout(() => {
+						this.renameTimer = null;
+						if (this.readonly) return;
+						this.renamingLocator = drag.locatorId;
+						this.render();
+					}, 350);
+				}
+			}
+			return;
+		}
+		if (drag.type === "ruler-locator-row") return;
+		if (drag.type === "ruler-seek") return;
+		if (drag.type === "time-selection") {
+			if (drag.moved && drag.previewSelection) {
+				const selection = drag.previewSelection;
+				this.commitTimeSelection(
+					selection.start,
+					selection.end,
+					selection.laneIds,
+				);
+			} else if (!drag.moved && drag.clip) {
+				this.selectClipBounds(
+					drag.clip,
+					Boolean(event.shiftKey || event.metaKey || event.ctrlKey),
+				);
+			} else if (
+				!drag.moved &&
+				(event.shiftKey || event.metaKey || event.ctrlKey) &&
+				this.extendTimeSelection(event, drag)
+			) {
+				return;
+			} else {
+				const beat = snapBeat(
+					this.beatAtPoint(event.clientX),
+					this.beatsPerBar,
+					this.grid,
+					this.snapMode,
+				);
+				this.commitTimeSelection(
+					beat,
+					beat,
+					drag.allLanes ? this._lanes.map((lane) => lane.id) : [drag.laneId],
+				);
+			}
+			return;
+		}
+		if (drag.type === "scroll-time" || drag.type === "scroll-lanes") return;
+		this.clearClipDragVisuals();
+		if (drag.element) drag.element.style.cursor = "default";
+		if (drag.type === "trim-left" || drag.type === "trim-right") {
+			if (drag.previews) {
+				for (const { id, start, end } of drag.previews)
+					this.dispatchEvent(eventOf("clip-trim", { id, start, end }));
+			} else this.render();
+			return;
+		}
+		if (drag.type === "move" && drag.moved && !this.readonly && drag.preview) {
+			this.setTimeSelection(
+				drag.preview.start,
+				drag.preview.end,
+				drag.preview.laneIds,
+			);
+			this.emitTimeMove("time-move", drag);
+			return;
+		}
+		if (drag.type === "move") {
+			if (drag.renameCandidate) {
+				this.renameTimer = setTimeout(() => {
+					this.renameTimer = null;
+					this.beginRename(drag.clipId);
+				}, 350);
+			}
+		}
+	}
+
+	startLoopDrag(event, kind) {
+		if (this.hasAttribute("disabled") || event.button !== 0) return;
+		event.preventDefault();
+		event.stopPropagation();
+		this.drag = {
+			pointerId: event.pointerId,
+			type: "loop",
+			kind,
+			startX: event.clientX,
+			start: this._loopStart,
+			end: this._loopEnd,
+			loopEnabled: this._loopEnabled,
+			px: this._pxPerBeat,
+			node: event.currentTarget,
+		};
+		this.setAttribute("data-loop-drag", "");
+		event.currentTarget.setPointerCapture?.(event.pointerId);
+	}
+
+	moveLoopDrag(event) {
+		const drag = this.drag;
+		if (drag?.type !== "loop" || event.pointerId !== drag.pointerId) return;
+		const delta =
+			((event.clientX - drag.startX) / drag.px) * this.gestureFactor(event);
+		const mode = this.snapModeFor(event);
+		const step = this.currentGridStep();
+		const anchors = this.snapAnchors().filter(
+			(anchor) => anchor !== drag.start && anchor !== drag.end,
+		);
+		const snapValue = (value, origin) =>
+			snapTime(value, { step, mode, origin, anchors, reach: this.snapReach() });
+		let start = drag.start;
+		let end = drag.end;
+		if (drag.kind === "start")
+			start = Math.min(
+				snapValue(drag.start + delta, drag.start),
+				end - MIN_CLIP_LENGTH,
+			);
+		else if (drag.kind === "end")
+			end = Math.max(
+				snapValue(drag.end + delta, drag.end),
+				start + MIN_CLIP_LENGTH,
+			);
+		else {
+			start = Math.max(0, snapValue(drag.start + delta, drag.start));
+			end = start + (drag.end - drag.start);
+		}
+		drag.preview = { start, end };
+		this.paintLoop(start, end);
+		this.dispatchEvent(
+			eventOf("loop-input", { start, end, enabled: this._loopEnabled }),
+		);
+	}
+
+	endLoopDrag(event) {
+		const drag = this.drag;
+		if (drag?.type !== "loop" || event.pointerId !== drag.pointerId) return;
+		this.drag = null;
+		this.removeAttribute("data-loop-drag");
+		const preview = drag.preview ?? { start: drag.start, end: drag.end };
+		this.paintLoop();
+		this.dispatchEvent(
+			eventOf("loop-change", { ...preview, enabled: this._loopEnabled }),
+		);
+	}
+
+	cancelLoopDrag(event) {
+		if (this.drag?.type !== "loop" || event.pointerId !== this.drag.pointerId)
+			return;
+		this.removeAttribute("data-loop-drag");
+		this.cancelActiveDrag();
+	}
+
+	/** @param {TimelineLane} lane @param {AutomationLaneView} automation @param {{beat:number,value:number}[]} points */
+	/** Report an automation edit; the host applies it and hands the points back. */
+	commitAutomationChange(lane, automation, points) {
+		if (this.readonly) return;
+		this.dispatchEvent(
+			eventOf("automation-change", {
+				laneId: lane.id,
+				automationId: automation.id,
+				points: points.map((point) => ({ ...point })),
+			}),
+		);
+	}
+
+	// ---- Click, keyboard, wheel -------------------------------------------------
+
+	handleDoubleClick(event) {
+		if (this.hasAttribute("disabled")) return;
+		const loopPart = event
+			.composedPath()
+			.find(
+				(node) =>
+					node instanceof HTMLElement &&
+					(node.classList.contains("ruler-band") ||
+						node.classList.contains("ruler-handle")),
+			);
+		if (loopPart instanceof HTMLElement) {
+			if (loopPart.classList.contains("ruler-band")) {
+				this.dispatchEvent(
+					eventOf("loop-toggle", { enabled: !this._loopEnabled }),
+				);
+			}
+			return;
+		}
+		const locator = this.locatorFromEvent(event);
+		if (locator) {
+			clearTimeout(this.renameTimer);
+			this.renameTimer = null;
+			return;
+		}
+		if (
+			event
+				.composedPath()
+				.some(
+					(node) =>
+						node instanceof HTMLElement &&
+						node.classList.contains("ruler-wrap"),
+				)
+		) {
+			if (this.rulerRowAtPoint(event.clientY) === 1) {
+				if (this.readonly) return;
+				event.preventDefault();
+				const beat = snapBeat(
+					this.beatAtPoint(event.clientX),
+					this.beatsPerBar,
+					this.grid,
+					this.snapModeFor(event),
+				);
+				this.dispatchEvent(eventOf("locator-create", { beat }));
+			} else if (this.rulerRowAtPoint(event.clientY) === 2) {
+				event.preventDefault();
+				this.dispatchEvent(eventOf("fit-request", {}));
+			}
+			return;
+		}
+		const laneName = pathElement(event, "lane-name");
+		if (laneName instanceof HTMLElement) {
+			const lane = this._lanes.find(
+				(entry) =>
+					entry.id === laneName.closest(".lane-header")?.dataset.laneId,
+			);
+			if (lane) {
+				event.preventDefault();
+				this.beginLaneRename(lane.id);
+			}
+			return;
+		}
+		if (this.clipAtPoint(event)) return;
+		if (this.readonly) return;
+		const lane = event
+			.composedPath()
+			.find(
+				(node) =>
+					node instanceof HTMLElement && node.classList.contains("lane"),
+			);
+		if (lane instanceof HTMLElement) {
+			this.dispatchEvent(
+				eventOf("lane-create", {
+					laneId: lane.dataset.laneId,
+					beat: this.creationBeatFor(event),
+					length: this.currentGridStep(),
+				}),
+			);
+		} else if (
+			event
+				.composedPath()
+				.some(
+					(node) =>
+						node instanceof HTMLElement &&
+						node.classList.contains("header-wrap"),
+				)
+		) {
+			this.dispatchEvent(
+				eventOf("lanes-create", {
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+		}
+	}
+
+	handleContextMenu(event) {
+		if (this.hasAttribute("disabled")) return;
+		const locator = this.locatorFromEvent(event);
+		if (locator) {
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("locator-context", {
+					id: locator.locator.id,
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+			return;
+		}
+		const automation = this.automationFromEvent(event);
+		if (automation) {
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("automation-context", {
+					laneId: automation.lane.id,
+					automationId: automation.automation.id,
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+			return;
+		}
+		const found = this.clipFromEvent(event);
+		if (found) {
+			event.preventDefault();
+			if (
+				!this.timeSelectionContains(
+					found.lane.id,
+					this.beatAtPoint(event.clientX),
+				)
+			)
+				this.selectClipBounds(found);
+			this.dispatchEvent(
+				eventOf("clip-context", {
+					id: found.clip.id,
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+			return;
+		}
+		const header = event
+			.composedPath()
+			.find(
+				(node) =>
+					node instanceof HTMLElement && node.classList.contains("lane-header"),
+			);
+		if (header instanceof HTMLElement) {
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("lane-header-context", {
+					laneId: header.dataset.laneId,
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+			return;
+		}
+		const lane = event
+			.composedPath()
+			.find(
+				(node) =>
+					node instanceof HTMLElement && node.classList.contains("lane"),
+			);
+		if (lane instanceof HTMLElement) {
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("lane-context", {
+					laneId: lane.dataset.laneId,
+					beat: this.beatAtPoint(event.clientX),
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+		} else if (
+			event
+				.composedPath()
+				.some(
+					(node) =>
+						node instanceof HTMLElement &&
+						node.classList.contains("header-wrap"),
+				)
+		) {
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("lanes-context", {
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+		} else if (
+			event
+				.composedPath()
+				.some(
+					(node) =>
+						node instanceof HTMLElement &&
+						node.classList.contains("ruler-wrap"),
+				)
+		) {
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("ruler-context", {
+					beat: this.beatAtPoint(event.clientX),
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+		} else {
+			// every remaining point of the surface still resolves to a context
+			// intent, so callers never need a native contextmenu fallback
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("timeline-context", {
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			);
+		}
+	}
+
+	entryClip(key) {
+		const clips = this._lanes.flatMap((lane) => lane.clips);
+		if (!clips.length) return null;
+		if (key === "Home" || key === "ArrowLeft" || key === "ArrowUp")
+			return clips[0];
+		if (key === "End") return clips[clips.length - 1];
+		return clips.reduce(
+			(nearest, clip) =>
+				Math.abs((Number(clip.start) || 0) - this._playhead) <
+				Math.abs((Number(nearest.start) || 0) - this._playhead)
+					? clip
+					: nearest,
+			clips[0],
+		);
+	}
+
+	handleKey(event) {
+		if (this.hasAttribute("disabled")) return;
+		const source = event.composedPath()[0];
+		if (
+			source instanceof HTMLInputElement ||
+			source instanceof HTMLTextAreaElement
+		)
+			return;
+		const key = event.key.toLowerCase();
+		if (event.key === "Escape" && this.drag) {
+			event.preventDefault();
+			this.cancelActiveDrag();
+			return;
+		}
+		const automationBody = this.automationFromEvent(event);
+		const envelopeEditor = event
+			.composedPath()
+			.some(
+				(node) =>
+					node instanceof HTMLElement &&
+					node.localName === "compost-envelope-editor",
+			);
+		if (
+			!this.readonly &&
+			!event.altKey &&
+			!event.metaKey &&
+			!event.ctrlKey &&
+			key === "b"
+		) {
+			event.preventDefault();
+			this.dispatchEvent(eventOf("draw-toggle", { enabled: !this.draw }));
+			return;
+		}
+		if (
+			envelopeEditor &&
+			!(this.draw && (event.key === "Delete" || event.key === "Backspace"))
+		)
+			return;
+		const keyStep = this.currentGridStep() * (event.shiftKey ? 1 / 16 : 1);
+		const loopHandle = pathElement(event, "ruler-handle");
+		if (
+			loopHandle instanceof HTMLElement &&
+			(event.key === "ArrowLeft" || event.key === "ArrowRight")
+		) {
+			event.preventDefault();
+			if (this.readonly) return;
+			const delta = keyStep * (event.key === "ArrowRight" ? 1 : -1);
+			const start = loopHandle.classList.contains("start")
+				? clamp(this._loopStart + delta, 0, this._loopEnd - MIN_CLIP_LENGTH)
+				: this._loopStart;
+			const end = loopHandle.classList.contains("end")
+				? Math.max(this._loopEnd + delta, this._loopStart + MIN_CLIP_LENGTH)
+				: this._loopEnd;
+			this.dispatchEvent(
+				eventOf("loop-change", { start, end, enabled: this._loopEnabled }),
+			);
+			return;
+		}
+		const locatorTarget = this.locatorFromEvent(event);
+		if (locatorTarget) {
+			if (event.key === "F2" && !this.readonly) {
+				event.preventDefault();
+				this.renamingLocator = locatorTarget.locator.id;
+				this.render();
+				return;
+			} else if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("locator-jump", { id: locatorTarget.locator.id }),
+				);
+				return;
+			} else if (
+				!this.readonly &&
+				(event.key === "Delete" || event.key === "Backspace")
+			) {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("locator-delete", { id: locatorTarget.locator.id }),
+				);
+				return;
+			} else if (
+				!this.readonly &&
+				(event.key === "ArrowLeft" || event.key === "ArrowRight")
+			) {
+				event.preventDefault();
+				const beat = Math.max(
+					0,
+					locatorTarget.locator.beat +
+						keyStep * (event.key === "ArrowRight" ? 1 : -1),
+				);
+				this.dispatchEvent(
+					eventOf("locator-move", { id: locatorTarget.locator.id, beat }),
+				);
+				return;
+			}
+		}
+		if (this.draw && automationBody && event.key.startsWith("Arrow")) {
+			event.preventDefault();
+			return;
+		}
+		const selection = this._timeSelection;
+		const automationSelection =
+			!this.draw && automationBody
+				? this.automationSelectionFor(automationBody.lane.id)
+				: null;
+		if (
+			automationSelection &&
+			(event.key === "Delete" || event.key === "Backspace")
+		) {
+			event.preventDefault();
+			const points = toEnvelopePoints(automationBody.automation.points);
+			const values = envelopeRangeEdgeValues(
+				points,
+				automationSelection.start,
+				automationSelection.end,
+				{
+					min: automationBody.automation.min,
+					max: automationBody.automation.max,
+					scale: automationBody.automation.scale,
+					stepped: automationBody.automation.stepped,
+					step: this.automationValueStep(automationBody.automation),
+				},
+			);
+			this.commitAutomationChange(
+				automationBody.lane,
+				automationBody.automation,
+				fromEnvelopePoints(
+					flattenEnvelopeRange(
+						points,
+						automationSelection.start,
+						automationSelection.end,
+						values,
+						{
+							min: automationBody.automation.min,
+							max: automationBody.automation.max,
+						},
+						undefined,
+						this.automationValueStep(automationBody.automation),
+					),
+				),
+			);
+			return;
+		}
+		if (selection && source === this && this.handleTimeSelectionArrow(event))
+			return;
+		if (selection && selection.end > selection.start) {
+			if (!this.readonly && (event.metaKey || event.ctrlKey) && key === "d") {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("time-duplicate", {
+						start: selection.start,
+						end: selection.end,
+						laneIds: [...selection.laneIds],
+						to: selection.end,
+					}),
+				);
+				return;
+			}
+			if (key === "l" && !event.altKey && !event.shiftKey) {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("loop-change", {
+						start: selection.start,
+						end: selection.end,
+						enabled: true,
+					}),
+				);
+				return;
+			}
+			if (
+				!this.readonly &&
+				(event.key === "Delete" || event.key === "Backspace")
+			) {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("time-delete", {
+						start: selection.start,
+						end: selection.end,
+						laneIds: [...selection.laneIds],
+						removeTime: Boolean(event.shiftKey),
+					}),
+				);
+				return;
+			}
+			if (!this.readonly && (event.metaKey || event.ctrlKey) && key === "e") {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("clip-split", {
+						ids: this.clipsIntersectingTimeSelection(selection),
+						beats: [selection.start, selection.end],
+						laneIds: [...selection.laneIds],
+					}),
+				);
+				return;
+			}
+		}
+		if (event.key === "," || event.key === ".") {
+			const current = this._playhead;
+			const candidates = this._locators.filter((locator) =>
+				event.key === "," ? locator.beat < current : locator.beat > current,
+			);
+			const locator = event.key === "," ? candidates.at(-1) : candidates[0];
+			if (locator) {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf(event.key === "," ? "locator-prev" : "locator-next", {
+						id: locator.id,
+					}),
+				);
+			}
+			return;
+		}
+		const headerTarget = this.laneHeaderFromEvent(event);
+		const onAutomationSurface = event
+			.composedPath()
+			.some(
+				(node) =>
+					node instanceof HTMLElement &&
+					node.classList.contains("lane-automation"),
+			);
+		const onHeaderControl = event
+			.composedPath()
+			.some(
+				(node) =>
+					node instanceof HTMLElement &&
+					node.matches(
+						"button, input, select, textarea, [data-timeline-interactive]",
+					),
+			);
+		if (headerTarget && !onAutomationSurface && !onHeaderControl) {
+			const index = this._lanes.indexOf(headerTarget.lane);
+			if (event.shiftKey && event.key === "F10") {
+				event.preventDefault();
+				const point = this.pointForLaneHeader(headerTarget.lane.id);
+				this.dispatchEvent(
+					eventOf("lane-header-context", {
+						laneId: headerTarget.lane.id,
+						...point,
+					}),
+				);
+				return;
+			}
+			if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+				event.preventDefault();
+				const toIndex = clamp(
+					index + (event.key === "ArrowUp" ? -1 : 1),
+					0,
+					this._lanes.length - 1,
+				);
+				if (toIndex !== index && !this.readonly)
+					this.dispatchEvent(
+						eventOf("lane-move", { laneId: headerTarget.lane.id, toIndex }),
+					);
+				return;
+			}
+			if (event.key === "Enter" || event.key === "F2") {
+				event.preventDefault();
+				this.beginLaneRename(headerTarget.lane.id);
+				return;
+			}
+		}
+		if (event.shiftKey && event.key === "F10" && automationBody) {
+			event.preventDefault();
+			const rect = automationBody.row.getBoundingClientRect();
+			this.dispatchEvent(
+				eventOf("automation-context", {
+					laneId: automationBody.lane.id,
+					automationId: automationBody.automation.id,
+					clientX: rect.left + rect.width / 2,
+					clientY: rect.top + rect.height / 2,
+				}),
+			);
+			return;
+		}
+		const current = this.focusedClip;
+		const found = current ? this.findClip(current) : null;
+		const meta = event.metaKey || event.ctrlKey;
+		if (event.shiftKey && event.key === "F10") {
+			if (found) {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("clip-context", {
+						id: found.clip.id,
+						...this.pointForClip(found.clip.id),
+					}),
+				);
+			} else if (this.focusedLane) {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("lane-header-context", {
+						laneId: this.focusedLane,
+						...this.pointForLaneHeader(this.focusedLane),
+					}),
+				);
+			}
+			return;
+		}
+		if (meta && key === "a") {
+			event.preventDefault();
+			this.selectArrangement();
+			return;
+		}
+		if (!meta && !event.altKey && (key === "z" || key === "x")) {
+			event.preventDefault();
+			this.zoomToFocus(key);
+			return;
+		}
+		if (!this.readonly && meta && key === "i") {
+			// insert time: the region's span on its lanes, or one bar at the playhead on every lane
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf(
+					"time-insert",
+					selection
+						? {
+								beat: selection.start,
+								beats:
+									selection.end > selection.start
+										? selection.end - selection.start
+										: this.beatsPerBar,
+								laneIds: [...selection.laneIds],
+							}
+						: {
+								beat: this._playhead,
+								beats: this.beatsPerBar,
+								laneIds: this._lanes.map((lane) => lane.id),
+							},
+				),
+			);
+			return;
+		}
+		if (!this.readonly && meta && key === "j") {
+			const clips = this.clipsInsideTimeSelection(selection)
+				.map((id) => this.findClip(id))
+				.filter(Boolean)
+				.sort(
+					(a, b) => (Number(a.clip.start) || 0) - (Number(b.clip.start) || 0),
+				);
+			if (clips.length >= 2) {
+				event.preventDefault();
+				this.dispatchEvent(
+					eventOf("clip-join", { ids: clips.map(({ clip }) => clip.id) }),
+				);
+			}
+			return;
+		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			this.focusedClip = null;
+			this.focusedLane = null;
+			if (this._timeSelection) {
+				this.setTimeSelection(null, null);
+				this.dispatchEvent(eventOf("time-select", { start: null }));
+			}
+			return;
+		}
+		if (!found) {
+			if (
+				[
+					"ArrowLeft",
+					"ArrowRight",
+					"ArrowUp",
+					"ArrowDown",
+					"Home",
+					"End",
+				].includes(event.key)
+			) {
+				const entry = this.entryClip(event.key);
+				if (entry) {
+					event.preventDefault();
+					const entryFound = this.findClip(entry.id);
+					if (entryFound) this.selectClipBounds(entryFound);
+					this.focusClip(entry.id);
+				}
+				return;
+			}
+			if (event.key === "[" || event.key === "]") {
+				event.preventDefault();
+				this.zoomBy(event.key === "]" ? 1.16 : 0.86);
+			}
+			return;
+		}
+		if (
+			!this.readonly &&
+			selection &&
+			selection.end > selection.start &&
+			event.altKey &&
+			(event.key === "ArrowLeft" || event.key === "ArrowRight")
+		) {
+			event.preventDefault();
+			const delta = keyStep * (event.key === "ArrowRight" ? 1 : -1);
+			const to = Math.max(0, selection.start + delta);
+			this.dispatchEvent(
+				eventOf("time-move", {
+					start: selection.start,
+					end: selection.end,
+					laneIds: [...selection.laneIds],
+					to,
+					toLaneIds: [...selection.laneIds],
+					copy: false,
+				}),
+			);
+			return;
+		}
+		if (
+			!this.readonly &&
+			selection &&
+			selection.end > selection.start &&
+			event.altKey &&
+			(event.key === "ArrowUp" || event.key === "ArrowDown")
+		) {
+			event.preventDefault();
+			const direction = event.key === "ArrowUp" ? -1 : 1;
+			const first = this._lanes.findIndex(
+				(lane) => lane.id === selection.laneIds[0],
+			);
+			const last = first + selection.laneIds.length - 1;
+			if (first + direction < 0 || last + direction >= this._lanes.length)
+				return;
+			this.dispatchEvent(
+				eventOf("time-move", {
+					start: selection.start,
+					end: selection.end,
+					laneIds: [...selection.laneIds],
+					to: selection.start,
+					toLaneIds: this._lanes
+						.slice(first + direction, last + direction + 1)
+						.map((lane) => lane.id),
+					copy: false,
+				}),
+			);
+			return;
+		}
+		const adjacent = this.adjacentClip(found, event.key);
+		if (
+			[
+				"ArrowLeft",
+				"ArrowRight",
+				"ArrowUp",
+				"ArrowDown",
+				"Home",
+				"End",
+			].includes(event.key)
+		) {
+			if (!adjacent) return;
+			event.preventDefault();
+			const adjacentFound = this.findClip(adjacent.id);
+			if (adjacentFound) this.selectClipBounds(adjacentFound, event.shiftKey);
+			this.focusClip(adjacent.id);
+			return;
+		}
+		if (
+			event.key === "Enter" ||
+			(!meta && !event.altKey && event.key.toLowerCase() === "e")
+		) {
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("clip-open", {
+					id: found.clip.id,
+					altKey: event.altKey,
+					...this.pointForClip(found.clip.id),
+				}),
+			);
+		} else if (event.key === "F2") {
+			event.preventDefault();
+			this.beginRename(found.clip.id);
+		} else if (
+			!this.readonly &&
+			(event.key === "Delete" || event.key === "Backspace")
+		) {
+			event.preventDefault();
+			this.dispatchEvent(eventOf("clip-delete", { ids: [found.clip.id] }));
+		} else if (!this.readonly && meta && event.key.toLowerCase() === "d") {
+			event.preventDefault();
+			this.dispatchEvent(eventOf("clip-duplicate", { ids: [found.clip.id] }));
+		} else if (!this.readonly && meta && event.key.toLowerCase() === "e") {
+			event.preventDefault();
+			this.dispatchEvent(
+				eventOf("clip-split", { ids: [found.clip.id], beat: this._playhead }),
+			);
+		} else if (event.key === "[" || event.key === "]") {
+			event.preventDefault();
+			this.zoomBy(event.key === "]" ? 1.16 : 0.86);
+		}
+	}
+
+	/** @param {{lane: TimelineLane, clip: TimelineClip}} found @param {string} key */
+	adjacentClip(found, key) {
+		const laneIndex = this._lanes.indexOf(found.lane);
+		const clips = found.lane.clips;
+		const index = clips.indexOf(found.clip);
+		if (key === "Home") return clips[0];
+		if (key === "End") return clips[clips.length - 1];
+		if (key === "ArrowLeft") return clips[index - 1] || clips[index];
+		if (key === "ArrowRight") return clips[index + 1] || clips[index];
+		if (key === "ArrowUp" || key === "ArrowDown") {
+			const other = this._lanes[laneIndex + (key === "ArrowUp" ? -1 : 1)];
+			if (!other?.clips.length) return null;
+			const center =
+				(Number(found.clip.start) || 0) + (Number(found.clip.length) || 0) / 2;
+			return other.clips.reduce((best, clip) =>
+				Math.abs(clip.start + clip.length / 2 - center) <
+				Math.abs(best.start + best.length / 2 - center)
+					? clip
+					: best,
+			);
+		}
+		return null;
+	}
+
+	/** z: zoom to the time rectangle, or ask the host to fit; x: back. */
+	/** @param {string} key */
+	zoomToFocus(key) {
+		if (key === "x") {
+			const previous = this.zoomHistory.pop();
+			if (!previous) return;
+			this._pxPerBeat = previous.pxPerBeat;
+			this._scrollBeat = previous.scrollBeat;
+			this.render();
+			this.scheduleViewChange();
+			return;
+		}
+		const selection = this._timeSelection;
+		const range = selection
+			? { start: selection.start, end: selection.end }
+			: null;
+		if (!range || !(range.end > range.start + MIN_CLIP_LENGTH)) {
+			this.dispatchEvent(eventOf("fit-request", {}));
+			return;
+		}
+		this.zoomHistory.push({
+			pxPerBeat: this._pxPerBeat,
+			scrollBeat: this._scrollBeat,
+		});
+		const width = Math.max(
+			1,
+			this.lanesWrap.clientWidth || this.clientWidth || 1,
+		);
+		this._pxPerBeat = finiteClamp(
+			width / (range.end - range.start),
+			MIN_PX_PER_BEAT,
+			MAX_PX_PER_BEAT,
+		);
+		this._scrollBeat = range.start;
+		this.render();
+		this.scheduleViewChange();
+	}
+
+	zoomBy(multiplier) {
+		const at = this._playhead;
+		const old = this._pxPerBeat;
+		this._pxPerBeat = finiteClamp(
+			old * multiplier,
+			MIN_PX_PER_BEAT,
+			MAX_PX_PER_BEAT,
+		);
+		this._scrollBeat = Math.max(
+			0,
+			at - ((at - this._scrollBeat) * old) / this._pxPerBeat,
+		);
+		this.render();
+		this.scheduleViewChange();
+	}
+
+	handleWheel(event) {
+		event.preventDefault();
+		if (event.altKey) {
+			const current = this._lanes.length
+				? this.laneRowHeightFor(this._lanes[0])
+				: this.laneHeight;
+			const height = clamp(
+				Math.round(current * (event.deltaY > 0 ? 0.86 : 1.16)),
+				24,
+				400,
+			);
+			for (const lane of this._lanes) this.previewLaneHeight(lane, height);
+			this.paintTimeSelection();
+			this.dispatchEvent(eventOf("lanes-resize", { height }));
+			return;
+		}
+		if (event.metaKey || event.ctrlKey) {
+			const old = this._pxPerBeat;
+			const rect = this.rulerWrap.getBoundingClientRect();
+			const at = this._scrollBeat + (event.clientX - rect.left) / old;
+			this._pxPerBeat = finiteClamp(
+				old * (event.deltaY > 0 ? 0.86 : 1.16),
+				MIN_PX_PER_BEAT,
+				MAX_PX_PER_BEAT,
+			);
+			this._scrollBeat = Math.max(
+				0,
+				at - (event.clientX - rect.left) / this._pxPerBeat,
+			);
+			this.render();
+			this.scheduleViewChange();
+		} else if (
+			event.shiftKey ||
+			Math.abs(event.deltaX) > Math.abs(event.deltaY)
+		) {
+			this.scrollBeat = Math.max(
+				0,
+				this._scrollBeat + (event.deltaX || event.deltaY) / this._pxPerBeat,
+			);
+		} else {
+			this.lanesWrap.scrollTop = Math.max(
+				0,
+				this.lanesWrap.scrollTop + event.deltaY,
+			);
+		}
+	}
 }
 
-defineElement('compost-timeline', CompostTimeline);
+defineElement("compost-timeline", CompostTimeline);

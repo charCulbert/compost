@@ -39,7 +39,7 @@
             <label><input type="checkbox" data-timeline-launch-quant checked> Launch quantization</label>
             <button type="button" data-timeline-play>Play</button>
           </div>
-          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: drag with one finger to edit; move two fingers to pan time and lanes, or spread them to zoom time. Long-press a clip, lane, lane header, locator, ruler, or empty surface for its context action. Mouse: drag clip titles and edges, Alt-drag copies, Command/Ctrl inverts snapping, Shift edits precisely, and double-click empty space creates a clip. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel resizes lanes.</small>
+          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: drag with one finger to edit; move two fingers to pan time and lanes, or spread them to zoom time. Long-press a clip, lane, lane header, locator, ruler, or empty surface for its context action. Mouse: click or drag lanes to select time, click a clip for its exact bounds, drag a clip title to move the selected rectangle, and Alt-drag to copy it. Shift or Command/Ctrl extends the rectangle. Double-click empty space creates a clip. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel resizes lanes.</small>
         </div>
         </div>
         <output>last event: —</output>
@@ -48,6 +48,7 @@
     <script type="module">
     import { quantizedNotes } from '../../src/piano-roll-model.js';
     import { elementDemo } from '../shared/element-page.js';
+
     const { s } = await elementDemo('compost-timeline');
     {
       const timeline = s.querySelector('compost-timeline');
@@ -60,7 +61,7 @@
       const draw = s.querySelector('[data-timeline-draw]');
       const launchQuant = s.querySelector('[data-timeline-launch-quant]');
       let playing = false;
-      let lanes = [
+      const lanes = [
         { id: 'drums', name: 'Drums', color: 'var(--compost-accent, AccentColor)', automation:
           { id: 'gain', label: 'Gain', min: 0, max: 1, value: .72, state: 'playing', points: [
             { beat: 0, value: .5, curve: .35 }, { beat: 4, value: .8 }, { beat: 8, value: .65 },
@@ -153,44 +154,48 @@
         }
       });
       let clipboard = [];
+      const materialIn = ({ start, end, laneIds }) => {
+        if (!(end > start)) return [];
+        return lanes.flatMap((lane) => {
+          const laneOffset = laneIds.indexOf(lane.id);
+          if (laneOffset < 0) return [];
+          return lane.clips.flatMap((clip) => {
+            const from = Math.max(start, clip.start);
+            const until = Math.min(end, clip.start + clip.length);
+            return until > from ? [{ laneOffset, offset: from - start, clip: { ...clip,
+              start: 0, length: until - from, offset: (clip.offset || 0) + from - clip.start } }] : [];
+          });
+        });
+      };
       const copySelection = () => {
         const selection = timeline.timeSelection;
-        const selected = new Set(timeline.selected);
-        const origin = selection?.start ?? Math.min(...allClips().filter((clip) => selected.has(clip.id)).map((clip) => clip.start));
-        if (!Number.isFinite(origin)) return false;
-        clipboard = [];
-        for (const lane of lanes) {
-          if (selection && !selection.laneIds.includes(lane.id)) continue;
-          for (const clip of lane.clips) {
-            if (!selection && !selected.has(clip.id)) continue;
-            const start = selection ? Math.max(selection.start, clip.start) : clip.start;
-            const end = selection ? Math.min(selection.end, clip.start + clip.length) : clip.start + clip.length;
-            if (end <= start) continue;
-            clipboard.push({ laneId: lane.id, offset: start - origin, clip: { ...clip,
-              start: 0, length: end - start, offset: (clip.offset || 0) + start - clip.start } });
-          }
-        }
+        if (!selection) return false;
+        clipboard = materialIn(selection);
         return clipboard.length > 0;
       };
       const deleteSelection = () => {
         const selection = timeline.timeSelection;
-        if (selection) return apply['time-delete']({ ...selection, removeTime: false });
-        const ids = timeline.selected;
-        if (ids.length) apply['clip-delete']({ ids });
+        if (selection?.end > selection.start)
+          apply['time-delete']({ ...selection, removeTime: false });
       };
       const paste = () => {
         if (!clipboard.length) return;
-        const ids = [];
+        const selection = timeline.timeSelection;
+        const at = selection?.start ?? timeline.playhead;
+        const firstLane = selection
+          ? Math.max(0, lanes.findIndex((lane) => lane.id === selection.laneIds[0]))
+          : 0;
+        const used = new Set();
         for (const entry of clipboard) {
-          const lane = lanes.find((candidate) => candidate.id === entry.laneId) ?? lanes[0];
+          const lane = lanes[Math.min(lanes.length - 1, firstLane + entry.laneOffset)];
+          if (!lane) continue;
           created += 1;
-          const clip = { ...entry.clip, id: `${entry.clip.id}-paste-${created}`, start: timeline.playhead + entry.offset };
-          lane.clips.push(clip);
-          ids.push(clip.id);
+          lane.clips.push({ ...entry.clip, id: `${entry.clip.id}-paste-${created}`, start: at + entry.offset });
+          used.add(lane.id);
         }
-        timeline.setTimeSelection(null, null);
         render();
-        timeline.selected = ids;
+        const end = at + Math.max(...clipboard.map((entry) => entry.offset + entry.clip.length));
+        timeline.setTimeSelection(at, end, [...used]);
       };
       const apply = {
         'loop-change': ({ start, end, enabled }) => { loop.checked = enabled; timeline.setLoop(start, end, enabled); },
@@ -216,15 +221,19 @@
           clip.length = end - start;
           render();
         },
-        'clip-move': ({ ids, deltaBeats, laneId, copy }) => {
-          const moving = allClips().filter((clip) => ids.includes(clip.id))
-            .map((clip) => ({ ...clip, id: copy ? `${clip.id}-copy-${created += 1}` : clip.id, start: clip.start + deltaBeats }));
+        'time-move': ({ start, end, laneIds, to, toLaneIds, copy }) => {
+          const moving = materialIn({ start, end, laneIds });
           if (!moving.length) return;
-          if (!copy) lanes.forEach((lane) => { lane.clips = lane.clips.filter((clip) => !ids.includes(clip.id)); });
-          (lanes.find((lane) => lane.id === laneId) ?? lanes[0]).clips.push(...moving);
+          if (!copy) apply['time-delete']({ start, end, laneIds, removeTime: false });
+          for (const entry of moving) {
+            const lane = lanes.find((candidate) => candidate.id === toLaneIds[entry.laneOffset]);
+            if (!lane) continue;
+            created += 1;
+            lane.clips.push({ ...entry.clip, id: `${entry.clip.id}-${copy ? 'copy' : 'move'}-${created}`, start: to + entry.offset });
+          }
           render();
+          timeline.setTimeSelection(to, to + end - start, toLaneIds);
         },
-        'clip-nudge': ({ ids, deltaBeats }) => { for (const clip of allClips()) if (ids.includes(clip.id)) clip.start = Math.max(0, clip.start + deltaBeats); render(); },
         'clip-rename': ({ id, name }) => { const clip = allClips().find((entry) => entry.id === id); if (clip) { clip.name = name; render(); } },
         'clip-delete': ({ ids }) => { lanes.forEach((lane) => { lane.clips = lane.clips.filter((clip) => !ids.includes(clip.id)); }); render(); },
         'clip-duplicate': ({ ids }) => {
