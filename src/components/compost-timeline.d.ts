@@ -55,6 +55,8 @@ export interface TimelineLane {
   id: string;
   name: string;
   color?: string;
+  /** what is written on the lane's clips, black or white; defaults to the system accent text */
+  ink?: string;
   compact?: boolean;
   picked?: boolean;
   dimmed?: boolean;

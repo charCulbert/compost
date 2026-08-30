@@ -88,10 +88,10 @@ export class CompostMeter extends HTMLElement {
           width: var(--meter-primary-width);
         }
         .primary {
-          background: var(--_accent);
+          background: var(--meter-primary, var(--_accent));
         }
         .over {
-          background: currentColor;
+          background: var(--meter-over, currentColor);
         }
         .peak {
           left: 0;

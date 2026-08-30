@@ -29,7 +29,7 @@ const TOUCH_TRIM_EDGE_EM = .75;
 /** @typedef {{id: string, name: string, start: number, length: number,
  * offset?: number, duration: number, loop?: boolean, state?: string,
  * notes?: {start: number, duration: number, note: number, velocity?: number}[], color?: string}} TimelineClip */
-/** @typedef {{id: string, name: string, color?: string,
+/** @typedef {{id: string, name: string, color?: string, ink?: string,
  * compact?: boolean, picked?: boolean, dimmed?: boolean, height?: number,
  * automation?: AutomationLaneView|null,
  * clips: TimelineClip[]}} TimelineLane */
@@ -304,7 +304,7 @@ export class CompostTimeline extends HTMLElement {
         .lane-automation[data-draw]:hover .automation-draw-hint { display: block; }
         .lane-base[data-state="overridden"] .automation-editor::part(line) { stroke-dasharray: 3 3; }
         .lane-base[data-state="recording"] .lane-automation { color: var(--compost-timeline-select); }
-        .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid var(--compost-timeline-text); border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: AccentColorText; cursor: default; touch-action: none; }
+        .clip { position: absolute; top: .25em; bottom: .25em; z-index: 2; box-sizing: border-box; min-width: 1px; overflow: hidden; border: 1px solid var(--compost-timeline-text); border-radius: 0; background: var(--clip-color, var(--compost-timeline-select)); color: var(--lane-ink, AccentColorText); cursor: default; touch-action: none; }
         .clip[data-selected], .clip:focus-visible { z-index: 3; border-width: 2px; border-color: CanvasText; outline: none; }
         .clip[data-state="queued"]::after { content: "▷"; position: absolute; right: .25em; bottom: .1em; z-index: 3; font-size: .8em; line-height: 1; }
         .clip[data-state="recording"] { box-shadow: inset -.15em 0 var(--compost-timeline-select); }
@@ -1367,6 +1367,7 @@ export class CompostTimeline extends HTMLElement {
     row.toggleAttribute('data-dimmed', Boolean(lane.dimmed));
     row.toggleAttribute('data-automation-view', Boolean(this.automationFor(lane)));
     row.style.setProperty('--lane-color', lane.color || 'var(--compost-timeline-text)');
+    if (lane.ink) row.style.setProperty('--lane-ink', lane.ink); else row.style.removeProperty('--lane-ink');
     row.style.setProperty('--lane-row-height', `${this.laneRowHeightFor(lane)}px`);
     row.style.height = `${this.laneHeightFor(lane)}px`;
     row.append(this.renderLaneBase(lane, end));
