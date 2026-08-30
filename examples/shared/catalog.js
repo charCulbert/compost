@@ -21,11 +21,34 @@ export const elementIDs = [
 	"compost-popup",
 ];
 
+const elementSummaries = {
+	"compost-audio": "Starts, suspends, and resumes Web Audio.",
+	"compost-midi": "Selects MIDI inputs and outputs.",
+	"compost-device-selector": "Edits audio and MIDI device settings.",
+	"compost-drawer": "Opens and resizes an edge drawer.",
+	"compost-knob": "Edits a continuous parameter with a knob.",
+	"compost-slider": "Edits a continuous parameter with a slider.",
+	"compost-meter": "Displays live peak, average, and held levels.",
+	"compost-number-box": "Edits an exact numeric parameter value.",
+	"compost-button": "Triggers actions and toggles parameters.",
+	"compost-select": "Chooses a discrete parameter value.",
+	"compost-piano": "Plays notes from pointer, touch, or keyboard input.",
+	"compost-scope": "Draws a supplied waveform.",
+	"compost-midi-monitor": "Displays recent MIDI messages.",
+	"compost-midi-mappings": "Lists and edits MIDI CC mappings.",
+	"compost-clip-grid": "Launches and edits clips across tracks and scenes.",
+	"compost-envelope-editor": "Draws and edits a breakpoint envelope.",
+	"compost-note-editor": "Edits MIDI notes, velocity, loops, and ranges.",
+	"compost-timeline": "Arranges clips and automation across tracks.",
+	"compost-window": "Moves and resizes a floating panel.",
+	"compost-popup": "Opens a keyboard-accessible option menu.",
+};
+
 const elementExamples = elementIDs.map((id) => ({
 	id,
 	href: `./${id}/`,
 	title: id,
-	summary: `One ${id} scenario with defaults and visible markup.`,
+	summary: elementSummaries[id],
 }));
 
 export const examples = [
@@ -33,8 +56,7 @@ export const examples = [
 		id: "monosynth",
 		href: "./monosynth/",
 		title: "Mono Synth",
-		summary:
-			"Editable notes, ADSR controls, and a pitch envelope drive a small monophonic JavaScript AudioWorklet with live scope, meter, piano, and MIDI mapping.",
+		summary: "Plays an editable monophonic synth patch.",
 		components: [
 			"compost-audio",
 			"compost-button",
@@ -74,8 +96,7 @@ export const examples = [
 		id: "parameter-sync",
 		href: "./parameter-sync/",
 		title: "Parameter Sync",
-		summary:
-			"Two controls share one parameter and reflect authoritative host updates.",
+		summary: "Keeps two controls synchronized with host state.",
 		components: ["compost-knob", "compost-slider"],
 		utilities: ["ParameterController"],
 		runtime: "DOM only.",

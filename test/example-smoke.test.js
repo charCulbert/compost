@@ -30,6 +30,21 @@ test("the Pages assembly only copies tracked site directories", () => {
 	assert.doesNotMatch(workflow, /cp -R docs/u);
 });
 
+test("every catalog entry has one concise, specific summary", () => {
+	for (const example of examples) {
+		assert.equal(typeof example.summary, "string", example.id);
+		assert.ok(
+			example.summary.length > 0 && example.summary.length <= 70,
+			example.id,
+		);
+		assert.doesNotMatch(
+			example.summary,
+			/\n|scenario with defaults/u,
+			example.id,
+		);
+	}
+});
+
 test("every element example is its own page sharing the common shell", () => {
 	const helper = read("examples/shared/element-page.js");
 	for (const id of elementIDs) {
