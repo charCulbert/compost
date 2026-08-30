@@ -1,27 +1,33 @@
-import { beginParameterGesture, defineElement, editParameterGesture, endParameterGesture, numberAttr } from '../utils.js';
+import {
+	beginParameterGesture,
+	defineElement,
+	editParameterGesture,
+	endParameterGesture,
+	numberAttr,
+} from "../utils.js";
 
 export class CompostButton extends HTMLElement {
-  static get observedAttributes() {
-    return [
-      'label',
-      'mode',
-      'name',
-      'parameter-id',
-      'section',
-      'pressed',
-      'value',
-      'disabled',
-      'aria-label',
-      'aria-description',
-    ];
-  }
+	static get observedAttributes() {
+		return [
+			"label",
+			"mode",
+			"name",
+			"parameter-id",
+			"section",
+			"pressed",
+			"value",
+			"disabled",
+			"aria-label",
+			"aria-description",
+		];
+	}
 
-  constructor() {
-    super();
-    this.flashTimer = 0;
+	constructor() {
+		super();
+		this.flashTimer = 0;
 
-    this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `
+		this.root = this.attachShadow({ mode: "open" });
+		this.root.innerHTML = `
       <style>
         :host {
           display: inline-block;
@@ -144,173 +150,192 @@ export class CompostButton extends HTMLElement {
         <span class="midi-map-label" part="midi-map-label" aria-hidden="true"></span>
       </button>`;
 
-    this.button = this.root.querySelector('button');
-    this.fallback = this.root.querySelector('.fallback');
+		this.button = this.root.querySelector("button");
+		this.fallback = this.root.querySelector(".fallback");
 
-    this.button.addEventListener('click', () => {
-      if (this.mode !== 'switch') {
-        this.trigger('control');
-        return;
-      }
+		this.button.addEventListener("click", () => {
+			if (this.mode !== "switch") {
+				this.trigger("control");
+				return;
+			}
 
-      beginParameterGesture(this, this.value);
-      this.pressed = !this.pressed;
-      editParameterGesture(this, this.value);
-      this.dispatchEvent(new Event('change', {
-        bubbles: true,
-        composed: true,
-      }));
-      endParameterGesture(this, this.value);
-    });
-  }
+			beginParameterGesture(this, this.value);
+			this.pressed = !this.pressed;
+			editParameterGesture(this, this.value);
+			this.dispatchEvent(
+				new Event("change", {
+					bubbles: true,
+					composed: true,
+				}),
+			);
+			endParameterGesture(this, this.value);
+		});
+	}
 
-  connectedCallback() {
-    this.refresh();
-  }
+	connectedCallback() {
+		this.refresh();
+	}
 
-  disconnectedCallback() {
-    clearTimeout(this.flashTimer);
-  }
+	disconnectedCallback() {
+		clearTimeout(this.flashTimer);
+	}
 
-  focus(options) {
-    this.button?.focus(options);
-  }
+	focus(options) {
+		this.button?.focus(options);
+	}
 
-  blur() {
-    this.button?.blur();
-  }
+	blur() {
+		this.button?.blur();
+	}
 
-  attributeChangedCallback(name) {
-    // `pressed` is the canonical switch state; a `value` attribute is accepted
-    // for symmetry with the other parameter controls and maps onto it.
-    if (name === 'value') this.setValue(numberAttr(this, 'value', this.value), false);
-    this.refresh();
-  }
+	attributeChangedCallback(name) {
+		// `pressed` is the canonical switch state; a `value` attribute is accepted
+		// for symmetry with the other parameter controls and maps onto it.
+		if (name === "value")
+			this.setValue(numberAttr(this, "value", this.value), false);
+		this.refresh();
+	}
 
-  get mode() {
-    return this.getAttribute('mode') === 'switch' ? 'switch' : 'trigger';
-  }
+	get mode() {
+		return this.getAttribute("mode") === "switch" ? "switch" : "trigger";
+	}
 
-  get pressed() {
-    return this.hasAttribute('pressed');
-  }
+	get pressed() {
+		return this.hasAttribute("pressed");
+	}
 
-  set pressed(value) {
-    this.toggleAttribute('pressed', Boolean(value));
-  }
+	set pressed(value) {
+		this.toggleAttribute("pressed", Boolean(value));
+	}
 
-  get value() {
-    return this.pressed ? 1 : 0;
-  }
+	get value() {
+		return this.pressed ? 1 : 0;
+	}
 
-  set value(value) {
-    this.setValue(value, false);
-  }
+	set value(value) {
+		this.setValue(value, false);
+	}
 
-  get parameterID() {
-    return this.getAttribute('parameter-id') || '';
-  }
+	get parameterID() {
+		return this.getAttribute("parameter-id") || "";
+	}
 
-  get parameterKind() { return this.mode === 'switch' ? 'discrete' : 'trigger'; }
+	get parameterKind() {
+		return this.mode === "switch" ? "discrete" : "trigger";
+	}
 
-  get transientParameter() {
-    return this.mode !== 'switch';
-  }
+	get transientParameter() {
+		return this.mode !== "switch";
+	}
 
-  get disabled() {
-    return this.hasAttribute('disabled');
-  }
+	get disabled() {
+		return this.hasAttribute("disabled");
+	}
 
-  set disabled(value) {
-    this.toggleAttribute('disabled', Boolean(value));
-  }
+	set disabled(value) {
+		this.toggleAttribute("disabled", Boolean(value));
+	}
 
-  setValue(value, shouldEmit = true, source = 'api') {
-    const active = Number(value) >= 0.5;
+	setValue(value, shouldEmit = true, source = "api") {
+		const active = Number(value) >= 0.5;
 
-    if (this.mode !== 'switch') {
-      if (shouldEmit && active) {
-        this.trigger(source);
-      }
-      return;
-    }
+		if (this.mode !== "switch") {
+			if (shouldEmit && active) {
+				this.trigger(source);
+			}
+			return;
+		}
 
-    if (this.pressed === active) return;
+		if (this.pressed === active) return;
 
-    this.pressed = active;
+		this.pressed = active;
 
-    if (shouldEmit) {
-      beginParameterGesture(this, active ? 0 : 1, { source });
-      editParameterGesture(this, this.value, { source });
-      this.dispatchEvent(new Event('change', {
-        bubbles: true,
-        composed: true,
-      }));
-      endParameterGesture(this, this.value, { source });
-    }
-  }
+		if (shouldEmit) {
+			beginParameterGesture(this, active ? 0 : 1, { source });
+			editParameterGesture(this, this.value, { source });
+			this.dispatchEvent(
+				new Event("change", {
+					bubbles: true,
+					composed: true,
+				}),
+			);
+			endParameterGesture(this, this.value, { source });
+		}
+	}
 
-  trigger(source = 'control') {
-    if (this.mode !== 'switch') {
-      this.flashActive();
-    }
+	trigger(source = "control") {
+		if (this.mode !== "switch") {
+			this.flashActive();
+		}
 
-    this.dispatchEvent(new CustomEvent('button-trigger', {
-      bubbles: true,
-      composed: true,
-      detail: {
-        name: this.getAttribute('name') || '',
-        parameterID: this.parameterID,
-        value: 1,
-        source,
-      },
-    }));
-    beginParameterGesture(this, 0, { source });
-    editParameterGesture(this, 1, { source });
-    editParameterGesture(this, 0, { source });
-    endParameterGesture(this, 0, { source });
-  }
+		this.dispatchEvent(
+			new CustomEvent("button-trigger", {
+				bubbles: true,
+				composed: true,
+				detail: {
+					name: this.getAttribute("name") || "",
+					parameterID: this.parameterID,
+					value: 1,
+					source,
+				},
+			}),
+		);
+		beginParameterGesture(this, 0, { source });
+		editParameterGesture(this, 1, { source });
+		editParameterGesture(this, 0, { source });
+		endParameterGesture(this, 0, { source });
+	}
 
-  flashActive() {
-    clearTimeout(this.flashTimer);
-    this.setAttribute('data-active-flash', '');
+	flashActive() {
+		clearTimeout(this.flashTimer);
+		this.setAttribute("data-active-flash", "");
 
-    const duration = this.readDurationCSS('--compost-button-flash-ms', 180);
-    this.flashTimer = setTimeout(() => {
-      this.removeAttribute('data-active-flash');
-      this.flashTimer = 0;
-    }, duration);
-  }
+		const duration = this.readDurationCSS("--compost-button-flash-ms", 180);
+		this.flashTimer = setTimeout(() => {
+			this.removeAttribute("data-active-flash");
+			this.flashTimer = 0;
+		}, duration);
+	}
 
-  readDurationCSS(name, fallback) {
-    const raw = getComputedStyle(this).getPropertyValue(name).trim();
-    if (!raw) return fallback;
+	readDurationCSS(name, fallback) {
+		const raw = getComputedStyle(this).getPropertyValue(name).trim();
+		if (!raw) return fallback;
 
-    if (raw.endsWith('ms')) return Number.parseFloat(raw) || fallback;
-    if (raw.endsWith('s')) return (Number.parseFloat(raw) || fallback / 1000) * 1000;
+		if (raw.endsWith("ms")) return Number.parseFloat(raw) || fallback;
+		if (raw.endsWith("s"))
+			return (Number.parseFloat(raw) || fallback / 1000) * 1000;
 
-    const value = Number.parseFloat(raw);
-    return Number.isFinite(value) ? value : fallback;
-  }
+		const value = Number.parseFloat(raw);
+		return Number.isFinite(value) ? value : fallback;
+	}
 
-  refresh() {
-    const label = this.getAttribute('label') || '';
-    this.fallback.textContent = label;
-    this.button.disabled = this.disabled;
-    this.button.setAttribute('aria-label', this.getAttribute('aria-label') || label || this.textContent.trim() || 'Button');
+	refresh() {
+		const label = this.getAttribute("label") || "";
+		this.fallback.textContent = label;
+		this.button.disabled = this.disabled;
+		this.button.setAttribute(
+			"aria-label",
+			this.getAttribute("aria-label") ||
+				label ||
+				this.textContent.trim() ||
+				"Button",
+		);
 
-    if (this.hasAttribute('aria-description')) {
-      this.button.setAttribute('aria-description', this.getAttribute('aria-description'));
-    } else {
-      this.button.removeAttribute('aria-description');
-    }
+		if (this.hasAttribute("aria-description")) {
+			this.button.setAttribute(
+				"aria-description",
+				this.getAttribute("aria-description"),
+			);
+		} else {
+			this.button.removeAttribute("aria-description");
+		}
 
-    if (this.mode === 'switch') {
-      this.button.setAttribute('aria-pressed', String(this.pressed));
-    } else {
-      this.button.removeAttribute('aria-pressed');
-    }
-  }
+		if (this.mode === "switch") {
+			this.button.setAttribute("aria-pressed", String(this.pressed));
+		} else {
+			this.button.removeAttribute("aria-pressed");
+		}
+	}
 }
 
-defineElement('compost-button', CompostButton);
+defineElement("compost-button", CompostButton);

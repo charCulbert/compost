@@ -1,49 +1,50 @@
-import { createMIDILearnUI } from '../midi-learn-ui.js';
-import { defineElement } from '../utils.js';
-import './compost-number-box.js';
+import { createMIDILearnUI } from "../midi-learn-ui.js";
+import { defineElement } from "../utils.js";
+import "./compost-number-box.js";
 
 function escapeHTML(value) {
-  return String(value ?? '')
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;');
+	return String(value ?? "")
+		.replace(/&/gu, "&amp;")
+		.replace(/</gu, "&lt;")
+		.replace(/>/gu, "&gt;")
+		.replace(/"/gu, "&quot;");
 }
 
 function mappingSortKey(mapping) {
-  return [
-    mapping.label || mapping.name || '',
-    mapping.parameterID || '',
-  ].join('\u0000').toLowerCase();
+	return [mapping.label || mapping.name || "", mapping.parameterID || ""]
+		.join("\u0000")
+		.toLowerCase();
 }
 
 function formatNumber(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '';
-  return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(6)));
+	const number = Number(value);
+	if (!Number.isFinite(number)) return "";
+	return Number.isInteger(number)
+		? String(number)
+		: String(Number(number.toFixed(6)));
 }
 
 export class CompostMIDIMappings extends HTMLElement {
-  static get observedAttributes() {
-    return ['disabled', 'heading'];
-  }
+	static get observedAttributes() {
+		return ["disabled", "heading"];
+	}
 
-  constructor() {
-    super();
+	constructor() {
+		super();
 
-    this._mappings = null;
-    this.controller = null;
-    this.pendingFocusRequest = null;
-    this.handleMappingChange = this.handleMappingChange.bind(this);
-    this.handleFieldChange = this.handleFieldChange.bind(this);
-    this.handleRowClick = this.handleRowClick.bind(this);
-    this.handleRowKeyDown = this.handleRowKeyDown.bind(this);
-    this.handleRowPointerDown = this.handleRowPointerDown.bind(this);
-    this.clearMappings = this.clearMappings.bind(this);
-    this.instructionsID = `compost-midi-mappings-instructions-${Math.random().toString(36).slice(2)}`;
+		this._mappings = null;
+		this.controller = null;
+		this.pendingFocusRequest = null;
+		this.handleMappingChange = this.handleMappingChange.bind(this);
+		this.handleFieldChange = this.handleFieldChange.bind(this);
+		this.handleRowClick = this.handleRowClick.bind(this);
+		this.handleRowKeyDown = this.handleRowKeyDown.bind(this);
+		this.handleRowPointerDown = this.handleRowPointerDown.bind(this);
+		this.clearMappings = this.clearMappings.bind(this);
+		this.instructionsID = `compost-midi-mappings-instructions-${Math.random().toString(36).slice(2)}`;
 
-    this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `
+		this.root = this.attachShadow({ mode: "open" });
+		this.root.innerHTML = `
       <style>
         :host {
           --compost-midi-mappings-bg: transparent;
@@ -295,273 +296,324 @@ export class CompostMIDIMappings extends HTMLElement {
         <div class="status" data-status aria-live="polite" aria-atomic="true"></div>
       </section>`;
 
-    this.heading = this.root.querySelector('[data-heading]');
-    this.mapButton = this.root.querySelector('.map-button');
-    this.clearButton = this.root.querySelector('.clear-button');
-    this.empty = this.root.querySelector('[data-empty]');
-    this.tableScroll = this.root.querySelector('[data-table-scroll]');
-    this.table = this.root.querySelector('[data-table]');
-    this.caption = this.root.querySelector('[data-caption]');
-    this.list = this.root.querySelector('[data-list]');
-    this.status = this.root.querySelector('[data-status]');
+		this.heading = this.root.querySelector("[data-heading]");
+		this.mapButton = this.root.querySelector(".map-button");
+		this.clearButton = this.root.querySelector(".clear-button");
+		this.empty = this.root.querySelector("[data-empty]");
+		this.tableScroll = this.root.querySelector("[data-table-scroll]");
+		this.table = this.root.querySelector("[data-table]");
+		this.caption = this.root.querySelector("[data-caption]");
+		this.list = this.root.querySelector("[data-list]");
+		this.status = this.root.querySelector("[data-status]");
 
-    this.list.addEventListener('parameter-end', this.handleFieldChange);
-    this.list.addEventListener('click', this.handleRowClick);
-    this.list.addEventListener('keydown', this.handleRowKeyDown);
-    this.list.addEventListener('pointerdown', this.handleRowPointerDown);
-    this.clearButton.addEventListener('click', this.clearMappings);
-  }
+		this.list.addEventListener("parameter-end", this.handleFieldChange);
+		this.list.addEventListener("click", this.handleRowClick);
+		this.list.addEventListener("keydown", this.handleRowKeyDown);
+		this.list.addEventListener("pointerdown", this.handleRowPointerDown);
+		this.clearButton.addEventListener("click", this.clearMappings);
+	}
 
-  connectedCallback() {
-    this.connectMappings();
-    this.connectController();
-    this.refresh();
-  }
+	connectedCallback() {
+		this.connectMappings();
+		this.connectController();
+		this.refresh();
+	}
 
-  disconnectedCallback() {
-    this.disconnectController();
-    this.disconnectMappings();
-  }
+	disconnectedCallback() {
+		this.disconnectController();
+		this.disconnectMappings();
+	}
 
-  attributeChangedCallback() {
-    this.refresh();
-  }
+	attributeChangedCallback() {
+		this.refresh();
+	}
 
-  get mappings() {
-    return this._mappings;
-  }
+	get mappings() {
+		return this._mappings;
+	}
 
-  set mappings(value) {
-    if (this._mappings === value) return;
+	set mappings(value) {
+		if (this._mappings === value) return;
 
-    this.disconnectController();
-    this.disconnectMappings();
-    this._mappings = value;
-    this.connectMappings();
-    this.connectController();
-    this.refresh();
-  }
+		this.disconnectController();
+		this.disconnectMappings();
+		this._mappings = value;
+		this.connectMappings();
+		this.connectController();
+		this.refresh();
+	}
 
-  get disabled() { return this.hasAttribute('disabled'); }
-  set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
+	get disabled() {
+		return this.hasAttribute("disabled");
+	}
+	set disabled(value) {
+		this.toggleAttribute("disabled", Boolean(value));
+	}
 
-  connectController() {
-    if (!this.isConnected || !this._mappings) return;
+	connectController() {
+		if (!this.isConnected || !this._mappings) return;
 
-    this.disconnectController();
-    this.controller = createMIDILearnUI({
-      mappings: this._mappings,
-      root: document,
-      button: this.mapButton,
-      status: this.status,
-      onStateChange: (state) => {
-        this.dispatchEvent(new CustomEvent('midi-map-mode-change', {
-          detail: { active: state !== 'idle', state },
-          bubbles: true,
-          composed: true,
-        }));
-      },
-    });
-  }
+		this.disconnectController();
+		this.controller = createMIDILearnUI({
+			mappings: this._mappings,
+			root: document,
+			button: this.mapButton,
+			status: this.status,
+			onStateChange: (state) => {
+				this.dispatchEvent(
+					new CustomEvent("midi-map-mode-change", {
+						detail: { active: state !== "idle", state },
+						bubbles: true,
+						composed: true,
+					}),
+				);
+			},
+		});
+	}
 
-  disconnectController() {
-    this.controller?.disconnect();
-    this.controller = null;
-  }
+	disconnectController() {
+		this.controller?.disconnect();
+		this.controller = null;
+	}
 
-  connectMappings() {
-    if (!this.isConnected || !this._mappings) return;
+	connectMappings() {
+		if (!this.isConnected || !this._mappings) return;
 
-    ['midi-map', 'midi-unmap', 'midi-learn-begin', 'midi-learn-cancel'].forEach((type) => {
-      this._mappings.addEventListener?.(type, this.handleMappingChange);
-    });
-  }
+		["midi-map", "midi-unmap", "midi-learn-begin", "midi-learn-cancel"].forEach(
+			(type) => {
+				this._mappings.addEventListener?.(type, this.handleMappingChange);
+			},
+		);
+	}
 
-  disconnectMappings() {
-    if (!this._mappings) return;
+	disconnectMappings() {
+		if (!this._mappings) return;
 
-    ['midi-map', 'midi-unmap', 'midi-learn-begin', 'midi-learn-cancel'].forEach((type) => {
-      this._mappings.removeEventListener?.(type, this.handleMappingChange);
-    });
-  }
+		["midi-map", "midi-unmap", "midi-learn-begin", "midi-learn-cancel"].forEach(
+			(type) => {
+				this._mappings.removeEventListener?.(type, this.handleMappingChange);
+			},
+		);
+	}
 
-  listMappings() {
-    return [...(this._mappings?.all?.() || [])]
-      .sort((a, b) => mappingSortKey(a).localeCompare(mappingSortKey(b)));
-  }
+	listMappings() {
+		return [...(this._mappings?.all?.() || [])].sort((a, b) =>
+			mappingSortKey(a).localeCompare(mappingSortKey(b)),
+		);
+	}
 
-  handleMappingChange(event) {
-    if (event.type === 'midi-map') {
-      this.announce(`${event.detail?.label || event.detail?.parameterID || 'Control'} mapped to ${event.detail?.mappingLabel || 'MIDI CC'}.`);
-    } else if (event.type === 'midi-unmap') {
-      this.announce(`${event.detail?.label || event.detail?.parameterID || 'Control'} mapping cleared.`);
-    } else if (event.type === 'midi-learn-begin') {
-      this.announce(`Move a MIDI CC to map ${event.detail?.label || event.detail?.parameterID || 'the selected control'}.`);
-    }
+	handleMappingChange(event) {
+		if (event.type === "midi-map") {
+			this.announce(
+				`${event.detail?.label || event.detail?.parameterID || "Control"} mapped to ${event.detail?.mappingLabel || "MIDI CC"}.`,
+			);
+		} else if (event.type === "midi-unmap") {
+			this.announce(
+				`${event.detail?.label || event.detail?.parameterID || "Control"} mapping cleared.`,
+			);
+		} else if (event.type === "midi-learn-begin") {
+			this.announce(
+				`Move a MIDI CC to map ${event.detail?.label || event.detail?.parameterID || "the selected control"}.`,
+			);
+		}
 
-    const focusRequest = event.type === 'midi-map' ? this.pendingFocusRequest : null;
-    const focusDescriptor = focusRequest?.descriptor || null;
-    if (focusRequest) {
-      focusRequest.handled = true;
-      this.pendingFocusRequest = null;
-    }
-    this.refresh({ focusDescriptor });
-  }
+		const focusRequest =
+			event.type === "midi-map" ? this.pendingFocusRequest : null;
+		const focusDescriptor = focusRequest?.descriptor || null;
+		if (focusRequest) {
+			focusRequest.handled = true;
+			this.pendingFocusRequest = null;
+		}
+		this.refresh({ focusDescriptor });
+	}
 
-  handleFieldChange(event) {
-    if (event.detail?.cancelled) return;
+	handleFieldChange(event) {
+		if (event.detail?.cancelled) return;
 
-    const control = event.target.closest?.('compost-number-box[data-field]');
-    if (!control) return;
+		const control = event.target.closest?.("compost-number-box[data-field]");
+		if (!control) return;
 
-    const row = control.closest('[data-parameter-id]');
-    const parameterID = row?.dataset.parameterId;
-    if (!parameterID) return;
+		const row = control.closest("[data-parameter-id]");
+		const parameterID = row?.dataset.parameterId;
+		if (!parameterID) return;
 
-    const ccBox = row.querySelector('compost-number-box[data-field="cc"]');
-    const channelBox = row.querySelector('compost-number-box[data-field="channel"]');
-    const minBox = row.querySelector('compost-number-box[data-field="min"]');
-    const maxBox = row.querySelector('compost-number-box[data-field="max"]');
-    const cc = Number(ccBox.value);
-    const channel = channelBox.value === null ? null : Number(channelBox.value);
-    const min = Number(minBox.value);
-    const max = Number(maxBox.value);
-    const focusDescriptor = event.detail?.restoreFocus === false ? null : this.focusDescriptorFor(control);
+		const ccBox = row.querySelector('compost-number-box[data-field="cc"]');
+		const channelBox = row.querySelector(
+			'compost-number-box[data-field="channel"]',
+		);
+		const minBox = row.querySelector('compost-number-box[data-field="min"]');
+		const maxBox = row.querySelector('compost-number-box[data-field="max"]');
+		const cc = Number(ccBox.value);
+		const channel = channelBox.value === null ? null : Number(channelBox.value);
+		const min = Number(minBox.value);
+		const max = Number(maxBox.value);
+		const focusDescriptor =
+			event.detail?.restoreFocus === false
+				? null
+				: this.focusDescriptorFor(control);
 
-    if (!Number.isInteger(cc) || cc < 0 || cc > 127) {
-      this.announce('CC must be a number from 0 to 127.');
-      this.refresh({ focusDescriptor });
-      return;
-    }
+		if (!Number.isInteger(cc) || cc < 0 || cc > 127) {
+			this.announce("CC must be a number from 0 to 127.");
+			this.refresh({ focusDescriptor });
+			return;
+		}
 
-    if (channel !== null && (!Number.isInteger(channel) || channel < 1 || channel > 16)) {
-      this.announce('Channel must be blank or a number from 1 to 16.');
-      this.refresh({ focusDescriptor });
-      return;
-    }
+		if (
+			channel !== null &&
+			(!Number.isInteger(channel) || channel < 1 || channel > 16)
+		) {
+			this.announce("Channel must be blank or a number from 1 to 16.");
+			this.refresh({ focusDescriptor });
+			return;
+		}
 
-    if (!Number.isFinite(min) || !Number.isFinite(max)) {
-      this.announce('Min and max must be numbers.');
-      this.refresh({ focusDescriptor });
-      return;
-    }
+		if (!Number.isFinite(min) || !Number.isFinite(max)) {
+			this.announce("Min and max must be numbers.");
+			this.refresh({ focusDescriptor });
+			return;
+		}
 
-    const mapping = this.mappingFor(parameterID);
-    const focusRequest = { descriptor: focusDescriptor, handled: false };
-    this.pendingFocusRequest = focusRequest;
-    const didMap = this._mappings?.requestSet?.({ parameterID, cc, channel, min, max });
-    if (this.pendingFocusRequest === focusRequest) {
-      this.pendingFocusRequest = null;
-    }
-    if (didMap && !focusRequest.handled) {
-      this.refresh({ focusDescriptor });
-    }
-    if (didMap) {
-      this.announce(`${mapping?.label || parameterID} mapped to ${channel === null ? `CC ${cc}` : `ch ${channel} CC ${cc}`} from ${formatNumber(min)} to ${formatNumber(max)}.`);
-    }
-  }
+		const mapping = this.mappingFor(parameterID);
+		const focusRequest = { descriptor: focusDescriptor, handled: false };
+		this.pendingFocusRequest = focusRequest;
+		const didMap = this._mappings?.requestSet?.({
+			parameterID,
+			cc,
+			channel,
+			min,
+			max,
+		});
+		if (this.pendingFocusRequest === focusRequest) {
+			this.pendingFocusRequest = null;
+		}
+		if (didMap && !focusRequest.handled) {
+			this.refresh({ focusDescriptor });
+		}
+		if (didMap) {
+			this.announce(
+				`${mapping?.label || parameterID} mapped to ${channel === null ? `CC ${cc}` : `ch ${channel} CC ${cc}`} from ${formatNumber(min)} to ${formatNumber(max)}.`,
+			);
+		}
+	}
 
-  handleRowKeyDown(event) {
-    if (event.target?.closest?.('compost-number-box, input, button')) return;
-    if (event.key !== 'Delete' && event.key !== 'Backspace') return;
-    if (this.hasAttribute('disabled') || !this._mappings) return;
+	handleRowKeyDown(event) {
+		if (event.target?.closest?.("compost-number-box, input, button")) return;
+		if (event.key !== "Delete" && event.key !== "Backspace") return;
+		if (this.hasAttribute("disabled") || !this._mappings) return;
 
-    const row = event.target.closest?.('[data-parameter-id]');
-    const parameterID = row?.dataset.parameterId;
-    if (!parameterID) return;
+		const row = event.target.closest?.("[data-parameter-id]");
+		const parameterID = row?.dataset.parameterId;
+		if (!parameterID) return;
 
-    event.preventDefault();
-    this.clearMapping(parameterID);
-  }
+		event.preventDefault();
+		this.clearMapping(parameterID);
+	}
 
-  handleRowClick(event) {
-    const button = event.target?.closest?.('button[data-clear-mapping]');
-    const parameterID = button?.dataset.clearMapping;
-    if (!parameterID || this.hasAttribute('disabled') || !this._mappings) return;
+	handleRowClick(event) {
+		const button = event.target?.closest?.("button[data-clear-mapping]");
+		const parameterID = button?.dataset.clearMapping;
+		if (!parameterID || this.hasAttribute("disabled") || !this._mappings)
+			return;
 
-    this.clearMapping(parameterID);
-  }
+		this.clearMapping(parameterID);
+	}
 
-  handleRowPointerDown(event) {
-    if (event.target?.closest?.('compost-number-box, input, button')) return;
-    event.target.closest?.('[data-parameter-id]')?.focus();
-  }
+	handleRowPointerDown(event) {
+		if (event.target?.closest?.("compost-number-box, input, button")) return;
+		event.target.closest?.("[data-parameter-id]")?.focus();
+	}
 
-  clearMapping(parameterID) {
-    const mapping = this.mappingFor(parameterID);
-    if (this._mappings?.requestClear?.(parameterID)) {
-      this.announce(`${mapping?.label || parameterID} mapping cleared.`);
-      this.refresh();
-    }
-  }
+	clearMapping(parameterID) {
+		const mapping = this.mappingFor(parameterID);
+		if (this._mappings?.requestClear?.(parameterID)) {
+			this.announce(`${mapping?.label || parameterID} mapping cleared.`);
+			this.refresh();
+		}
+	}
 
-  clearMappings() {
-    const mappings = this.listMappings();
-    for (const mapping of mappings) this._mappings?.requestClear?.(mapping.parameterID);
-    this.announce(mappings.length ? 'MIDI mappings cleared.' : 'No MIDI mappings to clear.');
-  }
+	clearMappings() {
+		const mappings = this.listMappings();
+		for (const mapping of mappings)
+			this._mappings?.requestClear?.(mapping.parameterID);
+		this.announce(
+			mappings.length ? "MIDI mappings cleared." : "No MIDI mappings to clear.",
+		);
+	}
 
-  mappingFor(parameterID) {
-    return this.listMappings().find((mapping) => mapping.parameterID === parameterID) || null;
-  }
+	mappingFor(parameterID) {
+		return (
+			this.listMappings().find(
+				(mapping) => mapping.parameterID === parameterID,
+			) || null
+		);
+	}
 
-  parameterBoundsFor(mapping) {
-    const definition = this._mappings?.parameterProvider?.definition?.(mapping.parameterID);
-    const definitionMin = Number(definition?.min);
-    const definitionMax = Number(definition?.max);
-    return {
-      min: Number.isFinite(definitionMin) ? Math.min(definitionMin, mapping.min) : mapping.min,
-      max: Number.isFinite(definitionMax) ? Math.max(definitionMax, mapping.max) : mapping.max,
-    };
-  }
+	parameterBoundsFor(mapping) {
+		const definition = this._mappings?.parameterProvider?.definition?.(
+			mapping.parameterID,
+		);
+		const definitionMin = Number(definition?.min);
+		const definitionMax = Number(definition?.max);
+		return {
+			min: Number.isFinite(definitionMin)
+				? Math.min(definitionMin, mapping.min)
+				: mapping.min,
+			max: Number.isFinite(definitionMax)
+				? Math.max(definitionMax, mapping.max)
+				: mapping.max,
+		};
+	}
 
-  announce(message) {
-    this.status.textContent = message;
-  }
+	announce(message) {
+		this.status.textContent = message;
+	}
 
-  focusDescriptorFor(control) {
-    const row = control?.closest?.('[data-parameter-id]');
-    const parameterID = row?.dataset.parameterId;
-    const field = control?.dataset.field;
-    return parameterID && field ? { parameterID, field } : null;
-  }
+	focusDescriptorFor(control) {
+		const row = control?.closest?.("[data-parameter-id]");
+		const parameterID = row?.dataset.parameterId;
+		const field = control?.dataset.field;
+		return parameterID && field ? { parameterID, field } : null;
+	}
 
-  restoreFocus(descriptor) {
-    if (!descriptor) return;
+	restoreFocus(descriptor) {
+		if (!descriptor) return;
 
-    queueMicrotask(() => {
-      if (!this.isConnected) return;
+		queueMicrotask(() => {
+			if (!this.isConnected) return;
 
-      const row = [...this.list.querySelectorAll('[data-parameter-id]')]
-        .find((candidate) => candidate.dataset.parameterId === descriptor.parameterID);
-      const control = [...(row?.querySelectorAll('compost-number-box[data-field]') || [])]
-        .find((candidate) => candidate.dataset.field === descriptor.field);
-      control?.focus?.({ preventScroll: true });
-    });
-  }
+			const row = [...this.list.querySelectorAll("[data-parameter-id]")].find(
+				(candidate) => candidate.dataset.parameterId === descriptor.parameterID,
+			);
+			const control = [
+				...(row?.querySelectorAll("compost-number-box[data-field]") || []),
+			].find((candidate) => candidate.dataset.field === descriptor.field);
+			control?.focus?.({ preventScroll: true });
+		});
+	}
 
-  refresh({ focusDescriptor = null } = {}) {
-    const disabled = this.hasAttribute('disabled') || !this._mappings;
-    const mappings = this.listMappings();
-    const hasMappings = mappings.length > 0;
-    const disabledAttr = disabled ? ' disabled' : '';
+	refresh({ focusDescriptor = null } = {}) {
+		const disabled = this.hasAttribute("disabled") || !this._mappings;
+		const mappings = this.listMappings();
+		const hasMappings = mappings.length > 0;
+		const disabledAttr = disabled ? " disabled" : "";
 
-    this.mapButton.disabled = disabled;
-    this.clearButton.disabled = disabled || !hasMappings;
-    if (!this.controller || this.controller.state === 'idle') {
-      this.mapButton.textContent = 'Map MIDI';
-    }
-    this.heading.textContent = this.getAttribute('heading') || 'MIDI mappings';
-    this.caption.textContent = `${this.heading.textContent} editor table`;
-    this.empty.hidden = hasMappings;
-    this.tableScroll.hidden = !hasMappings;
-    this.table.hidden = !hasMappings;
-    this.list.innerHTML = mappings.map((mapping) => {
-      const bounds = this.parameterBoundsFor(mapping);
-      return `
+		this.mapButton.disabled = disabled;
+		this.clearButton.disabled = disabled || !hasMappings;
+		if (!this.controller || this.controller.state === "idle") {
+			this.mapButton.textContent = "Map MIDI";
+		}
+		this.heading.textContent = this.getAttribute("heading") || "MIDI mappings";
+		this.caption.textContent = `${this.heading.textContent} editor table`;
+		this.empty.hidden = hasMappings;
+		this.tableScroll.hidden = !hasMappings;
+		this.table.hidden = !hasMappings;
+		this.list.innerHTML = mappings
+			.map((mapping) => {
+				const bounds = this.parameterBoundsFor(mapping);
+				return `
       <tr tabindex="0" data-parameter-id="${escapeHTML(mapping.parameterID)}" aria-label="${escapeHTML(this.rowLabel(mapping))}">
         <td class="field">
-          <compost-number-box data-field="channel" label="${escapeHTML(mapping.label || mapping.parameterID)} mapping channel" min="1" max="16" step="1" placeholder="all" allow-empty value="${mapping.channel === null ? '' : escapeHTML(mapping.channel)}"${disabledAttr}></compost-number-box>
+          <compost-number-box data-field="channel" label="${escapeHTML(mapping.label || mapping.parameterID)} mapping channel" min="1" max="16" step="1" placeholder="all" allow-empty value="${mapping.channel === null ? "" : escapeHTML(mapping.channel)}"${disabledAttr}></compost-number-box>
         </td>
         <td class="field">
           <compost-number-box data-field="cc" label="${escapeHTML(mapping.label || mapping.parameterID)} mapping CC" min="0" max="127" step="1" value="${escapeHTML(mapping.cc)}"${disabledAttr}></compost-number-box>
@@ -580,20 +632,24 @@ export class CompostMIDIMappings extends HTMLElement {
           <compost-number-box data-field="max" label="${escapeHTML(mapping.label || mapping.parameterID)} mapped maximum" min="${escapeHTML(mapping.min)}" max="${escapeHTML(bounds.max)}" step="${escapeHTML(mapping.step || 0.001)}" value="${escapeHTML(formatNumber(mapping.max))}"${disabledAttr}></compost-number-box>
         </td>
       </tr>`;
-    }).join('');
-    this.restoreFocus(focusDescriptor);
-  }
+			})
+			.join("");
+		this.restoreFocus(focusDescriptor);
+	}
 
-  rowLabel(mapping) {
-    const name = mapping.label || mapping.name || mapping.parameterID || 'Control';
-    const channel = mapping.channel === null ? 'any channel' : `channel ${mapping.channel}`;
-    const range = `${formatNumber(mapping.min)} to ${formatNumber(mapping.max)}`;
-    const action = this.hasAttribute('disabled') || !this._mappings
-      ? ''
-      : ' Use the remove button, or focus this row and press Delete or Backspace, to clear this mapping.';
+	rowLabel(mapping) {
+		const name =
+			mapping.label || mapping.name || mapping.parameterID || "Control";
+		const channel =
+			mapping.channel === null ? "any channel" : `channel ${mapping.channel}`;
+		const range = `${formatNumber(mapping.min)} to ${formatNumber(mapping.max)}`;
+		const action =
+			this.hasAttribute("disabled") || !this._mappings
+				? ""
+				: " Use the remove button, or focus this row and press Delete or Backspace, to clear this mapping.";
 
-    return `${name}. ${channel}, CC ${mapping.cc}, maps incoming MIDI values to ${range}.${action}`;
-  }
+		return `${name}. ${channel}, CC ${mapping.cc}, maps incoming MIDI values to ${range}.${action}`;
+	}
 }
 
-defineElement('compost-midi-mappings', CompostMIDIMappings);
+defineElement("compost-midi-mappings", CompostMIDIMappings);

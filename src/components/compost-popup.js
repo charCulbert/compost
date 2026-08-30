@@ -1,45 +1,62 @@
-import { clamp, defineElement } from '../utils.js';
+import { clamp, defineElement } from "../utils.js";
 
 let nextPopupID = 1;
 
 export function popupPlacement({
-  trigger,
-  viewportWidth,
-  viewportHeight,
-  contentWidth,
-  contentHeight,
-  popupOffset = 0,
-  margin = 8,
+	trigger,
+	viewportWidth,
+	viewportHeight,
+	contentWidth,
+	contentHeight,
+	popupOffset = 0,
+	margin = 8,
 }) {
-  const availableBelow = viewportHeight - trigger.bottom - popupOffset - margin;
-  const availableAbove = trigger.top - popupOffset - margin;
-  const openAbove = availableBelow < Math.min(contentHeight, 180)
-    && availableAbove > availableBelow;
-  const maxHeight = Math.max(60, Math.min(320,
-    openAbove ? availableAbove : availableBelow));
-  const width = Math.min(Math.max(trigger.width, contentWidth), viewportWidth - margin * 2);
-  const left = Math.min(Math.max(margin, trigger.right - width),
-    viewportWidth - width - margin);
-  const height = Math.min(contentHeight, maxHeight);
-  const top = openAbove
-    ? Math.max(margin, trigger.top - popupOffset - height)
-    : Math.min(viewportHeight - margin - height, trigger.bottom + popupOffset);
-  return { left, top, width, maxHeight, openAbove };
+	const availableBelow = viewportHeight - trigger.bottom - popupOffset - margin;
+	const availableAbove = trigger.top - popupOffset - margin;
+	const openAbove =
+		availableBelow < Math.min(contentHeight, 180) &&
+		availableAbove > availableBelow;
+	const maxHeight = Math.max(
+		60,
+		Math.min(320, openAbove ? availableAbove : availableBelow),
+	);
+	const width = Math.min(
+		Math.max(trigger.width, contentWidth),
+		viewportWidth - margin * 2,
+	);
+	const left = Math.min(
+		Math.max(margin, trigger.right - width),
+		viewportWidth - width - margin,
+	);
+	const height = Math.min(contentHeight, maxHeight);
+	const top = openAbove
+		? Math.max(margin, trigger.top - popupOffset - height)
+		: Math.min(viewportHeight - margin - height, trigger.bottom + popupOffset);
+	return { left, top, width, maxHeight, openAbove };
 }
 
 // Where a popup opened from a point (a context menu) lands: beside the pointer,
 // pulled back inside the viewport when it would run off an edge.
 export function pointPlacement({
-  x, y, viewportWidth, viewportHeight, contentWidth, contentHeight, margin = 4,
+	x,
+	y,
+	viewportWidth,
+	viewportHeight,
+	contentWidth,
+	contentHeight,
+	margin = 4,
 }) {
-  const width = Math.min(contentWidth, Math.max(0, viewportWidth - margin * 2));
-  const height = Math.min(contentHeight, Math.max(0, viewportHeight - margin * 2));
-  return {
-    left: clamp(x, margin, Math.max(margin, viewportWidth - width - margin)),
-    top: clamp(y, margin, Math.max(margin, viewportHeight - height - margin)),
-    width,
-    height,
-  };
+	const width = Math.min(contentWidth, Math.max(0, viewportWidth - margin * 2));
+	const height = Math.min(
+		contentHeight,
+		Math.max(0, viewportHeight - margin * 2),
+	);
+	return {
+		left: clamp(x, margin, Math.max(margin, viewportWidth - width - margin)),
+		top: clamp(y, margin, Math.max(margin, viewportHeight - height - margin)),
+		width,
+		height,
+	};
 }
 
 /**
@@ -49,23 +66,23 @@ export function pointPlacement({
  * to go. Purely UI: the host decides what a pick means.
  */
 export class CompostPopup extends HTMLElement {
-  static get observedAttributes() {
-    return ['open', 'heading', 'value', 'label', 'sheet'];
-  }
+	static get observedAttributes() {
+		return ["open", "heading", "value", "label", "sheet"];
+	}
 
-  constructor() {
-    super();
+	constructor() {
+		super();
 
-    this.listID = `compost-popup-${nextPopupID++}`;
-    this.activeIndex = -1;
-    /** @type {{anchor?: Element|DOMRect|null, x?: number, y?: number}|null} */
-    this.anchorRequest = null;
-    this.handleDocumentPointerDown = this.handleDocumentPointerDown.bind(this);
-    this.handleDocumentKeyDown = this.handleDocumentKeyDown.bind(this);
-    this.position = this.position.bind(this);
+		this.listID = `compost-popup-${nextPopupID++}`;
+		this.activeIndex = -1;
+		/** @type {{anchor?: Element|DOMRect|null, x?: number, y?: number}|null} */
+		this.anchorRequest = null;
+		this.handleDocumentPointerDown = this.handleDocumentPointerDown.bind(this);
+		this.handleDocumentKeyDown = this.handleDocumentKeyDown.bind(this);
+		this.position = this.position.bind(this);
 
-    this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `
+		this.root = this.attachShadow({ mode: "open" });
+		this.root.innerHTML = `
       <style>
         :host {
           --compost-popup-bg: Canvas;
@@ -180,340 +197,433 @@ export class CompostPopup extends HTMLElement {
       </style>
       <div class="menu" part="menu" role="menu" popover="manual" tabindex="-1"></div>`;
 
-    this.menu = /** @type {HTMLElement} */ (this.root.querySelector('.menu'));
-    this.menu.id = this.listID;
-    this.menu.addEventListener('pointerdown', (event) => {
-      // keep focus where it was; the pick happens on the click
-      event.preventDefault();
-    });
-    this.menu.addEventListener('click', (event) => this.handleClick(event));
-    this.menu.addEventListener('pointermove', (event) => this.handlePointerMove(event));
-    this.menu.addEventListener('keydown', (event) => this.handleKeyDown(event));
-  }
+		this.menu = /** @type {HTMLElement} */ (this.root.querySelector(".menu"));
+		this.menu.id = this.listID;
+		this.menu.addEventListener("pointerdown", (event) => {
+			// keep focus where it was; the pick happens on the click
+			event.preventDefault();
+		});
+		this.menu.addEventListener("click", (event) => this.handleClick(event));
+		this.menu.addEventListener("pointermove", (event) =>
+			this.handlePointerMove(event),
+		);
+		this.menu.addEventListener("keydown", (event) => this.handleKeyDown(event));
+	}
 
-  connectedCallback() {
-    this.refresh();
-    if (this.hasAttribute('open') && !this.isOpen) this.open(this.anchorRequest || {});
-  }
+	connectedCallback() {
+		this.refresh();
+		if (this.hasAttribute("open") && !this.isOpen)
+			this.open(this.anchorRequest || {});
+	}
 
-  disconnectedCallback() {
-    this.teardownListeners();
-  }
+	disconnectedCallback() {
+		this.teardownListeners();
+	}
 
-  attributeChangedCallback(name) {
-    if (name === 'open') {
-      if (this.hasAttribute('open') && !this.isOpen) this.open(this.anchorRequest || {});
-      else if (!this.hasAttribute('open') && this.isOpen) this.close();
-      return;
-    }
-    this.refresh();
-  }
+	attributeChangedCallback(name) {
+		if (name === "open") {
+			if (this.hasAttribute("open") && !this.isOpen)
+				this.open(this.anchorRequest || {});
+			else if (!this.hasAttribute("open") && this.isOpen) this.close();
+			return;
+		}
+		this.refresh();
+	}
 
-  get isOpen() {
-    return this.menu?.matches(':popover-open') ?? false;
-  }
+	get isOpen() {
+		return this.menu?.matches(":popover-open") ?? false;
+	}
 
-  get value() {
-    return this.getAttribute('value') ?? '';
-  }
+	get value() {
+		return this.getAttribute("value") ?? "";
+	}
 
-  set value(value) {
-    if (value === null || value === undefined) this.removeAttribute('value');
-    else this.setAttribute('value', String(value));
-  }
+	set value(value) {
+		if (value === null || value === undefined) this.removeAttribute("value");
+		else this.setAttribute("value", String(value));
+	}
 
-  // ---- Items ------------------------------------------------------------
+	// ---- Items ------------------------------------------------------------
 
-  /** The option and separator children, in order. */
-  entries() {
-    return [...this.children].filter((child) =>
-      child.tagName === 'OPTION' || child.tagName === 'HR');
-  }
+	/** The option and separator children, in order. */
+	entries() {
+		return [...this.children].filter(
+			(child) => child.tagName === "OPTION" || child.tagName === "HR",
+		);
+	}
 
-  /** @returns {HTMLOptionElement[]} */
-  optionElements() {
-    return /** @type {HTMLOptionElement[]} */ ([...this.children]
-      .filter((child) => child.tagName === 'OPTION'));
-  }
+	/** @returns {HTMLOptionElement[]} */
+	optionElements() {
+		return /** @type {HTMLOptionElement[]} */ (
+			[...this.children].filter((child) => child.tagName === "OPTION")
+		);
+	}
 
-  /** Replaces the options from plain data: [{value, label, detail, color, disabled, selected}] or '-'. */
-  /** @param {Array<{value?: string, label?: string, detail?: string, color?: string, disabled?: boolean, selected?: boolean}|string>} items */
-  setItems(items) {
-    this.replaceChildren(...items.map((item) => {
-      if (item === '-' || item === null) return document.createElement('hr');
-      const option = document.createElement('option');
-      const entry = /** @type {{value?: string, label?: string, detail?: string, color?: string, swatch?: boolean, disabled?: boolean, selected?: boolean}} */ (item);
-      option.value = String(entry.value ?? entry.label ?? '');
-      option.textContent = String(entry.label ?? entry.value ?? '');
-      if (entry.detail !== undefined) option.dataset.detail = String(entry.detail);
-      if (entry.color !== undefined) option.dataset.color = String(entry.color);
-      if (entry.swatch) option.dataset.swatch = '';
-      if (entry.disabled) option.disabled = true;
-      if (entry.selected) option.setAttribute('selected', '');
-      return option;
-    }));
-    this.refresh();
-  }
+	/** Replaces the options from plain data: [{value, label, detail, color, disabled, selected}] or '-'. */
+	/** @param {Array<{value?: string, label?: string, detail?: string, color?: string, disabled?: boolean, selected?: boolean}|string>} items */
+	setItems(items) {
+		this.replaceChildren(
+			...items.map((item) => {
+				if (item === "-" || item === null) return document.createElement("hr");
+				const option = document.createElement("option");
+				const entry =
+					/** @type {{value?: string, label?: string, detail?: string, color?: string, swatch?: boolean, disabled?: boolean, selected?: boolean}} */ (
+						item
+					);
+				option.value = String(entry.value ?? entry.label ?? "");
+				option.textContent = String(entry.label ?? entry.value ?? "");
+				if (entry.detail !== undefined)
+					option.dataset.detail = String(entry.detail);
+				if (entry.color !== undefined)
+					option.dataset.color = String(entry.color);
+				if (entry.swatch) option.dataset.swatch = "";
+				if (entry.disabled) option.disabled = true;
+				if (entry.selected) option.setAttribute("selected", "");
+				return option;
+			}),
+		);
+		this.refresh();
+	}
 
-  refresh() {
-    if (!this.menu) return;
-    const heading = this.getAttribute('heading');
-    const options = this.optionElements();
-    const value = this.hasAttribute('value') ? this.value : null;
-    const marks = options.some((option) => option.hasAttribute('selected')) || value !== null;
-    this.menu.toggleAttribute('data-marks', marks);
-    this.menu.setAttribute('aria-label', this.getAttribute('label') || heading || 'Menu');
-    const nodes = [];
-    if (heading) {
-      const title = document.createElement('div');
-      title.className = 'heading';
-      title.part.add('heading');
-      title.textContent = heading;
-      nodes.push(title);
-    }
-    let index = 0;
-    for (const entry of this.entries()) {
-      if (entry.tagName === 'HR') {
-        const separator = document.createElement('div');
-        separator.className = 'separator';
-        separator.setAttribute('role', 'separator');
-        nodes.push(separator);
-        continue;
-      }
-      const option = /** @type {HTMLOptionElement} */ (entry);
-      const item = document.createElement('div');
-      item.className = option.dataset.swatch !== undefined ? 'item swatch' : 'item';
-      item.part.add('item');
-      item.id = `${this.listID}-item-${index}`;
-      item.dataset.index = String(index);
-      item.setAttribute('role', marks ? 'menuitemradio' : 'menuitem');
-      const checked = value !== null ? option.value === value : option.hasAttribute('selected');
-      if (marks) item.setAttribute('aria-checked', String(checked));
-      item.setAttribute('aria-disabled', String(option.disabled));
-      if (option.dataset.color !== undefined) {
-        item.dataset.color = option.dataset.color;
-        item.style.setProperty('--compost-popup-item-color', option.dataset.color);
-      }
-      const label = document.createElement('span');
-      label.className = 'label';
-      label.textContent = option.label || option.textContent || option.value;
-      item.append(label);
-      if (option.dataset.swatch !== undefined) {
-        // the square is the whole entry; its name stays for assistive tech
-        item.setAttribute('aria-label', label.textContent ?? '');
-        item.title = label.textContent ?? '';
-        const previous = nodes[nodes.length - 1];
-        const grid = previous instanceof HTMLElement && previous.classList.contains('swatches')
-          ? previous : Object.assign(document.createElement('div'), { className: 'swatches' });
-        if (grid !== previous) { grid.setAttribute('role', 'group'); nodes.push(grid); }
-        grid.append(item);
-        index += 1;
-        continue;
-      }
-      if (option.dataset.detail !== undefined) {
-        const detail = document.createElement('em');
-        detail.className = 'detail';
-        detail.textContent = option.dataset.detail;
-        item.append(detail);
-      }
-      nodes.push(item);
-      index += 1;
-    }
-    this.menu.replaceChildren(...nodes);
-    this.setActive(this.activeIndex, false);
-  }
+	refresh() {
+		if (!this.menu) return;
+		const heading = this.getAttribute("heading");
+		const options = this.optionElements();
+		const value = this.hasAttribute("value") ? this.value : null;
+		const marks =
+			options.some((option) => option.hasAttribute("selected")) ||
+			value !== null;
+		this.menu.toggleAttribute("data-marks", marks);
+		this.menu.setAttribute(
+			"aria-label",
+			this.getAttribute("label") || heading || "Menu",
+		);
+		const nodes = [];
+		if (heading) {
+			const title = document.createElement("div");
+			title.className = "heading";
+			title.part.add("heading");
+			title.textContent = heading;
+			nodes.push(title);
+		}
+		let index = 0;
+		for (const entry of this.entries()) {
+			if (entry.tagName === "HR") {
+				const separator = document.createElement("div");
+				separator.className = "separator";
+				separator.setAttribute("role", "separator");
+				nodes.push(separator);
+				continue;
+			}
+			const option = /** @type {HTMLOptionElement} */ (entry);
+			const item = document.createElement("div");
+			item.className =
+				option.dataset.swatch !== undefined ? "item swatch" : "item";
+			item.part.add("item");
+			item.id = `${this.listID}-item-${index}`;
+			item.dataset.index = String(index);
+			item.setAttribute("role", marks ? "menuitemradio" : "menuitem");
+			const checked =
+				value !== null
+					? option.value === value
+					: option.hasAttribute("selected");
+			if (marks) item.setAttribute("aria-checked", String(checked));
+			item.setAttribute("aria-disabled", String(option.disabled));
+			if (option.dataset.color !== undefined) {
+				item.dataset.color = option.dataset.color;
+				item.style.setProperty(
+					"--compost-popup-item-color",
+					option.dataset.color,
+				);
+			}
+			const label = document.createElement("span");
+			label.className = "label";
+			label.textContent = option.label || option.textContent || option.value;
+			item.append(label);
+			if (option.dataset.swatch !== undefined) {
+				// the square is the whole entry; its name stays for assistive tech
+				item.setAttribute("aria-label", label.textContent ?? "");
+				item.title = label.textContent ?? "";
+				const previous = nodes[nodes.length - 1];
+				const grid =
+					previous instanceof HTMLElement &&
+					previous.classList.contains("swatches")
+						? previous
+						: Object.assign(document.createElement("div"), {
+								className: "swatches",
+							});
+				if (grid !== previous) {
+					grid.setAttribute("role", "group");
+					nodes.push(grid);
+				}
+				grid.append(item);
+				index += 1;
+				continue;
+			}
+			if (option.dataset.detail !== undefined) {
+				const detail = document.createElement("em");
+				detail.className = "detail";
+				detail.textContent = option.dataset.detail;
+				item.append(detail);
+			}
+			nodes.push(item);
+			index += 1;
+		}
+		this.menu.replaceChildren(...nodes);
+		this.setActive(this.activeIndex, false);
+	}
 
-  itemElements() {
-    return /** @type {HTMLElement[]} */ ([...this.menu.querySelectorAll('.item')]);
-  }
+	itemElements() {
+		return /** @type {HTMLElement[]} */ ([
+			...this.menu.querySelectorAll(".item"),
+		]);
+	}
 
-  // ---- Open / close -----------------------------------------------------
+	// ---- Open / close -----------------------------------------------------
 
-  /**
-   * Opens beside an anchor (an element or a DOMRect) or at a point. Without
-   * either, it opens where it last did, or at the top left of the viewport.
-   * @param {{anchor?: Element|DOMRect|null, x?: number, y?: number}} [request]
-   */
-  open(request = {}) {
-    if (!this.isConnected) return;
-    this.refresh();
-    this.anchorRequest = request;
-    if (!this.isOpen) {
-      try { this.menu.showPopover(); } catch { this.menu.hidden = false; }
-      document.addEventListener('pointerdown', this.handleDocumentPointerDown, true);
-      document.addEventListener('keydown', this.handleDocumentKeyDown, true);
-      window.addEventListener('resize', this.position);
-      window.addEventListener('scroll', this.position, true);
-    }
-    if (!this.hasAttribute('open')) this.setAttribute('open', '');
-    this.position();
-    const options = this.optionElements();
-    const selected = options.findIndex((option) => option.hasAttribute('selected')
-      || (this.hasAttribute('value') && option.value === this.value));
-    this.setActive(selected, false);
-    this.menu.focus({ preventScroll: true });
-    this.dispatchEvent(new CustomEvent('popup-open', { bubbles: true, composed: true }));
-  }
+	/**
+	 * Opens beside an anchor (an element or a DOMRect) or at a point. Without
+	 * either, it opens where it last did, or at the top left of the viewport.
+	 * @param {{anchor?: Element|DOMRect|null, x?: number, y?: number}} [request]
+	 */
+	open(request = {}) {
+		if (!this.isConnected) return;
+		this.refresh();
+		this.anchorRequest = request;
+		if (!this.isOpen) {
+			try {
+				this.menu.showPopover();
+			} catch {
+				this.menu.hidden = false;
+			}
+			document.addEventListener(
+				"pointerdown",
+				this.handleDocumentPointerDown,
+				true,
+			);
+			document.addEventListener("keydown", this.handleDocumentKeyDown, true);
+			window.addEventListener("resize", this.position);
+			window.addEventListener("scroll", this.position, true);
+		}
+		if (!this.hasAttribute("open")) this.setAttribute("open", "");
+		this.position();
+		const options = this.optionElements();
+		const selected = options.findIndex(
+			(option) =>
+				option.hasAttribute("selected") ||
+				(this.hasAttribute("value") && option.value === this.value),
+		);
+		this.setActive(selected, false);
+		this.menu.focus({ preventScroll: true });
+		this.dispatchEvent(
+			new CustomEvent("popup-open", { bubbles: true, composed: true }),
+		);
+	}
 
-  /** @param {number} x @param {number} y */
-  openAt(x, y) {
-    this.open({ x, y });
-  }
+	/** @param {number} x @param {number} y */
+	openAt(x, y) {
+		this.open({ x, y });
+	}
 
-  /** @param {string} [reason] */
-  close(reason = 'close') {
-    if (!this.isOpen) {
-      if (this.hasAttribute('open')) this.removeAttribute('open');
-      return;
-    }
-    try { this.menu.hidePopover(); } catch { this.menu.hidden = true; }
-    this.teardownListeners();
-    if (this.hasAttribute('open')) this.removeAttribute('open');
-    this.dispatchEvent(new CustomEvent('popup-close', {
-      bubbles: true, composed: true, detail: { reason },
-    }));
-  }
+	/** @param {string} [reason] */
+	close(reason = "close") {
+		if (!this.isOpen) {
+			if (this.hasAttribute("open")) this.removeAttribute("open");
+			return;
+		}
+		try {
+			this.menu.hidePopover();
+		} catch {
+			this.menu.hidden = true;
+		}
+		this.teardownListeners();
+		if (this.hasAttribute("open")) this.removeAttribute("open");
+		this.dispatchEvent(
+			new CustomEvent("popup-close", {
+				bubbles: true,
+				composed: true,
+				detail: { reason },
+			}),
+		);
+	}
 
-  teardownListeners() {
-    document.removeEventListener('pointerdown', this.handleDocumentPointerDown, true);
-    document.removeEventListener('keydown', this.handleDocumentKeyDown, true);
-    window.removeEventListener('resize', this.position);
-    window.removeEventListener('scroll', this.position, true);
-  }
+	teardownListeners() {
+		document.removeEventListener(
+			"pointerdown",
+			this.handleDocumentPointerDown,
+			true,
+		);
+		document.removeEventListener("keydown", this.handleDocumentKeyDown, true);
+		window.removeEventListener("resize", this.position);
+		window.removeEventListener("scroll", this.position, true);
+	}
 
-  /** Lays the menu out for the current anchor request and viewport. */
-  position() {
-    if (!this.isOpen) return;
-    const request = this.anchorRequest || {};
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const contentWidth = this.menu.scrollWidth;
-    const contentHeight = this.menu.scrollHeight;
-    const anchor = request.anchor instanceof Element
-      ? request.anchor.getBoundingClientRect()
-      : request.anchor instanceof DOMRect ? request.anchor : null;
-    if (anchor) {
-      const placement = popupPlacement({
-        trigger: anchor, viewportWidth, viewportHeight, contentWidth, contentHeight,
-      });
-      // popupPlacement lines the list up with the trigger's right edge, as a
-      // select does; a menu hanging from a text control reads from its left
-      const left = clamp(anchor.left, 8, Math.max(8, viewportWidth - placement.width - 8));
-      Object.assign(this.menu.style, {
-        left: `${left}px`,
-        top: `${placement.top}px`,
-        width: `${Math.max(placement.width, contentWidth)}px`,
-        maxHeight: `${placement.maxHeight}px`,
-      });
-      return;
-    }
-    const placement = pointPlacement({
-      x: Number(request.x) || 0, y: Number(request.y) || 0,
-      viewportWidth, viewportHeight, contentWidth, contentHeight,
-    });
-    Object.assign(this.menu.style, {
-      left: `${placement.left}px`,
-      top: `${placement.top}px`,
-      width: '',
-      maxHeight: `${Math.max(60, viewportHeight - 8)}px`,
-    });
-  }
+	/** Lays the menu out for the current anchor request and viewport. */
+	position() {
+		if (!this.isOpen) return;
+		const request = this.anchorRequest || {};
+		const viewportWidth = window.innerWidth;
+		const viewportHeight = window.innerHeight;
+		const contentWidth = this.menu.scrollWidth;
+		const contentHeight = this.menu.scrollHeight;
+		const anchor =
+			request.anchor instanceof Element
+				? request.anchor.getBoundingClientRect()
+				: request.anchor instanceof DOMRect
+					? request.anchor
+					: null;
+		if (anchor) {
+			const placement = popupPlacement({
+				trigger: anchor,
+				viewportWidth,
+				viewportHeight,
+				contentWidth,
+				contentHeight,
+			});
+			// popupPlacement lines the list up with the trigger's right edge, as a
+			// select does; a menu hanging from a text control reads from its left
+			const left = clamp(
+				anchor.left,
+				8,
+				Math.max(8, viewportWidth - placement.width - 8),
+			);
+			Object.assign(this.menu.style, {
+				left: `${left}px`,
+				top: `${placement.top}px`,
+				width: `${Math.max(placement.width, contentWidth)}px`,
+				maxHeight: `${placement.maxHeight}px`,
+			});
+			return;
+		}
+		const placement = pointPlacement({
+			x: Number(request.x) || 0,
+			y: Number(request.y) || 0,
+			viewportWidth,
+			viewportHeight,
+			contentWidth,
+			contentHeight,
+		});
+		Object.assign(this.menu.style, {
+			left: `${placement.left}px`,
+			top: `${placement.top}px`,
+			width: "",
+			maxHeight: `${Math.max(60, viewportHeight - 8)}px`,
+		});
+	}
 
-  // ---- Interaction ------------------------------------------------------
+	// ---- Interaction ------------------------------------------------------
 
-  /** @param {number} index @param {boolean} [scroll] */
-  setActive(index, scroll = true) {
-    const items = this.itemElements();
-    this.activeIndex = index >= 0 && index < items.length ? index : -1;
-    items.forEach((item, position) => {
-      item.toggleAttribute('data-active', position === this.activeIndex);
-    });
-    const active = items[this.activeIndex];
-    if (active) {
-      this.menu.setAttribute('aria-activedescendant', active.id);
-      if (scroll) active.scrollIntoView({ block: 'nearest' });
-    } else {
-      this.menu.removeAttribute('aria-activedescendant');
-    }
-  }
+	/** @param {number} index @param {boolean} [scroll] */
+	setActive(index, scroll = true) {
+		const items = this.itemElements();
+		this.activeIndex = index >= 0 && index < items.length ? index : -1;
+		items.forEach((item, position) => {
+			item.toggleAttribute("data-active", position === this.activeIndex);
+		});
+		const active = items[this.activeIndex];
+		if (active) {
+			this.menu.setAttribute("aria-activedescendant", active.id);
+			if (scroll) active.scrollIntoView({ block: "nearest" });
+		} else {
+			this.menu.removeAttribute("aria-activedescendant");
+		}
+	}
 
-  /** @param {number} direction */
-  moveActive(direction) {
-    const items = this.itemElements();
-    if (!items.length) return;
-    let index = this.activeIndex;
-    for (let step = 0; step < items.length; step += 1) {
-      index = (index + direction + items.length) % items.length;
-      if (items[index].getAttribute('aria-disabled') !== 'true') break;
-    }
-    this.setActive(index);
-  }
+	/** @param {number} direction */
+	moveActive(direction) {
+		const items = this.itemElements();
+		if (!items.length) return;
+		let index = this.activeIndex;
+		for (let step = 0; step < items.length; step += 1) {
+			index = (index + direction + items.length) % items.length;
+			if (items[index].getAttribute("aria-disabled") !== "true") break;
+		}
+		this.setActive(index);
+	}
 
-  /** @param {number} index */
-  pick(index) {
-    const options = this.optionElements();
-    const option = options[index];
-    if (!option || option.disabled) return;
-    this.close('select');
-    this.dispatchEvent(new CustomEvent('popup-select', {
-      bubbles: true,
-      composed: true,
-      detail: { value: option.value, index, label: option.label || option.textContent || '' },
-    }));
-  }
+	/** @param {number} index */
+	pick(index) {
+		const options = this.optionElements();
+		const option = options[index];
+		if (!option || option.disabled) return;
+		this.close("select");
+		this.dispatchEvent(
+			new CustomEvent("popup-select", {
+				bubbles: true,
+				composed: true,
+				detail: {
+					value: option.value,
+					index,
+					label: option.label || option.textContent || "",
+				},
+			}),
+		);
+	}
 
-  /** @param {Event} event */
-  itemIndexFrom(event) {
-    const item = event.composedPath().find((node) =>
-      node instanceof HTMLElement && node.classList.contains('item'));
-    return item instanceof HTMLElement ? Number(item.dataset.index) : -1;
-  }
+	/** @param {Event} event */
+	itemIndexFrom(event) {
+		const item = event
+			.composedPath()
+			.find(
+				(node) =>
+					node instanceof HTMLElement && node.classList.contains("item"),
+			);
+		return item instanceof HTMLElement ? Number(item.dataset.index) : -1;
+	}
 
-  /** @param {MouseEvent} event */
-  handleClick(event) {
-    const index = this.itemIndexFrom(event);
-    if (index >= 0) this.pick(index);
-  }
+	/** @param {MouseEvent} event */
+	handleClick(event) {
+		const index = this.itemIndexFrom(event);
+		if (index >= 0) this.pick(index);
+	}
 
-  /** @param {PointerEvent} event */
-  handlePointerMove(event) {
-    const index = this.itemIndexFrom(event);
-    if (index >= 0 && index !== this.activeIndex) this.setActive(index, false);
-  }
+	/** @param {PointerEvent} event */
+	handlePointerMove(event) {
+		const index = this.itemIndexFrom(event);
+		if (index >= 0 && index !== this.activeIndex) this.setActive(index, false);
+	}
 
-  /** @param {KeyboardEvent} event */
-  handleKeyDown(event) {
-    if (event.key === 'ArrowDown') { event.preventDefault(); this.moveActive(1); }
-    else if (event.key === 'ArrowUp') { event.preventDefault(); this.moveActive(-1); }
-    else if (event.key === 'Home') { event.preventDefault(); this.setActive(0); }
-    else if (event.key === 'End') { event.preventDefault(); this.setActive(this.itemElements().length - 1); }
-    else if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      if (this.activeIndex >= 0) this.pick(this.activeIndex);
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      this.close('escape');
-    }
-  }
+	/** @param {KeyboardEvent} event */
+	handleKeyDown(event) {
+		if (event.key === "ArrowDown") {
+			event.preventDefault();
+			this.moveActive(1);
+		} else if (event.key === "ArrowUp") {
+			event.preventDefault();
+			this.moveActive(-1);
+		} else if (event.key === "Home") {
+			event.preventDefault();
+			this.setActive(0);
+		} else if (event.key === "End") {
+			event.preventDefault();
+			this.setActive(this.itemElements().length - 1);
+		} else if (event.key === "Enter" || event.key === " ") {
+			event.preventDefault();
+			if (this.activeIndex >= 0) this.pick(this.activeIndex);
+		} else if (event.key === "Escape") {
+			event.preventDefault();
+			this.close("escape");
+		}
+	}
 
-  /** @param {KeyboardEvent} event */
-  handleDocumentKeyDown(event) {
-    if (event.key !== 'Escape' || !this.isOpen) return;
-    // closing is this menu's business; nothing behind it should also react
-    event.preventDefault();
-    event.stopPropagation();
-    this.close('escape');
-  }
+	/** @param {KeyboardEvent} event */
+	handleDocumentKeyDown(event) {
+		if (event.key !== "Escape" || !this.isOpen) return;
+		// closing is this menu's business; nothing behind it should also react
+		event.preventDefault();
+		event.stopPropagation();
+		this.close("escape");
+	}
 
-  /** @param {PointerEvent} event */
-  handleDocumentPointerDown(event) {
-    if (!this.isOpen) return;
-    const path = event.composedPath();
-    if (path.includes(this.menu) || path.includes(this)) return;
-    const anchor = this.anchorRequest?.anchor;
-    if (anchor instanceof Element && path.includes(anchor)) return;
-    this.close('outside');
-  }
+	/** @param {PointerEvent} event */
+	handleDocumentPointerDown(event) {
+		if (!this.isOpen) return;
+		const path = event.composedPath();
+		if (path.includes(this.menu) || path.includes(this)) return;
+		const anchor = this.anchorRequest?.anchor;
+		if (anchor instanceof Element && path.includes(anchor)) return;
+		this.close("outside");
+	}
 }
 
-defineElement('compost-popup', CompostPopup);
+defineElement("compost-popup", CompostPopup);

@@ -1,5 +1,5 @@
 export function setupScopeDemo(container, scopes) {
-  container.innerHTML = `
+	container.innerHTML = `
     <div style="display: flex; align-items: end; gap: 1em; flex-wrap: wrap">
       <button type="button" data-run>Run oscillator</button>
       <label>Frequency
@@ -26,65 +26,73 @@ export function setupScopeDemo(container, scopes) {
       </label>
     </div>`;
 
-  const runButton = container.querySelector('[data-run]');
-  const frequencyInput = container.querySelector('[data-frequency]');
-  const frequencyValue = container.querySelector('[data-frequency-value]');
-  const rangeSelect = container.querySelector('[data-range]');
-  const offsetInput = container.querySelector('[data-offset]');
-  const offsetValue = container.querySelector('[data-offset-value]');
-  const xLabelsInput = container.querySelector('[data-x-labels]');
-  const yLabelsInput = container.querySelector('[data-y-labels]');
-  let context;
-  let source;
+	const runButton = container.querySelector("[data-run]");
+	const frequencyInput = container.querySelector("[data-frequency]");
+	const frequencyValue = container.querySelector("[data-frequency-value]");
+	const rangeSelect = container.querySelector("[data-range]");
+	const offsetInput = container.querySelector("[data-offset]");
+	const offsetValue = container.querySelector("[data-offset-value]");
+	const xLabelsInput = container.querySelector("[data-x-labels]");
+	const yLabelsInput = container.querySelector("[data-y-labels]");
+	let context;
+	let source;
 
-  runButton.addEventListener('click', async () => {
-    if (!context) {
-      context = new AudioContext();
-      await context.audioWorklet.addModule('../shared/scope-source-worklet.js');
-      source = new AudioWorkletNode(context, 'compost-scope-source', {
-        numberOfInputs: 0,
-        numberOfOutputs: 1,
-        outputChannelCount: [1],
-        parameterData: { frequency: Number(frequencyInput.value) },
-      });
-      source.port.onmessage = ({ data }) => {
-        for (const scope of scopes) scope.setSamples(data.samples);
-      };
-      source.connect(new GainNode(context, { gain: 0 })).connect(context.destination);
-      await context.resume();
-      runButton.textContent = 'Stop oscillator';
-      return;
-    }
+	runButton.addEventListener("click", async () => {
+		if (!context) {
+			context = new AudioContext();
+			await context.audioWorklet.addModule("../shared/scope-source-worklet.js");
+			source = new AudioWorkletNode(context, "compost-scope-source", {
+				numberOfInputs: 0,
+				numberOfOutputs: 1,
+				outputChannelCount: [1],
+				parameterData: { frequency: Number(frequencyInput.value) },
+			});
+			source.port.onmessage = ({ data }) => {
+				for (const scope of scopes) scope.setSamples(data.samples);
+			};
+			source
+				.connect(new GainNode(context, { gain: 0 }))
+				.connect(context.destination);
+			await context.resume();
+			runButton.textContent = "Stop oscillator";
+			return;
+		}
 
-    if (context.state === 'running') {
-      await context.suspend();
-      runButton.textContent = 'Run oscillator';
-    } else {
-      await context.resume();
-      runButton.textContent = 'Stop oscillator';
-    }
-  });
+		if (context.state === "running") {
+			await context.suspend();
+			runButton.textContent = "Run oscillator";
+		} else {
+			await context.resume();
+			runButton.textContent = "Stop oscillator";
+		}
+	});
 
-  frequencyInput.addEventListener('input', () => {
-    const frequency = Number(frequencyInput.value);
-    frequencyValue.textContent = `${frequency} Hz`;
-    source?.parameters.get('frequency').setValueAtTime(frequency, context.currentTime);
-  });
+	frequencyInput.addEventListener("input", () => {
+		const frequency = Number(frequencyInput.value);
+		frequencyValue.textContent = `${frequency} Hz`;
+		source?.parameters
+			.get("frequency")
+			.setValueAtTime(frequency, context.currentTime);
+	});
 
-  rangeSelect.addEventListener('change', () => {
-    for (const scope of scopes) scope.setAttribute('value-range', rangeSelect.value);
-  });
+	rangeSelect.addEventListener("change", () => {
+		for (const scope of scopes)
+			scope.setAttribute("value-range", rangeSelect.value);
+	});
 
-  offsetInput.addEventListener('input', () => {
-    offsetValue.textContent = offsetInput.value;
-    for (const scope of scopes) scope.setAttribute('y-offset', offsetInput.value);
-  });
+	offsetInput.addEventListener("input", () => {
+		offsetValue.textContent = offsetInput.value;
+		for (const scope of scopes)
+			scope.setAttribute("y-offset", offsetInput.value);
+	});
 
-  xLabelsInput.addEventListener('input', () => {
-    for (const scope of scopes) scope.setAttribute('x-marker-labels', xLabelsInput.value);
-  });
+	xLabelsInput.addEventListener("input", () => {
+		for (const scope of scopes)
+			scope.setAttribute("x-marker-labels", xLabelsInput.value);
+	});
 
-  yLabelsInput.addEventListener('input', () => {
-    for (const scope of scopes) scope.setAttribute('y-marker-labels', yLabelsInput.value);
-  });
+	yLabelsInput.addEventListener("input", () => {
+		for (const scope of scopes)
+			scope.setAttribute("y-marker-labels", yLabelsInput.value);
+	});
 }

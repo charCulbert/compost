@@ -1,14 +1,14 @@
-import { clamp, defineElement, numberAttr } from '../utils.js';
+import { clamp, defineElement, numberAttr } from "../utils.js";
 
 export class CompostDrawer extends HTMLElement {
-  static get observedAttributes() {
-    return ['open', 'edge', 'orientation', 'min-size', 'max-size', 'label'];
-  }
+	static get observedAttributes() {
+		return ["open", "edge", "orientation", "min-size", "max-size", "label"];
+	}
 
-  constructor() {
-    super();
-    this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `
+	constructor() {
+		super();
+		this.root = this.attachShadow({ mode: "open" });
+		this.root.innerHTML = `
       <style>
         :host {
           --compost-drawer-bg: Canvas;
@@ -233,187 +233,223 @@ export class CompostDrawer extends HTMLElement {
         <div class="content" part="content"><slot></slot></div>
       </details>`;
 
-    this.details = this.root.querySelector('details');
-    this.titleBar = this.root.querySelector('summary');
-    this.titleSlot = this.root.querySelector('slot[name="title"]');
-    this.resizeHandle = this.root.querySelector('.resize-handle');
-    this.resizeState = null;
-    this.details.addEventListener('toggle', () => {
-      this.toggleAttribute('open', this.details.open);
-      this.dispatchEvent(new Event('toggle'));
-    });
-    this.titleBar.addEventListener('click', (event) => {
-      event.preventDefault();
-      this.open = !this.open;
-    });
-    this.resizeHandle.addEventListener('pointerdown', (event) => this.startResize(event));
-    this.resizeHandle.addEventListener('pointermove', (event) => this.continueResize(event));
-    this.resizeHandle.addEventListener('pointerup', (event) => this.endResize(event));
-    this.resizeHandle.addEventListener('pointercancel', (event) => this.endResize(event));
-    this.resizeHandle.addEventListener('keydown', (event) => this.handleResizeKey(event));
-    this.titleSlot.addEventListener('slotchange', () => this.refreshLabel());
-  }
+		this.details = this.root.querySelector("details");
+		this.titleBar = this.root.querySelector("summary");
+		this.titleSlot = this.root.querySelector('slot[name="title"]');
+		this.resizeHandle = this.root.querySelector(".resize-handle");
+		this.resizeState = null;
+		this.details.addEventListener("toggle", () => {
+			this.toggleAttribute("open", this.details.open);
+			this.dispatchEvent(new Event("toggle"));
+		});
+		this.titleBar.addEventListener("click", (event) => {
+			event.preventDefault();
+			this.open = !this.open;
+		});
+		this.resizeHandle.addEventListener("pointerdown", (event) =>
+			this.startResize(event),
+		);
+		this.resizeHandle.addEventListener("pointermove", (event) =>
+			this.continueResize(event),
+		);
+		this.resizeHandle.addEventListener("pointerup", (event) =>
+			this.endResize(event),
+		);
+		this.resizeHandle.addEventListener("pointercancel", (event) =>
+			this.endResize(event),
+		);
+		this.resizeHandle.addEventListener("keydown", (event) =>
+			this.handleResizeKey(event),
+		);
+		this.titleSlot.addEventListener("slotchange", () => this.refreshLabel());
+	}
 
-  connectedCallback() {
-    if (!this.hasAttribute('edge')) {
-      this.setAttribute(
-        'edge', this.getAttribute('orientation') === 'horizontal' ? 'left' : 'bottom');
-    }
-    this.refresh();
-  }
+	connectedCallback() {
+		if (!this.hasAttribute("edge")) {
+			this.setAttribute(
+				"edge",
+				this.getAttribute("orientation") === "horizontal" ? "left" : "bottom",
+			);
+		}
+		this.refresh();
+	}
 
-  attributeChangedCallback() {
-    if (!this.isConnected) return;
-    this.refresh();
-  }
+	attributeChangedCallback() {
+		if (!this.isConnected) return;
+		this.refresh();
+	}
 
-  get open() {
-    return this.hasAttribute('open');
-  }
+	get open() {
+		return this.hasAttribute("open");
+	}
 
-  set open(value) {
-    this.toggleAttribute('open', Boolean(value));
-  }
+	set open(value) {
+		this.toggleAttribute("open", Boolean(value));
+	}
 
-  get resizable() {
-    return this.hasAttribute('resizable');
-  }
+	get resizable() {
+		return this.hasAttribute("resizable");
+	}
 
-  set resizable(value) {
-    this.toggleAttribute('resizable', Boolean(value));
-  }
+	set resizable(value) {
+		this.toggleAttribute("resizable", Boolean(value));
+	}
 
-  get edge() {
-    const edge = this.getAttribute('edge');
-    return ['top', 'right', 'bottom', 'left'].includes(edge) ? edge : 'bottom';
-  }
+	get edge() {
+		const edge = this.getAttribute("edge");
+		return ["top", "right", "bottom", "left"].includes(edge) ? edge : "bottom";
+	}
 
-  set edge(value) {
-    this.setAttribute('edge', value);
-  }
+	set edge(value) {
+		this.setAttribute("edge", value);
+	}
 
-  get orientation() {
-    return this.edge === 'left' || this.edge === 'right' ? 'horizontal' : 'vertical';
-  }
+	get orientation() {
+		return this.edge === "left" || this.edge === "right"
+			? "horizontal"
+			: "vertical";
+	}
 
-  get size() {
-    const style = this.ownerDocument?.defaultView?.getComputedStyle(this) ?? this.style;
-    const declared = Number.parseFloat(style.getPropertyValue('--compost-drawer-size'));
-    const bounds = this.getBoundingClientRect();
-    const rendered = this.orientation === 'horizontal' ? bounds.width : bounds.height;
-    return Number.isFinite(declared) ? declared : rendered;
-  }
+	get size() {
+		const style =
+			this.ownerDocument?.defaultView?.getComputedStyle(this) ?? this.style;
+		const declared = Number.parseFloat(
+			style.getPropertyValue("--compost-drawer-size"),
+		);
+		const bounds = this.getBoundingClientRect();
+		const rendered =
+			this.orientation === "horizontal" ? bounds.width : bounds.height;
+		return Number.isFinite(declared) ? declared : rendered;
+	}
 
-  set size(value) {
-    this.setSize(value);
-  }
+	set size(value) {
+		this.setSize(value);
+	}
 
-  get minSize() {
-    return numberAttr(this, 'min-size', 80);
-  }
+	get minSize() {
+		return numberAttr(this, "min-size", 80);
+	}
 
-  get maxSize() {
-    return Math.max(this.minSize, numberAttr(this, 'max-size', Number.MAX_SAFE_INTEGER));
-  }
+	get maxSize() {
+		return Math.max(
+			this.minSize,
+			numberAttr(this, "max-size", Number.MAX_SAFE_INTEGER),
+		);
+	}
 
-  setSize(value, shouldEmit = false) {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return;
+	setSize(value, shouldEmit = false) {
+		const number = Number(value);
+		if (!Number.isFinite(number)) return;
 
-    const size = clamp(number, this.minSize, this.maxSize);
-    this.style.setProperty('--compost-drawer-size', `${size}px`);
-    this.resizeHandle?.setAttribute('aria-valuenow', String(Math.round(size)));
-    this.resizeHandle?.setAttribute('aria-valuetext', `${Math.round(size)} pixels`);
-    if (shouldEmit) {
-      this.dispatchEvent(new CustomEvent('drawer-resize', {
-        bubbles: true,
-        composed: true,
-        detail: { size },
-      }));
-    }
-  }
+		const size = clamp(number, this.minSize, this.maxSize);
+		this.style.setProperty("--compost-drawer-size", `${size}px`);
+		this.resizeHandle?.setAttribute("aria-valuenow", String(Math.round(size)));
+		this.resizeHandle?.setAttribute(
+			"aria-valuetext",
+			`${Math.round(size)} pixels`,
+		);
+		if (shouldEmit) {
+			this.dispatchEvent(
+				new CustomEvent("drawer-resize", {
+					bubbles: true,
+					composed: true,
+					detail: { size },
+				}),
+			);
+		}
+	}
 
-  startResize(event) {
-    if (!this.open || !this.resizable || event.button !== 0) return;
+	startResize(event) {
+		if (!this.open || !this.resizable || event.button !== 0) return;
 
-    event.preventDefault();
-    this.resizeState = {
-      pointerID: event.pointerId,
-      startSize: this.size,
-      startPosition: this.resizePosition(event),
-    };
-    this.resizeHandle.setPointerCapture(event.pointerId);
-  }
+		event.preventDefault();
+		this.resizeState = {
+			pointerID: event.pointerId,
+			startSize: this.size,
+			startPosition: this.resizePosition(event),
+		};
+		this.resizeHandle.setPointerCapture(event.pointerId);
+	}
 
-  continueResize(event) {
-    if (event.pointerId !== this.resizeState?.pointerID) return;
-    this.setSize(
-      this.resizeState.startSize
-        + this.resizePosition(event)
-        - this.resizeState.startPosition,
-      true,
-    );
-  }
+	continueResize(event) {
+		if (event.pointerId !== this.resizeState?.pointerID) return;
+		this.setSize(
+			this.resizeState.startSize +
+				this.resizePosition(event) -
+				this.resizeState.startPosition,
+			true,
+		);
+	}
 
-  resizePosition(event) {
-    return {
-      top: event.clientY,
-      right: -event.clientX,
-      bottom: -event.clientY,
-      left: event.clientX,
-    }[this.edge];
-  }
+	resizePosition(event) {
+		return {
+			top: event.clientY,
+			right: -event.clientX,
+			bottom: -event.clientY,
+			left: event.clientX,
+		}[this.edge];
+	}
 
-  endResize(event) {
-    if (event.pointerId === this.resizeState?.pointerID) this.resizeState = null;
-  }
+	endResize(event) {
+		if (event.pointerId === this.resizeState?.pointerID)
+			this.resizeState = null;
+	}
 
-  handleResizeKey(event) {
-    const change = {
-      top: { ArrowUp: -16, ArrowDown: 16 },
-      right: { ArrowLeft: 16, ArrowRight: -16 },
-      bottom: { ArrowUp: 16, ArrowDown: -16 },
-      left: { ArrowLeft: -16, ArrowRight: 16 },
-    }[this.edge][event.key];
-    if (!change) return;
+	handleResizeKey(event) {
+		const change = {
+			top: { ArrowUp: -16, ArrowDown: 16 },
+			right: { ArrowLeft: 16, ArrowRight: -16 },
+			bottom: { ArrowUp: 16, ArrowDown: -16 },
+			left: { ArrowLeft: -16, ArrowRight: 16 },
+		}[this.edge][event.key];
+		if (!change) return;
 
-    event.preventDefault();
-    this.setSize(this.size + change, true);
-  }
+		event.preventDefault();
+		this.setSize(this.size + change, true);
+	}
 
-  refresh() {
-    if (!this.details) return;
-    this.dataset.axis = this.orientation;
-    this.details.open = this.open;
-    if (this.open && this.resizable) this.setSize(this.size);
-    this.resizeHandle.setAttribute(
-      'aria-orientation', this.orientation === 'horizontal' ? 'vertical' : 'horizontal');
-    this.resizeHandle.setAttribute('aria-valuemin', String(this.minSize));
-    this.resizeHandle.setAttribute('aria-valuemax', String(this.maxSize));
-    this.resizeHandle.setAttribute('aria-valuenow', String(Math.round(this.size)));
-    this.resizeHandle.setAttribute('aria-valuetext', `${Math.round(this.size)} pixels`);
-    this.refreshLabel();
-  }
+	refresh() {
+		if (!this.details) return;
+		this.dataset.axis = this.orientation;
+		this.details.open = this.open;
+		if (this.open && this.resizable) this.setSize(this.size);
+		this.resizeHandle.setAttribute(
+			"aria-orientation",
+			this.orientation === "horizontal" ? "vertical" : "horizontal",
+		);
+		this.resizeHandle.setAttribute("aria-valuemin", String(this.minSize));
+		this.resizeHandle.setAttribute("aria-valuemax", String(this.maxSize));
+		this.resizeHandle.setAttribute(
+			"aria-valuenow",
+			String(Math.round(this.size)),
+		);
+		this.resizeHandle.setAttribute(
+			"aria-valuetext",
+			`${Math.round(this.size)} pixels`,
+		);
+		this.refreshLabel();
+	}
 
-  refreshLabel() {
-    const label = this.getAttribute('label');
-    const assignedText = this.titleSlot.assignedNodes({ flatten: true })
-      .map((node) => node.textContent || '')
-      .join('')
-      .trim();
-    const drawerName = label?.trim() || assignedText || 'Drawer';
-    const resizeLabel = /\bdrawer$/iu.test(drawerName)
-      ? `Resize ${drawerName}`
-      : `Resize ${drawerName} drawer`;
+	refreshLabel() {
+		const label = this.getAttribute("label");
+		const assignedText = this.titleSlot
+			.assignedNodes({ flatten: true })
+			.map((node) => node.textContent || "")
+			.join("")
+			.trim();
+		const drawerName = label?.trim() || assignedText || "Drawer";
+		const resizeLabel = /\bdrawer$/iu.test(drawerName)
+			? `Resize ${drawerName}`
+			: `Resize ${drawerName} drawer`;
 
-    this.resizeHandle?.setAttribute('aria-label', resizeLabel);
+		this.resizeHandle?.setAttribute("aria-label", resizeLabel);
 
-    if (label !== null || !assignedText) {
-      this.titleBar.setAttribute('aria-label', label || 'Toggle drawer');
-    } else {
-      this.titleBar.removeAttribute('aria-label');
-    }
-  }
+		if (label !== null || !assignedText) {
+			this.titleBar.setAttribute("aria-label", label || "Toggle drawer");
+		} else {
+			this.titleBar.removeAttribute("aria-label");
+		}
+	}
 }
 
-defineElement('compost-drawer', CompostDrawer);
+defineElement("compost-drawer", CompostDrawer);

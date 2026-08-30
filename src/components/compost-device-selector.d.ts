@@ -1,18 +1,24 @@
-import type { DeviceSelectorSnapshot, DeviceSettingsDetail } from '../device-settings.js';
+import type {
+	DeviceSelectorSnapshot,
+	DeviceSettingsDetail,
+} from "../device-settings.js";
 
-export type { DeviceSelectorSnapshot, DeviceSettingsDetail } from '../device-settings.js';
+export type {
+	DeviceSelectorSnapshot,
+	DeviceSettingsDetail,
+} from "../device-settings.js";
 
 /** The detail on `device-settings-refresh`. */
 export interface DeviceSettingsRefreshDetail {
-  requestId: number;
-  snapshot: DeviceSelectorSnapshot | null;
+	requestId: number;
+	snapshot: DeviceSelectorSnapshot | null;
 }
 
 /** The live connection `connectHost` returns. */
 export interface DeviceSelectorHostConnection {
-  connected: boolean;
-  loadSnapshot(event?: Event | null): Promise<DeviceSelectorSnapshot | null>;
-  applySettings(event: Event): Promise<DeviceSelectorSnapshot | null>;
+	connected: boolean;
+	loadSnapshot(event?: Event | null): Promise<DeviceSelectorSnapshot | null>;
+	applySettings(event: Event): Promise<DeviceSelectorSnapshot | null>;
 }
 
 /**
@@ -28,31 +34,36 @@ export interface DeviceSelectorHostConnection {
  * @attribute error - error message shown in the dialog
  */
 export class CompostDeviceSelector extends HTMLElement {
-  get snapshot(): DeviceSelectorSnapshot | null;
-  set snapshot(value: unknown);
-  get busy(): boolean;
-  set busy(value: boolean);
-  get disabled(): boolean;
-  set disabled(value: boolean);
-  get error(): string;
-  set error(value: string);
+	get snapshot(): DeviceSelectorSnapshot | null;
+	set snapshot(value: unknown);
+	get busy(): boolean;
+	set busy(value: boolean);
+	get disabled(): boolean;
+	set disabled(value: boolean);
+	get error(): string;
+	set error(value: string);
 
-  open(): void;
-  close(): void;
-  focus(options?: FocusOptions): void;
+	open(): void;
+	close(): void;
+	focus(options?: FocusOptions): void;
 
-  /** Applies a snapshot unless a newer request has superseded it. */
-  applySnapshot(snapshot: unknown, options?: {requestId?: number | null}): boolean;
-  /** Wires refresh and input events to host callbacks; loads once. */
-  connectHost(options: {
-    getSnapshot: () => Promise<unknown> | unknown;
-    applySettings: (request: DeviceSettingsDetail) => Promise<unknown> | unknown;
-  }): Promise<DeviceSelectorSnapshot | null>;
-  disconnectHost(): void;
+	/** Applies a snapshot unless a newer request has superseded it. */
+	applySnapshot(
+		snapshot: unknown,
+		options?: { requestId?: number | null },
+	): boolean;
+	/** Wires refresh and input events to host callbacks; loads once. */
+	connectHost(options: {
+		getSnapshot: () => Promise<unknown> | unknown;
+		applySettings: (
+			request: DeviceSettingsDetail,
+		) => Promise<unknown> | unknown;
+	}): Promise<DeviceSelectorSnapshot | null>;
+	disconnectHost(): void;
 }
 
 declare global {
-  interface HTMLElementTagNameMap {
-    'compost-device-selector': CompostDeviceSelector;
-  }
+	interface HTMLElementTagNameMap {
+		"compost-device-selector": CompostDeviceSelector;
+	}
 }

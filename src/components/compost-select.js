@@ -1,9 +1,9 @@
 import {
-  beginParameterGesture,
-  defineElement,
-  editParameterGesture,
-  endParameterGesture,
-} from '../utils.js';
+	beginParameterGesture,
+	defineElement,
+	editParameterGesture,
+	endParameterGesture,
+} from "../utils.js";
 
 let nextSelectID = 1;
 
@@ -13,29 +13,29 @@ let nextSelectID = 1;
  * parameter surface is numeric when `parameter-id` is present.
  */
 export class CompostSelect extends HTMLElement {
-  static get observedAttributes() {
-    return [
-      'value',
-      'disabled',
-      'label',
-      'name',
-      'parameter-id',
-      'aria-label',
-      'aria-labelledby',
-      'aria-description',
-      'aria-describedby',
-    ];
-  }
+	static get observedAttributes() {
+		return [
+			"value",
+			"disabled",
+			"label",
+			"name",
+			"parameter-id",
+			"aria-label",
+			"aria-labelledby",
+			"aria-description",
+			"aria-describedby",
+		];
+	}
 
-  constructor() {
-    super();
+	constructor() {
+		super();
 
-    this.parameterID = '';
-    this.lastUpdateSource = 'control';
-    const id = `compost-select-${nextSelectID++}`;
+		this.parameterID = "";
+		this.lastUpdateSource = "control";
+		const id = `compost-select-${nextSelectID++}`;
 
-    this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `
+		this.root = this.attachShadow({ mode: "open" });
+		this.root.innerHTML = `
       <style>
         :host {
           --_accent: var(--compost-accent, AccentColor);
@@ -88,140 +88,148 @@ export class CompostSelect extends HTMLElement {
       <span class="midi-map-label" part="midi-map-label" aria-hidden="true"></span>
       <slot></slot>`;
 
-    this.labelElement = this.root.querySelector('label');
-    this.select = this.root.querySelector('select');
-    this.labelElement.htmlFor = id;
-    this.select.id = id;
-    this.select.addEventListener('change', (event) => this.handleChange(event));
+		this.labelElement = this.root.querySelector("label");
+		this.select = this.root.querySelector("select");
+		this.labelElement.htmlFor = id;
+		this.select.id = id;
+		this.select.addEventListener("change", (event) => this.handleChange(event));
 
-    this.observer = typeof MutationObserver === 'function'
-      ? new MutationObserver(() => this.refresh())
-      : null;
-  }
+		this.observer =
+			typeof MutationObserver === "function"
+				? new MutationObserver(() => this.refresh())
+				: null;
+	}
 
-  connectedCallback() {
-    this.observer?.observe(this, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ['disabled', 'label', 'selected', 'value'],
-    });
-    this.refresh();
-  }
+	connectedCallback() {
+		this.observer?.observe(this, {
+			childList: true,
+			subtree: true,
+			characterData: true,
+			attributes: true,
+			attributeFilter: ["disabled", "label", "selected", "value"],
+		});
+		this.refresh();
+	}
 
-  disconnectedCallback() {
-    this.observer?.disconnect();
-  }
+	disconnectedCallback() {
+		this.observer?.disconnect();
+	}
 
-  attributeChangedCallback() {
-    this.refresh();
-  }
+	attributeChangedCallback() {
+		this.refresh();
+	}
 
-  get value() {
-    return this.getAttribute('value') ?? '';
-  }
+	get value() {
+		return this.getAttribute("value") ?? "";
+	}
 
-  set value(value) {
-    this.setValue(value, false);
-  }
+	set value(value) {
+		this.setValue(value, false);
+	}
 
-  get disabled() {
-    return this.hasAttribute('disabled');
-  }
+	get disabled() {
+		return this.hasAttribute("disabled");
+	}
 
-  set disabled(value) {
-    this.toggleAttribute('disabled', Boolean(value));
-  }
+	set disabled(value) {
+		this.toggleAttribute("disabled", Boolean(value));
+	}
 
-  get parameterKind() {
-    return 'discrete';
-  }
+	get parameterKind() {
+		return "discrete";
+	}
 
-  get parameterValues() {
-    const values = this.optionElements()
-      .map((option) => Number(option.value))
-      .filter(Number.isFinite);
-    return values.length ? values : null;
-  }
+	get parameterValues() {
+		const values = this.optionElements()
+			.map((option) => Number(option.value))
+			.filter(Number.isFinite);
+		return values.length ? values : null;
+	}
 
-  get min() {
-    return Math.min(...(this.parameterValues ?? [0]));
-  }
+	get min() {
+		return Math.min(...(this.parameterValues ?? [0]));
+	}
 
-  get max() {
-    return Math.max(...(this.parameterValues ?? [1]));
-  }
+	get max() {
+		return Math.max(...(this.parameterValues ?? [1]));
+	}
 
-  get step() {
-    return 0;
-  }
+	get step() {
+		return 0;
+	}
 
-  getParameterValue() {
-    const value = Number(this.value);
-    return Number.isFinite(value) ? value : 0;
-  }
+	getParameterValue() {
+		const value = Number(this.value);
+		return Number.isFinite(value) ? value : 0;
+	}
 
-  optionElements() {
-    return [...this.children].filter((child) => child.tagName === 'OPTION');
-  }
+	optionElements() {
+		return [...this.children].filter((child) => child.tagName === "OPTION");
+	}
 
-  refresh() {
-    if (!this.select) return;
+	refresh() {
+		if (!this.select) return;
 
-    this.parameterID = this.getAttribute('parameter-id') || '';
-    const options = this.optionElements();
-    if (!this.hasAttribute('value')) {
-      const initial = options.find((option) => option.selected && !option.disabled)
-        || options.find((option) => !option.disabled);
-      if (initial) this.setAttribute('value', initial.value);
-    }
+		this.parameterID = this.getAttribute("parameter-id") || "";
+		const options = this.optionElements();
+		if (!this.hasAttribute("value")) {
+			const initial =
+				options.find((option) => option.selected && !option.disabled) ||
+				options.find((option) => !option.disabled);
+			if (initial) this.setAttribute("value", initial.value);
+		}
 
-    this.select.replaceChildren(...options.map((option) => option.cloneNode(true)));
-    this.select.value = this.value;
-    this.select.disabled = this.disabled;
-    this.select.name = this.getAttribute('name') || '';
+		this.select.replaceChildren(
+			...options.map((option) => option.cloneNode(true)),
+		);
+		this.select.value = this.value;
+		this.select.disabled = this.disabled;
+		this.select.name = this.getAttribute("name") || "";
 
-    const label = this.getAttribute('label') || '';
-    this.labelElement.textContent = label;
-    this.copyAriaAttribute('aria-label', label || 'Select');
-    this.copyAriaAttribute('aria-labelledby');
-    this.copyAriaAttribute('aria-description');
-    this.copyAriaAttribute('aria-describedby');
-  }
+		const label = this.getAttribute("label") || "";
+		this.labelElement.textContent = label;
+		this.copyAriaAttribute("aria-label", label || "Select");
+		this.copyAriaAttribute("aria-labelledby");
+		this.copyAriaAttribute("aria-description");
+		this.copyAriaAttribute("aria-describedby");
+	}
 
-  copyAriaAttribute(name, fallback = '') {
-    const value = this.getAttribute(name) || fallback;
-    if (value) this.select.setAttribute(name, value);
-    else this.select.removeAttribute(name);
-  }
+	copyAriaAttribute(name, fallback = "") {
+		const value = this.getAttribute(name) || fallback;
+		if (value) this.select.setAttribute(name, value);
+		else this.select.removeAttribute(name);
+	}
 
-  setValue(value, shouldEmit = true, source = 'control') {
-    const requestedValue = Number(value);
-    const option = this.optionElements().find((candidate) =>
-      candidate.value === String(value)
-      || (this.parameterID && Number.isFinite(requestedValue)
-        && Number(candidate.value) === requestedValue));
-    if (!option || option.disabled || option.value === this.value) return false;
+	setValue(value, shouldEmit = true, source = "control") {
+		const requestedValue = Number(value);
+		const option = this.optionElements().find(
+			(candidate) =>
+				candidate.value === String(value) ||
+				(this.parameterID &&
+					Number.isFinite(requestedValue) &&
+					Number(candidate.value) === requestedValue),
+		);
+		if (!option || option.disabled || option.value === this.value) return false;
 
-    this.lastUpdateSource = source;
-    this.setAttribute('value', option.value);
-    if (shouldEmit) editParameterGesture(this, this.getParameterValue(), { source });
-    return true;
-  }
+		this.lastUpdateSource = source;
+		this.setAttribute("value", option.value);
+		if (shouldEmit)
+			editParameterGesture(this, this.getParameterValue(), { source });
+		return true;
+	}
 
-  handleChange(event) {
-    event.stopPropagation();
-    const value = this.select.value;
-    if (this.parameterID) {
-      beginParameterGesture(this, this.getParameterValue());
-      this.setValue(value, true, 'control');
-      endParameterGesture(this, this.getParameterValue());
-    } else {
-      this.setValue(value, false, 'control');
-    }
-    this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-  }
+	handleChange(event) {
+		event.stopPropagation();
+		const value = this.select.value;
+		if (this.parameterID) {
+			beginParameterGesture(this, this.getParameterValue());
+			this.setValue(value, true, "control");
+			endParameterGesture(this, this.getParameterValue());
+		} else {
+			this.setValue(value, false, "control");
+		}
+		this.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+	}
 }
 
-defineElement('compost-select', CompostSelect);
+defineElement("compost-select", CompostSelect);

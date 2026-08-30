@@ -1,7 +1,7 @@
 /** The detail on `scope-frame`, fired after each drawn frame. */
 export interface ScopeFrameDetail {
-  /** The requestAnimationFrame timestamp. */
-  time: number;
+	/** The requestAnimationFrame timestamp. */
+	time: number;
 }
 
 /**
@@ -17,21 +17,18 @@ export interface ScopeFrameDetail {
  * @attribute y-marker-labels - `position:label` pairs for the y markers
  */
 export class CompostScope extends HTMLElement {
-  valueRange: number;
-  yOffset: number;
-  /** Vertical marker positions in data units. */
-  xMarkers: number[];
-  /** Horizontal marker positions in data units. */
-  yMarkers: number[];
-  /** Displays one prepared channel, coalescing updates to browser frames. */
-  setSamples(
-    samples: ArrayLike<number>,
-    options?: {copy?: boolean},
-  ): this;
+	valueRange: number;
+	yOffset: number;
+	/** Vertical marker positions in data units. */
+	xMarkers: number[];
+	/** Horizontal marker positions in data units. */
+	yMarkers: number[];
+	/** Displays one prepared channel, coalescing updates to browser frames. */
+	setSamples(samples: ArrayLike<number>, options?: { copy?: boolean }): this;
 }
 
 declare global {
-  interface HTMLElementTagNameMap {
-    'compost-scope': CompostScope;
-  }
+	interface HTMLElementTagNameMap {
+		"compost-scope": CompostScope;
+	}
 }

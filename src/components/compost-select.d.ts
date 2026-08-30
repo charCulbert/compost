@@ -15,23 +15,27 @@
  * @attribute aria-describedby
  */
 export class CompostSelect extends HTMLElement {
-  get value(): string;
-  set value(value: string | number);
-  get disabled(): boolean;
-  set disabled(value: boolean);
-  get parameterKind(): 'discrete';
-  get parameterValues(): number[] | null;
-  get min(): number;
-  get max(): number;
-  get step(): 0;
+	get value(): string;
+	set value(value: string | number);
+	get disabled(): boolean;
+	set disabled(value: boolean);
+	get parameterKind(): "discrete";
+	get parameterValues(): number[] | null;
+	get min(): number;
+	get max(): number;
+	get step(): 0;
 
-  getParameterValue(): number;
-  /** Sets a matching option; `shouldEmit = false` is a silent host update. */
-  setValue(value: string | number, shouldEmit?: boolean, source?: string): boolean;
+	getParameterValue(): number;
+	/** Sets a matching option; `shouldEmit = false` is a silent host update. */
+	setValue(
+		value: string | number,
+		shouldEmit?: boolean,
+		source?: string,
+	): boolean;
 }
 
 declare global {
-  interface HTMLElementTagNameMap {
-    'compost-select': CompostSelect;
-  }
+	interface HTMLElementTagNameMap {
+		"compost-select": CompostSelect;
+	}
 }

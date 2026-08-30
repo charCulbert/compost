@@ -11,5 +11,9 @@ export function noteFromMessage(message: MIDIMessageLike): number;
 export function controllerFromMessage(message: MIDIMessageLike): number;
 export function controllerValueFromMessage(message: MIDIMessageLike): number;
 export function packMIDIMessage(data: ArrayLike<number>): number;
-export function unpackMIDIMessage(message: MIDIMessageLike): [number, number, number];
-export function normaliseMIDIMessage(message: MIDIMessageLike): [number, number, number];
+export function unpackMIDIMessage(
+	message: MIDIMessageLike,
+): [number, number, number];
+export function normaliseMIDIMessage(
+	message: MIDIMessageLike,
+): [number, number, number];

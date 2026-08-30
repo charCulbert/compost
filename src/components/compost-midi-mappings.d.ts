@@ -1,9 +1,9 @@
-import type { MIDIMappings } from '../midi-mappings.js';
+import type { MIDIMappings } from "../midi-mappings.js";
 
 /** The detail on `midi-map-mode-change`. */
 export interface MIDIMapModeChangeDetail {
-  active: boolean;
-  state: string;
+	active: boolean;
+	state: string;
 }
 
 /**
@@ -16,20 +16,20 @@ export interface MIDIMapModeChangeDetail {
  * @attribute heading - visible panel heading
  */
 export class CompostMIDIMappings extends HTMLElement {
-  /** The mappings model this editor edits, or null. */
-  get mappings(): MIDIMappings | null;
-  set mappings(value: MIDIMappings | null);
-  get disabled(): boolean;
-  set disabled(value: boolean);
+	/** The mappings model this editor edits, or null. */
+	get mappings(): MIDIMappings | null;
+	set mappings(value: MIDIMappings | null);
+	get disabled(): boolean;
+	set disabled(value: boolean);
 
-  /** Clears one mapping through the model's request path. */
-  clearMapping(parameterID: string): void;
-  /** Clears every mapping through the model's request path. */
-  clearMappings(): void;
+	/** Clears one mapping through the model's request path. */
+	clearMapping(parameterID: string): void;
+	/** Clears every mapping through the model's request path. */
+	clearMappings(): void;
 }
 
 declare global {
-  interface HTMLElementTagNameMap {
-    'compost-midi-mappings': CompostMIDIMappings;
-  }
+	interface HTMLElementTagNameMap {
+		"compost-midi-mappings": CompostMIDIMappings;
+	}
 }

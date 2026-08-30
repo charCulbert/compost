@@ -24,18 +24,18 @@ const MOUSE_TRIM_EDGE = 6;
  * slop, lifts, or the gesture cancels. Starting again reschedules.
  */
 export function createLongPress() {
-  let timer = null;
-  return {
-    start(fire) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        fire();
-      }, LONG_PRESS_MS);
-    },
-    cancel() {
-      clearTimeout(timer);
-      timer = null;
-    },
-  };
+	let timer = null;
+	return {
+		start(fire) {
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				timer = null;
+				fire();
+			}, LONG_PRESS_MS);
+		},
+		cancel() {
+			clearTimeout(timer);
+			timer = null;
+		},
+	};
 }

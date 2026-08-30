@@ -1,20 +1,30 @@
-import { channelFromMessage, controllerFromMessage, controllerValueFromMessage, isControlChangeMessage, isNoteOffMessage, isNoteOnMessage, noteFromMessage, noteName, unpackMIDIMessage } from '../midi.js';
-import { defineElement, numberAttr } from '../utils.js';
+import {
+	channelFromMessage,
+	controllerFromMessage,
+	controllerValueFromMessage,
+	isControlChangeMessage,
+	isNoteOffMessage,
+	isNoteOnMessage,
+	noteFromMessage,
+	noteName,
+	unpackMIDIMessage,
+} from "../midi.js";
+import { defineElement, numberAttr } from "../utils.js";
 
 export class CompostMIDIMonitor extends HTMLElement {
-  static get observedAttributes() {
-    return ['for', 'max-lines', 'announce'];
-  }
+	static get observedAttributes() {
+		return ["for", "max-lines", "announce"];
+	}
 
-  constructor() {
-    super();
+	constructor() {
+		super();
 
-    this.lines = [];
-    this._midi = null;
-    this.handleMIDIEvent = this.handleMIDIEvent.bind(this);
+		this.lines = [];
+		this._midi = null;
+		this.handleMIDIEvent = this.handleMIDIEvent.bind(this);
 
-    this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `
+		this.root = this.attachShadow({ mode: "open" });
+		this.root.innerHTML = `
       <style>
         :host {
           --compost-midi-monitor-bg: Canvas;
@@ -55,105 +65,112 @@ export class CompostMIDIMonitor extends HTMLElement {
         <pre part="log" role="log" aria-label="MIDI message log" aria-live="off" aria-atomic="false" aria-relevant="additions"></pre>
       </div>`;
 
-    this.logElement = this.root.querySelector('pre');
-  }
+		this.logElement = this.root.querySelector("pre");
+	}
 
-  connectedCallback() {
-    this.attachConfiguredMIDI();
-    this.refresh();
-  }
+	connectedCallback() {
+		this.attachConfiguredMIDI();
+		this.refresh();
+	}
 
-  disconnectedCallback() {
-    this.detachMIDI();
-  }
+	disconnectedCallback() {
+		this.detachMIDI();
+	}
 
-  attributeChangedCallback() {
-    this.attachConfiguredMIDI();
-    this.trim();
-    this.refresh();
-  }
+	attributeChangedCallback() {
+		this.attachConfiguredMIDI();
+		this.trim();
+		this.refresh();
+	}
 
-  get midi() {
-    return this._midi;
-  }
+	get midi() {
+		return this._midi;
+	}
 
-  set midi(value) {
-    this.detachMIDI();
-    this._midi = value;
-    this._midi?.addEventListener?.('midi-message', this.handleMIDIEvent);
-  }
+	set midi(value) {
+		this.detachMIDI();
+		this._midi = value;
+		this._midi?.addEventListener?.("midi-message", this.handleMIDIEvent);
+	}
 
-  get maxLines() {
-    return Math.max(1, numberAttr(this, 'max-lines', 12));
-  }
+	get maxLines() {
+		return Math.max(1, numberAttr(this, "max-lines", 12));
+	}
 
-  attachConfiguredMIDI() {
-    const id = this.getAttribute('for');
-    if (!id || !this.isConnected) return;
+	attachConfiguredMIDI() {
+		const id = this.getAttribute("for");
+		if (!id || !this.isConnected) return;
 
-    this.midi = document.getElementById(id);
-  }
+		this.midi = document.getElementById(id);
+	}
 
-  detachMIDI() {
-    this._midi?.removeEventListener?.('midi-message', this.handleMIDIEvent);
-    this._midi = null;
-  }
+	detachMIDI() {
+		this._midi?.removeEventListener?.("midi-message", this.handleMIDIEvent);
+		this._midi = null;
+	}
 
-  handleMIDIEvent(event) {
-    this.handleMIDIMessage(event.detail?.message ?? event.detail?.data ?? event);
-  }
+	handleMIDIEvent(event) {
+		this.handleMIDIMessage(
+			event.detail?.message ?? event.detail?.data ?? event,
+		);
+	}
 
-  handleMIDIMessage(message) {
-    const line = `${new Date().toLocaleTimeString()}  ${this.formatMessage(message)}`;
-    this.lines.unshift(line);
-    this.trim();
-    this.logElement.prepend(this.createEntry(line));
-    while (this.logElement.children.length > this.maxLines) {
-      this.logElement.lastElementChild.remove();
-    }
-  }
+	handleMIDIMessage(message) {
+		const line = `${new Date().toLocaleTimeString()}  ${this.formatMessage(message)}`;
+		this.lines.unshift(line);
+		this.trim();
+		this.logElement.prepend(this.createEntry(line));
+		while (this.logElement.children.length > this.maxLines) {
+			this.logElement.lastElementChild.remove();
+		}
+	}
 
-  clear() {
-    this.lines = [];
-    this.refresh();
-  }
+	clear() {
+		this.lines = [];
+		this.refresh();
+	}
 
-  trim() {
-    this.lines = this.lines.slice(0, this.maxLines);
-  }
+	trim() {
+		this.lines = this.lines.slice(0, this.maxLines);
+	}
 
-  formatMessage(message) {
-    const [status, data1, data2] = unpackMIDIMessage(message);
-    const channel = channelFromMessage(message) + 1;
+	formatMessage(message) {
+		const [status, data1, data2] = unpackMIDIMessage(message);
+		const channel = channelFromMessage(message) + 1;
 
-    if (isNoteOnMessage(message)) {
-      const note = noteFromMessage(message);
-      return `ch ${channel} note on  ${noteName(note)} (${note}) vel ${data2}`;
-    }
+		if (isNoteOnMessage(message)) {
+			const note = noteFromMessage(message);
+			return `ch ${channel} note on  ${noteName(note)} (${note}) vel ${data2}`;
+		}
 
-    if (isNoteOffMessage(message)) {
-      const note = noteFromMessage(message);
-      return `ch ${channel} note off ${noteName(note)} (${note})`;
-    }
+		if (isNoteOffMessage(message)) {
+			const note = noteFromMessage(message);
+			return `ch ${channel} note off ${noteName(note)} (${note})`;
+		}
 
-    if (isControlChangeMessage(message)) {
-      return `ch ${channel} CC ${controllerFromMessage(message)} = ${controllerValueFromMessage(message)}`;
-    }
+		if (isControlChangeMessage(message)) {
+			return `ch ${channel} CC ${controllerFromMessage(message)} = ${controllerValueFromMessage(message)}`;
+		}
 
-    return `0x${status.toString(16).padStart(2, '0')} ${data1} ${data2}`;
-  }
+		return `0x${status.toString(16).padStart(2, "0")} ${data1} ${data2}`;
+	}
 
-  refresh() {
-    this.logElement.setAttribute('aria-live', this.hasAttribute('announce') ? 'polite' : 'off');
-    this.logElement.replaceChildren(...this.lines.map((line) => this.createEntry(line)));
-  }
+	refresh() {
+		this.logElement.setAttribute(
+			"aria-live",
+			this.hasAttribute("announce") ? "polite" : "off",
+		);
+		this.logElement.replaceChildren(
+			...this.lines.map((line) => this.createEntry(line)),
+		);
+	}
 
-  createEntry(line) {
-    const entry = document.createElement('span');
-    entry.className = 'entry';
-    entry.textContent = line;
-    return entry;
-  }
+	createEntry(line) {
+		const entry = document.createElement("span");
+		entry.className = "entry";
+		entry.textContent = line;
+		return entry;
+	}
 }
 
-defineElement('compost-midi-monitor', CompostMIDIMonitor);
+defineElement("compost-midi-monitor", CompostMIDIMonitor);

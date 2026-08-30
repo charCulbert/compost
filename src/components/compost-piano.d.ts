@@ -1,6 +1,6 @@
 /** The detail on `note-down` and `note-up`. */
 export interface PianoNoteDetail {
-  note: number;
+	note: number;
 }
 
 /**
@@ -15,28 +15,28 @@ export interface PianoNoteDetail {
  * @attribute inline - full-width inline layout
  */
 export class CompostPiano extends HTMLElement {
-  constructor(options?: {
-    naturalNoteWidth?: number;
-    accidentalWidth?: number;
-    accidentalPercentageHeight?: number;
-  });
+	constructor(options?: {
+		naturalNoteWidth?: number;
+		accidentalWidth?: number;
+		accidentalPercentageHeight?: number;
+	});
 
-  /** The rendered keyboard's width in 16px reference units, set after each render. */
-  keyboardWidth: number;
+	/** The rendered keyboard's width in 16px reference units, set after each render. */
+	keyboardWidth: number;
 
-  get config(): {noteCount: number, rootNote: number, keyMap: string};
+	get config(): { noteCount: number; rootNote: number; keyMap: string };
 
-  /** Lights or clears a key from an incoming note message. */
-  handleMIDIMessage(message: unknown): void;
-  handleExternalMIDI(message: unknown): void;
-  /** Releases every held note, sending `note-up` where needed. */
-  allNotesOff(): void;
-  isNoteActive(note: number): boolean;
-  isPlayableNote(note: number): boolean;
+	/** Lights or clears a key from an incoming note message. */
+	handleMIDIMessage(message: unknown): void;
+	handleExternalMIDI(message: unknown): void;
+	/** Releases every held note, sending `note-up` where needed. */
+	allNotesOff(): void;
+	isNoteActive(note: number): boolean;
+	isPlayableNote(note: number): boolean;
 }
 
 declare global {
-  interface HTMLElementTagNameMap {
-    'compost-piano': CompostPiano;
-  }
+	interface HTMLElementTagNameMap {
+		"compost-piano": CompostPiano;
+	}
 }

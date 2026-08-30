@@ -1,29 +1,29 @@
-import { defineElement } from '../utils.js';
-import './compost-button.js';
+import { defineElement } from "../utils.js";
+import "./compost-button.js";
 
 export class CompostAudio extends HTMLElement {
-  static get observedAttributes() {
-    return [
-      'start-label',
-      'stop-label',
-      'start-aria-label',
-      'stop-aria-label',
-      'centered-while-off',
-      'latency-hint',
-    ];
-  }
+	static get observedAttributes() {
+		return [
+			"start-label",
+			"stop-label",
+			"start-aria-label",
+			"stop-aria-label",
+			"centered-while-off",
+			"latency-hint",
+		];
+	}
 
-  constructor() {
-    super();
+	constructor() {
+		super();
 
-    this.context = null;
-    this.status = '';
-    this.lastAnnouncedState = '';
-    this.handlePowerClick = this.handlePowerClick.bind(this);
-    this.stopInternalControlEvent = this.stopInternalControlEvent.bind(this);
+		this.context = null;
+		this.status = "";
+		this.lastAnnouncedState = "";
+		this.handlePowerClick = this.handlePowerClick.bind(this);
+		this.stopInternalControlEvent = this.stopInternalControlEvent.bind(this);
 
-    this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `
+		this.root = this.attachShadow({ mode: "open" });
+		this.root.innerHTML = `
       <style>
         :host {
           --compost-audio-text: currentColor;
@@ -119,237 +119,272 @@ export class CompostAudio extends HTMLElement {
         <div class="status" part="status" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>`;
 
-    this.panel = this.root.querySelector('.panel');
-    this.powerButton = this.root.querySelector('compost-button');
-    this.statusElement = this.root.querySelector('.status');
-    this.powerButton.addEventListener('click', this.handlePowerClick, { capture: true });
-    this.powerButton.addEventListener('change', this.stopInternalControlEvent);
-    this.powerButton.addEventListener('parameter-begin', this.stopInternalControlEvent);
-    this.powerButton.addEventListener('parameter-edit', this.stopInternalControlEvent);
-    this.powerButton.addEventListener('parameter-end', this.stopInternalControlEvent);
-  }
+		this.panel = this.root.querySelector(".panel");
+		this.powerButton = this.root.querySelector("compost-button");
+		this.statusElement = this.root.querySelector(".status");
+		this.powerButton.addEventListener("click", this.handlePowerClick, {
+			capture: true,
+		});
+		this.powerButton.addEventListener("change", this.stopInternalControlEvent);
+		this.powerButton.addEventListener(
+			"parameter-begin",
+			this.stopInternalControlEvent,
+		);
+		this.powerButton.addEventListener(
+			"parameter-edit",
+			this.stopInternalControlEvent,
+		);
+		this.powerButton.addEventListener(
+			"parameter-end",
+			this.stopInternalControlEvent,
+		);
+	}
 
-  connectedCallback() {
-    this.refresh();
+	connectedCallback() {
+		this.refresh();
 
-    if (this.hasAttribute('modal')) {
-      queueMicrotask(() => this.focusPowerButton());
-    }
-  }
+		if (this.hasAttribute("modal")) {
+			queueMicrotask(() => this.focusPowerButton());
+		}
+	}
 
-  attributeChangedCallback() {
-    this.refresh();
-  }
+	attributeChangedCallback() {
+		this.refresh();
+	}
 
-  disconnectedCallback() {
-    this.stop(true);
-  }
+	disconnectedCallback() {
+		this.stop(true);
+	}
 
-  get startLabel() {
-    return this.getAttribute('start-label') || 'Start Audio';
-  }
+	get startLabel() {
+		return this.getAttribute("start-label") || "Start Audio";
+	}
 
-  get stopLabel() {
-    return this.getAttribute('stop-label') || 'Stop Audio';
-  }
+	get stopLabel() {
+		return this.getAttribute("stop-label") || "Stop Audio";
+	}
 
-  get startAriaLabel() {
-    return this.getAttribute('start-aria-label') || this.startLabel;
-  }
+	get startAriaLabel() {
+		return this.getAttribute("start-aria-label") || this.startLabel;
+	}
 
-  get stopAriaLabel() {
-    return this.getAttribute('stop-aria-label') || this.stopLabel;
-  }
+	get stopAriaLabel() {
+		return this.getAttribute("stop-aria-label") || this.stopLabel;
+	}
 
-  get latencyHint() {
-    const rawValue = (this.getAttribute('latency-hint') ?? '0').trim();
+	get latencyHint() {
+		const rawValue = (this.getAttribute("latency-hint") ?? "0").trim();
 
-    if (rawValue === 'interactive' || rawValue === 'balanced' || rawValue === 'playback') {
-      return rawValue;
-    }
+		if (
+			rawValue === "interactive" ||
+			rawValue === "balanced" ||
+			rawValue === "playback"
+		) {
+			return rawValue;
+		}
 
-    const numericValue = Number(rawValue);
+		const numericValue = Number(rawValue);
 
-    return rawValue !== '' && Number.isFinite(numericValue) && numericValue >= 0
-      ? numericValue
-      : 0;
-  }
+		return rawValue !== "" && Number.isFinite(numericValue) && numericValue >= 0
+			? numericValue
+			: 0;
+	}
 
-  get isRunning() {
-    return this.context?.state === 'running';
-  }
+	get isRunning() {
+		return this.context?.state === "running";
+	}
 
-  handlePowerClick(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    this.toggle();
-  }
+	handlePowerClick(event) {
+		event.preventDefault();
+		event.stopPropagation();
+		this.toggle();
+	}
 
-  stopInternalControlEvent(event) {
-    event.stopPropagation();
-  }
+	stopInternalControlEvent(event) {
+		event.stopPropagation();
+	}
 
-  async toggle() {
-    return this.isRunning ? this.stop() : this.start();
-  }
+	async toggle() {
+		return this.isRunning ? this.stop() : this.start();
+	}
 
-  async start() {
-    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+	async start() {
+		const AudioContextConstructor =
+			window.AudioContext || window.webkitAudioContext;
 
-    if (!AudioContextConstructor) {
-      this.setStatus('Web Audio is not available');
-      this.dispatchAudioEvent('audio-error');
-      return null;
-    }
+		if (!AudioContextConstructor) {
+			this.setStatus("Web Audio is not available");
+			this.dispatchAudioEvent("audio-error");
+			return null;
+		}
 
-    try {
-      const previousState = this.context?.state;
-      const wasResumable = Boolean(previousState
-        && previousState !== 'running'
-        && previousState !== 'closed');
-      if (!this.context || this.context.state === 'closed') {
-        try {
-          this.context = new AudioContextConstructor({ latencyHint: this.latencyHint });
-        } catch (_error) {
-          this.context = new AudioContextConstructor();
-        }
+		try {
+			const previousState = this.context?.state;
+			const wasResumable = Boolean(
+				previousState &&
+					previousState !== "running" &&
+					previousState !== "closed",
+			);
+			if (!this.context || this.context.state === "closed") {
+				try {
+					this.context = new AudioContextConstructor({
+						latencyHint: this.latencyHint,
+					});
+				} catch (_error) {
+					this.context = new AudioContextConstructor();
+				}
 
-        this.context.addEventListener('statechange', () => this.handleStateChange());
-      }
+				this.context.addEventListener("statechange", () =>
+					this.handleStateChange(),
+				);
+			}
 
-      if (this.context.state !== 'running' && this.context.state !== 'closed') {
-        await this.context.resume();
-      }
+			if (this.context.state !== "running" && this.context.state !== "closed") {
+				await this.context.resume();
+			}
 
-      this.handleStateChange();
-      if (this.context.state === 'running') {
-        this.dispatchAudioEvent(wasResumable ? 'audio-resumed' : 'audio-started');
-      }
-      return this.context;
-    } catch (error) {
-      this.setStatus(`Could not start audio: ${error.message}`);
-      this.dispatchAudioEvent('audio-error', { error });
-      return null;
-    }
-  }
+			this.handleStateChange();
+			if (this.context.state === "running") {
+				this.dispatchAudioEvent(
+					wasResumable ? "audio-resumed" : "audio-started",
+				);
+			}
+			return this.context;
+		} catch (error) {
+			this.setStatus(`Could not start audio: ${error.message}`);
+			this.dispatchAudioEvent("audio-error", { error });
+			return null;
+		}
+	}
 
-  async stop(forceClose = false) {
-    if (!this.context || this.context.state === 'closed') {
-      this.context = null;
-      this.refresh();
-      this.focusPowerButton();
-      return;
-    }
+	async stop(forceClose = false) {
+		if (!this.context || this.context.state === "closed") {
+			this.context = null;
+			this.refresh();
+			this.focusPowerButton();
+			return;
+		}
 
-    const context = this.context;
+		const context = this.context;
 
-    if (!forceClose) {
-      try {
-        await context.suspend();
-        this.setStatus('Audio context suspended.');
-        this.dispatchAudioEvent('audio-suspended');
-      } catch (error) {
-        this.setStatus(`Could not suspend audio: ${error.message}`);
-        this.dispatchAudioEvent('audio-error', { error });
-      }
-      this.refresh();
-      this.focusPowerButton();
-      return;
-    }
+		if (!forceClose) {
+			try {
+				await context.suspend();
+				this.setStatus("Audio context suspended.");
+				this.dispatchAudioEvent("audio-suspended");
+			} catch (error) {
+				this.setStatus(`Could not suspend audio: ${error.message}`);
+				this.dispatchAudioEvent("audio-error", { error });
+			}
+			this.refresh();
+			this.focusPowerButton();
+			return;
+		}
 
-    this.context = null;
-    // Reflect the closed state before awaiting the browser's close promise.
-    // Some implementations settle that promise only after their audio thread
-    // has drained, but the control must be usable immediately.
-    this.refresh();
+		this.context = null;
+		// Reflect the closed state before awaiting the browser's close promise.
+		// Some implementations settle that promise only after their audio thread
+		// has drained, but the control must be usable immediately.
+		this.refresh();
 
-    try {
-      await context.close();
-      this.setStatus('Audio context stopped.');
-      this.dispatchAudioEvent('audio-stopped');
-    } catch (error) {
-      this.setStatus(`Could not stop audio: ${error.message}`);
-      this.dispatchAudioEvent('audio-error', { error });
-    }
+		try {
+			await context.close();
+			this.setStatus("Audio context stopped.");
+			this.dispatchAudioEvent("audio-stopped");
+		} catch (error) {
+			this.setStatus(`Could not stop audio: ${error.message}`);
+			this.dispatchAudioEvent("audio-error", { error });
+		}
 
-    this.refresh();
-    this.focusPowerButton();
-  }
+		this.refresh();
+		this.focusPowerButton();
+	}
 
-  getContext() {
-    return this.context;
-  }
+	getContext() {
+		return this.context;
+	}
 
-  handleStateChange() {
-    const state = this.context?.state || 'closed';
-    this.setStatus(this.statusForState(state));
-    this.dispatchAudioEvent('audio-state-change', {
-      state,
-    });
-    this.refresh();
-  }
+	handleStateChange() {
+		const state = this.context?.state || "closed";
+		this.setStatus(this.statusForState(state));
+		this.dispatchAudioEvent("audio-state-change", {
+			state,
+		});
+		this.refresh();
+	}
 
-  setStatus(status) {
-    this.status = status;
-    this.refresh();
-  }
+	setStatus(status) {
+		this.status = status;
+		this.refresh();
+	}
 
-  statusForState(state) {
-    if (state === 'running') return 'Audio context running.';
-    if (state === 'suspended') return 'Audio context suspended.';
-    if (state === 'interrupted') return 'Audio context interrupted.';
-    if (state === 'closed') return 'Audio context stopped.';
-    return '';
-  }
+	statusForState(state) {
+		if (state === "running") return "Audio context running.";
+		if (state === "suspended") return "Audio context suspended.";
+		if (state === "interrupted") return "Audio context interrupted.";
+		if (state === "closed") return "Audio context stopped.";
+		return "";
+	}
 
-  dispatchAudioEvent(type, extraDetail = {}) {
-    this.dispatchEvent(new CustomEvent(type, {
-      bubbles: true,
-      composed: true,
-      detail: {
-        context: this.context,
-        state: this.context?.state || 'closed',
-        ...extraDetail,
-      },
-    }));
-  }
+	dispatchAudioEvent(type, extraDetail = {}) {
+		this.dispatchEvent(
+			new CustomEvent(type, {
+				bubbles: true,
+				composed: true,
+				detail: {
+					context: this.context,
+					state: this.context?.state || "closed",
+					...extraDetail,
+				},
+			}),
+		);
+	}
 
-  refresh() {
-    const isRunning = this.isRunning;
-    const label = isRunning ? this.stopLabel : this.startLabel;
-    const ariaLabel = isRunning ? this.stopAriaLabel : this.startAriaLabel;
-    const stateStatus = this.status || this.statusForState(this.context?.state || (isRunning ? 'running' : 'closed'));
-    const visibleStatuses = new Set([
-      'Web Audio is not available',
-    ]);
-    const shouldShowStatus = Boolean(this.status && (
-      visibleStatuses.has(this.status) ||
-      this.status.startsWith('Could not ')
-    ));
+	refresh() {
+		const isRunning = this.isRunning;
+		const label = isRunning ? this.stopLabel : this.startLabel;
+		const ariaLabel = isRunning ? this.stopAriaLabel : this.startAriaLabel;
+		const stateStatus =
+			this.status ||
+			this.statusForState(
+				this.context?.state || (isRunning ? "running" : "closed"),
+			);
+		const visibleStatuses = new Set(["Web Audio is not available"]);
+		const shouldShowStatus = Boolean(
+			this.status &&
+				(visibleStatuses.has(this.status) ||
+					this.status.startsWith("Could not ")),
+		);
 
-    this.toggleAttribute('running', Boolean(isRunning));
-    this.powerButton.setAttribute('label', label);
-    this.powerButton.setAttribute('aria-label', stateStatus ? `${ariaLabel}. ${stateStatus}` : ariaLabel);
-    this.powerButton.setAttribute('aria-description', isRunning
-      ? 'Audio is running. Press to stop the audio context.'
-      : this.context?.state === 'interrupted'
-        ? 'Audio was interrupted. Press to resume.'
-      : this.context?.state === 'suspended'
-        ? 'Audio is suspended. Press to resume the audio context.'
-        : 'Audio is stopped. Press to start the audio context.');
-    this.powerButton.toggleAttribute('pressed', isRunning);
-    this.toggleAttribute('data-status-visible', shouldShowStatus);
-    this.statusElement.textContent = this.status;
-    this.statusElement.hidden = !this.status;
+		this.toggleAttribute("running", Boolean(isRunning));
+		this.powerButton.setAttribute("label", label);
+		this.powerButton.setAttribute(
+			"aria-label",
+			stateStatus ? `${ariaLabel}. ${stateStatus}` : ariaLabel,
+		);
+		this.powerButton.setAttribute(
+			"aria-description",
+			isRunning
+				? "Audio is running. Press to stop the audio context."
+				: this.context?.state === "interrupted"
+					? "Audio was interrupted. Press to resume."
+					: this.context?.state === "suspended"
+						? "Audio is suspended. Press to resume the audio context."
+						: "Audio is stopped. Press to start the audio context.",
+		);
+		this.powerButton.toggleAttribute("pressed", isRunning);
+		this.toggleAttribute("data-status-visible", shouldShowStatus);
+		this.statusElement.textContent = this.status;
+		this.statusElement.hidden = !this.status;
 
-    if (!isRunning && this.hasAttribute('modal')) {
-      this.focusPowerButton();
-    }
-  }
+		if (!isRunning && this.hasAttribute("modal")) {
+			this.focusPowerButton();
+		}
+	}
 
-  focusPowerButton() {
-    queueMicrotask(() => this.powerButton?.focus());
-  }
+	focusPowerButton() {
+		queueMicrotask(() => this.powerButton?.focus());
+	}
 }
 
-defineElement('compost-audio', CompostAudio);
+defineElement("compost-audio", CompostAudio);

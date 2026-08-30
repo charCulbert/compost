@@ -35,8 +35,9 @@
       </section>
     </main>
     <script type="module">
-    import { elementDemo } from '../shared/element-page.js';
     import { createLongPress, DRAG_SLOP } from '../../src/internal/gestures.js';
+    import { elementDemo } from '../shared/element-page.js';
+
     const { s } = await elementDemo('compost-popup');
     {
       const popup = s.querySelector('compost-popup');

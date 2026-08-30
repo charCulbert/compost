@@ -27,6 +27,7 @@
     </main>
     <script type="module">
     import { elementDemo } from '../shared/element-page.js';
+
     const { s } = await elementDemo('compost-midi-mappings');
     {
       const { createMIDIMappings } = await import('../../src/midi-mappings.js');

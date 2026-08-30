@@ -1,20 +1,20 @@
 /** One meter lane's levels; null hides a bar, Infinity pins to an edge. */
 export interface MeterChannelState {
-  label?: string;
-  primary?: number | null;
-  secondary?: number | null;
-  peak?: number | null;
-  /** A number draws the over bar from zero; true reuses `primary`. */
-  over?: number | boolean | null;
-  clipped?: boolean;
+	label?: string;
+	primary?: number | null;
+	secondary?: number | null;
+	peak?: number | null;
+	/** A number draws the over bar from zero; true reuses `primary`. */
+	over?: number | boolean | null;
+	clipped?: boolean;
 }
 
 export interface MeterState {
-  primaryLabel?: string;
-  secondaryLabel?: string;
-  holdLabel?: string;
-  unit?: string;
-  channels?: MeterChannelState[];
+	primaryLabel?: string;
+	secondaryLabel?: string;
+	holdLabel?: string;
+	unit?: string;
+	channels?: MeterChannelState[];
 }
 
 /**
@@ -30,15 +30,15 @@ export interface MeterState {
  * @attribute shape - curve exponent
  */
 export class CompostMeter extends HTMLElement {
-  get min(): number;
-  get max(): number;
+	get min(): number;
+	get max(): number;
 
-  /** Merges partial state and repaints; channels replace wholesale. */
-  setState(state?: MeterState): void;
+	/** Merges partial state and repaints; channels replace wholesale. */
+	setState(state?: MeterState): void;
 }
 
 declare global {
-  interface HTMLElementTagNameMap {
-    'compost-meter': CompostMeter;
-  }
+	interface HTMLElementTagNameMap {
+		"compost-meter": CompostMeter;
+	}
 }

@@ -1,70 +1,71 @@
 {
-  "name": "compost",
-  "version": "0.1.0",
-  "private": false,
-  "type": "module",
-  "description": "Web Components and utilities for audio app UIs.",
-  "author": "Charlie Culbert",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/charCulbert/compost.git"
-  },
-  "homepage": "https://charculbert.github.io/compost/",
-  "bugs": "https://github.com/charCulbert/compost/issues",
-  "main": "./src/components/index.js",
-  "exports": {
-    ".": "./src/components/index.js",
-    "./components": "./src/components/index.js",
-    "./components/compost-audio": "./src/components/compost-audio.js",
-    "./components/compost-button": "./src/components/compost-button.js",
-    "./components/compost-clip-grid": "./src/components/compost-clip-grid.js",
-    "./components/compost-timeline": "./src/components/compost-timeline.js",
-    "./components/compost-device-selector": "./src/components/compost-device-selector.js",
-    "./components/compost-drawer": "./src/components/compost-drawer.js",
-    "./components/compost-envelope-editor": "./src/components/compost-envelope-editor.js",
-    "./components/compost-knob": "./src/components/compost-knob.js",
-    "./components/compost-midi": "./src/components/compost-midi.js",
-    "./components/compost-midi-mappings": "./src/components/compost-midi-mappings.js",
-    "./components/compost-midi-monitor": "./src/components/compost-midi-monitor.js",
-    "./components/compost-meter": "./src/components/compost-meter.js",
-    "./components/compost-note-editor": "./src/components/compost-note-editor.js",
-    "./components/compost-number-box": "./src/components/compost-number-box.js",
-    "./components/compost-piano": "./src/components/compost-piano.js",
-    "./components/compost-popup": "./src/components/compost-popup.js",
-    "./components/compost-scope": "./src/components/compost-scope.js",
-    "./components/compost-select": "./src/components/compost-select.js",
-    "./components/compost-slider": "./src/components/compost-slider.js",
-    "./components/compost-window": "./src/components/compost-window.js",
-    "./device-settings": "./src/device-settings.js",
-    "./midi": "./src/midi.js",
-    "./midi-learn-ui": "./src/midi-learn-ui.js",
-    "./midi-mapping": "./src/midi-mapping.js",
-    "./midi-mappings": "./src/midi-mappings.js",
-    "./parameter-controller": "./src/parameter-controller.js",
-    "./envelope-model": "./src/envelope-model.js",
-    "./piano-roll-model": "./src/piano-roll-model.js",
-    "./selection-region": "./src/selection-region.js",
-    "./time-grid": "./src/time-grid.js",
-    "./parameter-scale": "./src/parameter-scale.js",
-    "./utils": "./src/utils.js"
-  },
-  "files": [
-    "src"
-  ],
-  "scripts": {
-    "dev": "python3 examples/serve.py",
-    "test": "node --test 'test/*.test.js'",
-    "test:e2e": "playwright test"
-  },
-  "keywords": [
-    "web-components",
-    "audio",
-    "midi",
-    "audio-worklet",
-    "synth"
-  ],
-  "devDependencies": {
-    "@playwright/test": "^1.62.1"
-  }
+	"name": "compost",
+	"version": "0.1.0",
+	"private": false,
+	"type": "module",
+	"description": "Web Components and utilities for audio app UIs.",
+	"author": "Charlie Culbert",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/charCulbert/compost.git"
+	},
+	"homepage": "https://charculbert.github.io/compost/",
+	"bugs": "https://github.com/charCulbert/compost/issues",
+	"main": "./src/components/index.js",
+	"exports": {
+		".": "./src/components/index.js",
+		"./components": "./src/components/index.js",
+		"./components/compost-audio": "./src/components/compost-audio.js",
+		"./components/compost-button": "./src/components/compost-button.js",
+		"./components/compost-clip-grid": "./src/components/compost-clip-grid.js",
+		"./components/compost-timeline": "./src/components/compost-timeline.js",
+		"./components/compost-device-selector": "./src/components/compost-device-selector.js",
+		"./components/compost-drawer": "./src/components/compost-drawer.js",
+		"./components/compost-envelope-editor": "./src/components/compost-envelope-editor.js",
+		"./components/compost-knob": "./src/components/compost-knob.js",
+		"./components/compost-midi": "./src/components/compost-midi.js",
+		"./components/compost-midi-mappings": "./src/components/compost-midi-mappings.js",
+		"./components/compost-midi-monitor": "./src/components/compost-midi-monitor.js",
+		"./components/compost-meter": "./src/components/compost-meter.js",
+		"./components/compost-note-editor": "./src/components/compost-note-editor.js",
+		"./components/compost-number-box": "./src/components/compost-number-box.js",
+		"./components/compost-piano": "./src/components/compost-piano.js",
+		"./components/compost-popup": "./src/components/compost-popup.js",
+		"./components/compost-scope": "./src/components/compost-scope.js",
+		"./components/compost-select": "./src/components/compost-select.js",
+		"./components/compost-slider": "./src/components/compost-slider.js",
+		"./components/compost-window": "./src/components/compost-window.js",
+		"./device-settings": "./src/device-settings.js",
+		"./midi": "./src/midi.js",
+		"./midi-learn-ui": "./src/midi-learn-ui.js",
+		"./midi-mapping": "./src/midi-mapping.js",
+		"./midi-mappings": "./src/midi-mappings.js",
+		"./parameter-controller": "./src/parameter-controller.js",
+		"./envelope-model": "./src/envelope-model.js",
+		"./piano-roll-model": "./src/piano-roll-model.js",
+		"./selection-region": "./src/selection-region.js",
+		"./time-grid": "./src/time-grid.js",
+		"./parameter-scale": "./src/parameter-scale.js",
+		"./utils": "./src/utils.js"
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"dev": "python3 examples/serve.py",
+		"test": "node --test 'test/*.test.js'",
+		"test:e2e": "playwright test"
+	},
+	"keywords": [
+		"web-components",
+		"audio",
+		"midi",
+		"audio-worklet",
+		"synth"
+	],
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.11",
+		"@playwright/test": "^1.62.1"
+	}
 }
