@@ -311,6 +311,7 @@ export class CompostTimeline extends HTMLElement {
         .clip[data-muted], .clip[data-state="muted"] { background: transparent; color: var(--clip-color, var(--compost-timeline-select)); }
         .clip[data-state="playing"] .clip-notes, .clip[data-state="recording"] .clip-notes { opacity: 1; }
         .clip[data-dragging] { opacity: .35 !important; }
+        .clip[data-ghost] { opacity: .5; pointer-events: none; z-index: 5; }
         :host([data-drag-copy]) .clip { cursor: copy; }
         .clip-name { position: relative; z-index: 2; box-sizing: border-box; display: block; height: var(--clip-title-height); padding: .125em .25em 0; overflow: hidden; border-bottom: 1px solid color-mix(in srgb, CanvasText 45%, transparent); background: color-mix(in srgb, CanvasText 14%, transparent); text-overflow: ellipsis; white-space: nowrap; font-size: var(--compost-timeline-clip-font-size); line-height: 1.2; color: inherit; cursor: grab; }
         .clip-notes { position: absolute; inset: var(--clip-title-height) 0 0; opacity: 1; pointer-events: none; }
@@ -832,7 +833,7 @@ export class CompostTimeline extends HTMLElement {
   }
 
   clipElements() {
-    return /** @type {HTMLElement[]} */ ([...this.lanesWorld.querySelectorAll('.clip')]);
+    return /** @type {HTMLElement[]} */ ([...this.lanesWorld.querySelectorAll('.clip:not([data-ghost])')]);
   }
 
   pointForClip(id) {
@@ -1517,10 +1518,12 @@ export class CompostTimeline extends HTMLElement {
       clip.style.transform = '';
       clip.removeAttribute('data-dragging');
     }
+    this.clearClipGhosts();
     this.removeAttribute('data-drag-copy');
   }
 
-  /** A moved clip leaves a faded original behind; a copied one leaves it as it was. */
+  /** A moved clip leaves a faded original behind; a copied one leaves it in place
+    * and drags a translucent ghost instead, so the source stays visible. */
   paintCopyState() {
     const drag = this.drag;
     if (!drag || drag.type !== 'move') return;
@@ -1529,6 +1532,42 @@ export class CompostTimeline extends HTMLElement {
       const element = this.clipElements().find((node) => node.dataset.id === item.clip.id);
       element?.toggleAttribute('data-dragging', !drag.copy);
     }
+    if (!drag.copy) this.clearClipGhosts();
+  }
+
+  /** Paint, or repaint after a copy/move flip, where the dragged clips sit. */
+  paintMovePreview() {
+    const drag = this.drag;
+    if (!drag || drag.type !== 'move' || !drag.moved) return;
+    for (const item of drag.selected) {
+      const element = this.clipElements().find((node) => node.dataset.id === item.clip.id);
+      if (!element) continue;
+      const vertical = this.laneOffsetForPoint(drag.lastClientY, item.lane.id);
+      const target = drag.copy ? this.clipGhost(item, element) : element;
+      if (!target) continue;
+      target.style.transform = `translate(${(drag.previewDelta ?? 0) * this._pxPerBeat}px, ${vertical}px)`;
+      if (target !== element) element.style.transform = '';
+    }
+  }
+
+  /** The translucent stand-in that follows the pointer while a clip is copied. */
+  clipGhost(item, element) {
+    const drag = this.drag;
+    if (!drag) return null;
+    let ghost = drag.ghosts.get(item.clip.id);
+    if (!ghost) {
+      ghost = /** @type {HTMLElement} */ (element.cloneNode(true));
+      ghost.setAttribute('data-ghost', '');
+      ghost.removeAttribute('data-selected');
+      element.after(ghost);
+      drag.ghosts.set(item.clip.id, ghost);
+    }
+    return ghost;
+  }
+
+  clearClipGhosts() {
+    for (const ghost of this.lanesWorld.querySelectorAll('.clip[data-ghost]')) ghost.remove();
+    this.drag?.ghosts?.clear();
   }
 
   paintScroll() {
@@ -1650,7 +1689,7 @@ export class CompostTimeline extends HTMLElement {
     }
     const lane = pathElement(event, 'lane');
     if (!(lane instanceof HTMLElement)) return null;
-    for (const element of lane.querySelectorAll('.clip')) {
+    for (const element of lane.querySelectorAll('.clip:not([data-ghost])')) {
       const rect = element.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right) continue;
       if (event.clientY < rect.top || event.clientY > rect.bottom) continue;
@@ -1687,7 +1726,7 @@ export class CompostTimeline extends HTMLElement {
     this.drag = {
       pointerId: event.pointerId, type: mode, clipId: found.clip.id, laneId: found.lane.id,
       startX: event.clientX, startY: event.clientY, origin: { ...found.clip }, ids,
-      copy: Boolean(event.altKey), moved: false, element: found.element,
+      copy: Boolean(event.altKey), moved: false, element: found.element, ghosts: new Map(), lastClientY: event.clientY,
       selected: ids.map((id) => this.findClip(id)).filter(Boolean),
       renameCandidate: mode === 'move' && event.pointerType === 'mouse' && wasSelected,
     };
@@ -2135,12 +2174,9 @@ export class CompostTimeline extends HTMLElement {
       }) - originStart;
       drag.previewDelta = delta;
       drag.copy = Boolean(event.altKey);
+      drag.lastClientY = event.clientY;
       this.paintCopyState();
-      for (const item of drag.selected) {
-        const element = this.clipElements().find((node) => node.dataset.id === item.clip.id);
-        if (!element) continue;
-        element.style.transform = `translate(${delta * this._pxPerBeat}px, ${this.laneOffsetForPoint(event.clientY, item.lane.id)}px)`;
-      }
+      this.paintMovePreview();
     }
   }
 
