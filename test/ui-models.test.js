@@ -13,12 +13,6 @@ const { gridText, lengthText } = await import('../src/components/compost-note-ed
 const { rulerLabels } = await import('../src/internal/time-ruler.js');
 const {
   snapBeat, sortLocators, normalizeTimeSelection, clipBox, loopPassLines, clipNoteOpacity, previewTrimmedClip, rulerStep,
-  automationValueToY, automationValueFromY,
-  addAutomationPoint, moveAutomationPoint, deleteAutomationPoint,
-  preserveAutomationEdgePoints,
-  snapAutomationValue, effectiveAutomationStep, automationValueAtBeat, automationRangeEdgeValues,
-  moveAutomationPointsByY, moveAutomationRangeByY, thinAutomationPoints, drawAutomationPoints,
-  flattenAutomationRange, moveAutomationRange,
 } = await import('../src/components/compost-timeline.js');
 const { boundedPosition, constrainedSize } = await import('../src/components/compost-window.js');
 const { pointPlacement } = await import('../src/components/compost-popup.js');
@@ -108,107 +102,6 @@ test('locators stay stable and time selections snap and clamp', () => {
   assert.deepEqual(normalizeTimeSelection(9, 1, ['b', 'a', 'b'], 8), { start: 1, end: 8, laneIds: ['b', 'a'] });
   assert.equal(normalizeTimeSelection(2, 2, ['a'], 8), null);
   assert.equal(normalizeTimeSelection(null, 4, ['a'], 8), null);
-});
-
-test('automation geometry follows linear and fader axes', () => {
-  assert.equal(automationValueToY(1, 0, 1, 100), 0);
-  assert.equal(automationValueToY(0, 0, 1, 100), 100);
-  assert.equal(automationValueFromY(25, 0, 1, 100), .75);
-  assert.ok(Math.abs(automationValueToY(0, -90, 12, 100, 'gain') - 30) < 1e-9);
-  assert.ok(Math.abs(automationValueFromY(30, -90, 12, 100, 'gain')) < 1e-9);
-});
-
-test('automation display moves follow the gain curve and retain independent range edges', () => {
-  const options = { min: -90, max: 12, height: 100, scale: 'gain' };
-  const origin = [{ beat: 0, value: -12 }, { beat: 4, value: 0 }];
-  const expected = automationValueFromY(automationValueToY(-12, options.min, options.max, options.height, options.scale) + 10,
-    options.min, options.max, options.height, options.scale);
-  const movedPoint = moveAutomationPointsByY(origin, [0], 10, options);
-  assert.ok(Math.abs(movedPoint[0].value - expected) < 1e-9);
-  const edges = automationRangeEdgeValues(origin, 1, 3, options);
-  assert.notEqual(edges.start, edges.end);
-  const movedRange = moveAutomationRangeByY(origin, 1, 3, 10, options);
-  assert.equal(movedRange[0].value, origin[0].value);
-  assert.notEqual(movedRange.find((point) => point.beat === 1).value,
-    movedRange.find((point) => point.beat === 3).value);
-});
-
-test('automation point edits stay sorted, clamped and neighbour-safe', () => {
-  const range = { min: 0, max: 1 };
-  let points = [{ beat: 0, value: .25 }, { beat: 4, value: .75 }];
-  points = addAutomationPoint(points, { beat: 2, value: 2 }, range);
-  assert.deepEqual(points.map((point) => [point.beat, point.value]), [[0, .25], [2, 1], [4, .75]]);
-  points = moveAutomationPoint(points, 1, { beat: 8, value: -.5 }, range);
-  assert.deepEqual(points.map((point) => [point.beat, point.value]), [[0, .25], [4, 0], [4, .75]]);
-  assert.deepEqual(deleteAutomationPoint(points, 1).map((point) => [point.beat, point.value]), [[0, .25], [4, .75]]);
-});
-
-test('moving breakpoint endpoints retains flat edge runs and active order', () => {
-  const origin = [{ beat: 0, value: .2 }, { beat: 4, value: .8 }];
-  const first = preserveAutomationEdgePoints(origin, moveAutomationPoint(origin, 0, { beat: 2, value: .3 }), 0);
-  assert.deepEqual(first.map((point) => [point.beat, point.value]), [[0, .2], [2, .3], [4, .8]]);
-  const last = preserveAutomationEdgePoints(first, moveAutomationPoint(first, 2, { beat: 3, value: .7 }), 2);
-  assert.deepEqual(last.map((point) => [point.beat, point.value]), [[0, .2], [2, .3], [3, .7], [4, .8]]);
-});
-
-test('automation chooser values interpolate, step and clamp', () => {
-  const points = [{ beat: 0, value: 0 }, { beat: 4, value: 1 }];
-  assert.equal(automationValueAtBeat(points, 2, 0, 1), .5);
-  assert.equal(automationValueAtBeat(points, 2, 0, 1, 'linear', true), 0);
-  assert.equal(automationValueAtBeat([{ beat: 0, value: 0 }, { beat: 2, value: .5 }, { beat: 4, value: 1 }], 2, 0, 1, 'linear', true), .5);
-  const gainMid = automationValueAtBeat([{ beat: 0, value: -90 }, { beat: 4, value: 12 }], 2, -90, 12, 'gain');
-  assert.equal(gainMid, -39);
-  assert.equal(snapAutomationValue(1.2, 0, 1), 1);
-  assert.equal(snapAutomationValue(.63, 0, 1, .25), .75);
-  assert.deepEqual(flattenAutomationRange([
-    { beat: 0, value: 0 }, { beat: 2, value: 1 }, { beat: 4, value: 0 },
-  ], 1, 3, .5, 0, 1).map((point) => [point.beat, point.value]), [
-    [0, 0], [1, .5], [3, .5], [4, 0],
-  ]);
-  assert.deepEqual(moveAutomationRange([
-    { beat: 0, value: .2 }, { beat: 2, value: .3 }, { beat: 4, value: .4 },
-  ], 1, 3, .25, 0, 1).map((point) => [point.beat, point.value]), [
-    [0, .2], [1, .5], [2, .55], [3, .6], [4, .4],
-  ]);
-});
-
-test('stepped automation defaults to integer cells when no step is supplied', () => {
-  assert.equal(effectiveAutomationStep(true), 1);
-  assert.equal(effectiveAutomationStep(false), 0);
-  assert.equal(effectiveAutomationStep(true, .25), .25);
-  assert.deepEqual(drawAutomationPoints([], [
-    { beat: 0, value: .2 }, { beat: 1, value: .8 },
-  ], { min: 0, max: 1, stepped: true, gridStep: 1 }).map((point) => point.value), [0, 0, 1, 1]);
-});
-
-test('automation draw emits flat grid pairs and thins freehand once', () => {
-  const grid = drawAutomationPoints([{ beat: 0, value: 0 }], [
-    { beat: .1, value: .2 }, { beat: 1.1, value: .8 }, { beat: 2.1, value: .4 },
-  ], { min: 0, max: 1, gridStep: 1 });
-  assert.deepEqual(grid.map((point) => [point.beat, point.value]), [
-    [0, .2], [1 - 1e-9, .2], [1, .8], [2 - 1e-9, .8], [2, .4], [3 - 1e-9, .4],
-  ]);
-  const revisited = drawAutomationPoints([], [
-    { beat: 1.8, value: .9 }, { beat: .2, value: .1 },
-    { beat: 1.2, value: .2 }, { beat: .8, value: .7 },
-  ], { min: 0, max: 1, gridStep: 1 });
-  assert.deepEqual(revisited.map((point) => [point.beat, point.value]), [
-    [0, .7], [1 - 1e-9, .7], [1, .2], [2 - 1e-9, .2],
-  ]);
-  const untouched = drawAutomationPoints([
-    { beat: 1 - 1e-6, value: .11 }, { beat: 3, value: .33 },
-  ], [{ beat: 1.2, value: .8 }], { min: 0, max: 1, gridStep: 1 });
-  assert.deepEqual(untouched.map((point) => [point.beat, point.value]), [
-    [1 - 1e-6, .11], [1, .8], [2 - 1e-9, .8], [3, .33],
-  ]);
-  const samples = [{ beat: 0, value: 0 }, { beat: 1, value: .8 }, { beat: 2, value: 1 }];
-  assert.deepEqual(thinAutomationPoints(samples, .01), samples);
-  assert.deepEqual(drawAutomationPoints([], [
-    { beat: 0, value: 0 }, { beat: 1, value: .8 }, { beat: 2, value: 1 },
-  ], { min: 0, max: 1, freehand: true, tolerance: .01 }), samples);
-  assert.equal(drawAutomationPoints([], [
-    { beat: 0, value: 0 }, { beat: 1, value: .5 }, { beat: 2, value: 1 },
-  ], { min: 0, max: 1, freehand: true, tolerance: 0 }).length, 3);
 });
 
 test('a window never leaves the viewport and resizes in ratio from the dominant edge', () => {

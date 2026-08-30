@@ -6,25 +6,7 @@ import { gridStepForView, gridStepOf, snapModeWith, snapTime, timeGridLines, tim
 import { extendSelectionRegion } from '../selection-region.js';
 import './compost-envelope-editor.js';
 import { normalizeSelectionRegion } from '../selection-region.js';
-import {
-  addEnvelopePoint,
-  deleteEnvelopePoint,
-  drawEnvelopePoints,
-  effectiveEnvelopeStep,
-  envelopeRange as genericEnvelopeRange,
-  envelopeRangeEdgeValues,
-  envelopeValueAtTime,
-  envelopeValueFromY,
-  envelopeValueToY,
-  flattenEnvelopeRange,
-  moveEnvelopePoint,
-  moveEnvelopePointsByY,
-  moveEnvelopeRange,
-  moveEnvelopeRangeByY,
-  preserveEnvelopeEdgePoints,
-  snapEnvelopeValue,
-  thinEnvelopePoints,
-} from '../envelope-model.js';
+import { effectiveEnvelopeStep, envelopeRangeEdgeValues, flattenEnvelopeRange } from '../envelope-model.js';
 
 // A numerical guard, not a tick or musical-grid resolution.
 const MIN_CLIP_LENGTH = 1e-9;
@@ -152,10 +134,6 @@ export function rulerStep(pxPerBeat, beatsPerBar) {
   return bars;
 }
 
-function automationRange(min, max) {
-  return genericEnvelopeRange(min, max);
-}
-
 const toEnvelopePoints = (points) => (Array.isArray(points) ? points : []).map(({ beat, ...point }) => ({
   ...point,
   time: Number(beat),
@@ -165,129 +143,6 @@ const fromEnvelopePoints = (points) => (Array.isArray(points) ? points : []).map
   ...point,
   beat: Number(time),
 }));
-
-/** Convert an automation value to a y coordinate in a sub-row. */
-/** @param {number} value @param {number|{min:number,max:number}} min @param {number} max @param {number} height @param {'linear'|'gain'} [scale] */
-export function automationValueToY(value, min, max, height, scale = 'linear') {
-  return envelopeValueToY(value, min, max, height, scale);
-}
-
-/** Convert a y coordinate in a sub-row to an automation value. */
-/** @param {number} y @param {number|{min:number,max:number}} min @param {number} max @param {number} height @param {'linear'|'gain'} [scale] */
-export function automationValueFromY(y, min, max, height, scale = 'linear') {
-  return envelopeValueFromY(y, min, max, height, scale);
-}
-
-/** Add a point and return a new beat-sorted, range-clamped array. */
-/** @param {{beat:number,value:number}[]} points @param {{beat:number,value:number}} point @param {number|{min:number,max:number}} min @param {number} [max] */
-export function addAutomationPoint(points, point, min = 0, max = 1) {
-  return fromEnvelopePoints(addEnvelopePoint(toEnvelopePoints(points), {
-    ...point,
-    time: Number(point?.beat),
-  }, min, max));
-}
-
-/** Move one point without allowing it to cross its neighbours. */
-/** @param {{beat:number,value:number}[]} points @param {number} index @param {{beat:number,value:number}} point @param {number|{min:number,max:number}} min @param {number} [max] */
-export function moveAutomationPoint(points, index, point, min = 0, max = 1) {
-  return fromEnvelopePoints(moveEnvelopePoint(toEnvelopePoints(points), index, {
-    ...point,
-    time: Number(point?.beat),
-  }, min, max));
-}
-
-/** Keep a synthetic original edge point when an endpoint moves inward. */
-/** @param {{beat:number,value:number}[]} originPoints @param {{beat:number,value:number}[]} movedPoints @param {number} index */
-export function preserveAutomationEdgePoints(originPoints, movedPoints, index) {
-  return fromEnvelopePoints(preserveEnvelopeEdgePoints(
-    toEnvelopePoints(originPoints), toEnvelopePoints(movedPoints), index,
-  ));
-}
-
-/** Delete one point and return a new array. */
-/** @param {{beat:number,value:number}[]} points @param {number} index */
-export function deleteAutomationPoint(points, index) {
-  return fromEnvelopePoints(deleteEnvelopePoint(toEnvelopePoints(points), index));
-}
-
-/** Snap an automation value when a lane supplies a discrete step. */
-/** @param {number} value @param {number|{min:number,max:number}} min @param {number} [max] @param {number} [step] */
-export function snapAutomationValue(value, min = 0, max = 1, step = 0) {
-  return snapEnvelopeValue(value, min, max, step);
-}
-
-/** Return the effective value step, including the integer default for stepped lanes. */
-/** @param {boolean} stepped @param {number|string|null|undefined} step */
-export function effectiveAutomationStep(stepped = false, step) {
-  return effectiveEnvelopeStep(stepped, step);
-}
-
-/** Return the value on an envelope at a beat, including flat stepped segments. */
-/** @param {{beat:number,value:number}[]} points @param {number} beat @param {number|{min:number,max:number}} min @param {number} [max] @param {'linear'|'gain'} [scale] @param {boolean} [stepped] */
-export function automationValueAtBeat(points, beat, min = 0, max = 1, scale = 'linear', stepped = false) {
-  return envelopeValueAtTime(toEnvelopePoints(points), beat, min, max, scale, stepped);
-}
-
-function automationEditOptions(options = {}) {
-  const range = automationRange(options.min ?? options.range ?? 0, options.max);
-  return {
-    range,
-    height: Math.max(1, Number(options.height) || 1),
-    scale: options.scale === 'gain' ? 'gain' : 'linear',
-    stepped: Boolean(options.stepped),
-    step: effectiveAutomationStep(Boolean(options.stepped), options.step ?? options.valueStep),
-  };
-}
-
-/** Sample both sides of a range using the lane's actual interpolation semantics. */
-/** @param {{beat:number,value:number}[]} points @param {number} start @param {number} end @param {object} options */
-export function automationRangeEdgeValues(points, start, end, options = {}) {
-  return envelopeRangeEdgeValues(toEnvelopePoints(points), start, end, options);
-}
-
-function automationValueMovedByY(value, deltaY, options = {}) {
-  const { range, height, scale, stepped, step } = automationEditOptions(options);
-  const y = automationValueToY(value, range, height, scale) + (Number(deltaY) || 0);
-  return snapAutomationValue(automationValueFromY(y, range, height, scale), range, undefined, step || 0);
-}
-
-/** Move selected automation values in display space, preserving their beats. */
-/** @param {{beat:number,value:number}[]} points @param {number[]} indexes @param {number} deltaY @param {object} options */
-export function moveAutomationPointsByY(points, indexes, deltaY, options = {}) {
-  return fromEnvelopePoints(moveEnvelopePointsByY(toEnvelopePoints(points), indexes, deltaY, options));
-}
-
-/** Move a selected range in display space while preserving independently sampled edges. */
-/** @param {{beat:number,value:number}[]} points @param {number} start @param {number} end @param {number} deltaY @param {object} options */
-export function moveAutomationRangeByY(points, start, end, deltaY, options = {}) {
-  return fromEnvelopePoints(moveEnvelopeRangeByY(toEnvelopePoints(points), start, end, deltaY, options));
-}
-
-/** Thin freehand automation samples once, preserving endpoints and corners. */
-/** @param {{beat:number,value:number}[]} points @param {number} tolerance */
-export function thinAutomationPoints(points, tolerance = 0) {
-  return fromEnvelopePoints(thinEnvelopePoints(toEnvelopePoints(points), tolerance));
-}
-
-/** Build one complete automation write from grid cells or freehand samples. */
-/** @param {{beat:number,value:number}[]} originPoints @param {{beat:number,value:number}[]} samples @param {object} options */
-export function drawAutomationPoints(originPoints, samples, options = {}) {
-  return fromEnvelopePoints(drawEnvelopePoints(
-    toEnvelopePoints(originPoints), toEnvelopePoints(samples), options,
-  ));
-}
-
-/** Flatten an automation range while retaining points outside the selection. */
-/** @param {{beat:number,value:number}[]} points @param {number} start @param {number} end @param {number} value @param {number|{min:number,max:number}} min @param {number} [max] @param {number} [step] */
-export function flattenAutomationRange(points, start, end, value, min = 0, max = 1, step = 0) {
-  return fromEnvelopePoints(flattenEnvelopeRange(toEnvelopePoints(points), start, end, value, min, max, step));
-}
-
-/** Move only the points and edge values inside a selected automation range. */
-/** @param {{beat:number,value:number}[]} points @param {number} start @param {number} end @param {number} delta @param {number|{min:number,max:number}} min @param {number} [max] @param {number} [step] */
-export function moveAutomationRange(points, start, end, delta, min = 0, max = 1, step = 0) {
-  return fromEnvelopePoints(moveEnvelopeRange(toEnvelopePoints(points), start, end, delta, min, max, step));
-}
 
 function cloneAutomation(automation) {
   return automation && typeof automation === 'object' && !Array.isArray(automation) ? {
@@ -1912,7 +1767,7 @@ export class CompostTimeline extends HTMLElement {
   }
 
   automationValueStep(automation) {
-    return effectiveAutomationStep(Boolean(automation?.stepped), automation?.step ?? automation?.valueStep);
+    return effectiveEnvelopeStep(Boolean(automation?.stepped), automation?.step ?? automation?.valueStep);
   }
 
   /** Shift-click grows the region to include the clicked beat and lane. */
@@ -2658,7 +2513,8 @@ export class CompostTimeline extends HTMLElement {
       ? this.automationSelectionFor(automationBody.lane.id) : null;
     if (automationSelection && (event.key === 'Delete' || event.key === 'Backspace')) {
       event.preventDefault();
-      const values = automationRangeEdgeValues(automationBody.automation.points,
+      const points = toEnvelopePoints(automationBody.automation.points);
+      const values = envelopeRangeEdgeValues(points,
         automationSelection.start, automationSelection.end, {
           min: automationBody.automation.min,
           max: automationBody.automation.max,
@@ -2667,9 +2523,9 @@ export class CompostTimeline extends HTMLElement {
           step: this.automationValueStep(automationBody.automation),
         });
       this.commitAutomationChange(automationBody.lane, automationBody.automation,
-        flattenAutomationRange(automationBody.automation.points, automationSelection.start, automationSelection.end, values,
+        fromEnvelopePoints(flattenEnvelopeRange(points, automationSelection.start, automationSelection.end, values,
           { min: automationBody.automation.min, max: automationBody.automation.max }, undefined,
-          this.automationValueStep(automationBody.automation)));
+          this.automationValueStep(automationBody.automation))));
       return;
     }
     if (selection && source === this && this.handleTimeSelectionArrow(event)) return;

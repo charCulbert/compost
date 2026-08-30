@@ -100,15 +100,11 @@ test('moved public types remain available from their original modules', () => {
 });
 
 test('public envelope geometry declarations match their object-range overloads', () => {
-  for (const file of ['src/envelope-model.d.ts', 'src/components/compost-timeline.d.ts']) {
-    const declaration = fs.readFileSync(path.join(root, file), 'utf8');
-    assert.match(declaration,
-      /ValueToY\(value: number, range: \{min: number, max: number\}, height: number, scale\?: 'linear' \| 'gain'\)/u,
-      file);
-    assert.match(declaration,
-      /ValueFromY\(y: number, range: \{min: number, max: number\}, height: number, scale\?: 'linear' \| 'gain'\)/u,
-      file);
-  }
+  const declaration = fs.readFileSync(path.join(root, 'src/envelope-model.d.ts'), 'utf8');
+  assert.match(declaration,
+    /ValueToY\(value: number, range: \{min: number, max: number\}, height: number, scale\?: 'linear' \| 'gain'\)/u);
+  assert.match(declaration,
+    /ValueFromY\(y: number, range: \{min: number, max: number\}, height: number, scale\?: 'linear' \| 'gain'\)/u);
 });
 
 test('timeline preserves Element.scrollTo and exposes beat scrolling explicitly', () => {

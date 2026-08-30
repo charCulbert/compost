@@ -2,14 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addEnvelopePoint,
+  deleteEnvelopePoint,
   drawEnvelopePoints,
+  effectiveEnvelopeStep,
   envelopeCurvePosition,
+  envelopeRangeEdgeValues,
   envelopeValueAtTime,
   envelopeValueFromY,
   envelopeValueToY,
+  flattenEnvelopeRange,
   moveEnvelopePoint,
+  moveEnvelopePointsByY,
+  moveEnvelopeRange,
+  moveEnvelopeRangeByY,
+  preserveEnvelopeEdgePoints,
+  snapEnvelopeValue,
   sliceEnvelopeRange,
   splitEnvelopeAtTime,
+  thinEnvelopePoints,
 } from '../src/envelope-model.js';
 
 test('generic envelope geometry is independent of its caller time unit', () => {
@@ -49,10 +59,12 @@ test('splitting and slicing a curve preserve its exact shape', () => {
 
 test('generic envelope point edits stay sorted, bounded and neighbour-safe', () => {
   let points = [{ time: 0, value: 0 }, { time: 4, value: 1 }];
-  points = addEnvelopePoint(points, { time: 2, value: 2 });
+  const range = { min: 0, max: 1 };
+  points = addEnvelopePoint(points, { time: 2, value: 2 }, range);
   assert.deepEqual(points, [{ time: 0, value: 0 }, { time: 2, value: 1 }, { time: 4, value: 1 }]);
-  points = moveEnvelopePoint(points, 1, { time: 8, value: -.5 });
+  points = moveEnvelopePoint(points, 1, { time: 8, value: -.5 }, range);
   assert.deepEqual(points[1], { time: 4, value: 0 });
+  assert.deepEqual(deleteEnvelopePoint(points, 1).map((point) => [point.time, point.value]), [[0, 0], [4, 1]]);
 });
 
 test('generic envelope drawing supports snapped cells and free samples', () => {
@@ -67,4 +79,95 @@ test('generic envelope drawing supports snapped cells and free samples', () => {
     min: 0, max: 1, snap: 'off', tolerance: 0,
   });
   assert.deepEqual(free, [{ time: .1, value: .2 }, { time: .2, value: .4 }]);
+});
+
+test('envelope geometry follows linear and fader axes', () => {
+  assert.equal(envelopeValueToY(1, 0, 1, 100), 0);
+  assert.equal(envelopeValueToY(0, 0, 1, 100), 100);
+  assert.equal(envelopeValueFromY(25, 0, 1, 100), .75);
+  assert.ok(Math.abs(envelopeValueToY(0, -90, 12, 100, 'gain') - 30) < 1e-9);
+  assert.ok(Math.abs(envelopeValueFromY(30, -90, 12, 100, 'gain')) < 1e-9);
+});
+
+test('display moves follow the gain curve and retain independent range edges', () => {
+  const options = { min: -90, max: 12, height: 100, scale: 'gain' };
+  const origin = [{ time: 0, value: -12 }, { time: 4, value: 0 }];
+  const expected = envelopeValueFromY(envelopeValueToY(-12, options.min, options.max, options.height, options.scale) + 10,
+    options.min, options.max, options.height, options.scale);
+  const movedPoint = moveEnvelopePointsByY(origin, [0], 10, options);
+  assert.ok(Math.abs(movedPoint[0].value - expected) < 1e-9);
+  const edges = envelopeRangeEdgeValues(origin, 1, 3, options);
+  assert.notEqual(edges.start, edges.end);
+  const movedRange = moveEnvelopeRangeByY(origin, 1, 3, 10, options);
+  assert.equal(movedRange[0].value, origin[0].value);
+  assert.notEqual(movedRange.find((point) => point.time === 1).value,
+    movedRange.find((point) => point.time === 3).value);
+});
+
+test('moving breakpoint endpoints retains flat edge runs and active order', () => {
+  const origin = [{ time: 0, value: .2 }, { time: 4, value: .8 }];
+  const first = preserveEnvelopeEdgePoints(origin, moveEnvelopePoint(origin, 0, { time: 2, value: .3 }), 0);
+  assert.deepEqual(first.map((point) => [point.time, point.value]), [[0, .2], [2, .3], [4, .8]]);
+  const last = preserveEnvelopeEdgePoints(first, moveEnvelopePoint(first, 2, { time: 3, value: .7 }), 2);
+  assert.deepEqual(last.map((point) => [point.time, point.value]), [[0, .2], [2, .3], [3, .7], [4, .8]]);
+});
+
+test('envelope values interpolate, step and clamp', () => {
+  const points = [{ time: 0, value: 0 }, { time: 4, value: 1 }];
+  assert.equal(envelopeValueAtTime(points, 2, 0, 1), .5);
+  assert.equal(envelopeValueAtTime(points, 2, 0, 1, 'linear', true), 0);
+  assert.equal(envelopeValueAtTime([{ time: 0, value: 0 }, { time: 2, value: .5 }, { time: 4, value: 1 }], 2, 0, 1, 'linear', true), .5);
+  const gainMid = envelopeValueAtTime([{ time: 0, value: -90 }, { time: 4, value: 12 }], 2, -90, 12, 'gain');
+  assert.equal(gainMid, -39);
+  assert.equal(snapEnvelopeValue(1.2, 0, 1), 1);
+  assert.equal(snapEnvelopeValue(.63, 0, 1, .25), .75);
+  assert.deepEqual(flattenEnvelopeRange([
+    { time: 0, value: 0 }, { time: 2, value: 1 }, { time: 4, value: 0 },
+  ], 1, 3, .5, 0, 1).map((point) => [point.time, point.value]), [
+    [0, 0], [1, .5], [3, .5], [4, 0],
+  ]);
+  assert.deepEqual(moveEnvelopeRange([
+    { time: 0, value: .2 }, { time: 2, value: .3 }, { time: 4, value: .4 },
+  ], 1, 3, .25, 0, 1).map((point) => [point.time, point.value]), [
+    [0, .2], [1, .5], [2, .55], [3, .6], [4, .4],
+  ]);
+});
+
+test('stepped envelopes default to integer cells when no step is supplied', () => {
+  assert.equal(effectiveEnvelopeStep(true), 1);
+  assert.equal(effectiveEnvelopeStep(false), 0);
+  assert.equal(effectiveEnvelopeStep(true, .25), .25);
+  assert.deepEqual(drawEnvelopePoints([], [
+    { time: 0, value: .2 }, { time: 1, value: .8 },
+  ], { min: 0, max: 1, stepped: true, gridStep: 1 }).map((point) => point.value), [0, 0, 1, 1]);
+});
+
+test('envelope draw emits flat grid pairs and thins freehand once', () => {
+  const grid = drawEnvelopePoints([{ time: 0, value: 0 }], [
+    { time: .1, value: .2 }, { time: 1.1, value: .8 }, { time: 2.1, value: .4 },
+  ], { min: 0, max: 1, gridStep: 1 });
+  assert.deepEqual(grid.map((point) => [point.time, point.value]), [
+    [0, .2], [1 - 1e-9, .2], [1, .8], [2 - 1e-9, .8], [2, .4], [3 - 1e-9, .4],
+  ]);
+  const revisited = drawEnvelopePoints([], [
+    { time: 1.8, value: .9 }, { time: .2, value: .1 },
+    { time: 1.2, value: .2 }, { time: .8, value: .7 },
+  ], { min: 0, max: 1, gridStep: 1 });
+  assert.deepEqual(revisited.map((point) => [point.time, point.value]), [
+    [0, .7], [1 - 1e-9, .7], [1, .2], [2 - 1e-9, .2],
+  ]);
+  const untouched = drawEnvelopePoints([
+    { time: 1 - 1e-6, value: .11 }, { time: 3, value: .33 },
+  ], [{ time: 1.2, value: .8 }], { min: 0, max: 1, gridStep: 1 });
+  assert.deepEqual(untouched.map((point) => [point.time, point.value]), [
+    [1 - 1e-6, .11], [1, .8], [2 - 1e-9, .8], [3, .33],
+  ]);
+  const samples = [{ time: 0, value: 0 }, { time: 1, value: .8 }, { time: 2, value: 1 }];
+  assert.deepEqual(thinEnvelopePoints(samples, .01), samples);
+  assert.deepEqual(drawEnvelopePoints([], [
+    { time: 0, value: 0 }, { time: 1, value: .8 }, { time: 2, value: 1 },
+  ], { min: 0, max: 1, freehand: true, tolerance: .01 }), samples);
+  assert.equal(drawEnvelopePoints([], [
+    { time: 0, value: 0 }, { time: 1, value: .5 }, { time: 2, value: 1 },
+  ], { min: 0, max: 1, freehand: true, tolerance: 0 }).length, 3);
 });
