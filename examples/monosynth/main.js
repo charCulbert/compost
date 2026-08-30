@@ -8,14 +8,14 @@ import {
 import { createMIDIMappings } from "../../src/midi-mappings.js";
 import { createParameterController } from "../../src/parameter-controller.js";
 import { quantizedNotes } from "../../src/piano-roll-model.js";
+import { nextPeakHold } from "../shared/meter-demo.js";
 
 const values = {
 	waveShape: 0,
-	transpose: 0,
 	amplitude: 0.8,
 	offset: 0,
 	outputGain: 0.5,
-	tempo: 120,
+	tempo: 150,
 	attack: 0.001,
 	decay: 0.08,
 	sustain: 0.07,
@@ -26,72 +26,6 @@ let pitchEnvelope = [
 	{ time: 0, value: 12, curve: -0.35 },
 	{ time: 0.15, value: -12 },
 	{ time: 1, value: -12 },
-];
-const melodicNotes = [
-	{
-		id: "note-1",
-		note: 60,
-		start: 0,
-		duration: 0.45,
-		velocity: 110,
-		channel: 0,
-	},
-	{
-		id: "note-2",
-		note: 64,
-		start: 0.5,
-		duration: 0.45,
-		velocity: 96,
-		channel: 0,
-	},
-	{
-		id: "note-3",
-		note: 67,
-		start: 1,
-		duration: 0.45,
-		velocity: 104,
-		channel: 0,
-	},
-	{
-		id: "note-4",
-		note: 71,
-		start: 1.5,
-		duration: 0.45,
-		velocity: 92,
-		channel: 0,
-	},
-	{
-		id: "note-5",
-		note: 72,
-		start: 2,
-		duration: 0.7,
-		velocity: 116,
-		channel: 0,
-	},
-	{
-		id: "note-6",
-		note: 67,
-		start: 2.75,
-		duration: 0.2,
-		velocity: 88,
-		channel: 0,
-	},
-	{
-		id: "note-7",
-		note: 64,
-		start: 3,
-		duration: 0.45,
-		velocity: 100,
-		channel: 0,
-	},
-	{
-		id: "note-8",
-		note: 62,
-		start: 3.5,
-		duration: 0.45,
-		velocity: 94,
-		channel: 0,
-	},
 ];
 const kickNotes = [
 	{
@@ -124,21 +58,20 @@ const midi = document.querySelector("compost-midi");
 const midiDrawer = document.querySelector(".midi-drawer");
 const mappingsView = document.querySelector("compost-midi-mappings");
 const mapToggle = document.querySelector("[data-midi-map-toggle]");
-const transport = document.querySelector("[data-transport]");
-const preset = document.querySelector("[data-synth-preset]");
+const playButton = document.querySelector("[data-transport-play]");
+const stopButton = document.querySelector("[data-transport-stop]");
 const xLabels = document.querySelector("[data-scope-x-labels]");
 const yLabels = document.querySelector("[data-scope-y-labels]");
-const scopeFPS = document.querySelector("[data-scope-fps]");
 const midiActivity = document.querySelector("[data-midi-activity]");
 const parameters = createParameterController({ root: document });
 const mappings = createMIDIMappings({ parameterProvider: parameters });
 let audio = null;
 let audioSetup = null;
-let playing = false;
-let nextNoteID = 9;
+let playing = true;
+let nextNoteID = 4;
 let midiActivityTimeout = 0;
-let scopeFrames = 0;
-let scopeFrameStart = performance.now();
+let meterPeakHold = { level: -60, remaining: 0 };
+let previousMeterTime = 0;
 
 noteEditor.noteIdFactory = () => `note-${nextNoteID++}`;
 noteEditor.notes = notes;
@@ -152,11 +85,9 @@ mappings.addEventListener("midi-unmapping-request", ({ detail }) =>
 );
 mappings.applyMappings([
 	{ parameterID: "outputGain", cc: 7 },
-	{ parameterID: "transpose", cc: 74 },
 	{ parameterID: "amplitude", cc: 20 },
 	{ parameterID: "offset", cc: 71 },
 	{ parameterID: "waveShape", cc: 79 },
-	{ parameterID: "phaseReset", cc: 80 },
 	{ parameterID: "tempo", cc: 76 },
 	{ parameterID: "attack", cc: 73 },
 	{ parameterID: "decay", cc: 75 },
@@ -180,35 +111,21 @@ mapToggle.addEventListener("click", () => {
 	else mappingsView.controller?.cancel("toolbar");
 });
 
-transport.addEventListener("click", async () => {
+playButton.addEventListener("click", async () => {
 	const context = await audioControl.start();
 	if (!context) return;
 	await setupAudio(context);
-	playing = !playing;
-	transport.textContent = playing ? "Stop" : "Play";
-	transport.setAttribute("aria-pressed", String(playing));
-	audio?.synth.port.postMessage({ type: "transport", playing });
+	setPlaying(true);
 });
 
-preset.addEventListener("change", () => applyPreset(preset.value));
+stopButton.addEventListener("click", () => setPlaying(false));
+
 xLabels.addEventListener("input", () =>
 	scope.setAttribute("x-marker-labels", xLabels.value),
 );
 yLabels.addEventListener("input", () =>
 	scope.setAttribute("y-marker-labels", yLabels.value),
 );
-scope.addEventListener("scope-frame", ({ detail }) => {
-	scopeFrames += 1;
-	const elapsed = detail.time - scopeFrameStart;
-	if (elapsed < 1000) return;
-	scopeFPS.textContent = `${Math.round((scopeFrames * 1000) / elapsed)} fps`;
-	scopeFPS.setAttribute(
-		"aria-label",
-		`Scope render rate ${scopeFPS.textContent}`,
-	);
-	scopeFrames = 0;
-	scopeFrameStart = detail.time;
-});
 
 noteEditor.addEventListener("notes-change", ({ detail }) => {
 	notes = detail.notes;
@@ -230,6 +147,8 @@ noteEditor.addEventListener("note-preview", ({ detail }) =>
 noteEditor.addEventListener("note-preview-end", ({ detail }) =>
 	postNote("noteOff", detail, "editor"),
 );
+noteEditor.addEventListener("loop-change", postSequence);
+noteEditor.addEventListener("range-change", postSequence);
 
 envelopeEditor.addEventListener("envelope-input", ({ detail }) =>
 	postPitchEnvelope(detail.points),
@@ -338,15 +257,25 @@ async function setupAudio(context) {
 function cleanupAudio() {
 	audio?.synth.disconnect();
 	audio = null;
-	meter.setState({ channels: [{ primary: -60, secondary: -60 }] });
+	meterPeakHold = { level: -60, remaining: 0 };
+	previousMeterTime = 0;
+	meter.setState({
+		primaryLabel: "Peak",
+		secondaryLabel: "RMS",
+		holdLabel: "Hold",
+		unit: "dB",
+		channels: [{ primary: -60, secondary: -60, peak: -60 }],
+	});
 }
 
 function applyParameterIntent({ parameterID, value, source }) {
-	if (parameterID === "phaseReset") {
-		if (value === 1) audio?.synth.port.postMessage({ type: "resetPhase" });
-		return;
-	}
 	setValue(parameterID, value, source);
+}
+
+function setPlaying(nextPlaying) {
+	playing = nextPlaying;
+	playButton.setAttribute("aria-pressed", String(playing));
+	audio?.synth.port.postMessage({ type: "transport", playing });
 }
 
 function updateMeter(samples) {
@@ -357,14 +286,21 @@ function updateMeter(samples) {
 		peak = Math.max(peak, magnitude);
 		squares += sample * sample;
 	}
+	const time = performance.now();
+	const elapsed = previousMeterTime ? (time - previousMeterTime) / 1000 : 0;
+	previousMeterTime = time;
+	const peakLevel = decibels(peak);
+	meterPeakHold = nextPeakHold(meterPeakHold, peakLevel, elapsed);
 	meter.setState({
 		primaryLabel: "Peak",
 		secondaryLabel: "RMS",
+		holdLabel: "Hold",
 		unit: "dB",
 		channels: [
 			{
-				primary: decibels(peak),
+				primary: peakLevel,
 				secondary: decibels(Math.sqrt(squares / samples.length)),
+				peak: meterPeakHold.level,
 				clipped: peak >= 1,
 			},
 		],
@@ -403,85 +339,6 @@ function setDisplayValue(parameterID, value, source) {
 		scope.setAttribute("y-offset", String(displayValues[parameterID]));
 }
 
-function applyPreset(name) {
-	const presets = {
-		kick: {
-			waveShape: 0,
-			transpose: 0,
-			amplitude: 0.8,
-			offset: 0,
-			adsr: [0.001, 0.08, 0.07, 0.08],
-			pitch: [
-				[0, 12, -0.35],
-				[0.15, -12],
-				[1, -12],
-			],
-			notes: kickNotes,
-			rootNote: 45,
-		},
-		"saw-pluck": {
-			waveShape: 1,
-			transpose: 0,
-			amplitude: 0.8,
-			offset: 0,
-			adsr: [0.08, 0.2, 0.65, 0.35],
-			pitch: [
-				[0, 12, -0.35],
-				[0.05, -12, 0.35],
-				[0.1, 0],
-				[1, 0],
-			],
-			notes: melodicNotes,
-			rootNote: 48,
-		},
-		"sine-pad": {
-			waveShape: 0,
-			transpose: -12,
-			amplitude: 0.8,
-			offset: 0,
-			adsr: [0.35, 0.6, 0.75, 1.4],
-			pitch: [
-				[0, 0],
-				[1, 0],
-			],
-			notes: melodicNotes,
-			rootNote: 48,
-		},
-		"square-short": {
-			waveShape: 2,
-			transpose: 0,
-			amplitude: 0.5,
-			offset: 0.5,
-			adsr: [0.005, 0.08, 0.8, 0.12],
-			pitch: [
-				[0, -12],
-				[0.08, 0],
-				[1, 0],
-			],
-			notes: melodicNotes,
-			rootNote: 48,
-		},
-	};
-	const selected = presets[name];
-	if (!selected) return;
-	for (const id of ["waveShape", "transpose", "amplitude", "offset"])
-		setParameter(id, selected[id], "preset");
-	["attack", "decay", "sustain", "release"].forEach((id, index) =>
-		setParameter(id, selected.adsr[index], "preset"),
-	);
-	pitchEnvelope = selected.pitch.map(([time, value, curve]) => ({
-		time,
-		value,
-		curve,
-	}));
-	envelopeEditor.points = pitchEnvelope;
-	postPitchEnvelope(pitchEnvelope);
-	notes = selected.notes.map((note) => ({ ...note }));
-	noteEditor.setAttribute("root-note", String(selected.rootNote));
-	noteEditor.notes = notes;
-	postSequence();
-}
-
 function syncAudioParameters() {
 	for (const [id, value] of Object.entries(values))
 		setParameter(id, value, "setup");
@@ -495,8 +352,10 @@ function postSequence() {
 	audio?.synth.port.postMessage({
 		type: "sequence",
 		notes,
-		loopStart: noteEditor.rangeStart,
-		loopEnd: noteEditor.rangeEnd,
+		loopStart: noteEditor.loopEnabled
+			? noteEditor.loopStart
+			: noteEditor.rangeStart,
+		loopEnd: noteEditor.loopEnabled ? noteEditor.loopEnd : noteEditor.rangeEnd,
 	});
 }
 

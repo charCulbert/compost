@@ -135,30 +135,38 @@ test("the Mono Synth uses current editor and one-channel scope contracts", () =>
 	assert.match(html, /<compost-scope[^>]+value-range="1"/u);
 	assert.match(html, /<compost-meter/u);
 	assert.match(html, /<compost-number-box[^>]+parameter-id="scopeRange"/u);
-	assert.match(
-		html,
-		/<compost-button[^>]+mode="trigger"[^>]+parameter-id="phaseReset"/u,
-	);
-	assert.match(html, /data-scope-x-labels/u);
+	assert.match(html, /data-scope-x-labels[^>]+value=""/u);
 	assert.match(html, /class="app-frame"/u);
 	assert.match(html, /<compost-select[^>]+parameter-id="waveShape"/u);
-	assert.match(html, /<select data-synth-preset/u);
-	assert.match(html, /<option value="kick" selected>Kick<\/option>/u);
+	assert.doesNotMatch(`${html}\n${main}`, /data-synth-preset|applyPreset/u);
+	assert.match(html, /<section class="sequence-panel">/u);
 	assert.match(html, /<compost-envelope-editor/u);
 	assert.match(html, /label="Pitch envelope"/u);
 	for (const id of ["attack", "decay", "sustain", "release"]) {
 		assert.match(html, new RegExp(`parameter-id="${id}"`, "u"));
 	}
-	assert.match(html, /<compost-note-editor/u);
-	assert.doesNotMatch(html, /<compost-note-editor[^>]+\bloop(?:\s|=|>)/u);
+	assert.match(
+		html,
+		/<compost-note-editor[^>]+\bloop[^>]+adaptive-grid[^>]+note-count="25"/u,
+	);
+	assert.doesNotMatch(html, /fixed-viewport/u);
 	assert.doesNotMatch(html, /<compost-envelope-editor[^>]+\bgrid=/u);
-	assert.match(html, /data-transport/u);
-	assert.match(html, /class="keyboard-footer"/u);
+	assert.match(
+		html,
+		/class="transport header-transport"[^>]*>[\s\S]*data-transport-play/u,
+	);
+	assert.match(html, /data-transport-stop/u);
+	assert.match(main, /playing = true/u);
+	assert.match(html, /parameter-id="tempo"[^>]+value="150"/u);
+	assert.match(main, /tempo: 150/u);
 	assert.match(main, /scope\.setSamples\(data\.samples\)/u);
-	assert.match(main, /parameterID === ["']phaseReset["']/u);
+	assert.doesNotMatch(
+		`${html}\n${main}\n${worklet}`,
+		/phaseReset|resetPhase|transpose/u,
+	);
 	assert.match(main, /noteEditor\.addEventListener\(["']notes-change["']/u);
-	assert.match(main, /loopStart: noteEditor\.rangeStart/u);
-	assert.match(main, /loopEnd: noteEditor\.rangeEnd/u);
+	assert.match(main, /loopStart: noteEditor\.loopEnabled/u);
+	assert.match(main, /loopEnd: noteEditor\.loopEnabled/u);
 	assert.match(
 		main,
 		/envelopeEditor\.addEventListener\(["']envelope-change["']/u,
@@ -167,7 +175,6 @@ test("the Mono Synth uses current editor and one-channel scope contracts", () =>
 	assert.match(main, /kickNotes/u);
 	assert.match(main, /isNoteOffMessage/u);
 	assert.match(worklet, /type: ["']scope-samples["'], samples, outputSamples/u);
-	assert.match(worklet, /data\?\.type === ["']resetPhase["']/u);
 	assert.match(worklet, /this\.stage = ["']release["']/u);
 	assert.match(worklet, /pitchEnvelopeValue/u);
 	assert.match(worklet, /this\.playing/u);

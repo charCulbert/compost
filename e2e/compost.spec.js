@@ -945,6 +945,14 @@ test("centered audio keeps its toolbar footprint without animating", async ({
 }) => {
 	await page.goto("/examples/monosynth/");
 	const audio = page.locator("compost-audio");
+	await expect(page.locator(".color-scheme-toggle")).toHaveCSS(
+		"display",
+		"grid",
+	);
+	await expect(page.locator(".color-scheme-toggle")).toHaveCSS(
+		"place-items",
+		"center",
+	);
 	const slider = page.locator('compost-slider[parameter-id="outputGain"]');
 	const offHostWidth = await audio.evaluate(
 		(element) => element.getBoundingClientRect().width,
@@ -1093,38 +1101,149 @@ test("monosynth exposes a grabbable pitch segment and commits mouse bends", asyn
 		.not.toBe(before.curve);
 });
 
-test("monosynth editors omit unlabeled time and boundary markers", async ({
+test("monosynth exposes a full-width navigable note editor below the synth", async ({
 	page,
 }) => {
 	await page.goto("/examples/monosynth/");
 	const noteEditor = page.locator("compost-note-editor");
 	const envelopeEditor = page.locator("compost-envelope-editor");
 
-	await expect(noteEditor).not.toHaveAttribute("loop", "");
+	const editorLayout = await page
+		.locator(".workbench")
+		.evaluate((workbench) => {
+			const synth = workbench
+				.querySelector(".synth-grid")
+				.getBoundingClientRect();
+			const envelope = workbench
+				.querySelector("compost-envelope-editor")
+				.getBoundingClientRect();
+			const sequence = workbench
+				.querySelector("compost-note-editor")
+				.getBoundingClientRect();
+			const waveform = workbench.querySelector("compost-select");
+			const knob = workbench
+				.querySelector("compost-knob")
+				.getBoundingClientRect();
+			return {
+				sequenceBelowSynth: sequence.top >= synth.bottom,
+				sequenceFraction:
+					sequence.width / workbench.getBoundingClientRect().width,
+				sequenceIsTaller: sequence.height > envelope.height,
+				waveformInputIsShorter:
+					waveform.select.getBoundingClientRect().height < knob.height,
+			};
+		});
+	expect(editorLayout.sequenceBelowSynth).toBe(true);
+	expect(editorLayout.sequenceFraction).toBeGreaterThan(0.95);
+	expect(editorLayout.sequenceIsTaller).toBe(true);
+	expect(editorLayout.waveformInputIsShorter).toBe(true);
+	const transportAlignment = await page
+		.locator(".header-transport")
+		.evaluate((element) => {
+			const rect = element.getBoundingClientRect();
+			return {
+				center: rect.left + rect.width / 2,
+				viewportCenter: innerWidth / 2,
+			};
+		});
+	expect(transportAlignment.center).toBeCloseTo(
+		transportAlignment.viewportCenter,
+		0,
+	);
+	const transportChrome = await page
+		.locator(".header-transport")
+		.evaluate((element) => {
+			const toolbarCell = element
+				.closest("header")
+				.querySelector(".color-scheme-toggle")
+				.getBoundingClientRect();
+			const button = element.querySelector("[data-transport-play]");
+			const stopButton = element.querySelector("[data-transport-stop]");
+			const buttonStyle = getComputedStyle(button);
+			const tempo = element.querySelector("compost-number-box");
+			const tempoBox = tempo.shadowRoot.querySelector("[part='box']");
+			const tempoStyle = getComputedStyle(tempoBox);
+			return {
+				buttonFillsBar:
+					Math.abs(button.getBoundingClientRect().height - toolbarCell.height) <
+					1,
+				tempoFillsBar:
+					Math.abs(
+						tempoBox.getBoundingClientRect().height - toolbarCell.height,
+					) < 1,
+				buttonHasOnlyDividers:
+					buttonStyle.borderTopWidth === "0px" &&
+					buttonStyle.borderBottomWidth === "0px" &&
+					buttonStyle.borderLeftWidth === "1px" &&
+					buttonStyle.borderRightWidth === "1px",
+				transparentCells:
+					buttonStyle.backgroundColor === "rgba(0, 0, 0, 0)" &&
+					tempoStyle.backgroundColor === "rgba(0, 0, 0, 0)",
+				buttonCount: element.querySelectorAll("button").length,
+				playPressed: button.getAttribute("aria-pressed"),
+				playIconVisible:
+					getComputedStyle(button.querySelector("path")).display !== "none",
+				stopIconVisible:
+					getComputedStyle(stopButton.querySelector("path")).display !== "none",
+			};
+		});
+	expect(transportChrome).toEqual({
+		buttonFillsBar: true,
+		tempoFillsBar: true,
+		buttonHasOnlyDividers: true,
+		transparentCells: true,
+		buttonCount: 2,
+		playPressed: "true",
+		playIconVisible: true,
+		stopIconVisible: true,
+	});
+	await page.locator("[data-transport-stop]").dispatchEvent("click");
+	await expect(page.locator("[data-transport-play]")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
 	expect(
-		await noteEditor.evaluate((editor) => ({
-			beats: editor.beats,
-			rangeEnd: editor.rangeEnd,
-			loopEnd: editor.loopEnd,
-		})),
-	).toEqual({ beats: 4, rangeEnd: 4, loopEnd: 4 });
+		await page
+			.locator('[parameter-id="tempo"]')
+			.evaluate((element) => element.box.getAttribute("aria-valuenow")),
+	).toBe("150");
+	await expect(noteEditor).toHaveAttribute("loop", "");
+	await expect(noteEditor).toHaveAttribute("adaptive-grid", "");
 	expect(
-		await noteEditor.evaluate((editor) =>
-			[
-				"range-start",
-				"range-end",
-				"range-start-line",
-				"range-end-line",
-				"loop",
-				"loop-start",
-				"loop-end",
-			].map(
-				(part) =>
-					getComputedStyle(editor.shadowRoot.querySelector(`[part~="${part}"]`))
-						.display,
-			),
-		),
-	).toEqual(["none", "none", "none", "none", "none", "none", "none"]);
+		await noteEditor.evaluate((editor) => {
+			const before = {
+				rootNote: editor.rootNote,
+				noteCount: editor.noteCount,
+				offset: editor.offset,
+				zoom: editor.zoomPxPerBeat,
+			};
+			editor.gridWrap.dispatchEvent(
+				new WheelEvent("wheel", {
+					deltaY: -100,
+					ctrlKey: true,
+					cancelable: true,
+				}),
+			);
+			editor.keys.dispatchEvent(
+				new WheelEvent("wheel", { deltaY: 100, cancelable: true }),
+			);
+			return {
+				beats: editor.beats,
+				rangeEnd: editor.rangeEnd,
+				loopEnd: editor.loopEnd,
+				viewportChanged:
+					editor.rootNote !== before.rootNote ||
+					editor.noteCount !== before.noteCount ||
+					editor.offset !== before.offset ||
+					editor.zoomPxPerBeat !== before.zoom,
+			};
+		}),
+	).toEqual({
+		beats: 4,
+		rangeEnd: 4,
+		loopEnd: 4,
+		viewportChanged: true,
+	});
 	expect(
 		await envelopeEditor.evaluate((editor) => ({
 			grid: editor.grid,

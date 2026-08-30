@@ -24,7 +24,8 @@ export class CompostMeter extends HTMLElement {
           --_muted: color-mix(in srgb, currentColor 65%, transparent);
           --_outline: color-mix(in srgb, currentColor 30%, transparent);
           --_secondary: color-mix(in srgb, var(--_accent) 28%, transparent);
-          --meter-width: 2.5em;
+          --meter-channel-width: 1.25em;
+          --meter-width: calc(var(--meter-channel-width) * var(--_meter-channel-count, 1));
           --meter-length: 9em;
           --meter-gap: 0px;
           --meter-primary-width: 0.1875em;
@@ -171,6 +172,10 @@ export class CompostMeter extends HTMLElement {
 
 		const label = this.getAttribute("label") || "Meter";
 		const channels = this.state.channels;
+		this.style.setProperty(
+			"--_meter-channel-count",
+			String(Math.max(1, channels.length)),
+		);
 		this.root.querySelector(".label").textContent = label;
 		this.root.querySelector(".legend").textContent = [
 			this.state.primaryLabel,

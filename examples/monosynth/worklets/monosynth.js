@@ -11,13 +11,6 @@ class CompostMonoSynth extends AudioWorkletProcessor {
 				automationRate: "k-rate",
 			},
 			{
-				name: "transpose",
-				defaultValue: 0,
-				minValue: -24,
-				maxValue: 24,
-				automationRate: "k-rate",
-			},
-			{
 				name: "amplitude",
 				defaultValue: 0.8,
 				minValue: 0,
@@ -40,7 +33,7 @@ class CompostMonoSynth extends AudioWorkletProcessor {
 			},
 			{
 				name: "tempo",
-				defaultValue: 120,
+				defaultValue: 150,
 				minValue: 40,
 				maxValue: 240,
 				automationRate: "k-rate",
@@ -103,7 +96,6 @@ class CompostMonoSynth extends AudioWorkletProcessor {
 	}
 
 	handleMessage(data) {
-		if (data?.type === "resetPhase") this.phase = 0;
 		if (data?.type === "pitchEnvelope" && Array.isArray(data.points)) {
 			this.pitchEnvelope = data.points
 				.filter(
@@ -151,7 +143,6 @@ class CompostMonoSynth extends AudioWorkletProcessor {
 		if (!output?.length) return true;
 		const frames = output[0].length;
 		const shape = Math.round(parameters.waveShape[0]);
-		const transpose = parameters.transpose[0];
 		const tempo = parameters.tempo[0];
 		const attack = parameters.attack[0];
 		const decay = parameters.decay[0];
@@ -162,9 +153,7 @@ class CompostMonoSynth extends AudioWorkletProcessor {
 			this.updateVoice(attack, release);
 			const envelope = this.nextEnvelopeValue(decay, sustain);
 			const pitch =
-				this.voiceNote +
-				transpose +
-				pitchEnvelopeValue(this.pitchEnvelope, this.voiceAge);
+				this.voiceNote + pitchEnvelopeValue(this.pitchEnvelope, this.voiceAge);
 			const frequency = 440 * 2 ** ((pitch - 69) / 12);
 			const amplitude = valueAt(parameters.amplitude, frame);
 			const offset = valueAt(parameters.offset, frame);
