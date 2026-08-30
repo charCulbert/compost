@@ -1,12 +1,11 @@
 export type ClipState = "stopped" | "playing" | "recording";
 
-/** One slot's clip; a null slot is empty. */
+/** One host-owned session clip. */
 export interface ClipSpec {
+	id?: string;
 	name: string;
-	/** Optional per-clip accent; otherwise the grid's accent is inherited. */
 	color?: string;
 	state?: ClipState;
-	/** Whether this clip is waiting to launch while `state` remains current. */
 	queued?: boolean;
 	loop?: boolean;
 	/** 0..1, washed behind a playing clip's name. */
@@ -14,91 +13,160 @@ export interface ClipSpec {
 	[key: string]: unknown;
 }
 
-/** The detail on slot-indexed intents (`clip-launch`, `clip-select`, ...). */
-export interface ClipSlotDetail {
-	index: number;
+/** One host-owned track column in the session grid. */
+export interface ClipGridTrack {
+	id: string;
+	name?: string;
+	color?: string;
+	armed?: boolean;
+	recordQueuedSlot?: number | null;
+	stopState?: "" | "active" | "queued";
+	clips?: (ClipSpec | null)[];
 }
 
-/** The detail on `clip-open` and `clip-context`. */
-export interface ClipPointDetail extends ClipSlotDetail {
+/** One discrete coordinate in the session grid. */
+export interface ClipGridPosition {
+	trackId: string;
+	slot: number;
+}
+
+/** `clip-launch` and `clip-record`. */
+export type ClipSlotDetail = ClipGridPosition;
+
+/** `clip-stop`. */
+export interface ClipTrackDetail {
+	trackId: string;
+}
+
+/** `clip-open` and `clip-context`. */
+export interface ClipPointDetail extends ClipGridPosition {
 	altKey?: boolean;
 	clientX?: number;
 	clientY?: number;
 }
 
-/** The detail on `clip-rename`. */
-export interface ClipRenameDetail extends ClipSlotDetail {
+/** `clip-rename`. */
+export interface ClipRenameDetail extends ClipGridPosition {
 	name: string;
 }
 
-/** The detail on `clip-move`. */
-export interface ClipMoveDetail extends ClipSlotDetail {
-	to: number;
+/** `clips-select`. */
+export interface ClipsSelectDetail {
+	selection: ClipGridPosition[];
+	cursor: ClipGridPosition | null;
 }
 
-/** The detail on `clip-drop`, fired on the receiving grid. */
-export interface ClipDropDetail {
-	source: CompostClipGrid;
-	fromIndex: number;
-	toIndex: number;
+/** `clips-copy`, `clips-delete`, `clips-drag-start`, and `clips-drag-end`. */
+export interface ClipsPositionsDetail {
+	positions: ClipGridPosition[];
+}
+
+/** `clips-paste`. */
+export interface ClipsPasteDetail {
+	to: ClipGridPosition;
+}
+
+/** `clips-duplicate`. */
+export interface ClipsDuplicateDetail extends ClipsPositionsDetail {
+	to: ClipGridPosition;
+}
+
+/** `clips-move`. */
+export interface ClipsMoveDetail extends ClipsDuplicateDetail {
 	copy: boolean;
+}
+
+export interface CompostClipGridEventDetailMap {
+	"clip-launch": ClipSlotDetail;
+	"clip-record": ClipSlotDetail;
+	"clip-stop": ClipTrackDetail;
+	"clip-open": ClipPointDetail;
+	"clip-context": ClipPointDetail;
+	"clip-rename": ClipRenameDetail;
+	"clips-select": ClipsSelectDetail;
+	"clips-copy": ClipsPositionsDetail;
+	"clips-paste": ClipsPasteDetail;
+	"clips-delete": ClipsPositionsDetail;
+	"clips-duplicate": ClipsDuplicateDetail;
+	"clips-move": ClipsMoveDetail;
+	"clips-drag-start": ClipsPositionsDetail;
+	"clips-drag-end": ClipsPositionsDetail;
 }
 
 /** Which slot a pointer at `y` lands in, given the rows' boxes. */
 export function slotIndexAt(y: number, rows: DOMRect[]): number;
 
+/** Return every occupied position in the inclusive rectangle. */
+export function rectangularClipSelection(
+	tracks: ClipGridTrack[],
+	anchor: ClipGridPosition,
+	end: ClipGridPosition,
+): ClipGridPosition[];
+
+/** Translate positions so their occupied top-left lands at `to`. */
+export function translatedClipPositions(
+	tracks: ClipGridTrack[],
+	positions: ClipGridPosition[],
+	to: ClipGridPosition,
+): ClipGridPosition[];
+
 /**
- * `<compost-clip-grid>`: one track's column of clip slots. The grid only
- * draws states and reports intent: `clip-launch`, `clip-stop`,
- * `clip-record`, `clip-select`, `clip-open`, `clip-context`, `clip-rename`,
- * `clip-delete`, `clip-duplicate`, `clip-move`, `clip-drag-start`,
- * `clip-drag-end` and `clip-drop`. The host decides what each intent means.
+ * `<compost-clip-grid>`: a complete multi-track session launcher. It owns
+ * selection, focus, clipboard keyboard recognition, and drag geometry while
+ * the host owns clip data, clipboard contents, IDs, collision policy, and
+ * mutation.
  *
- * @attribute slots - number of clip slots (1-512)
+ * @attribute slots - number of session rows (1-512)
  * @attribute label
- * @attribute armed - record-arms the track
- * @attribute selected - index of the selected slot; absent clears
- * @attribute selection - further slot indexes marked as selected, space-separated; absent clears
- * @attribute record-queued - slot index queued for recording; reflected
- * @attribute stop - index of the playing slot; absent clears
  * @attribute disabled
- * @attribute show-stop - shows the stop square while a clip plays
+ * @attribute show-stop - shows empty track stop controls
  */
 export class CompostClipGrid extends HTMLElement {
 	slotCount: number;
 	label: string;
 
-	/** Copies of the slots, one entry per slot, null for an empty one. */
-	get clips(): (ClipSpec | null)[];
-	set clips(value: (ClipSpec | null)[]);
-	/** The selected slot index, or -1. */
-	get selected(): number;
-	set selected(index: number | null);
-	/** The slots marked as part of a wider selection, beside the selected one. */
-	get selection(): number[];
-	set selection(indexes: number[] | null);
-	/** The empty slot waiting to begin recording, or -1. */
-	get recordQueued(): number;
-	set recordQueued(index: number | null);
-	get armed(): boolean;
+	/** Deep copies of the tracks and their clip slots. */
+	get tracks(): ClipGridTrack[];
+	/** Replace every track and slot without emitting model intent. */
+	setTracks(tracks: ClipGridTrack[]): void;
+
+	/** Selected occupied or pending destination coordinates. */
+	get selection(): ClipGridPosition[];
+	/** Current keyboard and paste destination. */
+	get cursor(): ClipGridPosition | null;
+	/** Restore selection and optionally its cursor without emitting intent. */
+	setSelection(
+		positions: ClipGridPosition[],
+		cursor?: ClipGridPosition | null,
+	): void;
+
 	get disabled(): boolean;
 	set disabled(value: boolean);
-	/** The stop slot's state: '' (idle), 'active' or 'queued'. */
-	get stopState(): "" | "active" | "queued";
 
-	/** Replaces every slot: one entry per slot, null for an empty one. */
-	setClips(clips: (ClipSpec | null)[]): void;
 	/** Cheap per-frame update of one playing clip's progress, 0..1. */
-	setProgress(index: number, progress: number): void;
-	/** Lights a row across the grid, as the scene launcher does when hovered. */
-	highlightRow(index: number, on: boolean): void;
-	/** Opens an inline editor on a clip's name; the result arrives as `clip-rename`. */
-	beginRename(index: number): void;
-	focusSlot(index: number): void;
-	/** The slot under a viewport y, or -1. */
-	slotIndexAtPoint(clientY: number): number;
-	/** Marks the slot a drag would land in; -1 clears it. */
-	markDrop(index: number, copy: boolean): void;
+	setProgress(trackId: string, slot: number, progress: number): void;
+	/** Lights one session row across every track. */
+	highlightRow(slot: number, on: boolean): void;
+	/** Opens an inline editor; the result arrives as `clip-rename`. */
+	beginRename(position: ClipGridPosition): void;
+	focusSlot(position: ClipGridPosition): void;
+
+	addEventListener<K extends keyof CompostClipGridEventDetailMap>(
+		type: K,
+		listener: (
+			this: CompostClipGrid,
+			event: CustomEvent<CompostClipGridEventDetailMap[K]>,
+		) => void,
+		options?: boolean | AddEventListenerOptions,
+	): void;
+	removeEventListener<K extends keyof CompostClipGridEventDetailMap>(
+		type: K,
+		listener: (
+			this: CompostClipGrid,
+			event: CustomEvent<CompostClipGridEventDetailMap[K]>,
+		) => void,
+		options?: boolean | EventListenerOptions,
+	): void;
 }
 
 declare global {

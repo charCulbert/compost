@@ -75,6 +75,22 @@ test("every public JavaScript export has a declaration", () => {
 	}
 });
 
+test("every clip-grid intent is present in its public detail map", () => {
+	const source = fs.readFileSync(
+		path.join(root, "src/components/compost-clip-grid.js"),
+		"utf8",
+	);
+	const declaration = fs.readFileSync(
+		path.join(root, "src/components/compost-clip-grid.d.ts"),
+		"utf8",
+	);
+	const emitted = [...source.matchAll(/\.emit\(["']([^"']+)["']/gu)].map(
+		(match) => match[1],
+	);
+	for (const name of new Set(emitted))
+		assert.match(declaration, new RegExp(`["']${name}["']`, "u"), name);
+});
+
 test("every timeline intent is present in its public detail map", () => {
 	const source = fs.readFileSync(
 		path.join(root, "src/components/compost-timeline.js"),

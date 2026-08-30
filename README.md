@@ -58,10 +58,11 @@ On touch, context means one-finger long-press; two fingers remain available
 for editor pan and zoom gestures.
 `compost-piano` sends `note-down` and `note-up`.
 
-The same modifiers work across editors: Command/Ctrl inverts time snapping,
-Shift provides fine control on value drags and extends selection on an item
-drag, and Alt copies item moves. `compost-note-editor` also uses Command/Ctrl
-on a note body to edit velocity.
+Across the time editors, Command/Ctrl inverts time snapping, Shift provides
+fine control on value drags and extends selection on an item drag, and Alt
+copies item moves. The clip grid uses Shift for rectangular selection,
+Command/Ctrl for sparse selection and clipboard commands, and Alt for drag-copy.
+`compost-note-editor` also uses Command/Ctrl on a note body to edit velocity.
 Double-click resets a control. On touch, double-tap resets knobs and sliders;
 a number-box tap opens its numeric editor while a drag still adjusts it.
 The timeline uses a two-finger pinch to zoom time and pan time or lanes. The
@@ -88,6 +89,12 @@ data and are not represented by either element. Grid resolution stays fixed by
 default; `adaptive-grid` lets zoom choose the effective step in both editors.
 `compost-note-editor` emits `note-quantize` with the selected IDs, grid step
 and whether lengths were requested; the host applies its own strength and swing.
+`compost-clip-grid` renders a complete multi-track session launcher from
+`setTracks()`. It owns the discrete track/slot cursor, rectangular and sparse
+selection, keyboard clipboard recognition, and multi-clip drag geometry.
+`clips-copy`, `clips-paste`, `clips-delete`, `clips-duplicate`, and `clips-move`
+carry stable track IDs and slot coordinates. The host owns clipboard contents,
+new IDs, collision policy, mutation, undo, and conversion into timeline clips.
 `compost-timeline` never moves automation with arrangement material; a host
 that wants that shifts the lane's points when it applies `time-move`.
 With the timeline's `automation` attribute present, each lane shows its one

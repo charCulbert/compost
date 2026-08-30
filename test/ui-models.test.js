@@ -19,7 +19,8 @@ globalThis.customElements ??= {
 	},
 };
 
-const { slotIndexAt } = await import("../src/components/compost-clip-grid.js");
+const { rectangularClipSelection, slotIndexAt, translatedClipPositions } =
+	await import("../src/components/compost-clip-grid.js");
 const { gridText, lengthText } = await import(
 	"../src/components/compost-note-editor.js"
 );
@@ -40,6 +41,41 @@ const { boundedPosition, constrainedSize } = await import(
 const { pointPlacement } = await import("../src/components/compost-popup.js");
 const { duplicatedNotes, selectionSpan, trimmedNotes, velocityShiftedNotes } =
 	await import("../src/piano-roll-model.js");
+
+test("clip-grid rectangles select occupied slots and preserve sparse spacing", () => {
+	const tracks = [
+		{ id: "a", clips: [{ name: "a0" }, null, { name: "a2" }] },
+		{ id: "b", clips: [null, { name: "b1" }, { name: "b2" }] },
+		{ id: "c", clips: [{ name: "c0" }, null, null] },
+	];
+	assert.deepEqual(
+		rectangularClipSelection(
+			tracks,
+			{ trackId: "a", slot: 0 },
+			{ trackId: "b", slot: 2 },
+		),
+		[
+			{ trackId: "a", slot: 0 },
+			{ trackId: "a", slot: 2 },
+			{ trackId: "b", slot: 1 },
+			{ trackId: "b", slot: 2 },
+		],
+	);
+	assert.deepEqual(
+		translatedClipPositions(
+			tracks,
+			[
+				{ trackId: "a", slot: 0 },
+				{ trackId: "b", slot: 2 },
+			],
+			{ trackId: "b", slot: 3 },
+		),
+		[
+			{ trackId: "b", slot: 3 },
+			{ trackId: "c", slot: 5 },
+		],
+	);
+});
 
 test("a pointer lands in the slot whose box contains it", () => {
 	const rows = [

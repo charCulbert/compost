@@ -1647,14 +1647,13 @@ test("clip grid example host applies launch, stop and record intents", async ({
 	const grid = page.locator("compost-clip-grid");
 	const fill = grid.getByRole("button", { name: "Launch fill.b on Drums" });
 	await fill.click();
-	await expect(grid.locator(".row").nth(1)).toHaveAttribute("data-queued", "");
-	await expect(grid.locator(".row").nth(1)).toHaveAttribute(
-		"data-state",
-		"playing",
-		{ timeout: 3000 },
-	);
+	const fillSlot = grid.locator('.slot[data-track-id="drums"][data-slot="1"]');
+	await expect(fillSlot).toHaveAttribute("data-queued", "");
+	await expect(fillSlot).toHaveAttribute("data-state", "playing", {
+		timeout: 3000,
+	});
 	await grid.getByRole("button", { name: "Stop Drums" }).click();
-	await expect(grid.locator('.row[data-state="playing"]')).toHaveCount(0, {
+	await expect(grid.locator('.slot[data-state="playing"]')).toHaveCount(0, {
 		timeout: 3000,
 	});
 
@@ -1666,9 +1665,11 @@ test("clip grid example host applies launch, stop and record intents", async ({
 
 test("clip grid lets one clip override the track accent", async ({ page }) => {
 	await page.goto("/examples/compost-clip-grid/");
-	const row = page.locator("compost-clip-grid").locator(".row").nth(1);
-	await expect(row).toHaveCSS("--compost-clip-grid-accent", "#d15a40");
-	await expect(row.locator(".name")).toHaveCSS("color", "rgb(209, 90, 64)");
+	const slot = page
+		.locator("compost-clip-grid")
+		.locator('.slot[data-track-id="drums"][data-slot="1"]');
+	await expect(slot).toHaveCSS("--compost-clip-grid-accent", "#d15a40");
+	await expect(slot.locator(".name")).toHaveCSS("color", "rgb(209, 90, 64)");
 });
 
 test("clip grid slow mouse click renames without hijacking open or touch", async ({
@@ -1700,6 +1701,192 @@ test("clip grid slow mouse click renames without hijacking open or touch", async
 	);
 	await page.waitForTimeout(400);
 	await expect(editor).toHaveCount(0);
+});
+
+test("clip grid owns rectangular selection and the demo applies its clipboard intents", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-clip-grid/");
+	const grid = page.locator("compost-clip-grid");
+	const drumsBreak = grid.getByRole("button", { name: /^break\.a on Drums/u });
+	const bassWalk = grid.getByRole("button", { name: /^walk\.c on Bass/u });
+	const synthAir = grid.getByRole("button", { name: /^air\.e on Synth/u });
+
+	await drumsBreak.click();
+	await page.keyboard.down("Shift");
+	await bassWalk.click();
+	await page.keyboard.up("Shift");
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "drums", slot: 0 },
+		{ trackId: "drums", slot: 1 },
+		{ trackId: "bass", slot: 0 },
+		{ trackId: "bass", slot: 2 },
+	]);
+	await bassWalk.press("Escape");
+	expect(await grid.evaluate((element) => element.selection)).toEqual([]);
+	await drumsBreak.click();
+	await page.keyboard.down("Shift");
+	await bassWalk.click();
+	await page.keyboard.up("Shift");
+
+	await page.keyboard.down("Meta");
+	await synthAir.click();
+	await page.keyboard.up("Meta");
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(5);
+	await expect(
+		grid.locator('.slot[data-track-id="synth"][data-slot="4"]'),
+	).toHaveAttribute("part", /(?:^|\s)selected(?:\s|$)/u);
+
+	await synthAir.press("Meta+c");
+	const destination = grid.getByRole("button", {
+		name: "Empty Drums slot 6",
+	});
+	await destination.click();
+	expect(await grid.evaluate((element) => element.selection)).toEqual([]);
+	expect(await grid.evaluate((element) => element.cursor)).toEqual({
+		trackId: "drums",
+		slot: 5,
+	});
+	await destination.press("Meta+v");
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(5);
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "drums", slot: 5 },
+		{ trackId: "drums", slot: 6 },
+		{ trackId: "bass", slot: 5 },
+		{ trackId: "bass", slot: 7 },
+		{ trackId: "synth", slot: 9 },
+	]);
+
+	await grid
+		.getByRole("button", { name: /slot 10/u })
+		.last()
+		.press("Meta+d");
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(5);
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "drums", slot: 10 },
+		{ trackId: "drums", slot: 11 },
+		{ trackId: "bass", slot: 10 },
+		{ trackId: "bass", slot: 12 },
+		{ trackId: "synth", slot: 14 },
+	]);
+	await grid
+		.getByRole("button", { name: /slot 15/u })
+		.last()
+		.press("Delete");
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(0);
+	expect(await grid.evaluate((element) => element.selection)).toEqual([]);
+});
+
+test("clip grid arrows move its slot cursor and extend selection", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-clip-grid/");
+	const grid = page.locator("compost-clip-grid");
+	const empty = grid.getByRole("button", { name: "Empty Drums slot 3" });
+	await empty.click();
+	await empty.press("ArrowRight");
+	expect(await grid.evaluate((element) => element.cursor)).toEqual({
+		trackId: "bass",
+		slot: 2,
+	});
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "bass", slot: 2 },
+	]);
+	await grid
+		.getByRole("button", { name: /^walk\.c on Bass/u })
+		.press("Shift+ArrowUp");
+	await grid
+		.getByRole("button", { name: "Empty Bass slot 2" })
+		.press("Shift+ArrowLeft");
+	expect(await grid.evaluate((element) => element.cursor)).toEqual({
+		trackId: "drums",
+		slot: 1,
+	});
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "drums", slot: 1 },
+		{ trackId: "bass", slot: 2 },
+	]);
+});
+
+test("clip grid drags and Alt-copies the complete sparse selection", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-clip-grid/");
+	const grid = page.locator("compost-clip-grid");
+	const drumsBreak = grid.getByRole("button", { name: /^break\.a on Drums/u });
+	const bassWalk = grid.getByRole("button", { name: /^walk\.c on Bass/u });
+	await drumsBreak.click();
+	await page.keyboard.down("Meta");
+	await bassWalk.click();
+	await page.keyboard.up("Meta");
+
+	const source = await bassWalk.boundingBox();
+	const target = await grid
+		.getByRole("button", { name: "Empty Synth slot 4" })
+		.boundingBox();
+	await page.keyboard.down("Alt");
+	await page.mouse.move(
+		source.x + source.width / 2,
+		source.y + source.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(
+		target.x + target.width / 2,
+		target.y + target.height / 2,
+		{
+			steps: 6,
+		},
+	);
+	await expect(grid.locator('.slot[data-drop="copy"]')).toHaveCount(2);
+	await page.mouse.up();
+	await page.keyboard.up("Alt");
+
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "bass", slot: 1 },
+		{ trackId: "synth", slot: 3 },
+	]);
+	await expect(
+		grid.getByRole("button", { name: /^break\.a on Drums/u }),
+	).toHaveCount(1);
+	await expect(
+		grid.getByRole("button", { name: /^walk\.c on Bass/u }),
+	).toHaveCount(1);
+	await expect(
+		grid.getByRole("button", { name: /^break\.a\.copy on Bass/u }),
+	).toHaveCount(1);
+	await expect(
+		grid.getByRole("button", { name: /^walk\.c\.copy on Synth/u }),
+	).toHaveCount(1);
+
+	const movedSource = grid.getByRole("button", {
+		name: /^walk\.c\.copy on Synth/u,
+	});
+	const movedBox = await movedSource.boundingBox();
+	const moveTarget = await grid
+		.getByRole("button", { name: "Empty Synth slot 6" })
+		.boundingBox();
+	await page.mouse.move(
+		movedBox.x + movedBox.width / 2,
+		movedBox.y + movedBox.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(
+		moveTarget.x + moveTarget.width / 2,
+		moveTarget.y + moveTarget.height / 2,
+		{ steps: 6 },
+	);
+	await expect(grid.locator('.slot[data-drop="move"]')).toHaveCount(2);
+	await page.mouse.up();
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "bass", slot: 3 },
+		{ trackId: "synth", slot: 5 },
+	]);
+	await expect(
+		grid.getByRole("button", { name: /^break\.a\.copy on Bass/u }),
+	).toHaveCount(1);
+	await expect(
+		grid.getByRole("button", { name: /^walk\.c\.copy on Synth/u }),
+	).toHaveCount(1);
 });
 
 test("timeline reports material move, trim, delete and ruler seek intents", async ({

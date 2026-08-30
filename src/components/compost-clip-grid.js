@@ -3,11 +3,12 @@ import { installTouchDoubleClick } from "../internal/touch-double-click.js";
 import { clamp, defineElement, numberAttr } from "../utils.js";
 
 let nextGridID = 1;
-/** An ellipsis costs about a character, a poor trade when only a few show. */
 const ELLIPSIS_MIN_CHARS = 7;
 
 /** @typedef {'stopped'|'playing'|'recording'} ClipState */
-/** @typedef {{name: string, color?: string, state?: ClipState, queued?: boolean, loop?: boolean, progress?: number}} ClipSpec */
+/** @typedef {{id?: string, name: string, color?: string, state?: ClipState, queued?: boolean, loop?: boolean, progress?: number}} ClipSpec */
+/** @typedef {{id: string, name?: string, color?: string, armed?: boolean, recordQueuedSlot?: number|null, stopState?: ''|'active'|'queued', clips?: (ClipSpec|null)[]}} ClipGridTrack */
+/** @typedef {{trackId: string, slot: number}} ClipGridPosition */
 
 /** @param {string} fill @param {string} [stroke] */
 const triangle = (fill, stroke = "none") =>
@@ -35,52 +36,82 @@ export function slotIndexAt(y, rows) {
 	return -1;
 }
 
+/** Return every occupied position in the inclusive rectangle. */
+/** @param {ClipGridTrack[]} tracks @param {ClipGridPosition} anchor @param {ClipGridPosition} end */
+export function rectangularClipSelection(tracks, anchor, end) {
+	const firstTrack = tracks.findIndex((track) => track.id === anchor?.trackId);
+	const lastTrack = tracks.findIndex((track) => track.id === end?.trackId);
+	if (firstTrack < 0 || lastTrack < 0) return [];
+	const left = Math.min(firstTrack, lastTrack);
+	const right = Math.max(firstTrack, lastTrack);
+	const top = Math.min(Number(anchor.slot), Number(end.slot));
+	const bottom = Math.max(Number(anchor.slot), Number(end.slot));
+	if (!Number.isInteger(top) || !Number.isInteger(bottom) || top < 0) return [];
+	return tracks.slice(left, right + 1).flatMap((track) =>
+		Array.from({ length: bottom - top + 1 }, (_, offset) => top + offset)
+			.filter((slot) => Boolean(track.clips?.[slot]))
+			.map((slot) => ({ trackId: track.id, slot })),
+	);
+}
+
+/** Translate positions so their occupied top-left lands at `to`. */
+/** @param {ClipGridTrack[]} tracks @param {ClipGridPosition[]} positions @param {ClipGridPosition} to */
+export function translatedClipPositions(tracks, positions, to) {
+	const indexes = positions
+		.map((position) =>
+			tracks.findIndex((track) => track.id === position.trackId),
+		)
+		.filter((index) => index >= 0);
+	const toTrack = tracks.findIndex((track) => track.id === to?.trackId);
+	if (!positions.length || !indexes.length || toTrack < 0) return [];
+	const firstTrack = Math.min(...indexes);
+	const firstSlot = Math.min(...positions.map((position) => position.slot));
+	return positions.flatMap((position) => {
+		const sourceTrack = tracks.findIndex(
+			(track) => track.id === position.trackId,
+		);
+		const target = tracks[toTrack + sourceTrack - firstTrack];
+		return target
+			? [
+					{
+						trackId: target.id,
+						slot: to.slot + position.slot - firstSlot,
+					},
+				]
+			: [];
+	});
+}
+
 /**
- * One track's column of clip slots: each slot renders a clip's name and
- * state — stopped, playing with its progress washed behind the name, or
- * recording. A separate queued mark shows a pending launch without hiding
- * that current state, and an empty slot shows a record ring when the track is
- * armed. A stop slot underneath takes the whole track out at the next launch
- * point the way a clip is brought in.
- *
- * The grid only draws states and reports intent: `clip-launch`,
- * `clip-stop`, `clip-record`, `clip-select`, `clip-open`, `clip-context`,
- * `clip-rename`, `clip-delete`, `clip-duplicate`, `clip-move`, and
- * `clip-drop` when a clip is dragged into a slot (of this or another grid).
- * The host decides when a queued launch fires and sets the states back.
+ * A complete multi-track clip launcher. The module draws host-owned snapshots,
+ * owns rectangular selection, focus and drag geometry, and emits intents. The
+ * host owns clip data, clipboard contents, IDs, collision policy and mutation.
  */
 export class CompostClipGrid extends HTMLElement {
 	static get observedAttributes() {
-		return [
-			"slots",
-			"label",
-			"armed",
-			"selected",
-			"selection",
-			"record-queued",
-			"stop",
-			"disabled",
-			"show-stop",
-		];
+		return ["slots", "label", "disabled", "show-stop"];
 	}
 
 	constructor() {
 		super();
-
 		this.gridID = `compost-clip-grid-${nextGridID++}`;
 		this.slotCount = 5;
 		this.label = "Clips";
-		/** @type {(ClipSpec|null)[]} */ this._clips = [];
-		/** @type {{pointerId: number, index: number, x: number, y: number, moved: boolean,
-		 * copy: boolean, target: CompostClipGrid|null, targetIndex: number, row: HTMLElement}|null} */
-		this.drag = null;
+		/** @type {ClipGridTrack[]} */ this._tracks = [];
+		/** @type {ClipGridPosition[]} */ this._selection = [];
+		/** @type {ClipGridPosition|null} */ this._cursor = null;
+		/** @type {ClipGridPosition|null} */ this.selectionAnchor = null;
+		/** @type {any} */ this.drag = null;
+		this.dropPositions = [];
+		this.dropCopy = false;
 		this.longPress = createLongPress();
-		/** @type {number|null} */ this.renaming = null;
+		/** @type {ClipGridPosition|null} */ this.renaming = null;
 		this.renameTimer = null;
 		this.clickPointerType = "";
-		/** @type {{index: number, copy: boolean}|null} */ this.dropMark = null;
+		this.ignoreClick = false;
 		this.handleWindowMove = this.handleWindowMove.bind(this);
 		this.handleWindowUp = this.handleWindowUp.bind(this);
+		this.handleModifierKey = this.handleModifierKey.bind(this);
 		this.fitNames = this.fitNames.bind(this);
 
 		this.root = this.attachShadow({ mode: "open" });
@@ -96,62 +127,72 @@ export class CompostClipGrid extends HTMLElement {
           --compost-clip-grid-wash: color-mix(in srgb, var(--compost-clip-grid-accent) 18%, transparent);
           --compost-clip-grid-editor-bg: Canvas;
           --compost-clip-grid-row-height: 2.9em;
-          --compost-clip-grid-font-size: 0.91em;
-          display: flex;
-          flex-direction: column;
+          --compost-clip-grid-column-width: 10em;
+          --compost-clip-grid-font-size: .91em;
+          display: block;
           min-height: 0;
-          overflow-x: hidden;
-          overflow-y: auto;
-          overscroll-behavior-y: contain;
-          scrollbar-width: none;
+          overflow: auto;
+          overscroll-behavior: contain;
           color: var(--compost-clip-grid-text);
           font: inherit;
           -webkit-user-select: none;
           user-select: none;
         }
-        :host::-webkit-scrollbar { display: none; }
-        :host([disabled]) { opacity: 0.5; pointer-events: none; }
-        .row {
+        :host([disabled]) { opacity: .5; pointer-events: none; }
+        .matrix {
+          display: grid;
+          grid-template-columns: repeat(var(--track-count), minmax(var(--compost-clip-grid-column-width), 1fr));
+          min-width: max-content;
+          border-left: 1px solid var(--compost-clip-grid-line);
+          border-bottom: 1px solid var(--compost-clip-grid-line);
+        }
+        .track-header, .slot, .stop {
           position: relative;
-          flex: none;
+          box-sizing: border-box;
+          min-width: 0;
+          border-top: 1px solid var(--compost-clip-grid-line);
+          border-right: 1px solid var(--compost-clip-grid-line);
+          isolation: isolate;
+        }
+        .track-header {
+          position: sticky;
+          top: 0;
+          z-index: 8;
+          min-height: 2em;
+          padding: .35em .55em;
+          overflow: hidden;
+          background: Canvas;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: var(--compost-clip-grid-font-size);
+        }
+        .slot, .stop {
           display: flex;
           align-items: center;
           height: var(--compost-clip-grid-row-height);
-          padding-right: 0.55em;
-          border-top: 1px solid var(--compost-clip-grid-line);
-          /* isolate makes z-index:-1 mean "behind this row's text" rather than
-             "behind the whole column" */
-          isolation: isolate;
+          padding-right: .55em;
+          outline: none;
         }
-        .row[data-highlight]::after {
+        .slot[data-highlight]::after, .slot[data-selected]::after,
+        .slot[data-cursor]::before, .slot[data-drop]::before {
           content: "";
           position: absolute;
           inset: 0;
-          background: var(--compost-clip-grid-highlight);
           pointer-events: none;
+        }
+        .slot[data-highlight]::after { background: var(--compost-clip-grid-highlight); z-index: 0; }
+        .slot[data-selected]::after {
           z-index: 0;
+          background: color-mix(in srgb, var(--compost-clip-grid-accent) 18%, transparent);
+          box-shadow: inset 0 0 0 2px var(--compost-clip-grid-accent);
         }
-        /* the row's own content sits above the highlight rather than behind it */
-        .row > * { position: relative; z-index: 1; }
-        .progress {
-          position: absolute;
-          left: 0;
-          top: 0;
-          bottom: 0;
-          width: 0;
-          background: var(--compost-clip-grid-wash);
-        }
-        .mark {
-          position: absolute;
-          left: 0;
-          top: 0.36em;
-          bottom: 0.36em;
-          width: 1px;
-          background: var(--compost-clip-grid-accent);
-        }
-        .row[data-dragging] { opacity: 0.3; }
-        .row[data-occupied="move"] { box-shadow: inset 0 0 0 1px currentColor; }
-        .row[data-occupied="copy"] { box-shadow: inset 0 0 0 1px var(--compost-clip-grid-accent); }
+        .slot[data-cursor]::before { z-index: 3; box-shadow: inset 0 0 0 1px currentColor; }
+        .slot:focus-visible::before { z-index: 4; box-shadow: inset 0 0 0 2px currentColor; }
+        .slot[data-drop="move"]::before { z-index: 5; box-shadow: inset 0 0 0 2px currentColor; }
+        .slot[data-drop="copy"]::before { z-index: 5; box-shadow: inset 0 0 0 2px var(--compost-clip-grid-accent); }
+        .slot > * { position: relative; z-index: 1; }
+        .slot[data-dragging] { opacity: .35; }
+        .progress { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--compost-clip-grid-wash); }
         .tri {
           flex: none;
           align-self: stretch;
@@ -166,59 +207,46 @@ export class CompostClipGrid extends HTMLElement {
           cursor: pointer;
           font: inherit;
         }
-        .tri svg { display: block; width: 0.64em; height: 0.73em; }
-        .tri.record svg, .tri.rec svg { width: 0.73em; height: 0.73em; }
+        .tri svg { display: block; width: .64em; height: .73em; }
+        .tri.record svg, .tri.rec svg { width: .73em; height: .73em; }
         .tri:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-        .queue {
-          flex: none;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 0.8em;
-          margin-left: auto;
-          color: var(--compost-clip-grid-accent);
-        }
-        .queue svg { display: block; width: 0.48em; height: 0.55em; }
-        .name {
+        .queue { flex: none; display: flex; align-items: center; justify-content: center; width: .8em; margin-left: auto; color: var(--compost-clip-grid-accent); }
+        .queue svg { display: block; width: .48em; height: .55em; }
+        .name, .empty-target {
           flex: 1 1 auto;
           min-width: 0;
-          padding-left: 0.45em;
-          font-size: var(--compost-clip-grid-font-size);
-          color: var(--compost-clip-grid-text);
-          white-space: nowrap;
+          align-self: stretch;
+          display: flex;
+          align-items: center;
+          border: 0;
+          padding: 0 0 0 .45em;
           overflow: hidden;
+          background: none;
+          color: var(--compost-clip-grid-text);
+          text-align: left;
           text-overflow: ellipsis;
+          white-space: nowrap;
           cursor: pointer;
           touch-action: none;
-        }
-        .name:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-        .row[data-state="playing"] .name,
-        .row[data-queued] .name,
-        .row[data-state="recording"] .name { color: var(--compost-clip-grid-accent); }
-        .row[data-color] .name { color: var(--compost-clip-grid-accent); }
-        .preview { flex: none; width: 2.27em; height: 1.27em; color: var(--compost-clip-grid-muted); }
-        .row[data-state="playing"] .preview { color: var(--compost-clip-grid-accent); }
-        .preview[hidden] { display: none !important; }
-        .editor {
-          box-sizing: border-box;
-          width: 6.9em;
-          margin-left: 0.45em;
-          border: 0;
-          border: 1px solid var(--compost-clip-grid-line);
-          outline: 2px solid currentColor;
-          outline-offset: -2px;
-          background: var(--compost-clip-grid-editor-bg);
-          color: var(--compost-clip-grid-text);
           font: inherit;
           font-size: var(--compost-clip-grid-font-size);
-          -webkit-user-select: text;
-          user-select: text;
         }
+        .empty-target { cursor: default; }
+        .name:focus, .empty-target:focus { outline: none; }
+        .slot[data-state="playing"] .name, .slot[data-queued] .name,
+        .slot[data-state="recording"] .name, .slot[data-color] .name { color: var(--compost-clip-grid-accent); }
+        .preview { flex: none; width: 2.27em; height: 1.27em; color: var(--compost-clip-grid-muted); }
+        .slot[data-state="playing"] .preview { color: var(--compost-clip-grid-accent); }
+        .preview[hidden] { display: none !important; }
+        .editor { box-sizing: border-box; width: calc(100% - 2em); margin-left: .45em; border: 1px solid var(--compost-clip-grid-line); outline: 2px solid currentColor; outline-offset: -2px; background: var(--compost-clip-grid-editor-bg); color: var(--compost-clip-grid-text); font: inherit; font-size: var(--compost-clip-grid-font-size); -webkit-user-select: text; user-select: text; }
         .stop { color: var(--compost-clip-grid-muted); }
-        .stop:hover { color: currentColor; }
         .stop[data-queued] { color: var(--compost-clip-grid-accent); }
         .stop[hidden] { display: none !important; }
-      </style>`;
+      </style>
+      <div class="matrix" part="grid" role="grid"></div>`;
+		this.matrix = /** @type {HTMLElement} */ (
+			this.root.querySelector(".matrix")
+		);
 
 		this.addEventListener("click", (event) => this.handleClick(event));
 		this.addEventListener("dblclick", (event) => this.handleDoubleClick(event));
@@ -235,10 +263,8 @@ export class CompostClipGrid extends HTMLElement {
 	}
 
 	connectedCallback() {
-		this.setAttribute("role", "group");
-		// a press on an idle part of this element is the column's to use
-		if (!this.hasAttribute("data-strip-passthrough"))
-			this.setAttribute("data-strip-passthrough", "");
+		if (!this.hasAttribute("tabindex")) this.tabIndex = 0;
+		this.setAttribute("role", "region");
 		this.readAttributes();
 		this.render();
 		this.resizeObserver?.observe(this);
@@ -250,15 +276,10 @@ export class CompostClipGrid extends HTMLElement {
 		this.endDrag(true);
 	}
 
-	/** @param {string} name */
-	attributeChangedCallback(name) {
+	attributeChangedCallback() {
 		if (!this.isConnected) return;
 		this.readAttributes();
-		// the selection mark and the stop slot change in place: rebuilding the rows
-		// under a pointer would break the double-click that follows a click
-		if (name === "selected" || name === "selection") this.paintSelection();
-		else if (name === "stop") this.paintStop();
-		else this.render();
+		this.render();
 	}
 
 	readAttributes() {
@@ -268,58 +289,73 @@ export class CompostClipGrid extends HTMLElement {
 			512,
 		);
 		this.label = this.getAttribute("label") || this.label;
-		this.setAttribute("aria-label", `${this.label} clips`);
+		this.setAttribute("aria-label", this.label);
 	}
 
-	get clips() {
-		return this._clips.map((clip) => (clip ? { ...clip } : null));
+	get tracks() {
+		return this._tracks.map((track) => ({
+			...track,
+			clips: track.clips.map((clip) => (clip ? { ...clip } : null)),
+		}));
 	}
 
-	set clips(value) {
-		this.setClips(value);
+	/** @param {ClipGridTrack[]} tracks */
+	setTracks(tracks) {
+		const seen = new Set();
+		const list = (Array.isArray(tracks) ? tracks : [])
+			.map((track) => ({
+				id: String(track?.id || ""),
+				name: String(track?.name || track?.id || "Track"),
+				color: track?.color ? String(track.color) : undefined,
+				armed: Boolean(track?.armed),
+				recordQueuedSlot: Number.isInteger(track?.recordQueuedSlot)
+					? Number(track.recordQueuedSlot)
+					: null,
+				stopState:
+					track?.stopState === "queued" || track?.stopState === "active"
+						? track.stopState
+						: "",
+				clips: Array.isArray(track?.clips)
+					? track.clips.map((clip) =>
+							clip && typeof clip.name === "string" ? { ...clip } : null,
+						)
+					: [],
+			}))
+			.filter((track) => track.id && !seen.has(track.id) && seen.add(track.id));
+		this._tracks = list;
+		this.slotCount = Math.max(
+			this.slotCount,
+			...list.map((track) => track.clips.length),
+		);
+		for (const track of this._tracks)
+			track.clips = Array.from(
+				{ length: this.slotCount },
+				(_, slot) => track.clips[slot] ?? null,
+			);
+		if (!this._cursor || !this.positionExists(this._cursor))
+			this._cursor = this._tracks[0]
+				? { trackId: this._tracks[0].id, slot: 0 }
+				: null;
+		this._selection = this.normalizePositions(this._selection);
+		this.render();
 	}
 
-	get selected() {
-		return this.hasAttribute("selected")
-			? numberAttr(this, "selected", -1)
-			: -1;
-	}
-
-	set selected(index) {
-		if (index === null || index === undefined || index < 0)
-			this.removeAttribute("selected");
-		else this.setAttribute("selected", String(index));
-	}
-	/** The slots marked as part of a wider selection, beside the selected one. */
 	get selection() {
-		return (this.getAttribute("selection") || "")
-			.split(/\s+/u)
-			.filter(Boolean)
-			.map(Number)
-			.filter(Number.isInteger);
-	}
-	set selection(indexes) {
-		const list = Array.isArray(indexes)
-			? indexes.filter((index) => Number.isInteger(index) && index >= 0)
-			: [];
-		if (list.length === 0) this.removeAttribute("selection");
-		else this.setAttribute("selection", list.join(" "));
+		return this._selection.map((position) => ({ ...position }));
 	}
 
-	get recordQueued() {
-		return this.hasAttribute("record-queued")
-			? numberAttr(this, "record-queued", -1)
-			: -1;
+	get cursor() {
+		return this._cursor ? { ...this._cursor } : null;
 	}
 
-	set recordQueued(index) {
-		if (index === null || index === undefined || index < 0)
-			this.removeAttribute("record-queued");
-		else this.setAttribute("record-queued", String(index));
-	}
-
-	get armed() {
-		return this.hasAttribute("armed");
+	/** @param {ClipGridPosition[]} positions @param {ClipGridPosition|null} [cursor] */
+	setSelection(positions, cursor = null) {
+		this._selection = this.normalizePositions(positions);
+		if (cursor && this.positionExists(cursor)) this._cursor = { ...cursor };
+		else if (this._selection.length)
+			this._cursor = { ...this._selection.at(-1) };
+		this.selectionAnchor = this._cursor ? { ...this._cursor } : null;
+		this.paintSelection();
 	}
 
 	get disabled() {
@@ -329,299 +365,346 @@ export class CompostClipGrid extends HTMLElement {
 		this.toggleAttribute("disabled", Boolean(value));
 	}
 
-	/** The stop slot's state: '' (idle), 'active' (something is playing), 'queued'. */
-	get stopState() {
-		const value = this.getAttribute("stop");
-		return value === "queued" || value === "active" ? value : "";
+	/** @param {ClipGridPosition[]} positions */
+	normalizePositions(positions) {
+		const seen = new Set();
+		return (Array.isArray(positions) ? positions : []).flatMap((position) => {
+			const normalized = {
+				trackId: String(position?.trackId || ""),
+				slot: Number(position?.slot),
+			};
+			const key = this.positionKey(normalized);
+			return this.positionExists(normalized) && !seen.has(key) && seen.add(key)
+				? [normalized]
+				: [];
+		});
 	}
 
-	/** Replaces every slot: one entry per slot, null for an empty one. */
-	/** @param {(ClipSpec|null)[]} clips */
-	setClips(clips) {
-		const list = Array.isArray(clips) ? clips : [];
-		this._clips = Array.from(
-			{ length: Math.max(this.slotCount, list.length) },
-			(_, index) => {
-				const clip = list[index];
-				return clip && typeof clip.name === "string" ? { ...clip } : null;
-			},
+	/** @param {ClipGridPosition} position */
+	positionExists(position) {
+		return (
+			this._tracks.some((track) => track.id === position?.trackId) &&
+			Number.isInteger(position?.slot) &&
+			position.slot >= 0 &&
+			position.slot < this.slotCount
 		);
-		if (this._clips.length !== this.slotCount) {
-			this.slotCount = this._clips.length;
-			this.setAttribute("slots", String(this.slotCount));
-		}
-		this.render();
+	}
+
+	/** @param {ClipGridPosition} position */
+	positionKey(position) {
+		return `${position.trackId}\u0000${position.slot}`;
+	}
+
+	/** @param {ClipGridPosition} position */
+	clipAt(position) {
+		return (
+			this._tracks.find((track) => track.id === position?.trackId)?.clips[
+				position?.slot
+			] ?? null
+		);
 	}
 
 	/** Cheap per-frame update of one playing clip's progress, 0..1. */
-	/** @param {number} index @param {number} progress */
-	setProgress(index, progress) {
-		const clip = this._clips[index];
+	/** @param {string} trackId @param {number} slot @param {number} progress */
+	setProgress(trackId, slot, progress) {
+		const track = this._tracks.find((entry) => entry.id === trackId);
+		const clip = track?.clips[slot];
 		if (!clip) return;
 		clip.progress = clamp(Number(progress) || 0, 0, 1);
-		const bar = this.rowElements()[index]?.querySelector(".progress");
+		const bar = this.slotElement({ trackId, slot })?.querySelector(".progress");
 		if (bar instanceof HTMLElement)
 			bar.style.width = `${(clip.progress * 100).toFixed(1)}%`;
 	}
 
-	/** Lights a row across the grid, as the scene launcher does when hovered. */
-	/** @param {number} index @param {boolean} on */
-	highlightRow(index, on) {
-		const row = this.rowElements()[index];
-		if (row) row.toggleAttribute("data-highlight", on);
+	/** @param {number} slot @param {boolean} on */
+	highlightRow(slot, on) {
+		for (const element of this.slotElements().filter(
+			(entry) => Number(entry.dataset.slot) === slot,
+		))
+			element.toggleAttribute("data-highlight", on);
 	}
 
-	/** Opens an inline editor on a clip's name; the result arrives as `clip-rename`. */
-	/** @param {number} index */
-	beginRename(index) {
-		if (!this._clips[index] || this.disabled) return;
+	/** @param {ClipGridPosition} position */
+	beginRename(position) {
+		if (!this.clipAt(position) || this.disabled) return;
 		clearTimeout(this.renameTimer);
 		this.renameTimer = null;
-		this.renaming = index;
+		this.renaming = { ...position };
 		this.render();
 	}
 
 	// ---- Rendering ------------------------------------------------------------
 
-	rowElements() {
+	slotElements() {
 		return /** @type {HTMLElement[]} */ ([
-			...this.root.querySelectorAll(".row:not(.stop)"),
+			...this.root.querySelectorAll(".slot"),
 		]);
 	}
 
+	/** @param {ClipGridPosition} position */
+	slotElement(position) {
+		return /** @type {HTMLElement|null} */ (
+			this.root.querySelector(
+				`.slot[data-track-id="${CSS.escape(position.trackId)}"][data-slot="${position.slot}"]`,
+			)
+		);
+	}
+
 	render() {
-		if (!this.root) return;
-		const rows = [];
-		const selected = this.selected;
-		for (let index = 0; index < this.slotCount; index += 1) {
-			const clip = this._clips[index] ?? null;
-			const row = document.createElement("div");
-			row.className = "row";
-			row.part.add("row");
-			row.dataset.index = String(index);
-			if (clip) {
-				if (clip.color) {
-					row.dataset.color = "";
-					row.style.setProperty("--compost-clip-grid-accent", clip.color);
-				}
-				const state = clip.state ?? "stopped";
-				row.dataset.state = state;
-				row.part.add(state);
-				if (clip.queued) {
-					row.dataset.queued = "";
-					row.part.add("queued");
-				}
-				if (state === "playing") {
-					const progress = document.createElement("span");
-					progress.className = "progress";
-					progress.part.add("progress");
-					progress.style.width = `${(clamp(Number(clip.progress) || 0, 0, 1) * 100).toFixed(1)}%`;
-					row.append(progress);
-				}
-				if (selected === index) {
-					const mark = document.createElement("span");
-					mark.className = "mark";
-					mark.part.add("mark");
-					row.append(mark);
-				}
-				const tri = document.createElement("button");
-				tri.type = "button";
-				tri.className = `tri${state === "recording" ? " rec" : ""}`;
-				tri.dataset.action = "launch";
-				// every button says which track it belongs to, so a screen reader walking
-				// a row of columns never hears "Launch take 1" four times over
-				tri.setAttribute(
-					"aria-label",
-					`${clip.queued ? "Cancel queued launch of" : state === "playing" ? "Stop" : state === "recording" ? "Finish recording and queue" : "Launch"} ${clip.name} on ${this.label}`,
-				);
-				tri.title = clip.queued
-					? "cancel queued launch"
-					: state === "recording"
-						? "finish take · queue launch"
-						: state === "playing"
-							? "stop"
-							: "launch  ↵";
-				tri.part.add("launch");
-				tri.innerHTML =
-					state === "recording"
-						? dot("var(--compost-clip-grid-accent)")
-						: triangle(
-								state === "playing"
-									? "var(--compost-clip-grid-accent)"
-									: "var(--compost-clip-grid-muted)",
-							);
-				row.append(tri);
-				row.insertAdjacentHTML("beforeend", PREVIEW);
-				row.querySelector(".preview")?.part.add("preview");
-				if (this.renaming === index) {
-					const input = document.createElement("input");
-					input.className = "editor";
-					input.part.add("editor");
-					input.value = clip.name;
-					input.setAttribute("aria-label", `Rename ${clip.name}`);
-					let closed = false;
-					const finish = (/** @type {boolean} */ commit) => {
-						if (closed) return;
-						closed = true;
-						this.renaming = null;
-						const name = input.value.trim();
-						this.render();
-						if (commit && name && name !== clip.name) {
-							this.dispatchEvent(
-								new CustomEvent("clip-rename", {
-									bubbles: true,
-									composed: true,
-									detail: { index, name },
-								}),
-							);
-						}
-					};
-					input.addEventListener("keydown", (event) => {
-						event.stopPropagation();
-						if (event.key === "Enter") finish(true);
-						if (event.key === "Escape") finish(false);
-					});
-					input.addEventListener("blur", () => finish(true));
-					input.addEventListener("pointerdown", (event) =>
-						event.stopPropagation(),
-					);
-					row.append(input);
-					requestAnimationFrame(() => {
-						input.focus();
-						input.select();
-					});
-				} else {
-					const name = document.createElement("span");
-					name.className = "name";
-					name.part.add("name");
-					name.dataset.action = "clip";
-					name.tabIndex = 0;
-					name.setAttribute("role", "button");
-					name.setAttribute(
-						"aria-label",
-						`${clip.name} on ${this.label}, ${state}${clip.queued ? ", queued to play" : ""}${clip.loop === false ? ", one shot" : ""}`,
-					);
-					name.textContent = clip.name;
-					row.append(name);
-				}
-				if (clip.queued) {
-					const queue = document.createElement("span");
-					queue.className = "queue";
-					queue.part.add("queue");
-					queue.setAttribute("aria-hidden", "true");
-					queue.innerHTML = triangle("none", "var(--compost-clip-grid-accent)");
-					row.append(queue);
-				}
-			} else {
-				const recordQueued = index === this.recordQueued;
-				if (recordQueued) {
-					row.dataset.recordQueued = "";
-					row.part.add("queued-record");
-				}
-				const tri = document.createElement(this.armed ? "button" : "span");
-				tri.className = `tri${this.armed ? " record" : ""}`;
-				if (this.armed) {
-					/** @type {HTMLButtonElement} */ (tri).type = "button";
-					tri.dataset.action = "record";
-					tri.part.add("record");
-					tri.setAttribute(
-						"aria-label",
-						recordQueued
-							? `Cancel queued recording in ${this.label} slot ${index + 1}`
-							: `Record into ${this.label} slot ${index + 1}`,
-					);
-					tri.title = recordQueued
-						? "cancel queued recording"
-						: "record into this slot";
-					tri.innerHTML = ring(
-						recordQueued
-							? "var(--compost-clip-grid-accent)"
-							: "var(--compost-clip-grid-rail)",
-					);
-				}
-				row.append(tri);
-				if (recordQueued) {
-					const queue = document.createElement("span");
-					queue.className = "queue";
-					queue.part.add("queue");
-					queue.setAttribute("aria-hidden", "true");
-					queue.innerHTML = ring("var(--compost-clip-grid-accent)");
-					row.append(queue);
-				}
-			}
-			rows.push(row);
+		if (!this.matrix) return;
+		this.matrix.style.setProperty(
+			"--track-count",
+			String(Math.max(1, this._tracks.length)),
+		);
+		const fragment = document.createDocumentFragment();
+		for (const track of this._tracks) {
+			const header = document.createElement("div");
+			header.className = "track-header";
+			header.part.add("track-header");
+			header.dataset.trackId = track.id;
+			header.textContent = track.name;
+			header.title = track.name;
+			fragment.append(header);
 		}
-		// every track that holds clips gets a stop slot
-		const stop = document.createElement("div");
-		stop.className = "row stop";
-		stop.part.add("row");
-		stop.part.add("stop");
-		stop.hidden = !this._clips.some(Boolean) && !this.hasAttribute("show-stop");
-		const tri = document.createElement("button");
-		tri.type = "button";
-		tri.className = "tri";
-		tri.part.add("stop-control");
-		tri.dataset.action = "stop";
-		tri.setAttribute("aria-label", `Stop ${this.label}`);
-		stop.append(tri);
-		rows.push(stop);
-		const style = this.root.querySelector("style");
-		this.root.replaceChildren(...(style ? [style] : []), ...rows);
-		this.paintStop();
-		// a host re-rendering mid-drag must not lose the slot the drag is over
-		if (this.dropMark) this.markDrop(this.dropMark.index, this.dropMark.copy);
+		for (let slot = 0; slot < this.slotCount; slot += 1)
+			for (const track of this._tracks)
+				fragment.append(this.renderSlot(track, slot));
+		for (const track of this._tracks) fragment.append(this.renderStop(track));
+		this.matrix.replaceChildren(fragment);
+		this.paintSelection();
+		this.paintDrop();
 		this.fitNames();
 	}
 
-	/** Moves the selection mark without rebuilding the rows. */
-	paintSelection() {
-		const marked = new Set([this.selected, ...this.selection]);
-		this.rowElements().forEach((row, index) => {
-			const mark = row.querySelector(".mark");
-			if (marked.has(index) && !mark && this._clips[index]) {
-				const span = document.createElement("span");
-				span.className = "mark";
-				span.part.add("mark");
-				row.prepend(span);
-			} else if (!marked.has(index) && mark) {
-				mark.remove();
+	/** @param {ClipGridTrack} track @param {number} slot */
+	renderSlot(track, slot) {
+		const clip = track.clips[slot] ?? null;
+		const position = { trackId: track.id, slot };
+		const element = document.createElement("div");
+		element.className = "slot";
+		element.part.add("slot");
+		element.dataset.trackId = track.id;
+		element.dataset.slot = String(slot);
+		element.setAttribute("role", "gridcell");
+		if (clip) {
+			if (clip.color || track.color) {
+				element.dataset.color = "";
+				element.style.setProperty(
+					"--compost-clip-grid-accent",
+					clip.color || track.color,
+				);
 			}
-		});
+			const state = clip.state ?? "stopped";
+			element.dataset.state = state;
+			element.part.add(state);
+			if (clip.queued) {
+				element.dataset.queued = "";
+				element.part.add("queued");
+			}
+			if (state === "playing") {
+				const progress = document.createElement("span");
+				progress.className = "progress";
+				progress.part.add("progress");
+				progress.style.width = `${(clamp(Number(clip.progress) || 0, 0, 1) * 100).toFixed(1)}%`;
+				element.append(progress);
+			}
+			const launch = document.createElement("button");
+			launch.type = "button";
+			launch.className = `tri${state === "recording" ? " rec" : ""}`;
+			launch.dataset.action = "launch";
+			launch.setAttribute(
+				"aria-label",
+				`${clip.queued ? "Cancel queued launch of" : state === "playing" ? "Stop" : state === "recording" ? "Finish recording and queue" : "Launch"} ${clip.name} on ${track.name}`,
+			);
+			launch.part.add("launch");
+			launch.innerHTML =
+				state === "recording"
+					? dot("var(--compost-clip-grid-accent)")
+					: triangle(
+							state === "playing"
+								? "var(--compost-clip-grid-accent)"
+								: "var(--compost-clip-grid-muted)",
+						);
+			element.append(launch);
+			element.insertAdjacentHTML("beforeend", PREVIEW);
+			element.querySelector(".preview")?.part.add("preview");
+			if (
+				this.renaming &&
+				this.positionKey(this.renaming) === this.positionKey(position)
+			) {
+				const input = document.createElement("input");
+				input.className = "editor";
+				input.part.add("editor");
+				input.value = clip.name;
+				input.setAttribute("aria-label", `Rename ${clip.name}`);
+				let closed = false;
+				const finish = (commit) => {
+					if (closed) return;
+					closed = true;
+					this.renaming = null;
+					const name = input.value.trim();
+					this.render();
+					if (commit && name && name !== clip.name)
+						this.emit("clip-rename", { ...position, name });
+				};
+				input.addEventListener("keydown", (event) => {
+					event.stopPropagation();
+					if (event.key === "Enter") finish(true);
+					if (event.key === "Escape") finish(false);
+				});
+				input.addEventListener("blur", () => finish(true));
+				input.addEventListener("pointerdown", (event) =>
+					event.stopPropagation(),
+				);
+				element.append(input);
+				requestAnimationFrame(() => {
+					input.focus();
+					input.select();
+				});
+			} else {
+				const name = document.createElement("button");
+				name.type = "button";
+				name.className = "name";
+				name.part.add("name");
+				name.dataset.action = "clip";
+				name.tabIndex =
+					this._cursor &&
+					this.positionKey(this._cursor) === this.positionKey(position)
+						? 0
+						: -1;
+				name.setAttribute(
+					"aria-label",
+					`${clip.name} on ${track.name}, slot ${slot + 1}, ${state}${clip.queued ? ", queued to play" : ""}${clip.loop === false ? ", one shot" : ""}`,
+				);
+				name.textContent = clip.name;
+				element.append(name);
+			}
+			if (clip.queued) {
+				const queue = document.createElement("span");
+				queue.className = "queue";
+				queue.part.add("queue");
+				queue.setAttribute("aria-hidden", "true");
+				queue.innerHTML = triangle("none", "var(--compost-clip-grid-accent)");
+				element.append(queue);
+			}
+		} else {
+			const recordQueued = slot === track.recordQueuedSlot;
+			if (recordQueued) {
+				element.dataset.recordQueued = "";
+				element.part.add("queued-record");
+			}
+			const record = document.createElement(track.armed ? "button" : "span");
+			record.className = `tri${track.armed ? " record" : ""}`;
+			if (track.armed) {
+				record.type = "button";
+				record.dataset.action = "record";
+				record.part.add("record");
+				record.setAttribute(
+					"aria-label",
+					recordQueued
+						? `Cancel queued recording in ${track.name} slot ${slot + 1}`
+						: `Record into ${track.name} slot ${slot + 1}`,
+				);
+				record.innerHTML = ring(
+					recordQueued
+						? "var(--compost-clip-grid-accent)"
+						: "var(--compost-clip-grid-rail)",
+				);
+			}
+			element.append(record);
+			const target = document.createElement("button");
+			target.type = "button";
+			target.className = "empty-target";
+			target.dataset.action = "slot";
+			target.tabIndex =
+				this._cursor &&
+				this.positionKey(this._cursor) === this.positionKey(position)
+					? 0
+					: -1;
+			target.setAttribute("aria-label", `Empty ${track.name} slot ${slot + 1}`);
+			element.append(target);
+		}
+		return element;
 	}
 
-	/** Draws the stop slot's state without rebuilding the rows. */
-	paintStop() {
-		const stop = this.root.querySelector(".row.stop");
-		const tri = stop?.querySelector(".tri");
-		if (!(stop instanceof HTMLElement) || !(tri instanceof HTMLElement)) return;
-		const stopState = this.stopState;
-		stop.toggleAttribute("data-queued", stopState === "queued");
-		tri.innerHTML = square(
-			stopState === "queued"
+	/** @param {ClipGridTrack} track */
+	renderStop(track) {
+		const stop = document.createElement("div");
+		stop.className = "stop";
+		stop.part.add("stop");
+		stop.dataset.trackId = track.id;
+		stop.hidden = !track.clips.some(Boolean) && !this.hasAttribute("show-stop");
+		stop.toggleAttribute("data-queued", track.stopState === "queued");
+		const control = document.createElement("button");
+		control.type = "button";
+		control.className = "tri";
+		control.part.add("stop-control");
+		control.dataset.action = "stop";
+		control.dataset.trackId = track.id;
+		control.setAttribute("aria-label", `Stop ${track.name}`);
+		control.innerHTML = square(
+			track.stopState === "queued"
 				? "var(--compost-clip-grid-accent)"
-				: stopState === "active"
+				: track.stopState === "active"
 					? "var(--compost-clip-grid-text)"
 					: "var(--compost-clip-grid-muted)",
 		);
-		tri.title =
-			stopState === "queued" ? "stop queued · click: cancel" : "stop track";
+		stop.append(control);
+		return stop;
 	}
 
-	/** The preview mark is decoration; the clip's name is not. Give the mark up on
-	 * any row whose name would otherwise be cut short, and below a handful of
-	 * characters clip instead of ellipsising. */
+	paintSelection() {
+		const selected = new Set(
+			this._selection.map((position) => this.positionKey(position)),
+		);
+		for (const element of this.slotElements()) {
+			const position = this.positionFromElement(element);
+			const on = selected.has(this.positionKey(position));
+			element.toggleAttribute(
+				"data-selected",
+				on && Boolean(this.clipAt(position)),
+			);
+			if (on && this.clipAt(position)) element.part.add("selected");
+			else element.part.remove("selected");
+			element.toggleAttribute(
+				"data-cursor",
+				Boolean(
+					this._cursor &&
+						this.positionKey(this._cursor) === this.positionKey(position),
+				),
+			);
+		}
+	}
+
+	paintDrop() {
+		const marked = new Set(
+			this.dropPositions.map((position) => this.positionKey(position)),
+		);
+		const source = new Set(
+			this.drag?.moved
+				? this.drag.positions.map((position) => this.positionKey(position))
+				: [],
+		);
+		for (const element of this.slotElements()) {
+			const key = this.positionKey(this.positionFromElement(element));
+			if (marked.has(key))
+				element.dataset.drop = this.dropCopy ? "copy" : "move";
+			else delete element.dataset.drop;
+			element.toggleAttribute("data-dragging", source.has(key));
+		}
+	}
+
 	fitNames() {
-		for (const row of this.rowElements()) {
-			const name = row.querySelector(".name");
-			const preview = row.querySelector(".preview");
+		for (const element of this.slotElements()) {
+			const name = element.querySelector(".name");
+			const preview = element.querySelector(".preview");
 			if (!(name instanceof HTMLElement)) continue;
 			if (preview instanceof SVGElement) preview.removeAttribute("hidden");
 			if (
 				preview instanceof SVGElement &&
 				name.scrollWidth > name.clientWidth + 1
-			) {
+			)
 				preview.setAttribute("hidden", "");
-			}
 			const width = name.clientWidth;
 			const per = name.scrollWidth / Math.max(1, name.textContent?.length ?? 1);
 			name.style.textOverflow =
@@ -629,23 +712,34 @@ export class CompostClipGrid extends HTMLElement {
 		}
 	}
 
-	// ---- Events -----------------------------------------------------------------
+	// ---- Selection and events -------------------------------------------------
 
-	/** @param {Event} event @returns {{action: string, index: number}|null} */
+	/** @param {Element} element */
+	positionFromElement(element) {
+		return {
+			trackId: String(element.dataset.trackId || ""),
+			slot: Number(element.dataset.slot),
+		};
+	}
+
+	/** @param {Event} event */
 	actionFrom(event) {
 		const path = event.composedPath();
 		const control = path.find(
 			(node) => node instanceof HTMLElement && node.dataset.action,
 		);
-		const row = path.find(
-			(node) => node instanceof HTMLElement && node.classList.contains("row"),
+		const slot = path.find(
+			(node) => node instanceof HTMLElement && node.classList.contains("slot"),
 		);
-		if (!(control instanceof HTMLElement) || !(row instanceof HTMLElement))
-			return null;
-		return {
-			action: control.dataset.action ?? "",
-			index: Number(row.dataset.index ?? -1),
-		};
+		if (!(control instanceof HTMLElement)) return null;
+		const position =
+			slot instanceof HTMLElement
+				? this.positionFromElement(slot)
+				: {
+						trackId: String(control.dataset.trackId || ""),
+						slot: Number(control.dataset.slot),
+					};
+		return { action: control.dataset.action || "", position };
 	}
 
 	/** @param {string} type @param {object} detail */
@@ -655,35 +749,93 @@ export class CompostClipGrid extends HTMLElement {
 		);
 	}
 
+	emitSelection() {
+		this.emit("clips-select", {
+			selection: this.selection,
+			cursor: this.cursor,
+		});
+	}
+
+	/** @param {ClipGridPosition[]} positions @param {ClipGridPosition} cursor @param {boolean} [focus] */
+	commitSelection(positions, cursor, focus = false) {
+		this._selection = this.normalizePositions(positions);
+		this._cursor = this.positionExists(cursor) ? { ...cursor } : this._cursor;
+		this.paintSelection();
+		if (focus && this._cursor) this.focusSlot(this._cursor);
+		this.emitSelection();
+	}
+
+	/** @param {ClipGridPosition} position */
+	selectAt(position) {
+		this.selectionAnchor = { ...position };
+		this.commitSelection(this.clipAt(position) ? [position] : [], position);
+	}
+
+	/** @param {ClipGridPosition} position */
+	extendSelection(position) {
+		const anchor = this.selectionAnchor || this._cursor || position;
+		this.commitSelection(
+			rectangularClipSelection(this._tracks, anchor, position),
+			position,
+		);
+	}
+
+	/** @param {ClipGridPosition} position */
+	toggleSelection(position) {
+		const key = this.positionKey(position);
+		const selection = this._selection.some(
+			(entry) => this.positionKey(entry) === key,
+		)
+			? this._selection.filter((entry) => this.positionKey(entry) !== key)
+			: [...this._selection, position];
+		this.selectionAnchor = { ...position };
+		this.commitSelection(selection, position);
+	}
+
 	/** @param {MouseEvent} event */
 	handleClick(event) {
 		if (this.disabled) return;
+		if (this.ignoreClick) {
+			this.ignoreClick = false;
+			return;
+		}
 		const hit = this.actionFrom(event);
 		if (!hit) return;
+		const { action, position } = hit;
 		const pointerType = event.pointerType || this.clickPointerType;
 		this.clickPointerType = "";
-		if (hit.action === "launch") this.emit("clip-launch", { index: hit.index });
-		else if (hit.action === "record")
-			this.emit("clip-record", { index: hit.index });
-		else if (hit.action === "stop") this.emit("clip-stop", {});
-		else if (hit.action === "clip") {
-			// a modifier always selects: the host decides what shift or cmd means across its grids
-			const modified = event.shiftKey || event.metaKey || event.ctrlKey;
-			if (this.selected !== hit.index || modified) {
-				this.emit("clip-select", {
-					index: hit.index,
-					shiftKey: event.shiftKey,
-					metaKey: event.metaKey,
-					ctrlKey: event.ctrlKey,
-				});
+		if (action === "launch") this.emit("clip-launch", position);
+		else if (action === "record") this.emit("clip-record", position);
+		else if (action === "stop")
+			this.emit("clip-stop", { trackId: position.trackId });
+		else if (action === "slot") {
+			this._cursor = { ...position };
+			if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
+				this._selection = [];
+				this.selectionAnchor = { ...position };
+			}
+			this.paintSelection();
+			this.focusSlot(position);
+			this.emitSelection();
+		} else if (action === "clip") {
+			if (event.shiftKey) {
+				this.extendSelection(position);
+				return;
+			}
+			if (event.metaKey || event.ctrlKey) {
+				this.toggleSelection(position);
+				return;
+			}
+			const only =
+				this._selection.length === 1 &&
+				this.positionKey(this._selection[0]) === this.positionKey(position);
+			if (!only) {
+				this.selectAt(position);
 				return;
 			}
 			clearTimeout(this.renameTimer);
-			if (pointerType && pointerType !== "mouse") {
-				this.renameTimer = null;
-				return;
-			}
-			this.renameTimer = setTimeout(() => this.beginRename(hit.index), 350);
+			if (pointerType && pointerType !== "mouse") return;
+			this.renameTimer = setTimeout(() => this.beginRename(position), 350);
 		}
 	}
 
@@ -691,17 +843,16 @@ export class CompostClipGrid extends HTMLElement {
 	handleDoubleClick(event) {
 		if (this.disabled) return;
 		const hit = this.actionFrom(event);
-		if (hit?.action === "clip") {
-			clearTimeout(this.renameTimer);
-			this.renameTimer = null;
-			event.stopPropagation();
-			this.emit("clip-open", {
-				index: hit.index,
-				altKey: event.altKey,
-				clientX: event.clientX,
-				clientY: event.clientY,
-			});
-		}
+		if (hit?.action !== "clip") return;
+		clearTimeout(this.renameTimer);
+		this.renameTimer = null;
+		event.stopPropagation();
+		this.emit("clip-open", {
+			...hit.position,
+			altKey: event.altKey,
+			clientX: event.clientX,
+			clientY: event.clientY,
+		});
 	}
 
 	/** @param {MouseEvent} event */
@@ -711,8 +862,15 @@ export class CompostClipGrid extends HTMLElement {
 		if (!hit || (hit.action !== "clip" && hit.action !== "launch")) return;
 		event.preventDefault();
 		event.stopPropagation();
+		if (
+			!this._selection.some(
+				(position) =>
+					this.positionKey(position) === this.positionKey(hit.position),
+			)
+		)
+			this.selectAt(hit.position);
 		this.emit("clip-context", {
-			index: hit.index,
+			...hit.position,
 			clientX: event.clientX,
 			clientY: event.clientY,
 		});
@@ -722,57 +880,171 @@ export class CompostClipGrid extends HTMLElement {
 	handleKey(event) {
 		if (this.disabled) return;
 		const hit = this.actionFrom(event);
-		if (hit?.action !== "clip") return;
+		const position = hit?.position || this._cursor;
+		if (!position || !this.positionExists(position)) return;
 		const meta = event.metaKey || event.ctrlKey;
-		// the same door the double-click opens, for a keyboard: Shift-Enter, or e
+		const key = event.key.toLowerCase();
+		if (event.key === "Escape") {
+			event.preventDefault();
+			this._selection = [];
+			this.selectionAnchor = this._cursor ? { ...this._cursor } : null;
+			this.paintSelection();
+			this.emitSelection();
+			return;
+		}
+		if (meta && key === "c" && this._selection.length) {
+			event.preventDefault();
+			this.emit("clips-copy", { positions: this.selection });
+			return;
+		}
+		if (meta && key === "v") {
+			event.preventDefault();
+			this.emit("clips-paste", { to: { ...position } });
+			return;
+		}
+		if (meta && key === "d" && this._selection.length) {
+			event.preventDefault();
+			const firstTrack = Math.min(
+				...this._selection.map((entry) =>
+					this._tracks.findIndex((track) => track.id === entry.trackId),
+				),
+			);
+			const to = {
+				trackId: this._tracks[firstTrack].id,
+				slot: Math.max(...this._selection.map((entry) => entry.slot)) + 1,
+			};
+			const source = this.selection;
+			this.emit("clips-duplicate", { positions: source, to });
+			const translated = translatedClipPositions(this._tracks, source, to);
+			if (translated.every((entry) => this.positionExists(entry))) {
+				this._selection = translated;
+				this._cursor = translated.at(-1) || this._cursor;
+				this.selectionAnchor = translated[0] || this.selectionAnchor;
+				this.paintSelection();
+				if (this._cursor) this.focusSlot(this._cursor);
+			}
+			return;
+		}
 		if (
-			(event.shiftKey && event.key === "Enter") ||
-			(!meta && !event.altKey && event.key === "e")
+			(event.key === "Delete" || event.key === "Backspace") &&
+			this._selection.length
 		) {
 			event.preventDefault();
-			this.emit("clip-open", { index: hit.index, altKey: event.altKey });
+			const positions = this.selection;
+			this.emit("clips-delete", { positions });
+			this._selection = [];
+			this.paintSelection();
+			return;
+		}
+		if (
+			event.key === "ArrowLeft" ||
+			event.key === "ArrowRight" ||
+			event.key === "ArrowUp" ||
+			event.key === "ArrowDown"
+		) {
+			const trackIndex = this._tracks.findIndex(
+				(track) => track.id === position.trackId,
+			);
+			const next = {
+				trackId:
+					this._tracks[
+						clamp(
+							trackIndex +
+								(event.key === "ArrowLeft"
+									? -1
+									: event.key === "ArrowRight"
+										? 1
+										: 0),
+							0,
+							this._tracks.length - 1,
+						)
+					]?.id || position.trackId,
+				slot: clamp(
+					position.slot +
+						(event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0),
+					0,
+					this.slotCount - 1,
+				),
+			};
+			if (event.altKey && this._selection.length) {
+				event.preventDefault();
+				const indexes = this._selection.map((entry) =>
+					this._tracks.findIndex((track) => track.id === entry.trackId),
+				);
+				const origin = {
+					trackId: this._tracks[Math.min(...indexes)].id,
+					slot: Math.min(...this._selection.map((entry) => entry.slot)),
+				};
+				const originIndex = this._tracks.findIndex(
+					(track) => track.id === origin.trackId,
+				);
+				const toIndex = clamp(
+					originIndex +
+						(event.key === "ArrowLeft"
+							? -1
+							: event.key === "ArrowRight"
+								? 1
+								: 0),
+					0,
+					this._tracks.length - 1,
+				);
+				const to = {
+					trackId: this._tracks[toIndex].id,
+					slot: Math.max(
+						0,
+						origin.slot +
+							(event.key === "ArrowUp"
+								? -1
+								: event.key === "ArrowDown"
+									? 1
+									: 0),
+					),
+				};
+				this.commitMove(to, false);
+				return;
+			}
+			event.preventDefault();
+			if (event.shiftKey) this.extendSelection(next);
+			else this.selectAt(next);
+			this.focusSlot(next);
+			return;
+		}
+		const clip = this.clipAt(position);
+		const track = this._tracks.find((entry) => entry.id === position.trackId);
+		if (
+			clip &&
+			((event.shiftKey && event.key === "Enter") ||
+				(!meta && !event.altKey && key === "e"))
+		) {
+			event.preventDefault();
+			this.emit("clip-open", { ...position, altKey: event.altKey });
 		} else if (event.key === "Enter" || event.key === " ") {
 			event.preventDefault();
-			this.emit("clip-launch", { index: hit.index });
-		} else if (event.key === "Delete" || event.key === "Backspace") {
+			if (clip) this.emit("clip-launch", position);
+			else if (track?.armed) this.emit("clip-record", position);
+		} else if (event.key === "F2" && clip) {
 			event.preventDefault();
-			this.emit("clip-delete", { index: hit.index });
-		} else if (meta && event.key.toLowerCase() === "d") {
+			this.beginRename(position);
+		} else if (event.shiftKey && event.key === "F10" && clip) {
 			event.preventDefault();
-			this.emit("clip-duplicate", { index: hit.index });
-		} else if (
-			event.altKey &&
-			(event.key === "ArrowUp" || event.key === "ArrowDown")
-		) {
-			const to = hit.index + (event.key === "ArrowDown" ? 1 : -1);
-			if (to < 0 || to >= this.slotCount) return;
-			event.preventDefault();
-			event.stopPropagation();
-			this.emit("clip-move", { index: hit.index, to });
-		} else if (event.key === "F2") {
-			event.preventDefault();
-			this.beginRename(hit.index);
-		} else if (event.shiftKey && event.key === "F10") {
-			event.preventDefault();
-			event.stopPropagation();
-			const rect = (
-				this.rowElements()[hit.index] ?? this
-			).getBoundingClientRect();
+			const rect = (this.slotElement(position) || this).getBoundingClientRect();
 			this.emit("clip-context", {
-				index: hit.index,
+				...position,
 				clientX: rect.left + rect.width / 2,
 				clientY: rect.top + rect.height / 2,
 			});
 		}
 	}
 
-	/** @param {number} index */
-	focusSlot(index) {
-		const name = this.rowElements()[index]?.querySelector(".name");
-		if (name instanceof HTMLElement) name.focus();
+	/** @param {ClipGridPosition} position */
+	focusSlot(position) {
+		const element = this.slotElement(position)?.querySelector(
+			".name, .empty-target",
+		);
+		if (element instanceof HTMLElement) element.focus({ preventScroll: true });
 	}
 
-	// ---- Dragging clips between slots and grids ----------------------------------
+	// ---- Dragging -------------------------------------------------------------
 
 	/** @param {PointerEvent} event */
 	beginDrag(event) {
@@ -780,32 +1052,57 @@ export class CompostClipGrid extends HTMLElement {
 		const hit = this.actionFrom(event);
 		if (hit?.action !== "clip") return;
 		this.clickPointerType = event.pointerType;
-		const row = this.rowElements()[hit.index];
-		if (!row) return;
+		const key = this.positionKey(hit.position);
+		const wasSelected = this._selection.some(
+			(entry) => this.positionKey(entry) === key,
+		);
+		const positions = wasSelected ? this.selection : [{ ...hit.position }];
+		const trackIndexes = positions.map((position) =>
+			this._tracks.findIndex((track) => track.id === position.trackId),
+		);
+		const firstTrack = Math.min(...trackIndexes);
+		const firstSlot = Math.min(...positions.map((position) => position.slot));
+		const grabbedTrack = this._tracks.findIndex(
+			(track) => track.id === hit.position.trackId,
+		);
 		this.drag = {
 			pointerId: event.pointerId,
-			index: hit.index,
+			position: hit.position,
+			positions,
 			x: event.clientX,
 			y: event.clientY,
 			moved: false,
+			wasSelected,
 			copy: event.altKey,
-			target: null,
-			targetIndex: -1,
-			row,
+			grabbedTrackOffset: grabbedTrack - firstTrack,
+			grabbedSlotOffset: hit.position.slot - firstSlot,
+			to: null,
 		};
 		window.addEventListener("pointermove", this.handleWindowMove);
 		window.addEventListener("pointerup", this.handleWindowUp);
 		window.addEventListener("pointercancel", this.handleWindowUp);
+		window.addEventListener("keydown", this.handleModifierKey, true);
+		window.addEventListener("keyup", this.handleModifierKey, true);
 		this.longPress.start(() => {
 			if (!this.drag || this.drag.moved) return;
-			const index = this.drag.index;
+			const position = { ...this.drag.position };
+			const selected = this.drag.wasSelected;
 			this.endDrag(true);
+			if (!selected) this.selectAt(position);
 			this.emit("clip-context", {
-				index,
+				...position,
 				clientX: event.clientX,
 				clientY: event.clientY,
 			});
 		});
+	}
+
+	/** @param {KeyboardEvent} event */
+	handleModifierKey(event) {
+		if (!this.drag?.moved) return;
+		this.drag.copy = Boolean(event.altKey);
+		this.dropCopy = this.drag.copy;
+		this.paintDrop();
 	}
 
 	/** @param {PointerEvent} event */
@@ -819,44 +1116,105 @@ export class CompostClipGrid extends HTMLElement {
 			)
 				return;
 			drag.moved = true;
+			if (!drag.wasSelected) this.selectAt(drag.position);
 			this.longPress.cancel();
-			drag.row.setAttribute("data-dragging", "");
-			this.emit("clip-drag-start", { index: drag.index });
+			this.emit("clips-drag-start", { positions: drag.positions });
 		}
 		drag.copy = event.altKey;
 		event.preventDefault();
-		// show the exact slot it would land in, moving or copying, on any grid
-		const under = document
-			.elementsFromPoint(event.clientX, event.clientY)
-			.find((element) => element instanceof CompostClipGrid);
-		const target = under instanceof CompostClipGrid ? under : null;
-		const targetIndex = target ? target.slotIndexAtPoint(event.clientY) : -1;
-		if (
-			drag.target &&
-			(drag.target !== target || drag.targetIndex !== targetIndex)
-		) {
-			drag.target.markDrop(-1, false);
+		const slot = this.slotElements().find((element) => {
+			const rect = element.getBoundingClientRect();
+			return (
+				event.clientX >= rect.left &&
+				event.clientX < rect.right &&
+				event.clientY >= rect.top &&
+				event.clientY < rect.bottom
+			);
+		});
+		if (!(slot instanceof HTMLElement)) {
+			drag.to = null;
+			this.dropPositions = [];
+			this.paintDrop();
+			return;
 		}
-		drag.target = target;
-		drag.targetIndex = targetIndex;
-		if (target && targetIndex >= 0) target.markDrop(targetIndex, drag.copy);
+		const target = this.positionFromElement(slot);
+		const sourceTrackIndexes = drag.positions.map((position) =>
+			this._tracks.findIndex((track) => track.id === position.trackId),
+		);
+		const width =
+			Math.max(...sourceTrackIndexes) - Math.min(...sourceTrackIndexes);
+		const targetTrack = this._tracks.findIndex(
+			(track) => track.id === target.trackId,
+		);
+		const originTrack = clamp(
+			targetTrack - drag.grabbedTrackOffset,
+			0,
+			Math.max(0, this._tracks.length - width - 1),
+		);
+		const height =
+			Math.max(...drag.positions.map((position) => position.slot)) -
+			Math.min(...drag.positions.map((position) => position.slot));
+		const to = {
+			trackId: this._tracks[originTrack].id,
+			slot: clamp(
+				target.slot - drag.grabbedSlotOffset,
+				0,
+				Math.max(0, this.slotCount - height - 1),
+			),
+		};
+		drag.to = to;
+		this.dropPositions = translatedClipPositions(
+			this._tracks,
+			drag.positions,
+			to,
+		);
+		this.dropCopy = drag.copy;
+		this.paintDrop();
 	}
 
 	/** @param {PointerEvent} event */
 	handleWindowUp(event) {
 		const drag = this.drag;
 		if (!drag || event.pointerId !== drag.pointerId) return;
-		const { target, targetIndex, index, moved } = drag;
 		const copy = event.altKey || drag.copy;
-		this.endDrag(false);
-		if (!moved || !target || targetIndex < 0) return;
-		if (target === this && targetIndex === index) return;
-		target.emit("clip-drop", {
-			source: this,
-			fromIndex: index,
-			toIndex: targetIndex,
-			copy,
+		const to = drag.to ? { ...drag.to } : null;
+		const moved = drag.moved;
+		const sourceOrigin = translatedClipPositions(this._tracks, drag.positions, {
+			trackId:
+				this._tracks[
+					Math.min(
+						...drag.positions.map((position) =>
+							this._tracks.findIndex((track) => track.id === position.trackId),
+						),
+					)
+				].id,
+			slot: Math.min(...drag.positions.map((position) => position.slot)),
 		});
+		const unchanged =
+			to &&
+			translatedClipPositions(this._tracks, drag.positions, to).every(
+				(position, index) =>
+					this.positionKey(position) === this.positionKey(sourceOrigin[index]),
+			);
+		this.endDrag(false);
+		this.ignoreClick = moved;
+		if (moved) setTimeout(() => (this.ignoreClick = false));
+		if (!moved || !to || (unchanged && !copy)) return;
+		this.commitMove(to, copy, drag.positions);
+	}
+
+	/** @param {ClipGridPosition} to @param {boolean} copy @param {ClipGridPosition[]} [positions] */
+	commitMove(to, copy, positions = this.selection) {
+		const source = positions.map((position) => ({ ...position }));
+		const translated = translatedClipPositions(this._tracks, source, to);
+		this.emit("clips-move", { positions: source, to: { ...to }, copy });
+		if (translated.every((position) => this.positionExists(position))) {
+			this._selection = translated;
+			this._cursor = translated.at(-1) || this._cursor;
+			this.selectionAnchor = translated[0] || this.selectionAnchor;
+			this.paintSelection();
+			if (this._cursor) this.focusSlot(this._cursor);
+		}
 	}
 
 	/** @param {boolean} silent */
@@ -867,31 +1225,12 @@ export class CompostClipGrid extends HTMLElement {
 		window.removeEventListener("pointermove", this.handleWindowMove);
 		window.removeEventListener("pointerup", this.handleWindowUp);
 		window.removeEventListener("pointercancel", this.handleWindowUp);
-		if (!drag) return;
-		drag.row.removeAttribute("data-dragging");
-		drag.target?.markDrop(-1, false);
-		if (drag.moved && !silent)
-			this.emit("clip-drag-end", { index: drag.index });
-	}
-
-	/** The slot under a viewport y, or -1. */
-	/** @param {number} clientY */
-	slotIndexAtPoint(clientY) {
-		return slotIndexAt(
-			clientY,
-			this.rowElements().map((row) => row.getBoundingClientRect()),
-		);
-	}
-
-	/** Marks the slot a drag would land in; -1 clears it. */
-	/** @param {number} index @param {boolean} copy */
-	markDrop(index, copy) {
-		this.dropMark = index >= 0 ? { index, copy } : null;
-		this.rowElements().forEach((row, position) => {
-			if (position === index)
-				row.setAttribute("data-occupied", copy ? "copy" : "move");
-			else row.removeAttribute("data-occupied");
-		});
+		window.removeEventListener("keydown", this.handleModifierKey, true);
+		window.removeEventListener("keyup", this.handleModifierKey, true);
+		this.dropPositions = [];
+		this.paintDrop();
+		if (drag?.moved && !silent)
+			this.emit("clips-drag-end", { positions: drag.positions });
 	}
 }
 

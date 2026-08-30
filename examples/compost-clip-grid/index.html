@@ -16,14 +16,13 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
+        <h2>Session launcher</h2>
         <div class="row">
-        <div style="width: min(15em, calc(100vw - 64px)); display: grid; gap: .5em">
-          <span>Drums</span>
-          <compost-clip-grid label="Drums" slots="5" armed selected="4" stop="active" show-stop></compost-clip-grid>
-          <label><input type="checkbox" data-launch-quant checked> Launch quantization</label>
-          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: tap a name to select, drag it to another slot, or long-press it for its context action. Mouse: click a selected name again to rename, double-click opens, Option-drag copies, and Enter launches.</small>
-        </div>
+          <div style="width: min(46em, calc(100vw - 64px)); display: grid; gap: .5em">
+            <compost-clip-grid label="Session clips" slots="6" show-stop></compost-clip-grid>
+            <label><input type="checkbox" data-launch-quant checked> Launch quantization</label>
+            <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click selects a clip. Shift-click selects every occupied clip in a rectangle; Command/Ctrl-click toggles clips. Command/Ctrl+C copies, click an empty slot and Command/Ctrl+V pastes, Command/Ctrl+D duplicates, Delete removes, and Escape clears selection. Drag a selected clip to move the selection; Alt-drag copies it.</small>
+          </div>
         </div>
         <output>last event: —</output>
       </section>
@@ -34,136 +33,214 @@
     const { s } = await elementDemo('compost-clip-grid');
     {
       const grid = s.querySelector('compost-clip-grid');
-      let clips = [
-        { name: 'break.a', state: 'playing', progress: .62 },
-        { name: 'fill.b', color: '#d15a40', state: 'stopped' },
-        null,
-        null,
-        { name: 'ride.d', state: 'stopped' },
-      ];
-      let take = 1;
-      let queuedRecord = null;
       const launchQuant = s.querySelector('[data-launch-quant]');
+      let nextID = 10;
+      let take = 1;
+      let clipboard = [];
+      const tracks = [
+        {
+          id: 'drums', name: 'Drums', armed: true, stopState: 'active', clips: [
+            { id: 'drums-1', name: 'break.a', state: 'playing', progress: .62 },
+            { id: 'drums-2', name: 'fill.b', color: '#d15a40', state: 'stopped' },
+            null, null,
+            { id: 'drums-5', name: 'ride.d', state: 'stopped' },
+            null,
+          ],
+        },
+        {
+          id: 'bass', name: 'Bass', clips: [
+            { id: 'bass-1', name: 'sub.a', state: 'stopped' },
+            null,
+            { id: 'bass-3', name: 'walk.c', state: 'stopped' },
+            null, null, null,
+          ],
+        },
+        {
+          id: 'synth', name: 'Synth', clips: [
+            null,
+            { id: 'synth-2', name: 'chord.b', state: 'stopped' },
+            null, null,
+            { id: 'synth-5', name: 'air.e', state: 'stopped' },
+            null,
+          ],
+        },
+      ];
+      const trackAt = (trackId) => tracks.find((track) => track.id === trackId);
       const render = () => {
-        grid.setClips(clips);
-        grid.recordQueued = queuedRecord?.index ?? -1;
-        if (clips.some((clip) => clip && (clip.state !== 'stopped' || clip.queued))) grid.setAttribute('stop', 'active');
-        else grid.removeAttribute('stop');
+        for (const track of tracks) {
+          track.stopState = track.clips.some((clip) => clip && (clip.state !== 'stopped' || clip.queued)) ? 'active' : '';
+        }
+        grid.setTracks(tracks);
       };
-      const startPlayback = (index) => {
-        clips = clips.map((clip, position) => {
+      const cloneClip = (clip) => ({
+        ...clip,
+        id: `clip-${nextID++}`,
+        name: `${clip.name}.copy`,
+        state: 'stopped',
+        queued: false,
+        progress: 0,
+      });
+      const selectedMaterial = (positions) => positions.flatMap((position) => {
+        const clip = trackAt(position.trackId)?.clips[position.slot];
+        return clip ? [{ position, clip }] : [];
+      });
+      const relativeMaterial = (positions) => {
+        const material = selectedMaterial(positions);
+        if (!material.length) return [];
+        const trackIndexes = material.map(({ position }) => tracks.findIndex((track) => track.id === position.trackId));
+        const firstTrack = Math.min(...trackIndexes);
+        const firstSlot = Math.min(...material.map(({ position }) => position.slot));
+        return material.map(({ position, clip }) => ({
+          trackOffset: tracks.findIndex((track) => track.id === position.trackId) - firstTrack,
+          slotOffset: position.slot - firstSlot,
+          clip: { ...clip },
+        }));
+      };
+      const place = (material, to, copy) => {
+        const firstTrack = tracks.findIndex((track) => track.id === to.trackId);
+        if (firstTrack < 0) return [];
+        const result = [];
+        for (const item of material) {
+          const track = tracks[firstTrack + item.trackOffset];
+          if (!track) continue;
+          const slot = to.slot + item.slotOffset;
+          while (track.clips.length <= slot) track.clips.push(null);
+          track.clips[slot] = copy ? cloneClip(item.clip) : item.clip;
+          result.push({ trackId: track.id, slot });
+        }
+        const slots = Math.max(...tracks.map((track) => track.clips.length), 1);
+        grid.setAttribute('slots', String(slots));
+        return result;
+      };
+      const startPlayback = (trackId, slot) => {
+        const track = trackAt(trackId);
+        if (!track) return;
+        track.clips = track.clips.map((clip, position) => {
           if (!clip) return null;
-          return position === index
+          return position === slot
             ? { ...clip, state: 'playing', queued: false, progress: 0 }
             : { ...clip, state: 'stopped', queued: false };
         });
-        queuedRecord = null;
+        track.recordQueuedSlot = null;
         render();
       };
-      const queuePlayback = (index) => {
+      const queuePlayback = (trackId, slot) => {
+        const track = trackAt(trackId);
+        const clip = track?.clips[slot];
+        if (!track || !clip) return;
         if (!launchQuant.checked) {
-          startPlayback(index);
+          startPlayback(trackId, slot);
           return;
         }
-        const queued = { ...clips[index], queued: true, progress: 0 };
-        clips[index] = queued;
-        queuedRecord = null;
+        const queued = { ...clip, queued: true, progress: 0 };
+        track.clips[slot] = queued;
+        track.recordQueuedSlot = null;
         render();
         setTimeout(() => {
-          if (clips[index] !== queued) return;
-          startPlayback(index);
+          if (track.clips[slot] !== queued) return;
+          startPlayback(trackId, slot);
         }, 750);
       };
-      const startRecording = (index) => {
-        clips = clips.map((clip) => clip ? { ...clip, state: 'stopped', queued: false } : null);
-        clips[index] = { name: `take.${take++}`, state: 'recording' };
-        queuedRecord = null;
-        render();
-      };
-      grid.addEventListener('clip-select', ({ detail }) => { grid.selected = detail.index; });
       grid.addEventListener('clip-launch', ({ detail }) => {
-        const clip = clips[detail.index];
-        if (!clip) return;
-        if (clip.queued) {
-          clips[detail.index] = { ...clip, queued: false };
-        } else if (clip.state === 'recording') {
-          queuePlayback(detail.index);
+        const track = trackAt(detail.trackId);
+        const clip = track?.clips[detail.slot];
+        if (!track || !clip) return;
+        if (clip.queued) track.clips[detail.slot] = { ...clip, queued: false };
+        else if (clip.state === 'recording') {
+          queuePlayback(detail.trackId, detail.slot);
           return;
-        } else if (clip.state === 'playing') {
-          clips[detail.index] = { ...clip, state: 'stopped' };
-        } else {
-          clips = clips.map((other) => other?.queued
-            ? { ...other, queued: false } : other);
-          queuePlayback(detail.index);
+        } else if (clip.state === 'playing') track.clips[detail.slot] = { ...clip, state: 'stopped' };
+        else {
+          track.clips = track.clips.map((other) => other?.queued ? { ...other, queued: false } : other);
+          queuePlayback(detail.trackId, detail.slot);
           return;
         }
         render();
       });
       grid.addEventListener('clip-record', ({ detail }) => {
-        if (queuedRecord?.index === detail.index) {
-          queuedRecord = null;
+        const track = trackAt(detail.trackId);
+        if (!track) return;
+        if (track.recordQueuedSlot === detail.slot) {
+          track.recordQueuedSlot = null;
           render();
           return;
         }
+        const start = () => {
+          track.clips = track.clips.map((clip) => clip ? { ...clip, state: 'stopped', queued: false } : null);
+          track.clips[detail.slot] = { id: `take-${nextID++}`, name: `take.${take++}`, state: 'recording' };
+          track.recordQueuedSlot = null;
+          render();
+        };
         if (!launchQuant.checked) {
-          startRecording(detail.index);
+          start();
           return;
         }
-        clips = clips.map((clip) => clip?.queued ? { ...clip, queued: false } : clip);
-        const pending = { index: detail.index };
-        queuedRecord = pending;
+        track.recordQueuedSlot = detail.slot;
         render();
         setTimeout(() => {
-          if (queuedRecord !== pending) return;
-          startRecording(detail.index);
+          if (track.recordQueuedSlot !== detail.slot) return;
+          start();
         }, 750);
       });
-      grid.addEventListener('clip-stop', () => {
-        clips = clips.map((clip) => clip ? { ...clip, state: 'stopped', queued: false } : null);
-        queuedRecord = null;
+      grid.addEventListener('clip-stop', ({ detail }) => {
+        const track = trackAt(detail.trackId);
+        if (!track) return;
+        track.clips = track.clips.map((clip) => clip ? { ...clip, state: 'stopped', queued: false } : null);
+        track.recordQueuedSlot = null;
         render();
       });
       grid.addEventListener('clip-rename', ({ detail }) => {
-        if (!clips[detail.index]) return;
-        clips[detail.index] = { ...clips[detail.index], name: detail.name };
+        const track = trackAt(detail.trackId);
+        if (!track?.clips[detail.slot]) return;
+        track.clips[detail.slot] = { ...track.clips[detail.slot], name: detail.name };
         render();
       });
-      grid.addEventListener('clip-delete', ({ detail }) => {
-        clips[detail.index] = null;
-        if (grid.selected === detail.index) grid.selected = -1;
-        render();
+      grid.addEventListener('clips-copy', ({ detail }) => {
+        clipboard = relativeMaterial(detail.positions);
       });
-      grid.addEventListener('clip-duplicate', ({ detail }) => {
-        const to = clips.findIndex((clip) => !clip);
-        if (!clips[detail.index] || to < 0) return;
-        clips[to] = { ...clips[detail.index], state: 'stopped', queued: false };
+      grid.addEventListener('clips-paste', ({ detail }) => {
+        if (!clipboard.length) return;
+        const selection = place(clipboard, detail.to, true);
         render();
+        grid.setSelection(selection, selection.at(-1) ?? detail.to);
       });
-      grid.addEventListener('clip-move', ({ detail }) => {
-        clips[detail.to] = clips[detail.index];
-        clips[detail.index] = null;
-        render();
-      });
-      grid.addEventListener('clip-drop', ({ detail }) => {
-        if (detail.source !== grid || !clips[detail.fromIndex]) return;
-        if (detail.copy) {
-          clips[detail.toIndex] = { ...clips[detail.fromIndex], state: 'stopped', queued: false };
-        } else {
-          clips[detail.toIndex] = clips[detail.fromIndex];
-          clips[detail.fromIndex] = null;
+      grid.addEventListener('clips-delete', ({ detail }) => {
+        for (const position of detail.positions) {
+          const track = trackAt(position.trackId);
+          if (track) track.clips[position.slot] = null;
         }
         render();
       });
+      grid.addEventListener('clips-duplicate', ({ detail }) => {
+        const selection = place(relativeMaterial(detail.positions), detail.to, true);
+        render();
+        grid.setSelection(selection, selection.at(-1) ?? null);
+      });
+      grid.addEventListener('clips-move', ({ detail }) => {
+        const material = relativeMaterial(detail.positions);
+        if (!detail.copy) {
+          for (const position of detail.positions) {
+            const track = trackAt(position.trackId);
+            if (track) track.clips[position.slot] = null;
+          }
+        }
+        const selection = place(material, detail.to, detail.copy);
+        render();
+        grid.setSelection(selection, selection.at(-1) ?? null);
+      });
       render();
+      grid.setSelection([{ trackId: 'drums', slot: 4 }], { trackId: 'drums', slot: 4 });
       let previousFrame = performance.now();
       const advance = (now) => {
         const delta = (now - previousFrame) / 6000;
         previousFrame = now;
-        clips.forEach((clip, index) => {
-          if (clip?.state !== 'playing') return;
-          clip.progress = ((clip.progress ?? 0) + delta) % 1;
-          grid.setProgress(index, clip.progress);
-        });
+        for (const track of tracks) {
+          track.clips.forEach((clip, slot) => {
+            if (clip?.state !== 'playing') return;
+            clip.progress = ((clip.progress ?? 0) + delta) % 1;
+            grid.setProgress(track.id, slot, clip.progress);
+          });
+        }
         requestAnimationFrame(advance);
       };
       requestAnimationFrame(advance);
