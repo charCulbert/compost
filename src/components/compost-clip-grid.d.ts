@@ -58,6 +58,7 @@ export function slotIndexAt(y: number, rows: DOMRect[]): number;
  * @attribute label
  * @attribute armed - record-arms the track
  * @attribute selected - index of the selected slot; absent clears
+ * @attribute selection - further slot indexes marked as selected, space-separated; absent clears
  * @attribute record-queued - slot index queued for recording; reflected
  * @attribute stop - index of the playing slot; absent clears
  * @attribute disabled
@@ -73,6 +74,9 @@ export class CompostClipGrid extends HTMLElement {
   /** The selected slot index, or -1. */
   get selected(): number;
   set selected(index: number | null);
+  /** The slots marked as part of a wider selection, beside the selected one. */
+  get selection(): number[];
+  set selection(indexes: number[] | null);
   /** The empty slot waiting to begin recording, or -1. */
   get recordQueued(): number;
   set recordQueued(index: number | null);

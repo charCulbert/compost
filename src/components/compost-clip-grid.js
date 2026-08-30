@@ -46,7 +46,7 @@ export function slotIndexAt(y, rows) {
  */
 export class CompostClipGrid extends HTMLElement {
   static get observedAttributes() {
-    return ['slots', 'label', 'armed', 'selected', 'record-queued', 'stop', 'disabled', 'show-stop'];
+    return ['slots', 'label', 'armed', 'selected', 'selection', 'record-queued', 'stop', 'disabled', 'show-stop'];
   }
 
   constructor() {
@@ -236,7 +236,7 @@ export class CompostClipGrid extends HTMLElement {
     this.readAttributes();
     // the selection mark and the stop slot change in place: rebuilding the rows
     // under a pointer would break the double-click that follows a click
-    if (name === 'selected') this.paintSelection();
+    if (name === 'selected' || name === 'selection') this.paintSelection();
     else if (name === 'stop') this.paintStop();
     else this.render();
   }
@@ -262,6 +262,15 @@ export class CompostClipGrid extends HTMLElement {
   set selected(index) {
     if (index === null || index === undefined || index < 0) this.removeAttribute('selected');
     else this.setAttribute('selected', String(index));
+  }
+  /** The slots marked as part of a wider selection, beside the selected one. */
+  get selection() {
+    return (this.getAttribute('selection') || '').split(/\s+/u).filter(Boolean).map(Number).filter(Number.isInteger);
+  }
+  set selection(indexes) {
+    const list = Array.isArray(indexes) ? indexes.filter((index) => Number.isInteger(index) && index >= 0) : [];
+    if (list.length === 0) this.removeAttribute('selection');
+    else this.setAttribute('selection', list.join(' '));
   }
 
   get recordQueued() {
@@ -486,15 +495,15 @@ export class CompostClipGrid extends HTMLElement {
 
   /** Moves the selection mark without rebuilding the rows. */
   paintSelection() {
-    const selected = this.selected;
+    const marked = new Set([this.selected, ...this.selection]);
     this.rowElements().forEach((row, index) => {
       const mark = row.querySelector('.mark');
-      if (index === selected && !mark && this._clips[index]) {
+      if (marked.has(index) && !mark && this._clips[index]) {
         const span = document.createElement('span');
         span.className = 'mark';
         span.part.add('mark');
         row.prepend(span);
-      } else if (index !== selected && mark) {
+      } else if (!marked.has(index) && mark) {
         mark.remove();
       }
     });
@@ -557,8 +566,10 @@ export class CompostClipGrid extends HTMLElement {
     else if (hit.action === 'record') this.emit('clip-record', { index: hit.index });
     else if (hit.action === 'stop') this.emit('clip-stop', {});
     else if (hit.action === 'clip') {
-      if (this.selected !== hit.index) {
-        this.emit('clip-select', { index: hit.index });
+      // a modifier always selects: the host decides what shift or cmd means across its grids
+      const modified = event.shiftKey || event.metaKey || event.ctrlKey;
+      if (this.selected !== hit.index || modified) {
+        this.emit('clip-select', { index: hit.index, shiftKey: event.shiftKey, metaKey: event.metaKey, ctrlKey: event.ctrlKey });
         return;
       }
       clearTimeout(this.renameTimer);
