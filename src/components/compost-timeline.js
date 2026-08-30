@@ -252,6 +252,7 @@ export class CompostTimeline extends HTMLElement {
 			"adaptive-grid",
 			"snap",
 			"follow",
+			"playing",
 			"loop-enabled",
 			"disabled",
 			"readonly",
@@ -273,6 +274,7 @@ export class CompostTimeline extends HTMLElement {
 		this.adaptiveGrid = false;
 		this.snapMode = "grid";
 		this.follow = false;
+		this.playing = false;
 		this.fontSize = 16;
 		this.laneHeight = 64;
 		this.thinLaneHeight = 32;
@@ -315,6 +317,7 @@ export class CompostTimeline extends HTMLElement {
 			if (this.drag?.type !== "move" || !this.drag.moved) return;
 			this.drag.copy = Boolean(event.altKey);
 			this.paintCopyState();
+			this.paintMovePreview();
 			this.emitTimeMove("time-move-input");
 		};
 
@@ -415,6 +418,7 @@ export class CompostTimeline extends HTMLElement {
         .clip[data-state="playing"] .clip-notes, .clip[data-state="recording"] .clip-notes { opacity: 1; }
         .clip[data-dragging] { opacity: .35 !important; }
         .clip[data-ghost] { opacity: .5; pointer-events: none; z-index: 5; }
+        .clip[data-move-preview] { opacity: .45; }
         :host([data-drag-copy]) .clip { cursor: copy; }
         .clip-name { position: relative; z-index: 2; box-sizing: border-box; display: block; height: var(--clip-title-height); padding: .125em .25em 0; overflow: hidden; border-bottom: 1px solid color-mix(in srgb, CanvasText 45%, transparent); background: color-mix(in srgb, CanvasText 14%, transparent); text-overflow: ellipsis; white-space: nowrap; font-size: var(--compost-timeline-clip-font-size); line-height: 1.2; color: inherit; cursor: grab; }
         .clip-notes { position: absolute; inset: var(--clip-title-height) 0 0; opacity: 1; pointer-events: none; }
@@ -622,6 +626,7 @@ export class CompostTimeline extends HTMLElement {
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
 		this.follow = this.hasAttribute("follow");
+		this.playing = this.hasAttribute("playing");
 		this.automation = this.hasAttribute("automation");
 		this.draw = this.hasAttribute("draw");
 		const style = getComputedStyle(this);
@@ -640,8 +645,9 @@ export class CompostTimeline extends HTMLElement {
 					) || 16)
 				: parsedLaneHeight;
 		const defaultLaneHeight = fontSize * DEFAULT_LANE_HEIGHT_EM;
+		const minimumLaneHeight = Math.max(24, fontSize * 2);
 		this.laneHeight = Math.max(
-			24,
+			minimumLaneHeight,
 			this.hasAttribute("lane-height")
 				? numberAttr(this, "lane-height", this.laneHeight)
 				: Number.isFinite(cssLaneHeight)
@@ -661,7 +667,7 @@ export class CompostTimeline extends HTMLElement {
 					) || 16)
 				: parsedThinHeight;
 		this.thinLaneHeight = Math.max(
-			24,
+			minimumLaneHeight,
 			Number.isFinite(cssThinHeight)
 				? cssThinHeight
 				: fontSize * DEFAULT_THIN_LANE_HEIGHT_EM,
@@ -925,7 +931,7 @@ export class CompostTimeline extends HTMLElement {
 		const moved = next !== this._playhead;
 		this._playhead = next;
 		this.paintPlayhead();
-		if (moved && this.follow) this.keepPlayheadVisible();
+		if (moved && this.follow && this.playing) this.keepPlayheadVisible();
 	}
 
 	get loopStart() {
@@ -1014,10 +1020,15 @@ export class CompostTimeline extends HTMLElement {
 		return this.automation ? (lane?.automation ?? null) : null;
 	}
 
+	minimumLaneHeight() {
+		return Math.max(24, this.fontSize * 2);
+	}
+
 	/** @param {TimelineLane} lane */
 	laneRowHeightFor(lane) {
 		const custom = Number(lane?.height);
-		if (Number.isFinite(custom) && custom > 0) return Math.max(24, custom);
+		if (Number.isFinite(custom) && custom > 0)
+			return Math.max(this.minimumLaneHeight(), custom);
 		return lane?.compact ? this.thinLaneHeight : this.laneHeight;
 	}
 
@@ -1623,7 +1634,11 @@ export class CompostTimeline extends HTMLElement {
 			if (!drag || event.pointerId !== drag.pointerId) return;
 			drag.all ||= Boolean(event.altKey);
 			const delta = (event.clientY - drag.startY) * this.gestureFactor(event);
-			apply(clamp(drag.startHeight + delta, 24, 400), drag.all, drag.targetIds);
+			apply(
+				clamp(drag.startHeight + delta, this.minimumLaneHeight(), 400),
+				drag.all,
+				drag.targetIds,
+			);
 		});
 		const end = (/** @type {PointerEvent} */ event) => {
 			if (!drag || event.pointerId !== drag.pointerId) return;
@@ -1677,7 +1692,13 @@ export class CompostTimeline extends HTMLElement {
 			const em = Number.parseFloat(getComputedStyle(this).fontSize) || 16;
 			const step = em * 0.25 * (event.shiftKey ? 0.25 : 1);
 			const resized = targets();
-			apply(clamp(this.laneRowHeightFor(lane) + direction * step, 24, 400));
+			apply(
+				clamp(
+					this.laneRowHeightFor(lane) + direction * step,
+					this.minimumLaneHeight(),
+					400,
+				),
+			);
 			const height = this.laneRowHeightFor(lane);
 			for (const target of resized)
 				this.dispatchEvent(
@@ -2034,6 +2055,10 @@ export class CompostTimeline extends HTMLElement {
 
 	clearClipDragVisuals() {
 		this.removeAttribute("data-drag-copy");
+		for (const preview of this.lanesWorld.querySelectorAll(
+			".clip[data-move-preview]",
+		))
+			preview.remove();
 		this.paintTimeSelection();
 	}
 
@@ -2045,6 +2070,40 @@ export class CompostTimeline extends HTMLElement {
 		const drag = this.drag;
 		if (drag?.type !== "move" || !drag.moved || !drag.preview) return;
 		this.paintTimeSelection(drag.preview);
+		for (const old of this.lanesWorld.querySelectorAll(
+			".clip[data-move-preview]",
+		))
+			old.remove();
+		if (!drag.copy) return;
+		for (const [laneIndex, laneId] of drag.source.laneIds.entries()) {
+			const sourceLane = this._lanes.find((lane) => lane.id === laneId);
+			const targetLane = this._lanes.find(
+				(lane) => lane.id === drag.preview.laneIds[laneIndex],
+			);
+			const targetBase = this.lanesWorld.querySelector(
+				`.lane[data-lane-id="${CSS.escape(targetLane?.id || "")}"] .lane-base`,
+			);
+			if (!sourceLane || !targetLane || !(targetBase instanceof HTMLElement))
+				continue;
+			for (const clip of sourceLane.clips) {
+				const clipStart = Number(clip.start) || 0;
+				const clipEnd = clipStart + Math.max(0, Number(clip.length) || 0);
+				const from = Math.max(drag.source.start, clipStart);
+				const until = Math.min(drag.source.end, clipEnd);
+				if (until <= from) continue;
+				const copy = previewTrimmedClip(clip, from, until);
+				copy.start = drag.preview.start + from - drag.source.start;
+				const ghost = this.renderClip(copy, targetLane);
+				ghost.toggleAttribute("data-ghost", true);
+				ghost.toggleAttribute("data-move-preview", true);
+				ghost.dataset.sourceId = clip.id;
+				delete ghost.dataset.id;
+				ghost.tabIndex = -1;
+				ghost.removeAttribute("role");
+				ghost.setAttribute("aria-hidden", "true");
+				targetBase.append(ghost);
+			}
+		}
 	}
 
 	emitTimeMove(name, drag = this.drag) {
@@ -2356,8 +2415,9 @@ export class CompostTimeline extends HTMLElement {
 			1,
 			Math.hypot(second.x - first.x, second.y - first.y),
 		);
+		const scale = distance / this.pinch.distance;
 		const nextPxPerBeat = finiteClamp(
-			(this.pinch.pxPerBeat * distance) / this.pinch.distance,
+			this.pinch.pxPerBeat * scale,
 			MIN_PX_PER_BEAT,
 			MAX_PX_PER_BEAT,
 		);
@@ -2682,18 +2742,7 @@ export class CompostTimeline extends HTMLElement {
 		if (onRuler) {
 			const row = this.rulerRowAtPoint(event.clientY);
 			const beat = this.beatAtPoint(event.clientX);
-			if (row === 1) {
-				this.drag = {
-					pointerId: event.pointerId,
-					type: "ruler-locator-row",
-					startX: event.clientX,
-					startY: event.clientY,
-					startBeat: beat,
-					moved: false,
-				};
-				return;
-			}
-			if (row === 2) {
+			if (row === 1 || row === 2) {
 				this.dispatchEvent(
 					eventOf("seek", {
 						beat: snapBeat(
@@ -2825,7 +2874,6 @@ export class CompostTimeline extends HTMLElement {
 			drag.element.style.left = `${drag.previewBeat * this._pxPerBeat}px`;
 			return;
 		}
-		if (drag.type === "ruler-locator-row") return;
 		if (drag.type === "ruler-seek") {
 			const beat = snapBeat(
 				this.beatAtPoint(event.clientX),
@@ -3131,7 +3179,6 @@ export class CompostTimeline extends HTMLElement {
 			}
 			return;
 		}
-		if (drag.type === "ruler-locator-row") return;
 		if (drag.type === "ruler-seek") return;
 		if (drag.type === "time-selection") {
 			if (drag.moved && drag.previewSelection) {
@@ -3668,6 +3715,7 @@ export class CompostTimeline extends HTMLElement {
 		if (selection && selection.end > selection.start) {
 			if (!this.readonly && (event.metaKey || event.ctrlKey) && key === "d") {
 				event.preventDefault();
+				const length = selection.end - selection.start;
 				this.dispatchEvent(
 					eventOf("time-duplicate", {
 						start: selection.start,
@@ -3675,6 +3723,11 @@ export class CompostTimeline extends HTMLElement {
 						laneIds: [...selection.laneIds],
 						to: selection.end,
 					}),
+				);
+				this.setTimeSelection(
+					selection.end,
+					selection.end + length,
+					selection.laneIds,
 				);
 				return;
 			}
@@ -4092,7 +4145,7 @@ export class CompostTimeline extends HTMLElement {
 				: this.laneHeight;
 			const height = clamp(
 				Math.round(current * (event.deltaY > 0 ? 0.86 : 1.16)),
-				24,
+				this.minimumLaneHeight(),
 				400,
 			);
 			for (const lane of this._lanes) this.previewLaneHeight(lane, height);
@@ -4101,11 +4154,12 @@ export class CompostTimeline extends HTMLElement {
 			return;
 		}
 		if (event.metaKey || event.ctrlKey) {
+			const multiplier = event.deltaY > 0 ? 0.86 : 1.16;
 			const old = this._pxPerBeat;
 			const rect = this.rulerWrap.getBoundingClientRect();
 			const at = this._scrollBeat + (event.clientX - rect.left) / old;
 			this._pxPerBeat = finiteClamp(
-				old * (event.deltaY > 0 ? 0.86 : 1.16),
+				old * multiplier,
 				MIN_PX_PER_BEAT,
 				MAX_PX_PER_BEAT,
 			);

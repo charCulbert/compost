@@ -93,6 +93,7 @@
       automationView.addEventListener('change', () => timeline.toggleAttribute('automation', automationView.checked));
       play.addEventListener('click', () => {
         playing = !playing;
+        timeline.toggleAttribute('playing', playing);
         play.textContent = playing ? 'Stop' : 'Play';
         if (playing) transportBeat = timeline.playhead;
       });

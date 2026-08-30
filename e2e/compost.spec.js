@@ -1306,8 +1306,8 @@ test("two touch pointers pan and zoom the timeline without editing", async ({
 	const after = await lane.evaluate((target) => {
 		const element = target.getRootNode().host;
 		const rect = target.getBoundingClientRect();
-		const dispatch = (type, pointerId, x, y, buttons) =>
-			target.dispatchEvent(
+		const dispatch = (node, type, pointerId, x, y, buttons) =>
+			node.dispatchEvent(
 				new PointerEvent(type, {
 					bubbles: true,
 					composed: true,
@@ -1323,12 +1323,12 @@ test("two touch pointers pan and zoom the timeline without editing", async ({
 		const left = rect.left + rect.width * 0.35;
 		const right = rect.left + rect.width * 0.55;
 		const top = rect.top + 10;
-		dispatch("pointerdown", 81, left, top, 1);
-		dispatch("pointerdown", 82, right, top + 40, 1);
-		dispatch("pointermove", 81, left - 40, top + 40, 1);
-		dispatch("pointermove", 82, right + 60, top + 80, 1);
-		dispatch("pointerup", 81, left - 40, top + 40, 0);
-		dispatch("pointerup", 82, right + 60, top + 80, 0);
+		dispatch(target, "pointerdown", 81, left, top, 1);
+		dispatch(target, "pointerdown", 82, right, top + 40, 1);
+		dispatch(element, "pointermove", 81, left - 40, top + 20, 1);
+		dispatch(element, "pointermove", 82, right + 60, top + 120, 1);
+		dispatch(element, "pointerup", 81, left - 40, top + 20, 0);
+		dispatch(element, "pointerup", 82, right + 60, top + 120, 0);
 		return {
 			pxPerBeat: element.pxPerBeat,
 			scrollBeat: element.scrollBeat,
@@ -2183,6 +2183,42 @@ test("timeline time selections expand by lane and move with the arrow keys", asy
 	});
 });
 
+test("timeline duplication advances the selected rectangle", async ({
+	page,
+}) => {
+	await openTimeline(page);
+	const timeline = page.locator("compost-timeline");
+	await timeline.evaluate((element) => {
+		element.setLanes([{ id: "a", name: "A", clips: [] }]);
+		element.setTimeSelection(1, 3, ["a"]);
+		element.testEvents = [];
+		element.addEventListener("time-duplicate", (event) =>
+			element.testEvents.push(event.detail),
+		);
+	});
+	await timeline.focus();
+	await page.keyboard.press("Meta+d");
+	expect(
+		await timeline.evaluate((element) => ({
+			event: element.testEvents.at(-1),
+			selection: element.timeSelection,
+		})),
+	).toEqual({
+		event: { start: 1, end: 3, laneIds: ["a"], to: 3 },
+		selection: { start: 3, end: 5, laneIds: ["a"] },
+	});
+	await page.keyboard.press("Meta+d");
+	expect(
+		await timeline.evaluate((element) => ({
+			event: element.testEvents.at(-1),
+			selection: element.timeSelection,
+		})),
+	).toEqual({
+		event: { start: 3, end: 5, laneIds: ["a"], to: 5 },
+		selection: { start: 5, end: 7, laneIds: ["a"] },
+	});
+});
+
 test("timeline clips snap to their neighbours and locators", async ({
 	page,
 }) => {
@@ -2412,6 +2448,17 @@ test("timeline follow anchors the playhead at the viewport centre while playing"
 			element.pxPerBeat,
 	}));
 
+	// Follow is inert while transport playback is stopped.
+	await timeline.evaluate(
+		(element, beats) => element.setPlayhead(beats),
+		visible + 4,
+	);
+	expect(await timeline.evaluate((element) => element.scrollBeat)).toBe(0);
+	await timeline.evaluate((element) => {
+		element.setPlayhead(0);
+		element.setAttribute("playing", "");
+	});
+
 	// walking the playhead forward beats at a time keeps it anchored at the
 	// centre once it crosses it, scrolling 1:1 with no edge-driven jumps
 	await timeline.evaluate((element) => element.setPlayhead(1));
@@ -2568,12 +2615,14 @@ test("timeline Alt toggles copy while selected material is in flight", async ({
 				],
 			},
 		]);
+		element.setTimeSelection(1, 5, ["lane"]);
 		element.testEvents = [];
 		element.addEventListener("time-move", (event) =>
 			element.testEvents.push(event.detail),
 		);
 	});
 
+	const pxPerBeat = await timeline.evaluate((element) => element.pxPerBeat);
 	// start plain, then press Alt on the way to turn the material move into a copy
 	let box = await clip.boundingBox();
 	let title = await clip.locator(".clip-name").boundingBox();
@@ -2586,6 +2635,11 @@ test("timeline Alt toggles copy while selected material is in flight", async ({
 	);
 	await page.keyboard.down("Alt");
 	await expect(timeline).toHaveAttribute("data-drag-copy", "");
+	const copyPreview = timeline.locator(".clip[data-move-preview]");
+	await expect(copyPreview).toHaveCount(1);
+	await expect(copyPreview).toHaveAttribute("data-source-id", "beat");
+	await expect(copyPreview).toHaveCSS("opacity", "0.45");
+	expect((await copyPreview.boundingBox()).width).toBeCloseTo(4 * pxPerBeat, 0);
 	await page.mouse.move(
 		box.x + box.width / 2 + 60,
 		title.y + title.height / 2,
@@ -2609,6 +2663,7 @@ test("timeline Alt toggles copy while selected material is in flight", async ({
 		{ steps: 3 },
 	);
 	await page.keyboard.up("Alt");
+	await expect(timeline.locator(".clip[data-move-preview]")).toHaveCount(0);
 	await page.mouse.move(
 		box.x + box.width / 2 + 60,
 		title.y + title.height / 2,
@@ -2920,6 +2975,16 @@ test("timeline sizes every lane with Alt and zooms to the region on z", async ({
 	events = await timeline.evaluate((element) => element.testEvents);
 	expect(events.at(-1).type).toBe("lanes-resize");
 	expect(events.at(-1).detail.height).toBeGreaterThan(events[0].detail.height);
+
+	await page.keyboard.down("Alt");
+	for (let index = 0; index < 20; index += 1) await page.mouse.wheel(0, 100);
+	await page.keyboard.up("Alt");
+	const minimum = await timeline.evaluate((element) => ({
+		fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+		height: element.shadowRoot.querySelector(".lane").getBoundingClientRect()
+			.height,
+	}));
+	expect(minimum.height).toBeCloseTo(minimum.fontSize * 2, 0);
 
 	await timeline.evaluate((element) => element.setTimeSelection(2, 6, ["a"]));
 	await timeline.focus();
@@ -3251,6 +3316,14 @@ test("timeline rulers expose locators, time selections and measured row geometry
 			),
 		)
 		.toMatchObject({ type: "locator-context", detail: { id: "intro" } });
+
+	await timeline.evaluate((element) => {
+		element.testEvents = [];
+	});
+	await page.mouse.click(rulerBox.x + 120, rulerBox.y + 5);
+	expect(
+		await timeline.evaluate((element) => element.testEvents.at(-1)),
+	).toEqual({ type: "seek", detail: { beat: 5, source: "ruler" } });
 
 	await page.mouse.dblclick(rulerBox.x + 100, rulerBox.y + 5);
 	await expect

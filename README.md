@@ -105,8 +105,13 @@ exact bounds; dragging a clip title moves every intersecting material slice and
 emits `time-move-input` followed by `time-move`. The host owns splitting,
 mutation, collision policy and whether automation follows the move.
 `time-duplicate` asks the host to copy the exact selected span, including partial
-clips, immediately after itself. Clip overlap and audio-source trim limits are
-also host policy; the timeline draws the clip state handed back to it.
+clips, immediately after itself. Command/Ctrl+D advances the selection to that
+new rectangle, and Alt-drag shows translucent destination slices while copying.
+Clip overlap and audio-source trim limits are also host policy; the timeline
+draws the clip state handed back to it. Follow mode re-anchors the view only
+while the `playing` attribute is present. Pinch and Command/Ctrl-wheel zoom
+time; Alt-wheel scales lane height. Lane scaling stops at a font-relative
+minimum that keeps clip titles usable.
 Arrow keys move a timeline time selection by one grid step or lane;
 Shift+Arrow grows its time or lane extent instead. Command/Ctrl+A selects the
 finite occupied arrangement bounds, including empty lanes between them.

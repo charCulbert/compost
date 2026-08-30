@@ -329,7 +329,8 @@ export function rulerStep(pxPerBeat: number, beatsPerBar: number): number;
  * @attribute grid - default grid, a note value or legacy cells
  * @attribute adaptive-grid - lets zoom choose the effective grid step
  * @attribute snap - 'off' frees edits from the grid
- * @attribute follow - auto-scrolls to keep the playhead in view
+ * @attribute follow - auto-scrolls to keep the playhead in view during playback
+ * @attribute playing - enables playback-only follow behavior
  * @attribute loop-enabled - reflected loop state
  * @attribute disabled
  * @attribute readonly
@@ -353,6 +354,8 @@ export class CompostTimeline extends HTMLElement {
 	adaptiveGrid: boolean;
 	snapMode: "grid" | "off";
 	follow: boolean;
+	playing: boolean;
+	/** Default lane height, clamped to at least two font ems. */
 	laneHeight: number;
 	thinLaneHeight: number;
 	/** Mirrors the `automation` attribute: whether lanes show their automation curve. */
@@ -397,7 +400,7 @@ export class CompostTimeline extends HTMLElement {
 	): void;
 
 	get playhead(): number;
-	/** Move only the playhead; clip geometry is not rebuilt. */
+	/** Move only the playhead; follow re-anchors the view only while `playing` is set. */
 	setPlayhead(beat: number): void;
 
 	get loopStart(): number;
