@@ -668,12 +668,16 @@ export class CompostTimeline extends HTMLElement {
 
   get playhead() { return this._playhead; }
 
-  /** Move only the playhead; clip geometry is not rebuilt. */
+  /** Move only the playhead; clip geometry is not rebuilt. An unchanged beat
+    * never re-anchors the view, so hosts that tick setPlayhead while paused
+    * cannot undo the user's scroll. */
   /** @param {number} beat */
   setPlayhead(beat) {
-    this._playhead = Math.max(0, Number(beat) || 0);
+    const next = Math.max(0, Number(beat) || 0);
+    const moved = next !== this._playhead;
+    this._playhead = next;
     this.paintPlayhead();
-    if (this.follow) this.keepPlayheadVisible();
+    if (moved && this.follow) this.keepPlayheadVisible();
   }
 
   get loopStart() { return this._loopStart; }
