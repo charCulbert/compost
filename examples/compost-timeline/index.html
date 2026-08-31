@@ -16,7 +16,6 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
           <span>Arrangement · 6/8</span>
@@ -39,7 +38,10 @@
             <label><input type="checkbox" data-timeline-launch-quant checked> Launch quantization</label>
             <button type="button" data-timeline-play>Play</button>
           </div>
-          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: drag with one finger to edit; move two fingers to pan time and lanes, or spread them to zoom time. Long-press a clip, lane, lane header, locator, ruler, or empty surface for its context action. Mouse: click or drag lanes to select time, click a clip for its exact bounds, drag a clip title to move the selected rectangle, and Alt-drag to copy it. Shift or Command/Ctrl extends the rectangle. Double-click empty space creates a clip. Wheel scrolls lanes; Shift-wheel scrolls time; Command-wheel zooms time; Alt-wheel resizes lanes.</small>
+          <div class="usage-notes">
+            <div><strong>Desktop</strong><span>Click or drag to select. Drag titles to move; Alt-drag copies. Shift or Command/Ctrl extends. Wheel modifiers scroll, zoom, and resize.</span></div>
+            <div><strong>Mobile</strong><span>One finger edits. Two fingers pan or zoom. Double-tap empty space creates. Hold for context.</span></div>
+          </div>
         </div>
         </div>
         <output>last event: —</output>

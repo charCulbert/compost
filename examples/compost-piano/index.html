@@ -16,7 +16,6 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <div style="width: calc(100vw - 64px); display: grid; gap: .5em">
           <span>Keyboard</span>
@@ -26,7 +25,10 @@
             <label>Keys <input type="number" data-piano-count min="1" max="128" value="25" style="width: 5em"></label>
             <label><input type="checkbox" data-piano-dock> Dock to viewport</label>
           </div>
-          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click the piano, then play with A W S E D F T G Y H U J K O L P ; — or use pointer or touch.</small>
+          <div class="usage-notes">
+            <div><strong>Desktop</strong><span>Click keys, or focus the piano and play with A W S E D F T G Y H U J K O L P ;.</span></div>
+            <div><strong>Mobile</strong><span>Tap keys or slide across them.</span></div>
+          </div>
         </div>
         </div>
         <output>last event: —</output>

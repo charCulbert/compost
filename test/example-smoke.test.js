@@ -62,6 +62,11 @@ test("every element example is its own page sharing the common shell", () => {
 			`${id} shell`,
 		);
 		assert.match(page, /<div class="row">/u, `${id} row`);
+		assert.doesNotMatch(
+			page,
+			/<h2>Default<\/h2>/u,
+			`${id} has no filler heading`,
+		);
 		assert.doesNotMatch(page, /<pre id="markup"/u, `${id} has no source dump`);
 		assert.match(
 			page,
@@ -80,6 +85,27 @@ test("every element example is its own page sharing the common shell", () => {
 
 test("the shared example readout includes every literal component event", () => {
 	const helper = read("examples/shared/element-page.js");
+	const readoutBlock = helper.match(
+		/const EVENT_READOUT_IDS = new Set\(\[([^;]+)\]\)/su,
+	);
+	assert.ok(readoutBlock);
+	const readoutIDs = new Set(
+		[...readoutBlock[1].matchAll(/["']([^"']+)["']/gu)].map(
+			(match) => match[1],
+		),
+	);
+	for (const id of [
+		"compost-audio",
+		"compost-drawer",
+		"compost-knob",
+		"compost-midi-mappings",
+		"compost-number-box",
+		"compost-select",
+		"compost-slider",
+	])
+		assert.equal(readoutIDs.has(id), true, id);
+	for (const id of ["compost-meter", "compost-midi-monitor", "compost-scope"])
+		assert.equal(readoutIDs.has(id), false, id);
 	const block = helper.match(/const EVENT_TYPES = \[([^;]+)\]/su);
 	assert.ok(block);
 	const declared = new Set(
@@ -99,15 +125,43 @@ test("the shared example readout includes every literal component event", () => 
 	for (const type of ["locator-prev", "locator-next"])
 		assert.equal(declared.has(type), true, type);
 	assert.match(helper, /const elements = s\.querySelectorAll\(id\)/u);
+	assert.match(helper, /EVENT_READOUT_IDS\.has\(id\)/u);
+	assert.match(helper, /if \(payload === undefined\) return/u);
 	assert.match(helper, /for \(const element of elements\)/u);
 	assert.match(helper, /element\.addEventListener\(type/u);
 	assert.doesNotMatch(helper, /s\.addEventListener\(type/u);
 });
 
-test("example instructions match number-box pointer behavior", () => {
-	const page = read("examples/compost-number-box/index.html");
-	assert.match(page, /double-click to reset/u);
-	assert.doesNotMatch(page, /double-click to type/u);
+test("example instructions separate desktop and mobile usage", () => {
+	for (const id of [
+		"compost-clip-grid",
+		"compost-drawer",
+		"compost-envelope-editor",
+		"compost-knob",
+		"compost-midi-mappings",
+		"compost-note-editor",
+		"compost-number-box",
+		"compost-piano",
+		"compost-popup",
+		"compost-slider",
+		"compost-timeline",
+		"compost-window",
+	]) {
+		const page = read(`examples/${id}/index.html`);
+		assert.match(page, /class="usage-notes"/u, id);
+		assert.match(page, /<strong>Desktop<\/strong>/u, id);
+		assert.match(page, /<strong>Mobile<\/strong>/u, id);
+		assert.doesNotMatch(page, /Touch:|Mouse:/u, id);
+	}
+	const numberBox = read("examples/compost-number-box/index.html");
+	assert.match(numberBox, /double-click to reset/iu);
+	assert.doesNotMatch(numberBox, /double-click to type/iu);
+});
+
+test("the meter example keeps its output name accessible but visually quiet", () => {
+	const page = read("examples/compost-meter/index.html");
+	assert.match(page, /<compost-meter label="Output"/u);
+	assert.match(page, /compost-meter::part\(label\) \{ display: none; \}/u);
 });
 
 test("browser tests contain no diagnostic logging", () => {

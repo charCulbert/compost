@@ -1,6 +1,25 @@
 import "./example-page.js";
 
-// One readout per element example reports every intent the elements emit.
+const EVENT_READOUT_IDS = new Set([
+	"compost-audio",
+	"compost-button",
+	"compost-clip-grid",
+	"compost-device-selector",
+	"compost-drawer",
+	"compost-envelope-editor",
+	"compost-knob",
+	"compost-midi",
+	"compost-midi-mappings",
+	"compost-note-editor",
+	"compost-number-box",
+	"compost-piano",
+	"compost-popup",
+	"compost-select",
+	"compost-slider",
+	"compost-timeline",
+	"compost-window",
+]);
+
 const EVENT_TYPES = [
 	"button-trigger",
 	"parameter-begin",
@@ -107,7 +126,10 @@ const EVENT_TYPES = [
 ];
 
 /** Attaches the event readout and returns the section for page-owned wiring. */
-export async function elementDemo(id, { output = true } = {}) {
+export async function elementDemo(
+	id,
+	{ output = EVENT_READOUT_IDS.has(id) } = {},
+) {
 	await import(`../../src/components/${id}.js`);
 	await customElements.whenDefined(id);
 	const s = document.querySelector("section.plain");
@@ -117,7 +139,9 @@ export async function elementDemo(id, { output = true } = {}) {
 		for (const element of elements) {
 			for (const type of EVENT_TYPES) {
 				element.addEventListener(type, (event) => {
-					out.textContent = `last event: ${type} ${JSON.stringify(event.detail ?? event.target.value)}`;
+					const payload = event.detail ?? event.target.value;
+					if (payload === undefined) return;
+					out.textContent = `last event: ${type} ${JSON.stringify(payload)}`;
 				});
 			}
 		}

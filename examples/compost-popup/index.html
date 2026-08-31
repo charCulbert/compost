@@ -16,11 +16,10 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <div data-popup-surface tabindex="0" aria-label="Context menu"
           style="display: grid; place-items: center; width: min(24em, calc(100vw - 64px)); height: 8em; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); touch-action: manipulation; user-select: none">
-          Right-click or hold to open context menu
+          Open context menu
         </div>
         <compost-popup data-option-target="popup" heading="Context menu" label="Context menu">
           <option value="open">Open</option>
@@ -29,7 +28,10 @@
           <hr>
           <option value="delete">Delete</option>
         </compost-popup>
-        <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Right-click with a mouse or touch and hold on mobile. Two-finger taps are reserved for editor navigation, not context menus.</small>
+        <div class="usage-notes">
+          <div><strong>Desktop</strong><span>Right-click the target.</span></div>
+          <div><strong>Mobile</strong><span>Touch and hold the target. Two-finger taps stay reserved for navigation.</span></div>
+        </div>
         </div>
         <output>last event: —</output>
       </section>

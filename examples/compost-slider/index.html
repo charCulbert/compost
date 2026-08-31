@@ -16,7 +16,6 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <div style="width: 260px; display: grid; gap: 20px; align-self: center">
           <compost-slider data-option-target="slider" label="Cutoff" min="20" max="20000" value="800" curve="log" unit="Hz" editable></compost-slider>
@@ -26,6 +25,10 @@
         <div style="width: 260px; display: grid; gap: 20px; align-self: center">
           <compost-slider label="Learning" value="0.7" midi-map-state="active mode label" style="--midi-map-label:'CC 1'"></compost-slider>
           <compost-slider label="Cutoff (relative drag)" min="20" max="20000" value="800" curve="log" unit="Hz" interaction="relative"></compost-slider>
+        </div>
+        <div class="usage-notes">
+          <div><strong>Desktop</strong><span>Click or drag the rail. Click the value to type. Double-click resets. Arrow keys adjust; Alt moves faster.</span></div>
+          <div><strong>Mobile</strong><span>Tap or drag the rail. Tap the value to type. Double-tap resets.</span></div>
         </div>
         </div>
         <output>last event: —</output>

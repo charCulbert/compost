@@ -860,13 +860,52 @@ test("knob keyboard edits use a complete parameter gesture", async ({
 	]);
 });
 
-test("example readouts follow every component instance", async ({ page }) => {
+test("example readouts stay on intent-heavy demos and ignore empty events", async ({
+	page,
+}) => {
 	await page.goto("/examples/compost-button/");
 	const buttons = page.locator("compost-button");
 	await buttons.nth(1).click();
 	await expect(page.locator("section.plain output")).toContainText(
 		"parameter-end",
 	);
+
+	await page.goto("/examples/compost-select/");
+	await page.getByRole("combobox", { name: "Waveform" }).selectOption("3");
+	await expect(page.locator("section.plain output")).toHaveText(
+		'last event: change "3"',
+	);
+
+	await page.goto("/examples/compost-meter/");
+	await expect(page.locator("section.plain output")).toHaveCount(0);
+
+	await page.goto("/examples/compost-midi/");
+	const output = page.locator("section.plain output");
+	await page.locator("compost-midi").dispatchEvent("change");
+	await expect(output).toHaveText("last event: —");
+});
+
+test("usage notes separate desktop and mobile controls and stack on phones", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-knob/");
+	const usage = page.locator(".usage-notes");
+	await expect(usage.getByText("Desktop", { exact: true })).toBeVisible();
+	await expect(usage.getByText("Mobile", { exact: true })).toBeVisible();
+	expect(
+		await usage.evaluate(
+			(element) =>
+				getComputedStyle(element).gridTemplateColumns.split(" ").length,
+		),
+	).toBe(2);
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	expect(
+		await usage.evaluate(
+			(element) =>
+				getComputedStyle(element).gridTemplateColumns.split(" ").length,
+		),
+	).toBe(1);
 });
 
 test("select supports native selection", async ({ page }) => {

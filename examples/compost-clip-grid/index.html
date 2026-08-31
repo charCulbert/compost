@@ -21,7 +21,10 @@
           <div style="width: min(46em, calc(100vw - 64px)); display: grid; gap: .5em">
             <compost-clip-grid label="Session clips" slots="6" show-stop></compost-clip-grid>
             <label><input type="checkbox" data-launch-quant checked> Launch quantization</label>
-            <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Click selects a clip. Shift-click selects every occupied clip in a rectangle; Command/Ctrl-click toggles clips. Command/Ctrl+C copies, click an empty slot and Command/Ctrl+V pastes, Command/Ctrl+D duplicates, Delete removes, and Escape clears selection. Drag a selected clip to move the selection; Alt-drag copies it.</small>
+            <div class="usage-notes">
+              <div><strong>Desktop</strong><span>Click selects. Shift selects a rectangle. Command/Ctrl toggles clips and runs clipboard commands. Drag moves; Alt-drag copies.</span></div>
+              <div><strong>Mobile</strong><span>Tap clips and launch controls. Drag a selected clip to move it. Hold for context.</span></div>
+            </div>
           </div>
         </div>
         <output>last event: —</output>

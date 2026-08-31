@@ -16,7 +16,6 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
           <span>Clip notes · 6/8 · two-bar loop with pickup</span>
@@ -39,7 +38,10 @@
             <button type="button" data-note-playhead>Play</button>
             <button type="button" data-note-quantize>Quantize</button>
           </div>
-          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: drag notes or empty grid with one finger; move two fingers together to pan, spread horizontally to zoom time, or spread vertically to zoom pitch. Long-press a note or empty grid for its context action. Drag the piano vertically to pan pitches or horizontally to zoom them. Mouse: Alt-drag copies, Command/Ctrl changes velocity or inverts snapping, Shift extends or edits precisely, and double-click adds.</small>
+          <div class="usage-notes">
+            <div><strong>Desktop</strong><span>Drag to edit. Alt-drag copies. Command/Ctrl changes velocity or snapping. Shift extends or fine-tunes. Double-click adds.</span></div>
+            <div><strong>Mobile</strong><span>One finger edits. Two fingers pan or zoom. Drag the piano to navigate pitches. Hold for context.</span></div>
+          </div>
         </div>
         </div>
         <output>last event: —</output>

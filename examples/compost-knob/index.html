@@ -16,12 +16,15 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <compost-knob data-option-target="knob" label="Cutoff" min="20" max="20000" value="800" curve="log" unit="Hz" editable></compost-knob>
         <compost-knob label="Resonance" min="0" max="1" value="0.35"></compost-knob>
         <compost-knob label="Drive" min="0" max="10" value="3" disabled></compost-knob>
         <compost-knob label="Learning" min="0" max="1" value="0.6" midi-map-state="active mode label" style="--midi-map-label:'CC 74'"></compost-knob>
+        <div class="usage-notes">
+          <div><strong>Desktop</strong><span>Drag vertically. Click the value to type. Double-click resets. Arrow keys adjust; Alt moves faster.</span></div>
+          <div><strong>Mobile</strong><span>Drag vertically. Tap the value to type. Double-tap resets.</span></div>
+        </div>
         </div>
         <output>last event: —</output>
       </section>

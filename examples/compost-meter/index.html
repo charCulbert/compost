@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>compost-meter · Compost</title>
     <link rel="stylesheet" href="../shared/styles.css">
+    <style>compost-meter::part(label) { display: none; }</style>
   </head>
   <body data-example-id="compost-meter">
     <main class="shell">
@@ -16,7 +17,6 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <compost-meter label="Output" min="-90" max="12" curve="gain"></compost-meter>
         </div>

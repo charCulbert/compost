@@ -16,13 +16,15 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <div style="display: grid; gap: 0.4em"><span>Frequency</span><compost-number-box data-option-target="number" label="Frequency" min="20" max="20000" value="800" curve="log" unit="Hz" split-drag></compost-number-box></div>
         <div style="display: grid; gap: 0.4em"><span>Fine tune</span><compost-number-box label="Fine tune" min="-100" max="100" value="0" step="1" unit=" ct" split-drag></compost-number-box></div>
         <div style="display: grid; gap: 0.4em"><span>Disabled</span><compost-number-box label="Disabled" value="0.5" disabled></compost-number-box></div>
         <div style="display: grid; gap: 0.4em"><span>Learning</span><compost-number-box label="Learning" value="0.6" split-drag midi-map-state="active mode label" style="--midi-map-label:'CC 74'"></compost-number-box></div>
-        <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: tap a value to type it; drag to adjust it. Mouse: click then type, drag to adjust, or double-click to reset.</small>
+        <div class="usage-notes">
+          <div><strong>Desktop</strong><span>Click to type. Drag to adjust. Double-click to reset.</span></div>
+          <div><strong>Mobile</strong><span>Tap to type. Drag to adjust.</span></div>
+        </div>
         </div>
         <output>last event: —</output>
       </section>

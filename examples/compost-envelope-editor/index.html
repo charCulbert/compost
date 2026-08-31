@@ -16,7 +16,6 @@
       </header>
       <div id="media"></div>
       <section class="plain">
-        <h2>Default</h2>
         <div class="row">
         <div style="width: min(38em, calc(100vw - 64px)); display: grid; gap: .65em">
           <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 1em; flex-wrap: wrap">
@@ -28,7 +27,10 @@
           </div>
           <compost-envelope-editor label="Gain automation over 4 beats" duration="4"
             style="height: 11em"></compost-envelope-editor>
-          <small style="color: color-mix(in srgb, currentColor 65%, transparent)">Touch: touch down near a segment to highlight it; tap selects it, and drag moves the whole segment vertically. Keep that finger down and move a second finger vertically to bend it. Long-press opens its context action; double-tap the line adds a point. Mouse: double-click adds, Alt-click removes, Option-drag bends, Shift is fine movement, and Command/Ctrl inverts snapping.</small>
+          <div class="usage-notes">
+            <div><strong>Desktop</strong><span>Double-click adds. Alt-click removes. Option-drag bends. Shift fine-tunes. Command/Ctrl toggles snapping.</span></div>
+            <div><strong>Mobile</strong><span>Tap selects. Drag moves. Add a second finger to bend. Double-tap adds. Hold for context.</span></div>
+          </div>
         </div>
         </div>
         <output>last event: —</output>
