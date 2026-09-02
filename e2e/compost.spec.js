@@ -1821,6 +1821,49 @@ test("clip grid example host applies launch, stop and record intents", async ({
 	});
 });
 
+test("clip grid docks its stop row while slots scroll", async ({ page }) => {
+	await page.goto("/examples/compost-clip-grid/");
+	const grid = page.locator("compost-clip-grid");
+	const docked = await grid.evaluate((element) => {
+		element.style.height = "12em";
+		element.setAttribute("slots", "1");
+		const stop = element.shadowRoot.querySelector(".stop:not([hidden])");
+		return {
+			hostBottom: element.getBoundingClientRect().bottom,
+			stopBottom: stop.getBoundingClientRect().bottom,
+		};
+	});
+	expect(Math.abs(docked.hostBottom - docked.stopBottom)).toBeLessThan(1);
+
+	const before = await grid.evaluate((element) => {
+		element.setAttribute("slots", "12");
+		const stop = element.shadowRoot.querySelector(".stop:not([hidden])");
+		const hostBox = element.getBoundingClientRect();
+		const stopBox = stop.getBoundingClientRect();
+		return {
+			overflowing: element.scrollHeight > element.clientHeight,
+			hostBottom: hostBox.bottom,
+			stopBottom: stopBox.bottom,
+		};
+	});
+	expect(before.overflowing).toBe(true);
+	expect(Math.abs(before.hostBottom - before.stopBottom)).toBeLessThan(1);
+
+	const after = await grid.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+		const stop = element.shadowRoot.querySelector(".stop:not([hidden])");
+		const hostBox = element.getBoundingClientRect();
+		const stopBox = stop.getBoundingClientRect();
+		return {
+			scrollTop: element.scrollTop,
+			hostBottom: hostBox.bottom,
+			stopBottom: stopBox.bottom,
+		};
+	});
+	expect(after.scrollTop).toBeGreaterThan(0);
+	expect(Math.abs(after.hostBottom - after.stopBottom)).toBeLessThan(1);
+});
+
 test("clip grid lets one clip override the track accent", async ({ page }) => {
 	await page.goto("/examples/compost-clip-grid/");
 	const slot = page

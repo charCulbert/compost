@@ -142,6 +142,8 @@ export class CompostClipGrid extends HTMLElement {
         .matrix {
           display: grid;
           grid-template-columns: repeat(var(--track-count), minmax(var(--compost-clip-grid-column-width), 1fr));
+          grid-template-rows: auto repeat(var(--slot-count), var(--compost-clip-grid-row-height)) minmax(0, 1fr) var(--compost-clip-grid-row-height);
+          min-height: 100%;
           min-width: max-content;
           border-left: 1px solid var(--compost-clip-grid-line);
           border-bottom: 1px solid var(--compost-clip-grid-line);
@@ -239,7 +241,13 @@ export class CompostClipGrid extends HTMLElement {
         .slot[data-state="playing"] .preview { color: var(--compost-clip-grid-accent); }
         .preview[hidden] { display: none !important; }
         .editor { box-sizing: border-box; width: calc(100% - 2em); margin-left: .45em; border: 1px solid var(--compost-clip-grid-line); outline: 2px solid currentColor; outline-offset: -2px; background: var(--compost-clip-grid-editor-bg); color: var(--compost-clip-grid-text); font: inherit; font-size: var(--compost-clip-grid-font-size); -webkit-user-select: text; user-select: text; }
-        .stop { color: var(--compost-clip-grid-muted); }
+        .stop {
+          position: sticky;
+          bottom: 0;
+          z-index: 7;
+          background: var(--compost-clip-grid-editor-bg);
+          color: var(--compost-clip-grid-muted);
+        }
         .stop[data-queued] { color: var(--compost-clip-grid-accent); }
         .stop[hidden] { display: none !important; }
       </style>
@@ -456,6 +464,7 @@ export class CompostClipGrid extends HTMLElement {
 			"--track-count",
 			String(Math.max(1, this._tracks.length)),
 		);
+		this.matrix.style.setProperty("--slot-count", String(this.slotCount));
 		const fragment = document.createDocumentFragment();
 		for (const track of this._tracks) {
 			const header = document.createElement("div");
@@ -469,6 +478,10 @@ export class CompostClipGrid extends HTMLElement {
 		for (let slot = 0; slot < this.slotCount; slot += 1)
 			for (const track of this._tracks)
 				fragment.append(this.renderSlot(track, slot));
+		const spacer = document.createElement("div");
+		spacer.style.gridColumn = "1 / -1";
+		spacer.setAttribute("aria-hidden", "true");
+		fragment.append(spacer);
 		for (const track of this._tracks) fragment.append(this.renderStop(track));
 		this.matrix.replaceChildren(fragment);
 		this.paintSelection();
