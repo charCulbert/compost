@@ -2031,6 +2031,36 @@ test("clip grid drag-selects a cell rectangle from an empty slot", async ({
 	]);
 });
 
+test("clip grid Command-click toggles empty selections without leaving a selection outline", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-clip-grid/");
+	const grid = page.locator("compost-clip-grid");
+	const buttons = [
+		grid.getByRole("button", { name: "Empty Drums slot 3" }),
+		grid.getByRole("button", { name: "Empty Drums slot 4" }),
+		grid.getByRole("button", { name: "Empty Drums slot 6" }),
+	];
+	await buttons[0].press("Escape");
+	for (const button of buttons) await button.click({ modifiers: ["Meta"] });
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(3);
+	for (const button of buttons) {
+		const shadow = await button
+			.locator("..")
+			.evaluate((element) => getComputedStyle(element, "::after").boxShadow);
+		expect(shadow).not.toBe("none");
+	}
+
+	await buttons[1].click({ modifiers: ["Meta"] });
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(2);
+	await expect(buttons[1].locator("..")).not.toHaveAttribute("data-selected");
+	const deselected = await buttons[1].locator("..").evaluate((element) => ({
+		selection: getComputedStyle(element, "::after").boxShadow,
+		cursor: getComputedStyle(element, "::before").boxShadow,
+	}));
+	expect(deselected).toEqual({ selection: "none", cursor: "none" });
+});
+
 test("clip grid arrows move its slot cursor and extend selection", async ({
 	page,
 }) => {

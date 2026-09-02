@@ -176,8 +176,8 @@ export class CompostClipGrid extends HTMLElement {
           padding-right: .55em;
           outline: none;
         }
-        .slot[data-highlight]::after, .slot[data-selected]::after,
-        .slot[data-cursor]::before, .slot[data-drop]::before {
+		.slot[data-highlight]::after, .slot[data-selected]::after,
+		.slot[data-drop]::before {
           content: "";
           position: absolute;
           inset: 0;
@@ -188,9 +188,7 @@ export class CompostClipGrid extends HTMLElement {
           z-index: 0;
           box-shadow: inset 0 0 0 1px var(--compost-clip-grid-accent);
         }
-        .slot[data-cursor]::before { z-index: 3; box-shadow: inset 0 0 0 1px currentColor; }
-        .slot:focus-visible::before { z-index: 4; box-shadow: inset 0 0 0 2px currentColor; }
-        .slot[data-drop="move"]::before { z-index: 5; box-shadow: inset 0 0 0 2px currentColor; }
+		.slot[data-drop="move"]::before { z-index: 5; box-shadow: inset 0 0 0 2px currentColor; }
         .slot[data-drop="copy"]::before { z-index: 5; box-shadow: inset 0 0 0 2px var(--compost-clip-grid-accent); }
         .slot > * { position: relative; z-index: 1; }
         .slot[data-dragging] { opacity: .35; }
@@ -233,8 +231,9 @@ export class CompostClipGrid extends HTMLElement {
           font: inherit;
           font-size: var(--compost-clip-grid-font-size);
         }
-        .empty-target { cursor: default; }
-        .name:focus, .empty-target:focus { outline: none; }
+		.empty-target { cursor: default; }
+		.name:focus, .empty-target:focus { outline: none; }
+		.name:focus-visible, .empty-target:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         .slot[data-state="playing"] .name, .slot[data-queued] .name,
         .slot[data-state="recording"] .name, .slot[data-color] .name { color: var(--compost-clip-grid-accent); }
         .preview { flex: none; width: 2.27em; height: 1.27em; color: var(--compost-clip-grid-muted); }
