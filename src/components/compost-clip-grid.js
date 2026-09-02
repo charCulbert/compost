@@ -186,8 +186,7 @@ export class CompostClipGrid extends HTMLElement {
         .slot[data-highlight]::after { background: var(--compost-clip-grid-highlight); z-index: 0; }
         .slot[data-selected]::after {
           z-index: 0;
-          background: color-mix(in srgb, var(--compost-clip-grid-accent) 18%, transparent);
-          box-shadow: inset 0 0 0 2px var(--compost-clip-grid-accent);
+          box-shadow: inset 0 0 0 1px var(--compost-clip-grid-accent);
         }
         .slot[data-cursor]::before { z-index: 3; box-shadow: inset 0 0 0 1px currentColor; }
         .slot:focus-visible::before { z-index: 4; box-shadow: inset 0 0 0 2px currentColor; }
