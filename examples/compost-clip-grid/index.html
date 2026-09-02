@@ -22,7 +22,7 @@
             <compost-clip-grid label="Session clips" slots="6" show-stop></compost-clip-grid>
             <label><input type="checkbox" data-launch-quant checked> Launch quantization</label>
             <div class="usage-notes">
-              <div><strong>Desktop</strong><span>Click selects. Shift selects a rectangle. Command/Ctrl toggles clips and runs clipboard commands. Drag moves; Alt-drag copies.</span></div>
+              <div><strong>Desktop</strong><span>Click selects. Shift selects a rectangle. Command/Ctrl toggles slots and runs clipboard commands. Drag moves; Alt-drag copies.</span></div>
               <div><strong>Mobile</strong><span>Tap clips and launch controls. Drag a selected clip to move it. Hold for context.</span></div>
             </div>
           </div>
@@ -83,32 +83,34 @@
         queued: false,
         progress: 0,
       });
-      const selectedMaterial = (positions) => positions.flatMap((position) => {
+      const selectedCells = (positions) => positions.map((position) => {
         const clip = trackAt(position.trackId)?.clips[position.slot];
-        return clip ? [{ position, clip }] : [];
+        return { position, clip: clip ? { ...clip } : null };
       });
-      const relativeMaterial = (positions) => {
-        const material = selectedMaterial(positions);
-        if (!material.length) return [];
-        const trackIndexes = material.map(({ position }) => tracks.findIndex((track) => track.id === position.trackId));
+      const relativeCells = (positions) => {
+        const cells = selectedCells(positions);
+        if (!cells.length) return [];
+        const trackIndexes = cells.map(({ position }) => tracks.findIndex((track) => track.id === position.trackId));
         const firstTrack = Math.min(...trackIndexes);
-        const firstSlot = Math.min(...material.map(({ position }) => position.slot));
-        return material.map(({ position, clip }) => ({
+        const firstSlot = Math.min(...cells.map(({ position }) => position.slot));
+        return cells.map(({ position, clip }) => ({
           trackOffset: tracks.findIndex((track) => track.id === position.trackId) - firstTrack,
           slotOffset: position.slot - firstSlot,
-          clip: { ...clip },
+          clip,
         }));
       };
-      const place = (material, to, copy) => {
+      const place = (cells, to, copy) => {
         const firstTrack = tracks.findIndex((track) => track.id === to.trackId);
         if (firstTrack < 0) return [];
         const result = [];
-        for (const item of material) {
+        for (const item of cells) {
           const track = tracks[firstTrack + item.trackOffset];
           if (!track) continue;
           const slot = to.slot + item.slotOffset;
           while (track.clips.length <= slot) track.clips.push(null);
-          track.clips[slot] = copy ? cloneClip(item.clip) : item.clip;
+          track.clips[slot] = item.clip
+            ? copy ? cloneClip(item.clip) : item.clip
+            : null;
           result.push({ trackId: track.id, slot });
         }
         const slots = Math.max(...tracks.map((track) => track.clips.length), 1);
@@ -199,7 +201,7 @@
         render();
       });
       grid.addEventListener('clips-copy', ({ detail }) => {
-        clipboard = relativeMaterial(detail.positions);
+        clipboard = relativeCells(detail.positions);
       });
       grid.addEventListener('clips-paste', ({ detail }) => {
         if (!clipboard.length) return;
@@ -215,19 +217,19 @@
         render();
       });
       grid.addEventListener('clips-duplicate', ({ detail }) => {
-        const selection = place(relativeMaterial(detail.positions), detail.to, true);
+        const selection = place(relativeCells(detail.positions), detail.to, true);
         render();
         grid.setSelection(selection, selection.at(-1) ?? null);
       });
       grid.addEventListener('clips-move', ({ detail }) => {
-        const material = relativeMaterial(detail.positions);
+        const cells = relativeCells(detail.positions);
         if (!detail.copy) {
           for (const position of detail.positions) {
             const track = trackAt(position.trackId);
             if (track) track.clips[position.slot] = null;
           }
         }
-        const selection = place(material, detail.to, detail.copy);
+        const selection = place(cells, detail.to, detail.copy);
         render();
         grid.setSelection(selection, selection.at(-1) ?? null);
       });

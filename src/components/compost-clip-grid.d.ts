@@ -96,14 +96,14 @@ export interface CompostClipGridEventDetailMap {
 /** Which slot a pointer at `y` lands in, given the rows' boxes. */
 export function slotIndexAt(y: number, rows: DOMRect[]): number;
 
-/** Return every occupied position in the inclusive rectangle. */
+/** Return every position in the inclusive rectangle. */
 export function rectangularClipSelection(
 	tracks: ClipGridTrack[],
 	anchor: ClipGridPosition,
 	end: ClipGridPosition,
 ): ClipGridPosition[];
 
-/** Translate positions so their occupied top-left lands at `to`. */
+/** Translate positions so their top-left lands at `to`. */
 export function translatedClipPositions(
 	tracks: ClipGridTrack[],
 	positions: ClipGridPosition[],
@@ -130,7 +130,7 @@ export class CompostClipGrid extends HTMLElement {
 	/** Replace every track and slot without emitting model intent. */
 	setTracks(tracks: ClipGridTrack[]): void;
 
-	/** Selected occupied or pending destination coordinates. */
+	/** Selected slot coordinates, including empty slots. */
 	get selection(): ClipGridPosition[];
 	/** Current keyboard and paste destination. */
 	get cursor(): ClipGridPosition | null;

@@ -42,7 +42,7 @@ const { pointPlacement } = await import("../src/components/compost-popup.js");
 const { duplicatedNotes, selectionSpan, trimmedNotes, velocityShiftedNotes } =
 	await import("../src/piano-roll-model.js");
 
-test("clip-grid rectangles select occupied slots and preserve sparse spacing", () => {
+test("clip-grid rectangles include empty slots and preserve their spacing", () => {
 	const tracks = [
 		{ id: "a", clips: [{ name: "a0" }, null, { name: "a2" }] },
 		{ id: "b", clips: [null, { name: "b1" }, { name: "b2" }] },
@@ -56,7 +56,9 @@ test("clip-grid rectangles select occupied slots and preserve sparse spacing", (
 		),
 		[
 			{ trackId: "a", slot: 0 },
+			{ trackId: "a", slot: 1 },
 			{ trackId: "a", slot: 2 },
+			{ trackId: "b", slot: 0 },
 			{ trackId: "b", slot: 1 },
 			{ trackId: "b", slot: 2 },
 		],

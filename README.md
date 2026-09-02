@@ -93,8 +93,10 @@ and whether lengths were requested; the host applies its own strength and swing.
 `setTracks()`. It owns the discrete track/slot cursor, rectangular and sparse
 selection, keyboard clipboard recognition, and multi-clip drag geometry.
 `clips-copy`, `clips-paste`, `clips-delete`, `clips-duplicate`, and `clips-move`
-carry stable track IDs and slot coordinates. The host owns clipboard contents,
-new IDs, collision policy, mutation, undo, and conversion into timeline clips.
+carry stable track IDs and slot coordinates, including selected empty slots.
+The host owns clipboard contents, new IDs, collision policy, mutation, undo,
+and conversion into timeline clips. To reproduce a copied rectangle exactly,
+store empty slots as `null` and clear their corresponding destinations on paste.
 `compost-timeline` never moves automation with arrangement material; a host
 that wants that shifts the lane's points when it applies `time-move`.
 With the timeline's `automation` attribute present, each lane shows its one

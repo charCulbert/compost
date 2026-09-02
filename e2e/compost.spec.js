@@ -1920,7 +1920,9 @@ test("clip grid owns rectangular selection and the demo applies its clipboard in
 	expect(await grid.evaluate((element) => element.selection)).toEqual([
 		{ trackId: "drums", slot: 0 },
 		{ trackId: "drums", slot: 1 },
+		{ trackId: "drums", slot: 2 },
 		{ trackId: "bass", slot: 0 },
+		{ trackId: "bass", slot: 1 },
 		{ trackId: "bass", slot: 2 },
 	]);
 	await bassWalk.press("Escape");
@@ -1933,7 +1935,7 @@ test("clip grid owns rectangular selection and the demo applies its clipboard in
 	await page.keyboard.down("Meta");
 	await synthAir.click();
 	await page.keyboard.up("Meta");
-	await expect(grid.locator(".slot[data-selected]")).toHaveCount(5);
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(7);
 	await expect(
 		grid.locator('.slot[data-track-id="synth"][data-slot="4"]'),
 	).toHaveAttribute("part", /(?:^|\s)selected(?:\s|$)/u);
@@ -1943,17 +1945,21 @@ test("clip grid owns rectangular selection and the demo applies its clipboard in
 		name: "Empty Drums slot 6",
 	});
 	await destination.click();
-	expect(await grid.evaluate((element) => element.selection)).toEqual([]);
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "drums", slot: 5 },
+	]);
 	expect(await grid.evaluate((element) => element.cursor)).toEqual({
 		trackId: "drums",
 		slot: 5,
 	});
 	await destination.press("Meta+v");
-	await expect(grid.locator(".slot[data-selected]")).toHaveCount(5);
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(7);
 	expect(await grid.evaluate((element) => element.selection)).toEqual([
 		{ trackId: "drums", slot: 5 },
 		{ trackId: "drums", slot: 6 },
+		{ trackId: "drums", slot: 7 },
 		{ trackId: "bass", slot: 5 },
+		{ trackId: "bass", slot: 6 },
 		{ trackId: "bass", slot: 7 },
 		{ trackId: "synth", slot: 9 },
 	]);
@@ -1962,11 +1968,13 @@ test("clip grid owns rectangular selection and the demo applies its clipboard in
 		.getByRole("button", { name: /slot 10/u })
 		.last()
 		.press("Meta+d");
-	await expect(grid.locator(".slot[data-selected]")).toHaveCount(5);
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(7);
 	expect(await grid.evaluate((element) => element.selection)).toEqual([
 		{ trackId: "drums", slot: 10 },
 		{ trackId: "drums", slot: 11 },
+		{ trackId: "drums", slot: 12 },
 		{ trackId: "bass", slot: 10 },
+		{ trackId: "bass", slot: 11 },
 		{ trackId: "bass", slot: 12 },
 		{ trackId: "synth", slot: 14 },
 	]);
@@ -1976,6 +1984,24 @@ test("clip grid owns rectangular selection and the demo applies its clipboard in
 		.press("Delete");
 	await expect(grid.locator(".slot[data-selected]")).toHaveCount(0);
 	expect(await grid.evaluate((element) => element.selection)).toEqual([]);
+
+	await grid.getByRole("button", { name: "Empty Bass slot 11" }).click();
+	await grid
+		.getByRole("button", { name: "Empty Bass slot 13" })
+		.click({ modifiers: ["Shift"] });
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(3);
+	await expect(
+		grid.locator('.slot[data-track-id="bass"][data-slot="11"]'),
+	).toHaveAttribute("aria-selected", "true");
+	await page.keyboard.press("Meta+c");
+	await drumsBreak.click();
+	await page.keyboard.press("Meta+v");
+	await expect(
+		grid.getByRole("button", { name: /^break\.a on Drums/u }),
+	).toHaveCount(0);
+	await expect(
+		grid.getByRole("button", { name: /^fill\.b on Drums/u }),
+	).toHaveCount(0);
 });
 
 test("clip grid arrows move its slot cursor and extend selection", async ({
@@ -2005,6 +2031,8 @@ test("clip grid arrows move its slot cursor and extend selection", async ({
 	});
 	expect(await grid.evaluate((element) => element.selection)).toEqual([
 		{ trackId: "drums", slot: 1 },
+		{ trackId: "drums", slot: 2 },
+		{ trackId: "bass", slot: 1 },
 		{ trackId: "bass", slot: 2 },
 	]);
 });

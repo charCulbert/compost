@@ -36,7 +36,7 @@ export function slotIndexAt(y, rows) {
 	return -1;
 }
 
-/** Return every occupied position in the inclusive rectangle. */
+/** Return every position in the inclusive rectangle. */
 /** @param {ClipGridTrack[]} tracks @param {ClipGridPosition} anchor @param {ClipGridPosition} end */
 export function rectangularClipSelection(tracks, anchor, end) {
 	const firstTrack = tracks.findIndex((track) => track.id === anchor?.trackId);
@@ -48,13 +48,14 @@ export function rectangularClipSelection(tracks, anchor, end) {
 	const bottom = Math.max(Number(anchor.slot), Number(end.slot));
 	if (!Number.isInteger(top) || !Number.isInteger(bottom) || top < 0) return [];
 	return tracks.slice(left, right + 1).flatMap((track) =>
-		Array.from({ length: bottom - top + 1 }, (_, offset) => top + offset)
-			.filter((slot) => Boolean(track.clips?.[slot]))
-			.map((slot) => ({ trackId: track.id, slot })),
+		Array.from({ length: bottom - top + 1 }, (_, offset) => ({
+			trackId: track.id,
+			slot: top + offset,
+		})),
 	);
 }
 
-/** Translate positions so their occupied top-left lands at `to`. */
+/** Translate positions so their top-left lands at `to`. */
 /** @param {ClipGridTrack[]} tracks @param {ClipGridPosition[]} positions @param {ClipGridPosition} to */
 export function translatedClipPositions(tracks, positions, to) {
 	const indexes = positions
@@ -673,11 +674,9 @@ export class CompostClipGrid extends HTMLElement {
 		for (const element of this.slotElements()) {
 			const position = this.positionFromElement(element);
 			const on = selected.has(this.positionKey(position));
-			element.toggleAttribute(
-				"data-selected",
-				on && Boolean(this.clipAt(position)),
-			);
-			if (on && this.clipAt(position)) element.part.add("selected");
+			element.toggleAttribute("data-selected", on);
+			element.setAttribute("aria-selected", String(on));
+			if (on) element.part.add("selected");
 			else element.part.remove("selected");
 			element.toggleAttribute(
 				"data-cursor",
@@ -781,7 +780,7 @@ export class CompostClipGrid extends HTMLElement {
 	/** @param {ClipGridPosition} position */
 	selectAt(position) {
 		this.selectionAnchor = { ...position };
-		this.commitSelection(this.clipAt(position) ? [position] : [], position);
+		this.commitSelection([position], position);
 	}
 
 	/** @param {ClipGridPosition} position */
@@ -821,22 +820,18 @@ export class CompostClipGrid extends HTMLElement {
 		else if (action === "record") this.emit("clip-record", position);
 		else if (action === "stop")
 			this.emit("clip-stop", { trackId: position.trackId });
-		else if (action === "slot") {
-			this._cursor = { ...position };
-			if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-				this._selection = [];
-				this.selectionAnchor = { ...position };
-			}
-			this.paintSelection();
-			this.focusSlot(position);
-			this.emitSelection();
-		} else if (action === "clip") {
+		else if (action === "slot" || action === "clip") {
+			if (action === "slot") this.focusSlot(position);
 			if (event.shiftKey) {
 				this.extendSelection(position);
 				return;
 			}
 			if (event.metaKey || event.ctrlKey) {
 				this.toggleSelection(position);
+				return;
+			}
+			if (action === "slot") {
+				this.selectAt(position);
 				return;
 			}
 			const only =
