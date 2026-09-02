@@ -56,7 +56,7 @@ export interface ClipsSelectDetail {
 	cursor: ClipGridPosition | null;
 }
 
-/** `clips-copy`, `clips-delete`, `clips-drag-start`, and `clips-drag-end`. */
+/** `clips-copy`, `clips-cut`, `clips-delete`, `clips-drag-start`, and `clips-drag-end`. */
 export interface ClipsPositionsDetail {
 	positions: ClipGridPosition[];
 }
@@ -85,6 +85,7 @@ export interface CompostClipGridEventDetailMap {
 	"clip-rename": ClipRenameDetail;
 	"clips-select": ClipsSelectDetail;
 	"clips-copy": ClipsPositionsDetail;
+	"clips-cut": ClipsPositionsDetail;
 	"clips-paste": ClipsPasteDetail;
 	"clips-delete": ClipsPositionsDetail;
 	"clips-duplicate": ClipsDuplicateDetail;

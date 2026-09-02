@@ -899,9 +899,29 @@ export class CompostClipGrid extends HTMLElement {
 			this.emitSelection();
 			return;
 		}
+		if (meta && key === "a") {
+			event.preventDefault();
+			const selection = this._tracks.flatMap((track) =>
+				track.clips.flatMap((clip, slot) =>
+					clip ? [{ trackId: track.id, slot }] : [],
+				),
+			);
+			this.selectionAnchor = selection[0] || position;
+			this.commitSelection(selection, selection.at(-1) || position);
+			return;
+		}
 		if (meta && key === "c" && this._selection.length) {
 			event.preventDefault();
 			this.emit("clips-copy", { positions: this.selection });
+			return;
+		}
+		if (meta && key === "x" && this._selection.length) {
+			event.preventDefault();
+			const positions = this.selection;
+			this.emit("clips-cut", { positions });
+			this._selection = [];
+			this.selectionAnchor = this._cursor ? { ...this._cursor } : null;
+			this.paintSelection();
 			return;
 		}
 		if (meta && key === "v") {
@@ -1057,7 +1077,8 @@ export class CompostClipGrid extends HTMLElement {
 	beginDrag(event) {
 		if (this.disabled || event.button !== 0) return;
 		const hit = this.actionFrom(event);
-		if (hit?.action !== "clip") return;
+		if (hit?.action !== "clip" && hit?.action !== "slot") return;
+		const selecting = hit.action === "slot";
 		this.clickPointerType = event.pointerType;
 		const key = this.positionKey(hit.position);
 		const wasSelected = this._selection.some(
@@ -1080,6 +1101,7 @@ export class CompostClipGrid extends HTMLElement {
 			y: event.clientY,
 			moved: false,
 			wasSelected,
+			selecting,
 			copy: event.altKey,
 			grabbedTrackOffset: grabbedTrack - firstTrack,
 			grabbedSlotOffset: hit.position.slot - firstSlot,
@@ -1090,23 +1112,24 @@ export class CompostClipGrid extends HTMLElement {
 		window.addEventListener("pointercancel", this.handleWindowUp);
 		window.addEventListener("keydown", this.handleModifierKey, true);
 		window.addEventListener("keyup", this.handleModifierKey, true);
-		this.longPress.start(() => {
-			if (!this.drag || this.drag.moved) return;
-			const position = { ...this.drag.position };
-			const selected = this.drag.wasSelected;
-			this.endDrag(true);
-			if (!selected) this.selectAt(position);
-			this.emit("clip-context", {
-				...position,
-				clientX: event.clientX,
-				clientY: event.clientY,
+		if (!selecting)
+			this.longPress.start(() => {
+				if (!this.drag || this.drag.moved) return;
+				const position = { ...this.drag.position };
+				const selected = this.drag.wasSelected;
+				this.endDrag(true);
+				if (!selected) this.selectAt(position);
+				this.emit("clip-context", {
+					...position,
+					clientX: event.clientX,
+					clientY: event.clientY,
+				});
 			});
-		});
 	}
 
 	/** @param {KeyboardEvent} event */
 	handleModifierKey(event) {
-		if (!this.drag?.moved) return;
+		if (!this.drag?.moved || this.drag.selecting) return;
 		this.drag.copy = Boolean(event.altKey);
 		this.dropCopy = this.drag.copy;
 		this.paintDrop();
@@ -1123,9 +1146,12 @@ export class CompostClipGrid extends HTMLElement {
 			)
 				return;
 			drag.moved = true;
-			if (!drag.wasSelected) this.selectAt(drag.position);
 			this.longPress.cancel();
-			this.emit("clips-drag-start", { positions: drag.positions });
+			if (drag.selecting) this.selectionAnchor = { ...drag.position };
+			else {
+				if (!drag.wasSelected) this.selectAt(drag.position);
+				this.emit("clips-drag-start", { positions: drag.positions });
+			}
 		}
 		drag.copy = event.altKey;
 		event.preventDefault();
@@ -1145,6 +1171,14 @@ export class CompostClipGrid extends HTMLElement {
 			return;
 		}
 		const target = this.positionFromElement(slot);
+		if (drag.selecting) {
+			drag.to = target;
+			this.commitSelection(
+				rectangularClipSelection(this._tracks, drag.position, target),
+				target,
+			);
+			return;
+		}
 		const sourceTrackIndexes = drag.positions.map((position) =>
 			this._tracks.findIndex((track) => track.id === position.trackId),
 		);
@@ -1183,6 +1217,13 @@ export class CompostClipGrid extends HTMLElement {
 	handleWindowUp(event) {
 		const drag = this.drag;
 		if (!drag || event.pointerId !== drag.pointerId) return;
+		if (drag.selecting) {
+			const moved = drag.moved;
+			this.endDrag(false);
+			this.ignoreClick = moved;
+			if (moved) setTimeout(() => (this.ignoreClick = false));
+			return;
+		}
 		const copy = event.altKey || drag.copy;
 		const to = drag.to ? { ...drag.to } : null;
 		const moved = drag.moved;
@@ -1236,7 +1277,7 @@ export class CompostClipGrid extends HTMLElement {
 		window.removeEventListener("keyup", this.handleModifierKey, true);
 		this.dropPositions = [];
 		this.paintDrop();
-		if (drag?.moved && !silent)
+		if (drag?.moved && !drag.selecting && !silent)
 			this.emit("clips-drag-end", { positions: drag.positions });
 	}
 }

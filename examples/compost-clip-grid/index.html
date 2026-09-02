@@ -22,7 +22,7 @@
             <compost-clip-grid label="Session clips" slots="6" show-stop></compost-clip-grid>
             <label><input type="checkbox" data-launch-quant checked> Launch quantization</label>
             <div class="usage-notes">
-              <div><strong>Desktop</strong><span>Click selects. Shift selects a rectangle. Command/Ctrl toggles slots and runs clipboard commands. Drag moves; Alt-drag copies.</span></div>
+              <div><strong>Desktop</strong><span>Click selects. Shift or an empty-slot drag selects a rectangle. Command/Ctrl toggles slots and runs clipboard commands. Drag moves; Alt-drag copies.</span></div>
               <div><strong>Mobile</strong><span>Tap clips and launch controls. Drag a selected clip to move it. Hold for context.</span></div>
             </div>
           </div>
@@ -202,6 +202,14 @@
       });
       grid.addEventListener('clips-copy', ({ detail }) => {
         clipboard = relativeCells(detail.positions);
+      });
+      grid.addEventListener('clips-cut', ({ detail }) => {
+        clipboard = relativeCells(detail.positions);
+        for (const position of detail.positions) {
+          const track = trackAt(position.trackId);
+          if (track) track.clips[position.slot] = null;
+        }
+        render();
       });
       grid.addEventListener('clips-paste', ({ detail }) => {
         if (!clipboard.length) return;

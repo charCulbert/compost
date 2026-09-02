@@ -60,8 +60,9 @@ for editor pan and zoom gestures.
 
 Across the time editors, Command/Ctrl inverts time snapping, Shift provides
 fine control on value drags and extends selection on an item drag, and Alt
-copies item moves. The clip grid uses Shift for rectangular selection,
-Command/Ctrl for sparse selection and clipboard commands, and Alt for drag-copy.
+copies item moves. The clip grid uses Shift or a drag from an empty slot for
+rectangular selection, Command/Ctrl for sparse selection, occupied-clip Select
+All and clipboard commands, and Alt for drag-copy.
 `compost-note-editor` also uses Command/Ctrl on a note body to edit velocity.
 Double-click resets a control. On touch, double-tap resets knobs and sliders;
 a number-box tap opens its numeric editor while a drag still adjusts it.
@@ -92,7 +93,8 @@ and whether lengths were requested; the host applies its own strength and swing.
 `compost-clip-grid` renders a complete multi-track session launcher from
 `setTracks()`. It owns the discrete track/slot cursor, rectangular and sparse
 selection, keyboard clipboard recognition, and multi-clip drag geometry.
-`clips-copy`, `clips-paste`, `clips-delete`, `clips-duplicate`, and `clips-move`
+`clips-copy`, `clips-cut`, `clips-paste`, `clips-delete`, `clips-duplicate`, and
+`clips-move`
 carry stable track IDs and slot coordinates, including selected empty slots.
 The host owns clipboard contents, new IDs, collision policy, mutation, undo,
 and conversion into timeline clips. To reproduce a copied rectangle exactly,

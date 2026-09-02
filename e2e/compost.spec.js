@@ -1913,6 +1913,10 @@ test("clip grid owns rectangular selection and the demo applies its clipboard in
 	const bassWalk = grid.getByRole("button", { name: /^walk\.c on Bass/u });
 	const synthAir = grid.getByRole("button", { name: /^air\.e on Synth/u });
 
+	await drumsBreak.press("Meta+a");
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(7);
+	await drumsBreak.press("Escape");
+
 	await drumsBreak.click();
 	await page.keyboard.down("Shift");
 	await bassWalk.click();
@@ -2002,6 +2006,29 @@ test("clip grid owns rectangular selection and the demo applies its clipboard in
 	await expect(
 		grid.getByRole("button", { name: /^fill\.b on Drums/u }),
 	).toHaveCount(0);
+
+	await bassWalk.click();
+	await bassWalk.press("Meta+x");
+	await expect(bassWalk).toHaveCount(0);
+	await expect(grid.locator(".slot[data-selected]")).toHaveCount(0);
+});
+
+test("clip grid drag-selects a cell rectangle from an empty slot", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-clip-grid/");
+	const grid = page.locator("compost-clip-grid");
+	await grid
+		.getByRole("button", { name: "Empty Drums slot 4" })
+		.dragTo(grid.getByRole("button", { name: "Empty Bass slot 6" }));
+	expect(await grid.evaluate((element) => element.selection)).toEqual([
+		{ trackId: "drums", slot: 3 },
+		{ trackId: "drums", slot: 4 },
+		{ trackId: "drums", slot: 5 },
+		{ trackId: "bass", slot: 3 },
+		{ trackId: "bass", slot: 4 },
+		{ trackId: "bass", slot: 5 },
+	]);
 });
 
 test("clip grid arrows move its slot cursor and extend selection", async ({
