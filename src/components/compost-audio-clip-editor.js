@@ -525,6 +525,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			if (this.gainInput && Number(this.gainInput.value) !== this._gainDb)
 				this.gainInput.value = String(this._gainDb);
 			if (this.gainValue) this.gainValue.textContent = this.gainText;
+			this.renderWaveformGain();
 			return;
 		}
 		if (["start", "end", "loop-start", "loop-end"].includes(name)) {
@@ -599,6 +600,15 @@ export class CompostAudioClipEditor extends HTMLElement {
 	set peaks(value) {
 		this.waveform.peaks = value;
 		this._peaks = this.waveform.peaks;
+		this.renderWaveformGain();
+	}
+
+	renderWaveformGain() {
+		const amplitude = 10 ** (this._gainDb / 20);
+		this.waveform.peaks = this._peaks.map(({ min, max }) => ({
+			min: min * amplitude,
+			max: max * amplitude,
+		}));
 	}
 
 	get timeSelection() {

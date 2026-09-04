@@ -458,6 +458,31 @@ test("audio marker drag stays active over the waveform and ends there", async ({
 	expect(await editor.evaluate((element) => element.rangeStart)).toBe(2);
 });
 
+test("audio clip gain scales the waveform without changing source peaks", async ({
+	page,
+}) => {
+	await page.goto(`${localBaseURL}/examples/compost-audio-clip-editor/`);
+	const editor = page.locator("compost-audio-clip-editor");
+	const state = await editor.evaluate((element) => {
+		element.peaks = [{ min: -0.25, max: 0.5 }];
+		const waveform = element.shadowRoot.querySelector("compost-waveform");
+		element.setGain(-6);
+		const attenuated = waveform.peaks[0];
+		element.setGain(6);
+		return {
+			attenuated,
+			amplified: waveform.peaks[0],
+			source: element.peaks[0],
+		};
+	});
+
+	expect(state.source).toEqual({ min: -0.25, max: 0.5 });
+	expect(state.attenuated.min).toBeCloseTo(-0.1253, 4);
+	expect(state.attenuated.max).toBeCloseTo(0.2506, 4);
+	expect(state.amplified.min).toBeCloseTo(-0.4988, 4);
+	expect(state.amplified.max).toBeCloseTo(0.9976, 4);
+});
+
 test("note editor playback markers expose the same keyboard semantics", async ({
 	page,
 }) => {
