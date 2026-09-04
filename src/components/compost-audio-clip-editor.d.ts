@@ -11,6 +11,12 @@ export interface AudioClipGainDetail {
 	gain: number;
 }
 
+/** Interior clip-beat anchor; source seconds are deliberately host-owned. */
+export interface AudioClipWarpMarker {
+	id: string;
+	beat: number;
+}
+
 export interface AudioClipTimeSelection {
 	start: number;
 	end: number;
@@ -38,6 +44,10 @@ export interface AudioClipContextDetail {
  * Emits `range-input`/`range-change`, `loop-input`/`loop-change`,
  * `gain-input`/`gain-change`, `time-select-input`/`time-select`,
  * `audio-context` and `audio-file-drop` CustomEvents.
+ * Optional warping emits `warp-add` ({beat, candidateId?}), `warp-remove` ({id}), and
+ * `warp-input` / `warp-change` (AudioClipWarpMarker). Input previews a move;
+ * change commits it. Cancellation emits input with the original beat, no change.
+ * Add/remove are intent only: the host assigns IDs and replaces warpMarkers.
  *
  * @attribute label
  * @attribute beats - total clip length in quarter-note beats
@@ -55,6 +65,7 @@ export interface AudioClipContextDetail {
  * @attribute adaptive-grid-density - adaptive line density from 0.5 (sparse) to 2 (dense); default 1
  * @attribute grid-lines - 'off' hides grid lines
  * @attribute snap - 'off' frees edits from the grid
+ * @attribute warp - shows optional interior warp pins; double-click waveform requests a pin
  * @attribute readonly
  * @attribute disabled
  */
@@ -85,6 +96,17 @@ export class CompostAudioClipEditor extends HTMLElement {
 	/** Copied peak buckets. Setting updates the composed waveform. */
 	get peaks(): WaveformPeak[];
 	set peaks(value: WaveformPeak[]);
+	/** Copied, unique-ID anchors strictly inside (0, beats), sorted by beat.
+	 * Peaks must already represent the warped clip-beat domain; no DSP occurs here.
+	 * Replacing anchors cancels an active gesture. */
+	get warpMarkers(): AudioClipWarpMarker[];
+	set warpMarkers(value: AudioClipWarpMarker[]);
+	/** Optional host-detected onset suggestions in clip beats, not active markers.
+	 * Clicking accepts a candidate; double-clicking within 8px snaps placement to it
+	 * when snapping is enabled. Moving existing pins uses the musical grid instead.
+	 * No detection or source-time mapping occurs inside the component. */
+	get warpCandidates(): AudioClipWarpMarker[];
+	set warpCandidates(value: AudioClipWarpMarker[]);
 	get timeSelection(): AudioClipTimeSelection | null;
 	get pxPerBeat(): number;
 	get step(): number;

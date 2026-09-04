@@ -16,6 +16,29 @@ const MIN_TIME = 1e-9;
 const MAX_PX_PER_BEAT = 600;
 const MIN_PINCH_SPAN = 24;
 
+/** @param {{id: string, beat: number}[]} value @param {number} beats */
+function copyWarpAnchors(value, beats) {
+	const markers = value
+		.map(({ id, beat }) => ({ id, beat }))
+		.sort((a, b) => a.beat - b.beat);
+	if (
+		new Set(markers.map((marker) => marker.id)).size !== markers.length ||
+		markers.some(
+			(marker, i) =>
+				typeof marker.id !== "string" ||
+				!marker.id ||
+				!Number.isFinite(marker.beat) ||
+				marker.beat <= 0 ||
+				marker.beat >= beats ||
+				(i > 0 && marker.beat <= markers[i - 1].beat),
+		)
+	)
+		throw new RangeError(
+			"Warp anchors need unique IDs and increasing interior beats",
+		);
+	return markers;
+}
+
 /**
  * An audio-clip editor that composes the generic waveform display with clip
  * gain, playback-range and loop controls. It edits metadata and emits intent;
@@ -40,6 +63,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			"time-signature",
 			"musical-origin",
 			"grid-lines",
+			"warp",
 			"readonly",
 			"disabled",
 		];
@@ -55,6 +79,12 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.loopEnd = 8;
 		this.loopEnabled = false;
 		this._gainDb = 0;
+		/** @type {{id: string, beat: number}[]} */
+		this._warpMarkers = [];
+		/** @type {{id: string, beat: number}[]} */
+		this._warpCandidates = [];
+		/** @type {{pointerId: number, id: string, beat: number, startX: number, px: number}|null} */
+		this.warpDrag = null;
 		/** @type {number|null} */ this.playhead = null;
 		this.timeSignature = "4/4";
 		this.musicalOriginBeat = 0;
@@ -108,6 +138,20 @@ export class CompostAudioClipEditor extends HTMLElement {
           user-select: none;
         }
         :host([disabled]) { opacity: 0.55; pointer-events: none; }
+        :host([warp]) .frame { grid-template-rows: calc(var(--compost-audio-clip-editor-ruler-height) + 1.6em) minmax(0, 1fr); }
+        .warp-markers { display: none; position: absolute; inset: 0; pointer-events: none; }
+        :host([warp]) .warp-markers { display: block; }
+        .warp-marker {
+          position: absolute; top: var(--compost-audio-clip-editor-ruler-height);
+          width: 2em; height: 1.6em; transform: translateX(-50%);
+          padding: 0; border: 0; background: transparent; color: currentColor; font: inherit;
+          cursor: col-resize; pointer-events: auto; touch-action: none;
+        }
+        .warp-marker::before { content: '◆'; font-size: .7em; }
+        .warp-candidate { color: var(--compost-audio-clip-editor-muted); cursor: pointer; }
+        .warp-candidate::before { content: '◇'; }
+        .warp-marker:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+        .warp-marker:disabled { cursor: default; }
         :host(:focus-visible) { outline: 2px solid currentColor; outline-offset: -2px; }
         .frame {
           position: relative;
@@ -359,6 +403,8 @@ export class CompostAudioClipEditor extends HTMLElement {
             <div class="handle start loop-handle" part="loop-start" role="slider" tabindex="0"></div>
             <div class="handle end loop-handle" part="loop-end" role="slider" tabindex="0"></div>
             <div class="ruler-time-selection" part="time-selection-ruler"></div>
+            <div class="warp-markers" part="warp-candidates"></div>
+            <div class="warp-markers" part="warp-markers"></div>
           </div>
         </div>
         <div class="gain" part="gain">
@@ -385,6 +431,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 		const part = (selector) =>
 			/** @type {HTMLElement} */ (this.root.querySelector(selector));
 		this.ruler = part(".ruler");
+		this.warpMarkerLayer = part('[part="warp-markers"]');
+		this.warpCandidateLayer = part('[part="warp-candidates"]');
 		this.gridWrap = part(".gridwrap");
 		this.gridElement = part(".grid");
 		const waveform = this.root.querySelector("compost-waveform");
@@ -477,6 +525,43 @@ export class CompostAudioClipEditor extends HTMLElement {
 			);
 
 		this.refresh = this.refresh.bind(this);
+		this.handleWarpPointer = this.handleWarpPointer.bind(this);
+		this.gridWrap.addEventListener("dblclick", (event) => {
+			if (!this.hasAttribute("warp") || this.readonly) return;
+			event.preventDefault();
+			const invert = event.metaKey || event.ctrlKey;
+			const rawBeat =
+				(this.offset +
+					event.clientX -
+					this.gridWrap.getBoundingClientRect().left) /
+				this.pxPerBeat;
+			const candidate =
+				snapModeWith(this.snapMode, invert) === "grid"
+					? this._warpCandidates.reduce(
+							(nearest, point) =>
+								Math.abs(point.beat - rawBeat) * this.pxPerBeat <= 8 &&
+								(!nearest ||
+									Math.abs(point.beat - rawBeat) <
+										Math.abs(nearest.beat - rawBeat))
+									? point
+									: nearest,
+							null,
+						)
+					: null;
+			const beat = candidate?.beat ?? this.beatAtPoint(event.clientX, invert);
+			if (
+				beat <= this.markerEpsilon ||
+				beat >= this.beats - this.markerEpsilon ||
+				this._warpMarkers.some(
+					(marker) => Math.abs(marker.beat - beat) < this.markerEpsilon,
+				)
+			)
+				return;
+			this.emit(
+				"warp-add",
+				candidate ? { beat, candidateId: candidate.id } : { beat },
+			);
+		});
 		this.handleWindowKey = this.handleWindowKey.bind(this);
 		this.handleMarkerDragPointer = this.handleMarkerDragPointer.bind(this);
 		this.resizeObserver =
@@ -495,6 +580,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	}
 
 	disconnectedCallback() {
+		this.endWarpDrag(false);
 		this.resizeObserver?.disconnect();
 		window.removeEventListener("keydown", this.handleWindowKey, true);
 		if (this.drag) this.cancelMarkerDrag();
@@ -503,6 +589,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	/** @param {string} name */
 	attributeChangedCallback(name) {
+		if (["warp", "readonly", "disabled", "beats"].includes(name))
+			this.endWarpDrag(false);
 		if (name === "playhead") {
 			this.playhead = this.hasAttribute("playhead")
 				? clamp(numberAttr(this, "playhead", 0), 0, this.beats)
@@ -569,6 +657,189 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	set gain(value) {
 		this.setAttribute("gain", String(clamp(Number(value) || 0, -90, 24)));
+	}
+
+	/** Interior beat anchors only. Source times and all audio processing belong to the host. */
+	get warpMarkers() {
+		return this._warpMarkers.map((marker) => ({ ...marker }));
+	}
+
+	set warpMarkers(value) {
+		const markers = copyWarpAnchors(value, this.beats);
+		this.endWarpDrag(false);
+		this._warpMarkers = markers;
+		this.renderWarpMarkers();
+	}
+
+	/** Host-proposed anchors (for example detected transients), not active warps. */
+	get warpCandidates() {
+		return this._warpCandidates.map((marker) => ({ ...marker }));
+	}
+	set warpCandidates(value) {
+		this._warpCandidates = copyWarpAnchors(value, this.beats);
+		this.renderWarpCandidates();
+	}
+
+	renderWarpCandidates() {
+		if (!this.warpCandidateLayer) return;
+		this.warpCandidateLayer.replaceChildren();
+		for (const candidate of this._warpCandidates) {
+			if (
+				this._warpMarkers.some(
+					(marker) =>
+						Math.abs(marker.beat - candidate.beat) * this.pxPerBeat < 16,
+				)
+			)
+				continue;
+			const button = document.createElement("button");
+			button.type = "button";
+			button.className = "warp-marker warp-candidate";
+			button.part.add("warp-candidate");
+			button.style.left = `${candidate.beat * this.pxPerBeat}px`;
+			button.setAttribute(
+				"aria-label",
+				`Add warp marker at ${candidate.beat} beats`,
+			);
+			button.disabled = this.readonly;
+			button.addEventListener("pointerdown", (event) =>
+				event.stopPropagation(),
+			);
+			button.addEventListener("click", () => {
+				if (!this.readonly && this.hasAttribute("warp"))
+					this.emit("warp-add", {
+						beat: candidate.beat,
+						candidateId: candidate.id,
+					});
+			});
+			this.warpCandidateLayer.append(button);
+		}
+	}
+
+	renderWarpMarkers() {
+		if (!this.warpMarkerLayer) return;
+		const focused = this.root.activeElement?.getAttribute("data-warp-id");
+		this.warpMarkerLayer.replaceChildren();
+		for (const marker of this._warpMarkers) {
+			const button = document.createElement("button");
+			button.type = "button";
+			button.className = "warp-marker";
+			button.part.add("warp-marker");
+			button.dataset.warpId = marker.id;
+			button.setAttribute("aria-label", `Warp marker at ${marker.beat} beats`);
+			button.setAttribute("role", "slider");
+			button.setAttribute("aria-orientation", "horizontal");
+			button.setAttribute("aria-valuenow", String(marker.beat));
+			const index = this._warpMarkers.indexOf(marker);
+			button.setAttribute(
+				"aria-valuemin",
+				String((this._warpMarkers[index - 1]?.beat ?? 0) + this.markerEpsilon),
+			);
+			button.setAttribute(
+				"aria-valuemax",
+				String(
+					(this._warpMarkers[index + 1]?.beat ?? this.beats) -
+						this.markerEpsilon,
+				),
+			);
+			button.style.left = `${marker.beat * this.pxPerBeat}px`;
+			button.disabled = this.readonly;
+			button.addEventListener("pointerdown", (event) => {
+				if (
+					event.button !== 0 ||
+					this.readonly ||
+					!this.hasAttribute("warp") ||
+					this.warpDrag ||
+					this.drag
+				)
+					return;
+				event.preventDefault();
+				event.stopPropagation();
+				button.focus({ preventScroll: true });
+				this.warpDrag = {
+					pointerId: event.pointerId,
+					id: marker.id,
+					beat: marker.beat,
+					startX: event.clientX,
+					px: this.pxPerBeat,
+				};
+				if (event.isTrusted) button.setPointerCapture(event.pointerId);
+				for (const type of ["pointermove", "pointerup", "pointercancel"])
+					window.addEventListener(type, this.handleWarpPointer, true);
+			});
+			button.addEventListener("keydown", (event) => {
+				if (this.readonly || !this.hasAttribute("warp")) return;
+				if (event.key === "Delete" || event.key === "Backspace") {
+					event.preventDefault();
+					event.stopPropagation();
+					this.emit("warp-remove", { id: marker.id });
+				} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+					event.preventDefault();
+					event.stopPropagation();
+					const step =
+						snapModeWith(this.snapMode, event.metaKey || event.ctrlKey) ===
+						"grid"
+							? this.step
+							: 0.01;
+					this.moveWarpMarker(
+						marker.id,
+						marker.beat + (event.key === "ArrowLeft" ? -step : step),
+					);
+					this.emit("warp-change", { ...marker });
+					this.renderWarpMarkers();
+				}
+			});
+			this.warpMarkerLayer.append(button);
+			if (focused === marker.id) button.focus({ preventScroll: true });
+		}
+		this.renderWarpCandidates();
+	}
+
+	/** @param {string} id @param {number} beat */
+	moveWarpMarker(id, beat) {
+		const index = this._warpMarkers.findIndex((marker) => marker.id === id);
+		if (index < 0) return;
+		const marker = this._warpMarkers[index];
+		marker.beat = clamp(
+			beat,
+			(this._warpMarkers[index - 1]?.beat ?? 0) + this.markerEpsilon,
+			(this._warpMarkers[index + 1]?.beat ?? this.beats) - this.markerEpsilon,
+		);
+		const button = /** @type {HTMLElement} */ (
+			this.warpMarkerLayer.children[index]
+		);
+		button.style.left = `${marker.beat * this.pxPerBeat}px`;
+		button.setAttribute("aria-valuenow", String(marker.beat));
+		button.setAttribute("aria-label", `Warp marker at ${marker.beat} beats`);
+		this.emit("warp-input", { ...marker });
+	}
+
+	/** @param {PointerEvent} event */
+	handleWarpPointer(event) {
+		const drag = this.warpDrag;
+		if (!drag || event.pointerId !== drag.pointerId) return;
+		if (event.type === "pointermove") {
+			const beat = drag.beat + (event.clientX - drag.startX) / drag.px;
+			this.moveWarpMarker(
+				drag.id,
+				this.snapBeat(beat, event.metaKey || event.ctrlKey),
+			);
+		} else this.endWarpDrag(event.type === "pointerup");
+	}
+
+	/** @param {boolean} commit */
+	endWarpDrag(commit) {
+		const drag = this.warpDrag;
+		if (!drag) return;
+		this.warpDrag = null;
+		for (const type of ["pointermove", "pointerup", "pointercancel"])
+			window.removeEventListener(type, this.handleWarpPointer, true);
+		if (!commit) this.moveWarpMarker(drag.id, drag.beat);
+		else {
+			const marker = this._warpMarkers.find((marker) => marker.id === drag.id);
+			if (marker && marker.beat !== drag.beat)
+				this.emit("warp-change", { ...marker });
+		}
+		this.renderWarpMarkers();
 	}
 
 	get readonly() {
@@ -868,6 +1139,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	startTimeSelection(event) {
 		if (
 			event.button !== 0 ||
+			this.warpDrag ||
 			this.readonly ||
 			this.drag ||
 			this.selectionDrag ||
@@ -1045,6 +1317,12 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	/** @param {KeyboardEvent} event */
 	handleWindowKey(event) {
+		if (event.key === "Escape" && this.warpDrag) {
+			event.preventDefault();
+			event.stopPropagation();
+			this.endWarpDrag(false);
+			return;
+		}
 		const inEditor = event.composedPath().includes(this);
 		if (
 			(event.metaKey || event.ctrlKey) &&
@@ -1263,6 +1541,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			Math.min(1, (this.offset + this.gridWrap.clientWidth) / worldWidth),
 		);
 		this.renderRuler();
+		this.renderWarpMarkers();
 		this.renderGrid();
 		this.renderRanges();
 		this.renderTimeSelection();
