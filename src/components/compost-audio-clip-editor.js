@@ -12,6 +12,8 @@ import { clamp, defineElement, numberAttr } from "../utils.js";
 import { CompostWaveform } from "./compost-waveform.js";
 
 const MIN_TIME = 1e-9;
+const MAX_PX_PER_BEAT = 600;
+const MIN_PINCH_SPAN = 24;
 
 /**
  * An audio-clip editor that composes the generic waveform display with clip
@@ -59,12 +61,18 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.adaptiveGrid = false;
 		this.gridLines = true;
 		/** @type {'grid'|'off'} */ this.snapMode = "grid";
+		this.offset = 0;
+		this.zoomPxPerBeat = 0;
 		/** @type {{min: number, max: number}[]} */ this._peaks = [];
 		/** @type {{start: number, end: number}|null} */ this._timeSelection = null;
-		/** @type {{pointerId: number, kind: string, startX: number, width: number, rangeStart: number, rangeEnd: number, loopStart: number, loopEnd: number}|null} */
+		/** @type {{pointerId: number, kind: string, startX: number, pxPerBeat: number, rangeStart: number, rangeEnd: number, loopStart: number, loopEnd: number}|null} */
 		this.drag = null;
 		/** @type {{pointerId: number, startX: number, startBeat: number, moved: boolean, target: HTMLElement, origin: {start: number, end: number}|null, preview?: {start: number, end: number}}|null} */
 		this.selectionDrag = null;
+		/** @type {Map<number, {x: number, y: number}>} */ this.pointers =
+			new Map();
+		/** @type {{xDistance: number, pxPerBeat: number, beat: number}|null} */
+		this.pinch = null;
 
 		this.root = this.attachShadow({ mode: "open" });
 		this.root.innerHTML = `
@@ -131,7 +139,7 @@ export class CompostAudioClipEditor extends HTMLElement {
           font-variant-numeric: lining-nums tabular-nums;
         }
         .rulerwrap { grid-column: 2; grid-row: 1; position: relative; overflow: hidden; }
-        .ruler { position: absolute; inset: 0; touch-action: none; }
+        .ruler { position: absolute; top: 0; bottom: 0; left: 0; touch-action: none; }
         .ruler::before {
           content: "";
           position: absolute;
@@ -262,7 +270,7 @@ export class CompostAudioClipEditor extends HTMLElement {
           --compost-waveform-signal: var(--compost-audio-clip-editor-signal);
           pointer-events: none;
         }
-        .grid { position: absolute; inset: 0; pointer-events: none; }
+        .grid { position: absolute; top: 0; bottom: 0; left: 0; pointer-events: none; }
         .gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--compost-audio-clip-editor-line); }
         .gl.beat { background: color-mix(in srgb, currentColor 18%, transparent); }
         .gl.pulse { background: color-mix(in srgb, currentColor 24%, transparent); }
@@ -318,6 +326,8 @@ export class CompostAudioClipEditor extends HTMLElement {
           right: 0.55em;
           bottom: 0.36em;
           z-index: 5;
+          padding: 0 0.2em;
+          background: var(--compost-audio-clip-editor-bg);
           color: var(--compost-audio-clip-editor-muted);
           font-size: 0.82em;
           pointer-events: none;
@@ -426,20 +436,30 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.ruler.addEventListener("pointercancel", (event) =>
 			this.endMarkerDrag(/** @type {PointerEvent} */ (event), false),
 		);
-		this.ruler.addEventListener("pointerdown", (event) =>
-			this.startTimeSelection(/** @type {PointerEvent} */ (event)),
-		);
-		for (const type of ["pointermove", "pointerup", "pointercancel"]) {
-			this.ruler.addEventListener(type, (event) =>
-				this.handleTimeSelectionPointer(/** @type {PointerEvent} */ (event)),
-			);
-			this.gridWrap.addEventListener(type, (event) =>
-				this.handleTimeSelectionPointer(/** @type {PointerEvent} */ (event)),
-			);
+		for (const target of [this.ruler, this.gridWrap]) {
+			target.addEventListener("pointerdown", (event) => {
+				const pointer = /** @type {PointerEvent} */ (event);
+				if (!this.startNavigation(pointer)) this.startTimeSelection(pointer);
+			});
+			target.addEventListener("pointermove", (event) => {
+				const pointer = /** @type {PointerEvent} */ (event);
+				if (!this.moveNavigation(pointer))
+					this.handleTimeSelectionPointer(pointer);
+			});
+			target.addEventListener("pointerup", (event) => {
+				const pointer = /** @type {PointerEvent} */ (event);
+				if (!this.endNavigation(pointer))
+					this.handleTimeSelectionPointer(pointer);
+			});
+			target.addEventListener("pointercancel", (event) => {
+				const pointer = /** @type {PointerEvent} */ (event);
+				if (!this.endNavigation(pointer))
+					this.handleTimeSelectionPointer(pointer);
+			});
+			target.addEventListener("wheel", (event) => this.handleWheel(event), {
+				passive: false,
+			});
 		}
-		this.gridWrap.addEventListener("pointerdown", (event) =>
-			this.startTimeSelection(/** @type {PointerEvent} */ (event)),
-		);
 		this.gainInput.addEventListener("input", () => {
 			this.setAttribute("gain", this.gainInput.value);
 			this.emitGain("gain-input");
@@ -587,7 +607,12 @@ export class CompostAudioClipEditor extends HTMLElement {
 	}
 
 	get pxPerBeat() {
-		return this.gridWrap?.clientWidth / this.beats || 0;
+		const width = this.gridWrap?.clientWidth || 400;
+		return Math.max(width / this.beats, this.zoomPxPerBeat);
+	}
+
+	get maxOffset() {
+		return Math.max(0, this.beats * this.pxPerBeat - this.gridWrap.clientWidth);
 	}
 
 	get step() {
@@ -605,6 +630,12 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	get gainText() {
 		return `${this._gainDb.toFixed(1)} dB`;
+	}
+
+	zoomReset() {
+		this.zoomPxPerBeat = 0;
+		this.offset = 0;
+		this.refresh();
 	}
 
 	markersFromAttributes() {
@@ -715,9 +746,80 @@ export class CompostAudioClipEditor extends HTMLElement {
 	/** @param {number} clientX @param {boolean} [invert] */
 	beatAtPoint(clientX, invert = false) {
 		const bounds = this.gridWrap.getBoundingClientRect();
-		const beat =
-			((clientX - bounds.left) / Math.max(1, bounds.width)) * this.beats;
+		const beat = (this.offset + clientX - bounds.left) / this.pxPerBeat;
 		return this.snapBeat(beat, invert);
+	}
+
+	/** @param {PointerEvent} event */
+	startNavigation(event) {
+		if (event.pointerType !== "touch") return false;
+		this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+		if (this.pointers.size < 2) return false;
+		if (this.drag) this.cancelMarkerDrag();
+		if (this.selectionDrag) this.cancelTimeSelectionDrag();
+		this.startPinch();
+		event.preventDefault();
+		event.stopPropagation();
+		return true;
+	}
+
+	/** @param {PointerEvent} event */
+	moveNavigation(event) {
+		if (event.pointerType !== "touch" || !this.pointers.has(event.pointerId))
+			return false;
+		this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+		if (!this.pinch) return false;
+		this.movePinch();
+		event.preventDefault();
+		event.stopPropagation();
+		return true;
+	}
+
+	/** @param {PointerEvent} event */
+	endNavigation(event) {
+		if (event.pointerType !== "touch" || !this.pointers.has(event.pointerId))
+			return false;
+		const navigating = Boolean(this.pinch);
+		this.pointers.delete(event.pointerId);
+		if (this.pointers.size === 0) this.pinch = null;
+		if (navigating) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+		return navigating;
+	}
+
+	startPinch() {
+		const [first, second] = [...this.pointers.values()];
+		if (!second) return;
+		const centerX = (first.x + second.x) / 2;
+		const rect = this.gridWrap.getBoundingClientRect();
+		this.pinch = {
+			xDistance: Math.max(MIN_PINCH_SPAN, Math.abs(second.x - first.x)),
+			pxPerBeat: this.pxPerBeat,
+			beat: (this.offset + centerX - rect.left) / this.pxPerBeat,
+		};
+	}
+
+	movePinch() {
+		if (!this.pinch || this.pointers.size < 2) return;
+		const [first, second] = [...this.pointers.values()];
+		const centerX = (first.x + second.x) / 2;
+		const xDistance = Math.max(MIN_PINCH_SPAN, Math.abs(second.x - first.x));
+		const width = this.gridWrap.clientWidth;
+		const fit = width / this.beats;
+		this.zoomPxPerBeat = clamp(
+			(this.pinch.pxPerBeat * xDistance) / this.pinch.xDistance,
+			fit,
+			MAX_PX_PER_BEAT,
+		);
+		const rect = this.gridWrap.getBoundingClientRect();
+		this.offset = clamp(
+			this.pinch.beat * this.pxPerBeat - (centerX - rect.left),
+			0,
+			this.maxOffset,
+		);
+		this.refresh();
 	}
 
 	/** @param {PointerEvent} event */
@@ -814,6 +916,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			event.button !== 0 ||
 			this.readonly ||
 			this.disabled ||
+			this.drag ||
 			this.selectionDrag
 		)
 			return;
@@ -822,7 +925,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			pointerId: event.pointerId,
 			kind,
 			startX: event.clientX,
-			width: Math.max(1, this.gridWrap.clientWidth),
+			pxPerBeat: this.pxPerBeat,
 			rangeStart: this.rangeStart,
 			rangeEnd: this.rangeEnd,
 			loopStart: this.loopStart,
@@ -837,9 +940,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		if (!this.drag || event.pointerId !== this.drag.pointerId) return;
 		const factor = event.shiftKey ? 0.1 : 1;
 		const delta =
-			((event.clientX - this.drag.startX) / this.drag.width) *
-			this.beats *
-			factor;
+			((event.clientX - this.drag.startX) / this.drag.pxPerBeat) * factor;
 		const start =
 			this.drag.kind === "range-start"
 				? this.drag.rangeStart
@@ -995,6 +1096,36 @@ export class CompostAudioClipEditor extends HTMLElement {
 		return clamp(Math.round(beat / this.step) * this.step, 0, this.beats);
 	}
 
+	/** Command/Ctrl zooms time; Shift or a horizontal wheel pans time. */
+	/** @param {WheelEvent} event */
+	handleWheel(event) {
+		const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+		if (event.metaKey || event.ctrlKey) {
+			const delta = horizontal ? event.deltaX : event.deltaY;
+			if (!delta) return;
+			event.preventDefault();
+			const width = this.gridWrap.clientWidth;
+			const rect = this.gridWrap.getBoundingClientRect();
+			const x = clamp(event.clientX - rect.left, 0, width);
+			const old = this.pxPerBeat;
+			const at = (this.offset + x) / old;
+			this.zoomPxPerBeat = clamp(
+				old * (delta > 0 ? 0.86 : 1.16),
+				width / this.beats,
+				MAX_PX_PER_BEAT,
+			);
+			this.offset = clamp(at * this.pxPerBeat - x, 0, this.maxOffset);
+			this.refresh();
+			return;
+		}
+		if (!event.shiftKey && !horizontal) return;
+		const delta = event.deltaX || event.deltaY;
+		if (!delta) return;
+		event.preventDefault();
+		this.offset = clamp(this.offset + delta, 0, this.maxOffset);
+		this.refresh();
+	}
+
 	/** @param {Event} event */
 	handleFileDrag(event) {
 		if (this.readonly) return;
@@ -1038,6 +1169,18 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	refresh() {
 		if (!this.isConnected || !this.gridWrap) return;
+		const worldWidth = this.beats * this.pxPerBeat;
+		this.offset = clamp(
+			this.offset,
+			0,
+			Math.max(0, worldWidth - this.gridWrap.clientWidth),
+		);
+		this.gridElement.style.width = `${worldWidth}px`;
+		this.gridElement.style.transform = `translateX(${-this.offset}px)`;
+		this.waveform.setView(
+			this.offset / worldWidth,
+			Math.min(1, (this.offset + this.gridWrap.clientWidth) / worldWidth),
+		);
 		this.renderRuler();
 		this.renderGrid();
 		this.renderRanges();
@@ -1046,6 +1189,9 @@ export class CompostAudioClipEditor extends HTMLElement {
 	}
 
 	renderRuler() {
+		const px = this.pxPerBeat;
+		this.ruler.style.width = `${this.beats * px}px`;
+		this.ruler.style.transform = `translateX(${-this.offset}px)`;
 		for (const label of this.ruler.querySelectorAll(".bn,.rt")) label.remove();
 		const fragment = document.createDocumentFragment();
 		for (const { time, kind } of timeGridLines(this.beats, {
@@ -1057,7 +1203,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			const tick = document.createElement("div");
 			tick.className = `rt ${kind}`;
 			tick.part.add("ruler-tick");
-			tick.style.left = `${(time / this.beats) * 100}%`;
+			tick.style.left = `${time * px}px`;
 			fragment.append(tick);
 		}
 		for (const { beat, text } of rulerLabels(
@@ -1070,7 +1216,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			label.className = "bn";
 			label.part.add("ruler-label");
 			label.textContent = text;
-			label.style.left = `${(beat / this.beats) * 100}%`;
+			label.style.left = `${beat * px}px`;
 			fragment.append(label);
 		}
 		this.ruler.append(fragment);
@@ -1078,6 +1224,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	renderGrid() {
 		this.gridElement.replaceChildren();
+		const px = this.pxPerBeat;
 		if (this.gridLines) {
 			const fragment = document.createDocumentFragment();
 			for (const { time, kind } of timeGridLines(this.beats, {
@@ -1089,7 +1236,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 				const line = document.createElement("div");
 				line.className = `gl ${kind}`;
 				line.part.add("grid-line");
-				line.style.left = `${(time / this.beats) * 100}%`;
+				line.style.left = `${time * px}px`;
 				fragment.append(line);
 			}
 			this.gridElement.append(fragment);
@@ -1101,26 +1248,30 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	renderRanges() {
 		if (!this.rangeStartHandle) return;
-		const percent = (beat) => `${(beat / this.beats) * 100}%`;
+		const px = this.pxPerBeat;
+		const viewWidth = this.gridWrap.clientWidth;
 		const rangeHandle = this.rangeStartHandle.offsetWidth || 32;
 		const loopHandle = this.loopStartHandle.offsetWidth || 24;
-		this.rangeStartHandle.style.left = `calc(${percent(this.rangeStart)} - 1px)`;
-		this.rangeEndHandle.style.left = `calc(${percent(this.rangeEnd)} - ${rangeHandle - 1}px)`;
-		this.loopRegion.style.left = percent(this.loopStart);
-		this.loopRegion.style.width = percent(this.loopEnd - this.loopStart);
-		this.loopStartHandle.style.left = `calc(${percent(this.loopStart)} - 1px)`;
-		this.loopEndHandle.style.left = `calc(${percent(this.loopEnd)} - ${loopHandle - 1}px)`;
+		this.rangeStartHandle.style.left = `${this.rangeStart * px - 1}px`;
+		this.rangeEndHandle.style.left = `${this.rangeEnd * px - rangeHandle + 1}px`;
+		this.loopRegion.style.left = `${this.loopStart * px}px`;
+		this.loopRegion.style.width = `${(this.loopEnd - this.loopStart) * px}px`;
+		this.loopStartHandle.style.left = `${this.loopStart * px - 1}px`;
+		this.loopEndHandle.style.left = `${this.loopEnd * px - loopHandle + 1}px`;
 		this.before.style.left = "0";
-		this.before.style.width = percent(this.rangeStart);
-		this.past.style.left = percent(this.rangeEnd);
+		this.before.style.width = `${clamp(this.rangeStart * px - this.offset, 0, viewWidth)}px`;
+		this.past.style.left = `${clamp(this.rangeEnd * px - this.offset, 0, viewWidth)}px`;
 		this.past.style.right = "0";
 		for (const [line, beat] of [
 			[this.rangeStartLine, this.rangeStart],
 			[this.rangeEndLine, this.rangeEnd],
 			[this.loopStartLine, this.loopStart],
 			[this.loopEndLine, this.loopEnd],
-		])
-			line.style.left = percent(beat);
+		]) {
+			const x = beat * px - this.offset;
+			line.hidden = x < 0 || x > viewWidth;
+			line.style.left = `${x}px`;
+		}
 		for (const [handle, label, value, minimum, maximum] of [
 			[
 				this.rangeStartHandle,
@@ -1170,17 +1321,17 @@ export class CompostAudioClipEditor extends HTMLElement {
 			return;
 		}
 		const cursor = selection.start === selection.end;
-		const left = `${(selection.start / this.beats) * 100}%`;
+		const left = selection.start * this.pxPerBeat;
 		const width = cursor
-			? "2px"
-			: `${((selection.end - selection.start) / this.beats) * 100}%`;
-		for (const element of [
-			this.timeSelectionElement,
-			this.rulerTimeSelection,
+			? 2
+			: (selection.end - selection.start) * this.pxPerBeat;
+		for (const [element, offset] of [
+			[this.timeSelectionElement, this.offset],
+			[this.rulerTimeSelection, 0],
 		]) {
 			element.style.display = "block";
-			element.style.left = left;
-			element.style.width = width;
+			element.style.left = `${left - offset}px`;
+			element.style.width = `${width}px`;
 			element.toggleAttribute("data-cursor", cursor);
 		}
 	}
@@ -1191,8 +1342,10 @@ export class CompostAudioClipEditor extends HTMLElement {
 			this.playheadElement.style.display = "none";
 			return;
 		}
-		this.playheadElement.style.display = "block";
-		this.playheadElement.style.left = `${(this.playhead / this.beats) * 100}%`;
+		const x = this.playhead * this.pxPerBeat - this.offset;
+		this.playheadElement.style.display =
+			x < 0 || x > this.gridWrap.clientWidth ? "none" : "block";
+		this.playheadElement.style.left = `${x}px`;
 	}
 }
 

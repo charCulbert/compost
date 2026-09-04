@@ -66,6 +66,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	gridLines: boolean;
 	snapMode: "grid" | "off";
 	playhead: number | null;
+	offset: number;
 
 	get gain(): number;
 	set gain(value: number);
@@ -82,6 +83,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	/** Recomputes geometry and repaints the ruler and grid. */
 	refresh(): void;
+	/** Fits the full clip in view and returns horizontal scroll to the start. */
+	zoomReset(): void;
 	setRange(start: number, end: number, shouldEmit?: boolean): void;
 	setLoop(start: number, end: number, shouldEmit?: boolean): void;
 	setGain(gainDb: number, shouldEmit?: boolean): void;

@@ -24,17 +24,25 @@
               time-signature="4/4" grid="1/16" playhead="6.25"
               style="height: 16em"></compost-audio-clip-editor>
             <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
+              <label>Grid <select data-grid>
+                <option value="off">Off</option><option value="bar">1 bar</option>
+                <option value="1/4">1/4</option><option value="1/4T">1/4 triplet</option>
+                <option value="1/8">1/8</option><option value="1/8T">1/8 triplet</option>
+                <option value="1/16" selected>1/16</option><option value="1/16T">1/16 triplet</option>
+                <option value="1/32">1/32</option><option value="1/32T">1/32 triplet</option>
+              </select></label>
               <label><input type="checkbox" data-loop checked> Loop</label>
               <label><input type="checkbox" data-snap checked> Snap</label>
               <label><input type="checkbox" data-adaptive> Adaptive grid</label>
               <label>Height <input data-height type="range" min="120" max="420" value="256"></label>
+              <button type="button" data-fit>Fit clip</button>
               <button type="button" data-playhead>Animate playhead</button>
               <button type="button" data-cursor>Show cursor</button>
               <button type="button" data-selection>Show time selection</button>
             </div>
             <div class="usage-notes">
-              <div><strong>Desktop</strong><span>Click the waveform for the edit cursor; drag it for a time selection. Drag range and loop markers separately. Command/Ctrl toggles snapping; Shift fine-tunes markers or extends a selection.</span></div>
-              <div><strong>Mobile</strong><span>Tap the waveform for the edit cursor; drag to select. Marker targets are larger than their visible arrows. Drag an audio file over the waveform to replace it.</span></div>
+              <div><strong>Desktop</strong><span>Click the waveform for the edit cursor; drag it for a time selection. Command/Ctrl-wheel zooms at the pointer; Shift-wheel or a horizontal wheel pans. The lower-right readout shows the effective grid.</span></div>
+              <div><strong>Mobile</strong><span>Tap the waveform for the edit cursor; drag to select. Two fingers pan or zoom. Marker targets are larger than their visible arrows. Drag an audio file over the waveform to replace it.</span></div>
             </div>
           </div>
         </div>
@@ -53,6 +61,13 @@
         const level = Math.min(1, .07 + hit * accent + Math.abs(Math.sin(index * .027)) * .12);
         return { min: -level * (.7 + Math.sin(index * .13) * .25), max: level };
       });
+      s.querySelector('[data-grid]').addEventListener('change', (event) => {
+        if (event.target.value === 'off') editor.setAttribute('grid-lines', 'off');
+        else {
+          editor.removeAttribute('grid-lines');
+          editor.setAttribute('grid', event.target.value);
+        }
+      });
       s.querySelector('[data-loop]').addEventListener('change', (event) => {
         editor.toggleAttribute('loop', event.target.checked);
       });
@@ -65,6 +80,7 @@
       s.querySelector('[data-height]').addEventListener('input', (event) => {
         editor.style.height = `${event.target.value}px`;
       });
+      s.querySelector('[data-fit]').addEventListener('click', () => editor.zoomReset());
       s.querySelector('[data-cursor]').addEventListener('click', () => editor.setTimeSelection(7, 7));
       s.querySelector('[data-selection]').addEventListener('click', () => editor.setTimeSelection(6, 9));
       let playing = false;

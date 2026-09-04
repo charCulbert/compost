@@ -15,6 +15,8 @@ export class CompostWaveform extends HTMLElement {
 		super();
 		/** @type {WaveformPeak[]} */
 		this._peaks = [];
+		this._viewStart = 0;
+		this._viewEnd = 1;
 		this.generatedAriaLabel = "";
 		this.generatedAriaDescription = "";
 		this.root = this.attachShadow({ mode: "open" });
@@ -113,6 +115,23 @@ export class CompostWaveform extends HTMLElement {
 		this.paint();
 	}
 
+	/** The displayed fraction of the supplied peak envelope. */
+	get view() {
+		return { start: this._viewStart, end: this._viewEnd };
+	}
+
+	/** Display a normalized slice without changing or copying the peak envelope. */
+	/** @param {number} start @param {number} end */
+	setView(start, end) {
+		const nextStart = clamp(Number(start) || 0, 0, 1);
+		const nextEnd = clamp(Number(end) || 0, 0, 1);
+		if (!(nextEnd > nextStart)) return;
+		if (nextStart === this._viewStart && nextEnd === this._viewEnd) return;
+		this._viewStart = nextStart;
+		this._viewEnd = nextEnd;
+		this.paint();
+	}
+
 	refreshAccessibility() {
 		if (
 			typeof this.getAttribute !== "function" ||
@@ -154,11 +173,16 @@ export class CompostWaveform extends HTMLElement {
 		context.fillStyle = this.color();
 		const middle = height / 2;
 		const scaleY = Math.max(0, middle - 3 * ratio);
+		const viewStart = this._viewStart * this._peaks.length;
+		const viewLength = (this._viewEnd - this._viewStart) * this._peaks.length;
 		for (let x = 0; x < width; x += 1) {
-			const start = Math.floor((x * this._peaks.length) / width);
+			const start = Math.min(
+				this._peaks.length - 1,
+				Math.floor(viewStart + (x * viewLength) / width),
+			);
 			const end = Math.max(
 				start + 1,
-				Math.floor(((x + 1) * this._peaks.length) / width),
+				Math.ceil(viewStart + ((x + 1) * viewLength) / width),
 			);
 			let minimum = Infinity;
 			let maximum = -Infinity;

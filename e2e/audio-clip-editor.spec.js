@@ -19,6 +19,7 @@ test("waveform owns a clamped copy of peaks and repaints at rendered size", asyn
 		input[0].min = 0;
 		element.setAttribute("label", "Updated waveform");
 		element.style.height = "72px";
+		element.setView(0.25, 0.75);
 		await new Promise((resolve) =>
 			requestAnimationFrame(() => requestAnimationFrame(resolve)),
 		);
@@ -26,6 +27,7 @@ test("waveform owns a clamped copy of peaks and repaints at rendered size", asyn
 		const rect = canvas.getBoundingClientRect();
 		return {
 			peaks: element.peaks,
+			view: element.view,
 			canvas: [canvas.width, canvas.height],
 			css: [rect.width, rect.height],
 			label: element.getAttribute("aria-label"),
@@ -37,6 +39,7 @@ test("waveform owns a clamped copy of peaks and repaints at rendered size", asyn
 		{ min: -1, max: 1 },
 		{ min: -0.4, max: 0.8 },
 	]);
+	expect(state.view).toEqual({ start: 0.25, end: 0.75 });
 	expect(state.canvas[0]).toBeGreaterThanOrEqual(Math.round(state.css[0]));
 	expect(state.canvas[1]).toBeGreaterThanOrEqual(Math.round(state.css[1]));
 	expect(state.label).toBe("Updated waveform");
@@ -232,6 +235,126 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 	await editor.evaluate((element) => {
 		element.disabled = false;
 	});
+
+	const pinch = await editor.evaluate((element) => {
+		element.zoomReset();
+		const target = element.shadowRoot.querySelector(".gridwrap");
+		const rect = target.getBoundingClientRect();
+		const point = (type, pointerId, x) =>
+			target.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					cancelable: true,
+					pointerId,
+					pointerType: "touch",
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: rect.left + rect.width * x,
+					clientY: rect.top + rect.height / 2,
+				}),
+			);
+		const fit = element.pxPerBeat;
+		point("pointerdown", 1, 0.35);
+		point("pointerdown", 2, 0.65);
+		point("pointermove", 1, 0.2);
+		point("pointermove", 2, 0.8);
+		point("pointerup", 1, 0.2);
+		point("pointerup", 2, 0.8);
+		return {
+			fit,
+			px: element.pxPerBeat,
+			pointers: element.pointers.size,
+			pinch: element.pinch,
+		};
+	});
+	expect(pinch.px).toBeGreaterThan(pinch.fit);
+	expect(pinch.pointers).toBe(0);
+	expect(pinch.pinch).toBeNull();
+
+	const zoomed = await editor.evaluate((element) => {
+		element.zoomReset();
+		element.setAttribute("adaptive-grid", "");
+		const target = element.shadowRoot.querySelector(".gridwrap");
+		const rect = target.getBoundingClientRect();
+		const before = { px: element.pxPerBeat, step: element.step };
+		for (let index = 0; index < 6; index += 1)
+			target.dispatchEvent(
+				new WheelEvent("wheel", {
+					bubbles: true,
+					cancelable: true,
+					ctrlKey: true,
+					deltaY: -100,
+					clientX: rect.left + rect.width * 0.6,
+					clientY: rect.top + rect.height / 2,
+				}),
+			);
+		return {
+			before,
+			px: element.pxPerBeat,
+			step: element.step,
+			offset: element.offset,
+			view: element.shadowRoot.querySelector("compost-waveform").view,
+			readout: element.shadowRoot.querySelector(".division").textContent,
+		};
+	});
+	expect(zoomed.px).toBeGreaterThan(zoomed.before.px);
+	expect(zoomed.step).toBeLessThan(zoomed.before.step);
+	expect(zoomed.offset).toBeGreaterThan(0);
+	expect(zoomed.view.start).toBeGreaterThan(0);
+	expect(zoomed.view.end).toBeLessThan(1);
+	expect(zoomed.readout).not.toBe("off");
+
+	const panned = await editor.evaluate((element) => {
+		const target = element.shadowRoot.querySelector(".gridwrap");
+		const rect = target.getBoundingClientRect();
+		target.dispatchEvent(
+			new WheelEvent("wheel", {
+				bubbles: true,
+				cancelable: true,
+				shiftKey: true,
+				deltaY: 1_000_000,
+				clientX: rect.left + rect.width / 2,
+				clientY: rect.top + rect.height / 2,
+			}),
+		);
+		return { offset: element.offset, maxOffset: element.maxOffset };
+	});
+	expect(panned.offset).toBeCloseTo(panned.maxOffset, 5);
+
+	const zoomedPoint = await editor.evaluate((element) => {
+		const rect = element.shadowRoot
+			.querySelector(".gridwrap")
+			.getBoundingClientRect();
+		const raw = (element.offset + rect.width / 2) / element.pxPerBeat;
+		return {
+			x: rect.left + rect.width / 2,
+			y: rect.top + rect.height / 2,
+			beat: Math.round(raw / element.step) * element.step,
+		};
+	});
+	await page.mouse.click(zoomedPoint.x, zoomedPoint.y);
+	expect(await editor.evaluate((element) => element.timeSelection)).toEqual({
+		start: zoomedPoint.beat,
+		end: zoomedPoint.beat,
+	});
+
+	await page.locator("[data-fit]").click();
+	expect(
+		await editor.evaluate((element) => ({
+			px: element.pxPerBeat,
+			offset: element.offset,
+			view: element.shadowRoot.querySelector("compost-waveform").view,
+		})),
+	).toEqual({ px: targets.px, offset: 0, view: { start: 0, end: 1 } });
+
+	await editor.evaluate((element) => element.removeAttribute("adaptive-grid"));
+	await page.locator("[data-grid]").selectOption("off");
+	await expect(editor).toHaveAttribute("grid-lines", "off");
+	await expect(editor.locator(".division")).toHaveText("off");
+	await page.locator("[data-grid]").selectOption("1/8");
+	await expect(editor).toHaveAttribute("grid", "1/8");
+	await expect(editor).not.toHaveAttribute("grid-lines", "off");
+	await expect(editor.locator(".division")).toHaveText("1/8");
 
 	await editor.evaluate((element) => {
 		const data = new DataTransfer();
