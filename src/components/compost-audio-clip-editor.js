@@ -21,8 +21,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 		return [
 			"label",
 			"beats",
-			"play-start",
-			"play-end",
+			"start",
+			"end",
 			"loop-start",
 			"loop-end",
 			"loop",
@@ -384,10 +384,10 @@ export class CompostAudioClipEditor extends HTMLElement {
 		);
 		this.gainInput.addEventListener("input", () => {
 			this.setAttribute("gain", this.gainInput.value);
-			this.emit("gain-input", this.value);
+			this.emitGain("gain-input");
 		});
 		this.gainInput.addEventListener("change", () =>
-			this.emit("gain-change", this.value),
+			this.emitGain("gain-change"),
 		);
 		this.gridWrap.addEventListener("dragenter", (event) =>
 			this.handleFileDrag(event),
@@ -406,19 +406,25 @@ export class CompostAudioClipEditor extends HTMLElement {
 		);
 
 		this.refresh = this.refresh.bind(this);
-		this.resizeObserver = new ResizeObserver(this.refresh);
+		this.handleWindowKey = this.handleWindowKey.bind(this);
+		this.resizeObserver =
+			typeof ResizeObserver === "function"
+				? new ResizeObserver(this.refresh)
+				: null;
 	}
 
 	connectedCallback() {
 		this.setAttribute("role", "group");
 		if (!this.hasAttribute("tabindex")) this.tabIndex = 0;
 		this.readAttributes();
-		this.resizeObserver.observe(this);
+		this.resizeObserver?.observe(this);
+		window.addEventListener("keydown", this.handleWindowKey, true);
 		this.refresh();
 	}
 
 	disconnectedCallback() {
-		this.resizeObserver.disconnect();
+		this.resizeObserver?.disconnect();
+		window.removeEventListener("keydown", this.handleWindowKey, true);
 	}
 
 	/** @param {string} name */
@@ -437,7 +443,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			if (this.gainValue) this.gainValue.textContent = this.gainText;
 			return;
 		}
-		if (["play-start", "play-end", "loop-start", "loop-end"].includes(name)) {
+		if (["start", "end", "loop-start", "loop-end"].includes(name)) {
 			Object.assign(this, this.markersFromAttributes());
 			this.renderRanges();
 			return;
@@ -461,7 +467,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.beatsPerBar = meter.barLength;
 		this.beatLength = meter.beatLength;
 		this.pulseLength = meter.pulseLength;
-		this.grid = this.getAttribute("grid") || "1/16";
+		this.grid = this.getAttribute("grid")?.trim() || "1/16";
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
@@ -480,18 +486,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.setAttribute("gain", String(clamp(Number(value) || 0, -90, 24)));
 	}
 
-	get value() {
-		return {
-			playStartBeat: this.rangeStart,
-			playEndBeat: this.rangeEnd,
-			loopStartBeat: this.loopStart,
-			loopEndBeat: this.loopEnd,
-			gainDb: this._gainDb,
-		};
-	}
-
 	get readonly() {
-		return this.hasAttribute("readonly");
+		return this.hasAttribute("readonly") || this.hasAttribute("disabled");
 	}
 
 	set readonly(value) {
@@ -539,8 +535,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 	markersFromAttributes() {
 		return this.normaliseMarkers(
 			{
-				rangeStart: numberAttr(this, "play-start", 0),
-				rangeEnd: numberAttr(this, "play-end", this.beats),
+				rangeStart: numberAttr(this, "start", 0),
+				rangeEnd: numberAttr(this, "end", this.beats),
 				loopStart: numberAttr(this, "loop-start", 0),
 				loopEnd: numberAttr(this, "loop-end", this.beats),
 			},
@@ -560,7 +556,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			"refresh",
 		);
 		this.writeMarkers(markers);
-		if (shouldEmit) this.emit("range-change", this.value);
+		if (shouldEmit) this.emitRange("range-change");
 	}
 
 	/** @param {number} start @param {number} end @param {boolean} [shouldEmit] */
@@ -575,14 +571,14 @@ export class CompostAudioClipEditor extends HTMLElement {
 			"refresh",
 		);
 		this.writeMarkers(markers);
-		if (shouldEmit) this.emit("loop-change", this.value);
+		if (shouldEmit) this.emitLoop("loop-change");
 	}
 
-	/** @param {number} gain @param {'gain-input'|'gain-change'} [eventName] */
-	setGain(gain, eventName) {
+	/** @param {number} gain @param {boolean} [shouldEmit] */
+	setGain(gain, shouldEmit = false) {
 		const value = clamp(Number(gain) || 0, -90, 24);
 		this.setAttribute("gain", String(value));
-		if (eventName) this.emit(eventName, this.value);
+		if (shouldEmit) this.emitGain("gain-change");
 	}
 
 	/**
@@ -632,8 +628,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 	/** @param {{rangeStart: number, rangeEnd: number, loopStart: number, loopEnd: number}} markers */
 	writeMarkers(markers) {
 		for (const [name, value] of [
-			["play-start", markers.rangeStart],
-			["play-end", markers.rangeEnd],
+			["start", markers.rangeStart],
+			["end", markers.rangeEnd],
 			["loop-start", markers.loopStart],
 			["loop-end", markers.loopEnd],
 		])
@@ -686,15 +682,36 @@ export class CompostAudioClipEditor extends HTMLElement {
 		const { kind } = previous;
 		this.drag = null;
 		this.removeAttribute("data-marker-drag");
-		if (!commit) return;
+		if (!commit) {
+			this.writeMarkers(previous);
+			return;
+		}
 		const changed =
 			Math.abs(previous.rangeStart - this.rangeStart) > MIN_TIME ||
 			Math.abs(previous.rangeEnd - this.rangeEnd) > MIN_TIME ||
 			Math.abs(previous.loopStart - this.loopStart) > MIN_TIME ||
 			Math.abs(previous.loopEnd - this.loopEnd) > MIN_TIME;
 		if (!changed) return;
-		if (kind.startsWith("range")) this.emit("range-change", this.value);
-		else this.emit("loop-change", this.value);
+		if (kind.startsWith("range")) this.emitRange("range-change");
+		else this.emitLoop("loop-change");
+	}
+
+	cancelMarkerDrag() {
+		if (!this.drag) return;
+		const previous = this.drag;
+		this.drag = null;
+		this.removeAttribute("data-marker-drag");
+		this.writeMarkers(previous);
+		if (this.ruler.hasPointerCapture?.(previous.pointerId))
+			this.ruler.releasePointerCapture(previous.pointerId);
+	}
+
+	/** @param {KeyboardEvent} event */
+	handleWindowKey(event) {
+		if (event.key !== "Escape" || !this.drag) return;
+		event.preventDefault();
+		event.stopPropagation();
+		this.cancelMarkerDrag();
 	}
 
 	/** @param {KeyboardEvent} event @param {string} kind */
@@ -724,8 +741,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 			);
 			if (start === this.loopStart) return;
 			this.setLoop(start, start + length);
-			this.emit("loop-input", this.value);
-			this.emit("loop-change", this.value);
+			this.emitLoop("loop-input");
+			this.emitLoop("loop-change");
 			return;
 		}
 		const current =
@@ -747,10 +764,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 						: this.beats
 					: current + increment * direction;
 		this.applyMarker(kind, clamp(beat, 0, this.beats), "input");
-		this.emit(
-			kind.startsWith("range") ? "range-change" : "loop-change",
-			this.value,
-		);
+		if (kind.startsWith("range")) this.emitRange("range-change");
+		else this.emitLoop("loop-change");
 	}
 
 	/** @param {string} kind @param {number} beat @param {'input'|'change'} phase */
@@ -780,10 +795,9 @@ export class CompostAudioClipEditor extends HTMLElement {
 			kind === "loop-move" ? "refresh" : kind,
 		);
 		this.writeMarkers(markers);
-		this.emit(
-			`${kind.startsWith("range") ? "range" : "loop"}-${phase}`,
-			this.value,
-		);
+		if (kind.startsWith("range"))
+			this.emitRange(phase === "input" ? "range-input" : "range-change");
+		else this.emitLoop(phase === "input" ? "loop-input" : "loop-change");
 	}
 
 	/** @param {number} beat @param {boolean} invert */
@@ -795,14 +809,17 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	/** @param {Event} event */
 	handleFileDrag(event) {
-		if (this.readonly || this.disabled) return;
+		if (this.readonly) return;
+		const transfer = /** @type {DragEvent} */ (event).dataTransfer;
+		if (!transfer?.types.includes("Files")) return;
 		event.preventDefault();
+		transfer.dropEffect = "copy";
 		this.setAttribute("data-file-drag", "");
 	}
 
 	/** @param {Event} event */
 	handleFileDrop(event) {
-		if (this.readonly || this.disabled) return;
+		if (this.readonly) return;
 		event.preventDefault();
 		this.removeAttribute("data-file-drag");
 		const file = /** @type {DragEvent} */ (event).dataTransfer?.files?.[0];
@@ -814,6 +831,21 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.dispatchEvent(
 			new CustomEvent(name, { detail, bubbles: true, composed: true }),
 		);
+	}
+
+	/** @param {'range-input'|'range-change'} name */
+	emitRange(name) {
+		this.emit(name, { start: this.rangeStart, end: this.rangeEnd });
+	}
+
+	/** @param {'loop-input'|'loop-change'} name */
+	emitLoop(name) {
+		this.emit(name, { start: this.loopStart, end: this.loopEnd });
+	}
+
+	/** @param {'gain-input'|'gain-change'} name */
+	emitGain(name) {
+		this.emit(name, { gain: this._gainDb });
 	}
 
 	refresh() {

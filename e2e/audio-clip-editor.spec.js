@@ -41,6 +41,41 @@ test("waveform owns a clamped copy of peaks and repaints at rendered size", asyn
 	expect(state.canvas[1]).toBeGreaterThanOrEqual(Math.round(state.css[1]));
 	expect(state.label).toBe("Updated waveform");
 	expect(state.description).toContain("2 peak buckets");
+
+	const sampleRate = 8000;
+	const sampleCount = 800;
+	const audio = Buffer.alloc(44 + sampleCount * 2);
+	audio.write("RIFF", 0);
+	audio.writeUInt32LE(audio.length - 8, 4);
+	audio.write("WAVEfmt ", 8);
+	audio.writeUInt32LE(16, 16);
+	audio.writeUInt16LE(1, 20);
+	audio.writeUInt16LE(1, 22);
+	audio.writeUInt32LE(sampleRate, 24);
+	audio.writeUInt32LE(sampleRate * 2, 28);
+	audio.writeUInt16LE(2, 32);
+	audio.writeUInt16LE(16, 34);
+	audio.write("data", 36);
+	audio.writeUInt32LE(sampleCount * 2, 40);
+	for (let index = 0; index < sampleCount; index += 1)
+		audio.writeInt16LE(
+			Math.round(Math.sin((index * Math.PI * 2 * 440) / sampleRate) * 12000),
+			44 + index * 2,
+		);
+	await page.locator("[data-file]").setInputFiles({
+		name: "tone.wav",
+		mimeType: "audio/wav",
+		buffer: audio,
+	});
+	await expect(page.locator("[data-status]")).toContainText(
+		"the demo wrapper decoded 1 channel",
+	);
+	expect(
+		await waveform.evaluate((element) => ({
+			label: element.getAttribute("aria-label"),
+			peaks: element.peaks.length,
+		})),
+	).toEqual({ label: "tone.wav waveform", peaks: 256 });
 });
 
 test("audio clip editor composes the waveform and edits bounded clip metadata", async ({
@@ -75,19 +110,25 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 			range: [range.width, range.height],
 			loop: [loop.width, loop.height],
 			px: element.pxPerBeat,
-			value: element.value,
+			state: {
+				start: element.rangeStart,
+				end: element.rangeEnd,
+				loopStart: element.loopStart,
+				loopEnd: element.loopEnd,
+				gain: element.gain,
+			},
 		};
 	});
 	expect(targets.range[0]).toBeGreaterThanOrEqual(30);
 	expect(targets.range[1]).toBeGreaterThanOrEqual(20);
 	expect(targets.loop[0]).toBeGreaterThanOrEqual(22);
 	expect(targets.loop[1]).toBeGreaterThanOrEqual(18);
-	expect(targets.value).toEqual({
-		playStartBeat: 1,
-		playEndBeat: 15,
-		loopStartBeat: 4,
-		loopEndBeat: 12,
-		gainDb: 0,
+	expect(targets.state).toEqual({
+		start: 1,
+		end: 15,
+		loopStart: 4,
+		loopEnd: 12,
+		gain: 0,
 	});
 
 	const rangeStart = editor.locator(".range-handle.start");
@@ -102,9 +143,21 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 		rangeBox.y + rangeBox.height / 2,
 	);
 	await page.mouse.up();
-	expect(await editor.evaluate((element) => element.value.playStartBeat)).toBe(
-		2,
+	expect(await editor.evaluate((element) => element.rangeStart)).toBe(2);
+
+	const cancelBox = await rangeStart.boundingBox();
+	await page.mouse.move(
+		cancelBox.x + cancelBox.width / 2,
+		cancelBox.y + cancelBox.height / 2,
 	);
+	await page.mouse.down();
+	await page.mouse.move(
+		cancelBox.x + cancelBox.width / 2 + targets.px,
+		cancelBox.y + cancelBox.height / 2,
+	);
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	expect(await editor.evaluate((element) => element.rangeStart)).toBe(2);
 
 	const loopRegion = editor.locator(".region");
 	const loopBox = await loopRegion.boundingBox();
@@ -128,12 +181,21 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 		input.dispatchEvent(new Event("input", { bubbles: true }));
 		element.setAttribute("playhead", "7");
 		input.dispatchEvent(new Event("change", { bubbles: true }));
+		element.disabled = true;
 		return {
-			value: element.value.gainDb,
+			value: element.gain,
 			attribute: element.getAttribute("gain"),
+			disabledIsReadonly: element.readonly,
 		};
 	});
-	expect(gain).toEqual({ value: -6, attribute: "-6" });
+	expect(gain).toEqual({
+		value: -6,
+		attribute: "-6",
+		disabledIsReadonly: true,
+	});
+	await editor.evaluate((element) => {
+		element.disabled = false;
+	});
 
 	await editor.evaluate((element) => {
 		const data = new DataTransfer();
@@ -161,6 +223,11 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 			"audio-file-drop",
 		]),
 	);
+	expect(events.filter(([type]) => type === "range-change")).toEqual([
+		["range-change", { start: 2, end: 15 }],
+	]);
+	expect(events).toContainEqual(["loop-change", { start: 6, end: 14 }]);
+	expect(events).toContainEqual(["gain-change", { gain: -6 }]);
 	expect(events).toContainEqual(["audio-file-drop", "take.wav"]);
 
 	const resized = await editor.evaluate(async (element) => {

@@ -1,11 +1,14 @@
 import type { WaveformPeak } from "./compost-waveform.js";
 
-export interface AudioClipEditorValue {
-	playStartBeat: number;
-	playEndBeat: number;
-	loopStartBeat: number;
-	loopEndBeat: number;
-	gainDb: number;
+/** The detail on playback-range and loop input/change events. */
+export interface AudioClipRangeDetail {
+	start: number;
+	end: number;
+}
+
+/** The detail on gain input/change events. */
+export interface AudioClipGainDetail {
+	gain: number;
 }
 
 export interface AudioFileDropDetail {
@@ -20,8 +23,8 @@ export interface AudioFileDropDetail {
  *
  * @attribute label
  * @attribute beats - total clip length in quarter-note beats
- * @attribute play-start
- * @attribute play-end
+ * @attribute start - non-destructive playback range start in beats
+ * @attribute end - non-destructive playback range end in beats
  * @attribute loop-start
  * @attribute loop-end
  * @attribute loop - shows loop controls
@@ -55,7 +58,6 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	get gain(): number;
 	set gain(value: number);
-	get value(): AudioClipEditorValue;
 	/** Copied peak buckets. Setting updates the composed waveform. */
 	get peaks(): WaveformPeak[];
 	set peaks(value: WaveformPeak[]);
@@ -70,7 +72,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	refresh(): void;
 	setRange(start: number, end: number, shouldEmit?: boolean): void;
 	setLoop(start: number, end: number, shouldEmit?: boolean): void;
-	setGain(gainDb: number, eventName?: "gain-input" | "gain-change"): void;
+	setGain(gainDb: number, shouldEmit?: boolean): void;
 }
 
 declare global {
