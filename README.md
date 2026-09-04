@@ -46,8 +46,9 @@ straight through.
 
 Editors fire `<thing>-input` while you drag and `<thing>-change` when you let
 go: `envelope-input` / `envelope-change`, `loop-input` / `loop-change`,
-`range-input` / `range-change`, `gain-input` / `gain-change`,
-`automation-input` / `automation-change`, `notes-change`. Both events in a
+`range-input` / `range-change`, `gain-input` / `gain-change`, and
+`automation-input` / `automation-change`. Time selections use the same
+preview/commit shape as `time-select-input` / `time-select`. Both events in a
 pair carry the same payload, so you can preview the drag or ignore it until it commits.
 `notes-change` stands alone: the note editor commits each change as it
 happens, so there is no `-input`/`-change` pair for notes. Escape
@@ -70,7 +71,8 @@ Double-click resets a control. On touch, double-tap resets knobs and sliders;
 a number-box tap opens its numeric editor while a drag still adjusts it.
 The timeline uses a two-finger pinch to zoom time and pan time or lanes. The
 note editor pinches horizontally for time and vertically for pitch; moving the
-pinch pans both axes. One-finger gestures remain edits or selections.
+pinch pans both axes. The audio clip editor pinches horizontally to zoom and
+pan time. One-finger gestures remain edits or selections.
 `readonly` still shows live state and navigates but changes nothing;
 `disabled` is inert.
 
@@ -82,14 +84,19 @@ Events name what the user asked for, never which input did it. Elements show
 the state you give them; saving, undo, menus and what happens next are yours.
 Editors take IDs you own for the things they create, and snapping is a view
 mode over your full-precision values, never a stored grid.
-The note editor and timeline take a single `time-signature="N/D"` meter, with
-`D` equal to 1, 2, 4, 8 or 16. Model time remains quarter-note beats; the
-denominator only changes ruler counting and line placement. Grid values are
-meter-independent note values such as `1/8`, `1/16T`
-or `bar`; bare numbers remain supported as legacy cells per bar. Compound x/8
-meters show a pulse every three eighths. Meter changes within a song are host
-data and are not represented by either element. Grid resolution stays fixed by
-default; `adaptive-grid` lets zoom choose the effective step in both editors.
+`compost-waveform` only draws caller-prepared `{ min, max }` peak buckets;
+audio decoding and peak generation remain host policy.
+`compost-audio-clip-editor` composes that waveform with clip metadata and
+editing, and emits one-shot `audio-file-drop` intent with the caller-owned file.
+The note editor, audio clip editor, and timeline take a single
+`time-signature="N/D"` meter, with `D` equal to 1, 2, 4, 8 or 16. Model time
+remains quarter-note beats; the denominator only changes ruler counting and
+line placement. Grid values are meter-independent note values such as `1/8`,
+`1/16T` or `bar`; bare numbers remain supported as legacy cells per bar.
+Compound x/8 meters show a pulse every three eighths. Meter changes within a
+song are host data and are not represented by these elements. Grid resolution
+stays fixed by default; `adaptive-grid` lets zoom choose the effective step in
+all three editors.
 `compost-note-editor` emits `note-quantize` with the selected IDs, grid step
 and whether lengths were requested; the host applies its own strength and swing.
 `compost-clip-grid` renders a complete multi-track session launcher from

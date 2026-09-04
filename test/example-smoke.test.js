@@ -137,6 +137,7 @@ test("example instructions separate desktop and mobile usage", () => {
 		"compost-clip-grid",
 		"compost-drawer",
 		"compost-envelope-editor",
+		"compost-audio-clip-editor",
 		"compost-knob",
 		"compost-midi-mappings",
 		"compost-note-editor",
@@ -156,6 +157,9 @@ test("example instructions separate desktop and mobile usage", () => {
 	const numberBox = read("examples/compost-number-box/index.html");
 	assert.match(numberBox, /double-click to reset/iu);
 	assert.doesNotMatch(numberBox, /double-click to type/iu);
+	const noteEditor = read("examples/compost-note-editor/index.html");
+	assert.match(noteEditor, /data-note-fit/u);
+	assert.match(noteEditor, /data-note-fit[^\n]+zoomReset\(\)/u);
 });
 
 test("the meter example keeps its output name accessible but visually quiet", () => {

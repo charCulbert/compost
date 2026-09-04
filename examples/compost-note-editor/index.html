@@ -35,13 +35,14 @@
             <label><input type="checkbox" data-note-loop checked> Loop</label>
             <label><input type="checkbox" data-note-draw> Draw</label>
             <label><input type="checkbox" data-note-fold> Fold</label>
+            <button type="button" data-note-fit>Fit clip</button>
             <button type="button" data-note-playhead>Play</button>
             <button type="button" data-note-quantize>Quantize</button>
             <button type="button" data-note-cursor>Show cursor</button>
             <button type="button" data-note-selection>Show time selection</button>
           </div>
           <div class="usage-notes">
-            <div><strong>Desktop</strong><span>Click empty space for the edit cursor; drag it for a time-and-pitch selection. The ruler makes time-only selections. Alt-drag copies. Command/Ctrl changes velocity or snapping. Shift extends or fine-tunes. Double-click adds.</span></div>
+            <div><strong>Desktop</strong><span>Click empty space for the edit cursor; drag it for a time-and-pitch selection. The ruler makes time-only selections. Command/Ctrl-wheel zooms at the pointer; the lower-right readout shows the effective grid. Alt-drag copies. Command/Ctrl changes velocity or snapping. Shift extends or fine-tunes. Double-click adds.</span></div>
             <div><strong>Mobile</strong><span>Tap empty space for the edit cursor; drag to select. Two fingers pan or zoom. Drag the piano to navigate pitches. Hold for context.</span></div>
           </div>
         </div>
@@ -113,6 +114,7 @@
         draw.dispatchEvent(new Event('change'));
       });
       fold.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
+      s.querySelector('[data-note-fit]').addEventListener('click', () => editor.zoomReset());
       s.querySelector('[data-note-quantize]').addEventListener('click', () => editor.quantize());
       s.querySelector('[data-note-cursor]').addEventListener('click', () => editor.setTimeSelection(5, 5));
       s.querySelector('[data-note-selection]').addEventListener('click', () => editor.setTimeSelection(5, 7));

@@ -43,7 +43,7 @@ export interface AudioFileDropDetail {
  * @attribute playhead - host-supplied playhead in beats; absent hides it
  * @attribute time-signature - meter as N/D
  * @attribute grid - a note value or legacy cells per bar
- * @attribute adaptive-grid - lets width choose the effective grid step
+ * @attribute adaptive-grid - lets zoom choose the effective grid step
  * @attribute grid-lines - 'off' hides grid lines
  * @attribute snap - 'off' frees edits from the grid
  * @attribute readonly
