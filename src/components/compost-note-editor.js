@@ -389,6 +389,9 @@ export class CompostNoteEditor extends HTMLElement {
           position: absolute;
           right: 0.55em;
           bottom: 0.36em;
+          z-index: 5;
+          padding: 0 0.2em;
+          background: var(--compost-note-editor-bg);
           font-size: 0.82em;
           color: var(--compost-note-editor-muted);
           pointer-events: none;
@@ -1135,12 +1138,10 @@ export class CompostNoteEditor extends HTMLElement {
 	}
 
 	renderSelectionRegion() {
+		this.division.textContent = this.gridLines ? this.currentGridText() : "off";
 		if (!this.selectionRegion) {
 			this.timeSelectionElement.style.display = "none";
 			this.timeSelectionRuler.style.display = "none";
-			this.division.textContent = this.gridLines
-				? this.currentGridText()
-				: "off";
 			return;
 		}
 		const left = this.selectionRegion.start * this.pxPerBeat;
@@ -1183,18 +1184,6 @@ export class CompostNoteEditor extends HTMLElement {
 			this.timeSelectionElement.style.bottom = "0px";
 			this.timeSelectionElement.style.height = "auto";
 		}
-		const beats = this.selectionRegion.end - this.selectionRegion.start;
-		if (cursor) {
-			this.division.textContent = this.gridLines
-				? this.currentGridText()
-				: "off";
-			return;
-		}
-		const bars = beats / this.beatsPerBar;
-		this.division.textContent =
-			Math.abs(bars - Math.round(bars)) < 1e-9
-				? `${Math.round(bars)} bar${Math.round(bars) === 1 ? "" : "s"}`
-				: lengthText(beats, this.beatLength);
 	}
 
 	renderRuler() {

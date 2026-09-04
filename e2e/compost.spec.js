@@ -6749,7 +6749,7 @@ test("note editor keeps a snapped time span separate from its selected pitches",
 		"",
 	);
 	await expect(editor.locator(".time-selection-ruler")).toBeVisible();
-	await expect(editor.locator(".division")).toHaveText("1 bar");
+	await expect(editor.locator(".division")).toHaveText("1/16");
 
 	await page.keyboard.press("Meta+l");
 	await expect(editor).toHaveAttribute("loop-start", "1");

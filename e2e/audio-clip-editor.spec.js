@@ -481,3 +481,18 @@ test("note editor wheel zoom stays anchored at the pointer", async ({
 	expect(zoom.after).toBeCloseTo(zoom.before, 2);
 	expect(zoom.offset).toBeGreaterThan(0);
 });
+
+test("note editor keeps the effective grid readout visible during selection", async ({
+	page,
+}) => {
+	await page.goto(`${localBaseURL}/examples/compost-note-editor/`);
+	const editor = page.locator("compost-note-editor");
+	await editor.evaluate((element) => element.setTimeSelection(1, 5));
+	await expect(editor.locator(".division")).toHaveText("1/16");
+	const readout = await editor.locator(".division").evaluate((element) => {
+		const style = getComputedStyle(element);
+		return { background: style.backgroundColor, zIndex: style.zIndex };
+	});
+	expect(readout.background).not.toBe("rgba(0, 0, 0, 0)");
+	expect(readout.zIndex).toBe("5");
+});
