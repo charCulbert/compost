@@ -48,16 +48,19 @@ export function timeSignatureOf(value) {
 }
 
 /** All distinct grid, denominator-beat, compound-pulse and bar lines. */
-/** @param {number} end @param {{gridStep: number, beatLength: number, barLength: number, pulseLength?: number|null}} geometry */
+/** @param {number} end @param {{gridStep: number, beatLength: number, barLength: number, pulseLength?: number|null, origin?: number}} geometry */
 export function timeGridLines(
 	end,
-	{ gridStep, beatLength, barLength, pulseLength = null },
+	{ gridStep, beatLength, barLength, pulseLength = null, origin = 0 },
 ) {
 	const priorities = { cell: 0, beat: 1, pulse: 2, bar: 3 };
 	const lines = new Map();
 	const add = (step, kind) => {
 		if (!(step > 0)) return;
-		for (let time = 0; time <= end + MIN_TIME; time += step) {
+		const first = origin + Math.ceil((0 - origin - MIN_TIME) / step) * step;
+		for (let time = first; time <= end + MIN_TIME; time += step) {
+			if (time < -MIN_TIME) continue;
+			if (Math.abs(time) < MIN_TIME) time = 0;
 			const key = Math.round(time / MIN_TIME);
 			const previous = lines.get(key);
 			if (!previous || priorities[kind] > priorities[previous.kind])
@@ -151,13 +154,14 @@ export function snapModeWith(mode, modifierHeld) {
  * grid is a candidate too; `anchors` are absolute times that also attract,
  * within `reach` of the value. Anything below zero clamps to zero.
  * @param {number} value
- * @param {{step?: number, origin?: number, mode?: 'grid'|'off', anchors?: number[], reach?: number}} [options]
+ * @param {{step?: number, origin?: number, gridOrigin?: number, mode?: 'grid'|'off', anchors?: number[], reach?: number}} [options]
  */
 export function snapTime(
 	value,
 	{
 		step = 0,
 		origin = null,
+		gridOrigin = 0,
 		mode = "grid",
 		anchors = [],
 		reach = Number.POSITIVE_INFINITY,
@@ -176,7 +180,8 @@ export function snapTime(
 		const base = Number(origin);
 		if (origin !== null && Number.isFinite(base))
 			candidates.push(base + Math.round((raw - base) / step) * step);
-		candidates.push(Math.round(raw / step) * step);
+		const phase = Number.isFinite(Number(gridOrigin)) ? Number(gridOrigin) : 0;
+		candidates.push(phase + Math.round((raw - phase) / step) * step);
 	}
 	if (!candidates.length) return raw;
 	const nearest = candidates.reduce((best, candidate) =>

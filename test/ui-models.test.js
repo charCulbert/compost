@@ -142,6 +142,29 @@ test("note lengths and ruler labels read musically", () => {
 			"1.6.2",
 		],
 	);
+	assert.deepEqual(
+		rulerLabels(8, { barLength: 3, beatLength: 0.5 }, 100, 0.5, 4.25).map(
+			({ beat, text }) => [beat, text],
+		),
+		[
+			[0.25, "-1.5"],
+			[0.75, "-1.6"],
+			[1.25, "0"],
+			[1.75, "0.2"],
+			[2.25, "0.3"],
+			[2.75, "0.4"],
+			[3.25, "0.5"],
+			[3.75, "0.6"],
+			[4.25, "1"],
+			[4.75, "1.2"],
+			[5.25, "1.3"],
+			[5.75, "1.4"],
+			[6.25, "1.5"],
+			[6.75, "1.6"],
+			[7.25, "2"],
+			[7.75, "2.2"],
+		],
+	);
 });
 
 test("timeline geometry snaps, scales and marks looping passes", () => {

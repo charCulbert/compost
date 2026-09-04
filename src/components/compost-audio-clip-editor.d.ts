@@ -25,12 +25,19 @@ export interface AudioFileDropDetail {
 	file: File;
 }
 
+/** The detail on `audio-context`; beat is source-relative and unsnapped. */
+export interface AudioClipContextDetail {
+	beat: number;
+	clientX: number;
+	clientY: number;
+}
+
 /**
  * `<compost-audio-clip-editor>` composes `<compost-waveform>` with audio-clip
  * gain, playback-range and loop controls. The host owns audio and playback.
  * Emits `range-input`/`range-change`, `loop-input`/`loop-change`,
- * `gain-input`/`gain-change`, `time-select-input`/`time-select` and
- * `audio-file-drop` CustomEvents.
+ * `gain-input`/`gain-change`, `time-select-input`/`time-select`,
+ * `audio-context` and `audio-file-drop` CustomEvents.
  *
  * @attribute label
  * @attribute beats - total clip length in quarter-note beats
@@ -42,6 +49,7 @@ export interface AudioFileDropDetail {
  * @attribute gain - clip gain in dB from -90 to +24
  * @attribute playhead - host-supplied playhead in beats; absent hides it
  * @attribute time-signature - meter as N/D
+ * @attribute musical-origin - source-relative beat displayed as bar 1 and used as the grid phase
  * @attribute grid - a note value or legacy cells per bar
  * @attribute adaptive-grid - lets zoom choose the effective grid step
  * @attribute grid-lines - 'off' hides grid lines
@@ -58,6 +66,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	loopEnd: number;
 	loopEnabled: boolean;
 	timeSignature: string;
+	musicalOriginBeat: number;
 	beatsPerBar: number;
 	beatLength: number;
 	pulseLength: number | null;
@@ -80,6 +89,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 	set readonly(value: boolean);
 	get disabled(): boolean;
 	set disabled(value: boolean);
+	/** Returns the snapped source-relative beat at a viewport x coordinate. */
+	beatAtPoint(clientX: number, invert?: boolean): number;
 
 	/** Recomputes geometry and repaints the ruler and grid. */
 	refresh(): void;

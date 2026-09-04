@@ -1,7 +1,7 @@
 /** Bar, denominator-beat and grid-cell labels, made sparser when space is tight. */
 /** @param {number} beats @param {number|{barLength: number, beatLength: number}} meter @param {number} pxPerBeat
- * @param {number} [gridStep] */
-export function rulerLabels(beats, meter, pxPerBeat, gridStep = 1) {
+ * @param {number} [gridStep] @param {number} [origin] */
+export function rulerLabels(beats, meter, pxPerBeat, gridStep = 1, origin = 0) {
 	const barLength = typeof meter === "number" ? meter : meter.barLength;
 	const beatLength = typeof meter === "number" ? 1 : meter.beatLength;
 	const labelStep =
@@ -13,10 +13,13 @@ export function rulerLabels(beats, meter, pxPerBeat, gridStep = 1) {
 	const showBeats = pxPerBeat * beatLength >= 40;
 	const step = showCells ? labelStep : showBeats ? beatLength : barLength;
 	const labels = [];
-	for (let index = 0; index * step < beats - 1e-9; index += 1) {
-		const beat = index * step;
-		const barIndex = Math.floor((beat + 1e-9) / barLength);
-		const inBar = beat - barIndex * barLength;
+	const first = origin + Math.ceil((0 - origin - 1e-9) / step) * step;
+	for (let beat = first; beat < beats - 1e-9; beat += step) {
+		if (beat < -1e-9) continue;
+		if (Math.abs(beat) < 1e-9) beat = 0;
+		const musicalBeat = beat - origin;
+		const barIndex = Math.floor((musicalBeat + 1e-9) / barLength);
+		const inBar = musicalBeat - barIndex * barLength;
 		const beatIndex = Math.floor((inBar + 1e-9) / beatLength);
 		const bar = barIndex + 1;
 		if (showCells) {

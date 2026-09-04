@@ -67,6 +67,28 @@ test("compound meters add pulse lines without losing beats or note-value cells",
 	);
 });
 
+test("a non-grid musical origin phases grid lines in compound meter", () => {
+	assert.deepEqual(
+		timeGridLines(4, {
+			gridStep: 0.5,
+			beatLength: 0.5,
+			pulseLength: 1.5,
+			barLength: 3,
+			origin: 1.25,
+		}).map(({ time, kind }) => [time, kind]),
+		[
+			[0.25, "beat"],
+			[0.75, "beat"],
+			[1.25, "bar"],
+			[1.75, "beat"],
+			[2.25, "beat"],
+			[2.75, "pulse"],
+			[3.25, "beat"],
+			[3.75, "beat"],
+		],
+	);
+});
+
 test("a grid step is a bar divided into cells", () => {
 	assert.equal(gridStepOf(4, 16), 0.25);
 	assert.equal(gridStepOf(3, 8), 0.375);
@@ -113,6 +135,14 @@ test("snapping keeps an origin offset when that is nearer than the grid", () => 
 	// no origin: absolute grid
 	assert.equal(snapTime(1.13, { step: 0.25 }), 1.25);
 	assert.equal(snapTime(-0.2, { step: 0.25 }), 0);
+});
+
+test("snapping accepts a source-relative grid phase", () => {
+	assert.equal(snapTime(1.36, { step: 0.5, gridOrigin: 0.2 }), 1.2);
+	assert.equal(
+		snapTime(1.36, { step: 0.5, origin: 1.31, gridOrigin: 0.2 }),
+		1.31,
+	);
 });
 
 test("anchors attract within reach and snapping can be off", () => {

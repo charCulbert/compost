@@ -31,11 +31,17 @@ export function snapDuration(value, step, mode = "grid") {
 	return Math.max(step, Math.round(value / step) * step);
 }
 
-/** Snaps to whichever is nearer: an absolute grid line or the origin's grid offset. */
-/** @param {number} value @param {number} origin @param {number} step @param {string} [mode] */
-export function snapWithOffset(value, origin, step, mode = "grid") {
+/** Snaps to whichever is nearer: a phased grid line or the item's original offset. */
+/** @param {number} value @param {number} origin @param {number} step @param {string} [mode] @param {number} [gridOrigin] */
+export function snapWithOffset(
+	value,
+	origin,
+	step,
+	mode = "grid",
+	gridOrigin = 0,
+) {
 	if (mode === "off" || !(step > 0)) return Math.max(0, value);
-	const absolute = Math.round(value / step) * step;
+	const absolute = gridOrigin + Math.round((value - gridOrigin) / step) * step;
 	const offset = origin + Math.round((value - origin) / step) * step;
 	return Math.max(
 		0,

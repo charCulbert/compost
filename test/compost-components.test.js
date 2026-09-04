@@ -379,6 +379,63 @@ test("note editor Cmd/Ctrl inverts snapping and Shift provides precise pointer t
 	assert.equal(editor.gestureFactor({ shiftKey: true }), 0.25);
 });
 
+test("editor musical origins phase snapping without mutating content or ranges", () => {
+	const notes = [
+		{ id: "n1", note: 60, start: 0.4, duration: 1, velocity: 100, channel: 0 },
+	];
+	const midi = Object.create(CompostNoteEditor.prototype);
+	Object.assign(midi, {
+		musicalOriginBeat: 0.2,
+		snapMode: "grid",
+		grid: "1/8",
+		beatsPerBar: 4,
+		adaptiveGrid: false,
+		beatWidth: 100,
+		zoomPxPerBeat: 0,
+		beats: 8,
+		rangeStart: 0.5,
+		rangeEnd: 7,
+		loopStart: 1,
+		loopEnd: 5,
+		_notes: notes,
+	});
+	const before = JSON.stringify({
+		notes: midi._notes,
+		range: [midi.rangeStart, midi.rangeEnd],
+		loop: [midi.loopStart, midi.loopEnd],
+	});
+	assert.equal(midi.snapBeat(1.36), 1.2);
+	assert.equal(
+		JSON.stringify({
+			notes: midi._notes,
+			range: [midi.rangeStart, midi.rangeEnd],
+			loop: [midi.loopStart, midi.loopEnd],
+		}),
+		before,
+	);
+
+	const audio = Object.create(CompostAudioClipEditor.prototype);
+	Object.assign(audio, {
+		musicalOriginBeat: 0.2,
+		snapMode: "grid",
+		grid: "1/8",
+		beatsPerBar: 4,
+		adaptiveGrid: false,
+		zoomPxPerBeat: 100,
+		beats: 8,
+		rangeStart: 0.5,
+		rangeEnd: 7,
+		loopStart: 1,
+		loopEnd: 5,
+		gridWrap: { clientWidth: 400 },
+	});
+	assert.equal(audio.snapBeat(1.36, false), 1.2);
+	assert.deepEqual(
+		[audio.rangeStart, audio.rangeEnd, audio.loopStart, audio.loopEnd],
+		[0.5, 7, 1, 5],
+	);
+});
+
 test("audio editor Cmd/Ctrl+L enables a loop for a non-empty time selection", () => {
 	const events = [];
 	const editor = Object.create(CompostAudioClipEditor.prototype);
@@ -418,9 +475,10 @@ test("audio editor Cmd/Ctrl+L enables a loop for a non-empty time selection", ()
 
 	assert.equal(prevented, true);
 	assert.equal(editor.loopEnabled, true);
-	assert.deepEqual(events.map((event) => [event.type, event.detail]), [
-		["loop-change", { start: 2, end: 5 }],
-	]);
+	assert.deepEqual(
+		events.map((event) => [event.type, event.detail]),
+		[["loop-change", { start: 2, end: 5 }]],
+	);
 	assert.deepEqual([editor.zoomPxPerBeat, editor.offset], [120, 40]);
 });
 

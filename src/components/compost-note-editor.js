@@ -9,7 +9,6 @@ import {
 	resizedNotes,
 	resolveOverlaps,
 	selectionSpan,
-	snapBeats,
 	snapWithOffset,
 	trimmedNotes,
 	velocityShiftedNotes,
@@ -77,6 +76,7 @@ export class CompostNoteEditor extends HTMLElement {
 			"label",
 			"beats",
 			"time-signature",
+			"musical-origin",
 			"grid",
 			"adaptive-grid",
 			"snap",
@@ -110,6 +110,7 @@ export class CompostNoteEditor extends HTMLElement {
 		this.beatLength = 1;
 		this.pulseLength = null;
 		this.timeSignature = "4/4";
+		this.musicalOriginBeat = 0;
 		this.grid = "1/16";
 		this.adaptiveGrid = false;
 		this.gridLines = true;
@@ -590,6 +591,7 @@ export class CompostNoteEditor extends HTMLElement {
 		this.beatsPerBar = meter.barLength;
 		this.beatLength = meter.beatLength;
 		this.pulseLength = meter.pulseLength;
+		this.musicalOriginBeat = numberAttr(this, "musical-origin", 0);
 		this.grid = this.getAttribute("grid")?.trim() || this.grid;
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
@@ -779,6 +781,7 @@ export class CompostNoteEditor extends HTMLElement {
 						division === this.grid
 							? this.step
 							: gridStepOf(this.beatsPerBar, division),
+					origin: this.musicalOriginBeat,
 					lengths,
 				},
 			}),
@@ -932,6 +935,16 @@ export class CompostNoteEditor extends HTMLElement {
 		return Math.max(fit, width / Math.max(8, this.rangeEnd + 4));
 	}
 
+	/** Returns the source-relative beat at a viewport x coordinate. */
+	beatAtPoint(clientX) {
+		const bounds = this.gridWrap.getBoundingClientRect();
+		return clamp(
+			(this.offset + clientX - bounds.left) / this.pxPerBeat,
+			0,
+			this.beats,
+		);
+	}
+
 	/** @param {number} beat */
 	beatToX(beat) {
 		return beat * this.pxPerBeat;
@@ -987,15 +1000,23 @@ export class CompostNoteEditor extends HTMLElement {
 
 	/** @param {number} beat @param {boolean} [free] */
 	snapBeat(beat, free = this.snapMode === "off") {
-		return free ? Math.max(0, beat) : snapBeats(beat, this.step, "grid");
+		const origin = Number(this.musicalOriginBeat) || 0;
+		return free
+			? Math.max(0, beat)
+			: Math.max(
+					0,
+					origin + Math.round((beat - origin) / this.step) * this.step,
+				);
 	}
 
 	/** A new note belongs to the grid cell under the pointer, not the nearest line. */
 	creationBeat(beat, free = this.snapMode === "off") {
 		if (free) return Math.max(0, beat);
+		const origin = Number(this.musicalOriginBeat) || 0;
 		return Math.max(
 			0,
-			Math.floor((beat + Number.EPSILON) / this.step) * this.step,
+			origin +
+				Math.floor((beat - origin + Number.EPSILON) / this.step) * this.step,
 		);
 	}
 
@@ -1243,6 +1264,7 @@ export class CompostNoteEditor extends HTMLElement {
 			beatLength: this.beatLength,
 			pulseLength: this.pulseLength,
 			barLength: this.beatsPerBar,
+			origin: this.musicalOriginBeat,
 		})) {
 			const tick = document.createElement("div");
 			tick.className = `rt ${kind}`;
@@ -1255,6 +1277,7 @@ export class CompostNoteEditor extends HTMLElement {
 			{ barLength: this.beatsPerBar, beatLength: this.beatLength },
 			px,
 			this.step,
+			this.musicalOriginBeat,
 		)) {
 			const label = document.createElement("div");
 			label.className = "bn";
@@ -1352,6 +1375,7 @@ export class CompostNoteEditor extends HTMLElement {
 				beatLength: this.beatLength,
 				pulseLength: this.pulseLength,
 				barLength: this.beatsPerBar,
+				origin: this.musicalOriginBeat,
 			})) {
 				markup.push(
 					`<div class="gl ${kind}" part="grid-line ${kind}-line" style="left:${(beat * px).toFixed(2)}px"></div>`,
@@ -1766,6 +1790,7 @@ export class CompostNoteEditor extends HTMLElement {
 			origin.start,
 			this.step,
 			free ? "off" : "grid",
+			this.musicalOriginBeat,
 		);
 		const shiftBeats = target - origin.start;
 		const originRow = this.visibleKeys.indexOf(origin.note);
@@ -1808,7 +1833,12 @@ export class CompostNoteEditor extends HTMLElement {
 				new CustomEvent("note-context", {
 					bubbles: true,
 					composed: true,
-					detail: { id, clientX: event.clientX, clientY: event.clientY },
+					detail: {
+						id,
+						beat: this.beatAtPoint(event.clientX),
+						clientX: event.clientX,
+						clientY: event.clientY,
+					},
 				}),
 			);
 		});
@@ -2065,6 +2095,7 @@ export class CompostNoteEditor extends HTMLElement {
 				origin.start,
 				this.step,
 				free ? "off" : "grid",
+				this.musicalOriginBeat,
 			);
 			this._preview = trimmedNotes(
 				this._notes,
@@ -2344,6 +2375,7 @@ export class CompostNoteEditor extends HTMLElement {
 				composed: true,
 				detail: {
 					id: element?.dataset.id,
+					beat: this.beatAtPoint(event.clientX),
 					clientX: event.clientX,
 					clientY: event.clientY,
 				},
@@ -2539,6 +2571,7 @@ export class CompostNoteEditor extends HTMLElement {
 					composed: true,
 					detail: {
 						id,
+						beat: this._notes.find((note) => note.id === id)?.start ?? 0,
 						clientX: rect.left + rect.width / 2,
 						clientY: rect.top + rect.height / 2,
 					},

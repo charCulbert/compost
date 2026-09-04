@@ -36,6 +36,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			"adaptive-grid",
 			"snap",
 			"time-signature",
+			"musical-origin",
 			"grid-lines",
 			"readonly",
 			"disabled",
@@ -54,6 +55,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this._gainDb = 0;
 		/** @type {number|null} */ this.playhead = null;
 		this.timeSignature = "4/4";
+		this.musicalOriginBeat = 0;
 		this.beatsPerBar = 4;
 		this.beatLength = 1;
 		/** @type {number|null} */ this.pulseLength = null;
@@ -479,6 +481,10 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.gridWrap.addEventListener("drop", (event) =>
 			this.handleFileDrop(event),
 		);
+		for (const target of [this.gridWrap, this.rulerWrap])
+			target.addEventListener("contextmenu", (event) =>
+				this.handleContextMenu(event),
+			);
 
 		this.refresh = this.refresh.bind(this);
 		this.handleWindowKey = this.handleWindowKey.bind(this);
@@ -552,6 +558,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.beatsPerBar = meter.barLength;
 		this.beatLength = meter.beatLength;
 		this.pulseLength = meter.pulseLength;
+		this.musicalOriginBeat = numberAttr(this, "musical-origin", 0);
 		this.grid = this.getAttribute("grid")?.trim() || "1/16";
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
@@ -773,6 +780,22 @@ export class CompostAudioClipEditor extends HTMLElement {
 		const bounds = this.gridWrap.getBoundingClientRect();
 		const beat = (this.offset + clientX - bounds.left) / this.pxPerBeat;
 		return this.snapBeat(beat, invert);
+	}
+
+	/** @param {MouseEvent} event */
+	handleContextMenu(event) {
+		event.preventDefault();
+		const bounds = this.gridWrap.getBoundingClientRect();
+		const beat = clamp(
+			(this.offset + event.clientX - bounds.left) / this.pxPerBeat,
+			0,
+			this.beats,
+		);
+		this.emit("audio-context", {
+			beat,
+			clientX: event.clientX,
+			clientY: event.clientY,
+		});
 	}
 
 	/** @param {PointerEvent} event */
@@ -1035,7 +1058,10 @@ export class CompostAudioClipEditor extends HTMLElement {
 			inEditor &&
 			!this.readonly
 		) {
-			if (!this._timeSelection || this._timeSelection.end <= this._timeSelection.start)
+			if (
+				!this._timeSelection ||
+				this._timeSelection.end <= this._timeSelection.start
+			)
 				return;
 			event.preventDefault();
 			event.stopPropagation();
@@ -1149,7 +1175,12 @@ export class CompostAudioClipEditor extends HTMLElement {
 	snapBeat(beat, invert) {
 		if (snapModeWith(this.snapMode, invert) === "off")
 			return clamp(beat, 0, this.beats);
-		return clamp(Math.round(beat / this.step) * this.step, 0, this.beats);
+		const origin = Number(this.musicalOriginBeat) || 0;
+		return clamp(
+			origin + Math.round((beat - origin) / this.step) * this.step,
+			0,
+			this.beats,
+		);
 	}
 
 	/** Command/Ctrl zooms time; Shift or a horizontal wheel pans time. */
@@ -1255,6 +1286,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			beatLength: this.beatLength,
 			pulseLength: this.pulseLength,
 			barLength: this.beatsPerBar,
+			origin: this.musicalOriginBeat,
 		})) {
 			const tick = document.createElement("div");
 			tick.className = `rt ${kind}`;
@@ -1267,6 +1299,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			{ barLength: this.beatsPerBar, beatLength: this.beatLength },
 			this.pxPerBeat,
 			this.step,
+			this.musicalOriginBeat,
 		)) {
 			const label = document.createElement("div");
 			label.className = "bn";
@@ -1288,6 +1321,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 				beatLength: this.beatLength,
 				pulseLength: this.pulseLength,
 				barLength: this.beatsPerBar,
+				origin: this.musicalOriginBeat,
 			})) {
 				const line = document.createElement("div");
 				line.className = `gl ${kind}`;

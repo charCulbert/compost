@@ -35,6 +35,8 @@ export type NoteTimeSelectDetail =
 export interface NoteQuantizeDetail {
 	ids: string[];
 	step: number;
+	/** Source-relative phase of the quantization grid. */
+	origin: number;
 	lengths: boolean;
 }
 /** The detail on `note-preview` and `note-preview-end`. */
@@ -46,6 +48,7 @@ export interface NotePreviewDetail {
 /** The detail on `note-context`; `id` is absent for the editor background. */
 export interface NoteContextDetail {
 	id: string | undefined;
+	beat: number;
 	clientX: number;
 	clientY: number;
 }
@@ -56,6 +59,7 @@ export function rulerLabels(
 	meter: number | { barLength: number; beatLength: number },
 	pxPerBeat: number,
 	gridStep?: number,
+	origin?: number,
 ): { beat: number; text: string }[];
 
 /** A length in the meter's denominator beats, written the way a musician reads it. */
@@ -80,6 +84,7 @@ export function gridText(
  * @attribute label
  * @attribute beats - total length in quarter-note beats
  * @attribute time-signature - meter as N/D
+ * @attribute musical-origin - source-relative beat displayed as bar 1 and used as the grid phase
  * @attribute grid - default grid, a note value or legacy cells
  * @attribute adaptive-grid - lets zoom choose the effective grid step
  * @attribute snap - 'off' frees edits from the grid
@@ -107,6 +112,7 @@ export class CompostNoteEditor extends HTMLElement {
 	label: string;
 	/** Effective meter; 4/4 unless `time-signature` parses. */
 	timeSignature: string;
+	musicalOriginBeat: number;
 	/** Effective bar length in quarter-note beats. */
 	beatsPerBar: number;
 	/** Effective denominator-beat length in quarter-note beats. */
@@ -168,6 +174,8 @@ export class CompostNoteEditor extends HTMLElement {
 	get selectedIds(): string[];
 	get timeSelection(): { start: number; end: number } | null;
 	get pxPerBeat(): number;
+	/** Returns the unsnapped source-relative beat at a viewport x coordinate. */
+	beatAtPoint(clientX: number): number;
 
 	/** Sets the non-destructive playback range, independently of the loop. */
 	setRange(start: number, end: number, shouldEmit?: boolean): void;
