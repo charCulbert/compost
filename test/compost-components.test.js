@@ -35,6 +35,9 @@ const { CompostEnvelopeEditor } = await import(
 const { CompostNoteEditor } = await import(
 	"../src/components/compost-note-editor.js"
 );
+const { CompostAudioClipEditor } = await import(
+	"../src/components/compost-audio-clip-editor.js"
+);
 const { CompostPiano } = await import("../src/components/compost-piano.js");
 const { CompostSlider } = await import("../src/components/compost-slider.js");
 const { CompostDrawer } = await import("../src/components/compost-drawer.js");
@@ -374,6 +377,89 @@ test("note editor Cmd/Ctrl inverts snapping and Shift provides precise pointer t
 	);
 	assert.equal(editor.gestureFactor({ shiftKey: false }), 1);
 	assert.equal(editor.gestureFactor({ shiftKey: true }), 0.25);
+});
+
+test("audio editor Cmd/Ctrl+L enables a loop for a non-empty time selection", () => {
+	const events = [];
+	const editor = Object.create(CompostAudioClipEditor.prototype);
+	Object.assign(editor, {
+		_timeSelection: { start: 2, end: 5 },
+		rangeStart: 0,
+		rangeEnd: 8,
+		loopStart: 0,
+		loopEnd: 8,
+		zoomPxPerBeat: 120,
+		offset: 40,
+		setRange() {},
+		setLoop(start, end, emit) {
+			this.loopStart = start;
+			this.loopEnd = end;
+			if (emit) this.emitLoop("loop-change");
+		},
+		setAttribute(name) {
+			if (name === "loop") this.loopEnabled = true;
+		},
+		hasAttribute: () => false,
+		dispatchEvent(event) {
+			events.push(event);
+		},
+	});
+	let prevented = false;
+	editor.handleWindowKey({
+		key: "l",
+		metaKey: true,
+		ctrlKey: false,
+		composedPath: () => [editor],
+		preventDefault() {
+			prevented = true;
+		},
+		stopPropagation() {},
+	});
+
+	assert.equal(prevented, true);
+	assert.equal(editor.loopEnabled, true);
+	assert.deepEqual(events.map((event) => [event.type, event.detail]), [
+		["loop-change", { start: 2, end: 5 }],
+	]);
+	assert.deepEqual([editor.zoomPxPerBeat, editor.offset], [120, 40]);
+});
+
+test("audio editor Cmd/Ctrl+L ignores collapsed selections", () => {
+	const editor = Object.create(CompostAudioClipEditor.prototype);
+	Object.assign(editor, {
+		_timeSelection: { start: 3, end: 3 },
+		hasAttribute: () => false,
+	});
+	let prevented = false;
+	editor.handleWindowKey({
+		key: "L",
+		metaKey: false,
+		ctrlKey: true,
+		composedPath: () => [editor],
+		preventDefault() {
+			prevented = true;
+		},
+	});
+	assert.equal(prevented, false);
+});
+
+test("MIDI loop-to-selection preserves the current zoom and scroll", () => {
+	const editor = Object.create(CompostNoteEditor.prototype);
+	Object.assign(editor, {
+		selectionRegion: { start: 1, end: 3 },
+		selection: new Set(),
+		_notes: [],
+		rangeStart: 0,
+		rangeEnd: 8,
+		zoomPxPerBeat: 150,
+		offset: 75,
+		hasAttribute: () => false,
+		setRange() {},
+		setAttribute() {},
+		setLoop() {},
+	});
+	editor.loopToSelection();
+	assert.deepEqual([editor.zoomPxPerBeat, editor.offset], [150, 75]);
 });
 
 test("envelope curve hover distinguishes point insertion from the segment handle around it", () => {

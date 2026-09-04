@@ -90,6 +90,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 	setGain(gainDb: number, shouldEmit?: boolean): void;
 	/** Restore or clear the host-owned time selection or collapsed edit cursor. */
 	setTimeSelection(start: number | null, end: number | null): void;
+	/** Sets and enables the loop for a non-empty time selection. */
+	loopToSelection(): void;
 }
 
 declare global {

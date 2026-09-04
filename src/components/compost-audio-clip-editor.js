@@ -616,6 +616,21 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.renderTimeSelection();
 	}
 
+	/** Sets and enables the loop for a non-empty time selection. */
+	loopToSelection() {
+		if (
+			!this._timeSelection ||
+			this._timeSelection.end <= this._timeSelection.start
+		)
+			return;
+		this.setRange(
+			Math.min(this.rangeStart, this._timeSelection.start),
+			Math.max(this.rangeEnd, this._timeSelection.end),
+		);
+		this.setAttribute("loop", "");
+		this.setLoop(this._timeSelection.start, this._timeSelection.end, true);
+	}
+
 	get pxPerBeat() {
 		const width = this.gridWrap?.clientWidth || 400;
 		return Math.max(width / this.beats, this.zoomPxPerBeat);
@@ -1013,11 +1028,25 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	/** @param {KeyboardEvent} event */
 	handleWindowKey(event) {
+		const inEditor = event.composedPath().includes(this);
+		if (
+			(event.metaKey || event.ctrlKey) &&
+			event.key.toLowerCase() === "l" &&
+			inEditor &&
+			!this.readonly
+		) {
+			if (!this._timeSelection || this._timeSelection.end <= this._timeSelection.start)
+				return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.loopToSelection();
+			return;
+		}
 		if (event.key !== "Escape") return;
 		if (
 			!this.drag &&
 			!this.selectionDrag &&
-			(!this._timeSelection || !event.composedPath().includes(this))
+			(!this._timeSelection || !inEditor)
 		)
 			return;
 		event.preventDefault();

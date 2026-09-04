@@ -905,8 +905,6 @@ export class CompostNoteEditor extends HTMLElement {
 				this.selection.size ? [...this.selection] : null,
 			);
 		if (!span) return;
-		this.zoomPxPerBeat = 0;
-		this.offset = 0;
 		const locked = this.hasAttribute("lock-loop-start");
 		this.setRange(
 			Math.min(this.rangeStart, locked ? 0 : span.start),
