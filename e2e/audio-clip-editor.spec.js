@@ -441,6 +441,10 @@ test("audio marker drag stays active over the waveform and ends there", async ({
 			);
 		}),
 	).toBe(true);
+	await editor.evaluate((element) => {
+		const marker = element.shadowRoot.querySelector(".range-handle.start");
+		marker.releasePointerCapture(element.drag.pointerId);
+	});
 	await page.mouse.move(startX + pxPerBeat, gridBox.y + gridBox.height / 2, {
 		steps: 4,
 	});

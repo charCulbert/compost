@@ -433,15 +433,6 @@ export class CompostAudioClipEditor extends HTMLElement {
 				this.handleMarkerKey(/** @type {KeyboardEvent} */ (event), kind),
 			);
 		}
-		this.ruler.addEventListener("pointermove", (event) =>
-			this.moveMarkerDrag(/** @type {PointerEvent} */ (event)),
-		);
-		this.ruler.addEventListener("pointerup", (event) =>
-			this.endMarkerDrag(/** @type {PointerEvent} */ (event), true),
-		);
-		this.ruler.addEventListener("pointercancel", (event) =>
-			this.endMarkerDrag(/** @type {PointerEvent} */ (event), false),
-		);
 		for (const target of [this.ruler, this.gridWrap]) {
 			target.addEventListener("pointerdown", (event) => {
 				const pointer = /** @type {PointerEvent} */ (event);
@@ -491,6 +482,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 		this.refresh = this.refresh.bind(this);
 		this.handleWindowKey = this.handleWindowKey.bind(this);
+		this.handleMarkerDragPointer = this.handleMarkerDragPointer.bind(this);
 		this.resizeObserver =
 			typeof ResizeObserver === "function"
 				? new ResizeObserver(this.refresh)
@@ -509,6 +501,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 	disconnectedCallback() {
 		this.resizeObserver?.disconnect();
 		window.removeEventListener("keydown", this.handleWindowKey, true);
+		if (this.drag) this.cancelMarkerDrag();
+		else this.stopMarkerDragPointerEvents();
 	}
 
 	/** @param {string} name */
@@ -950,7 +944,20 @@ export class CompostAudioClipEditor extends HTMLElement {
 			target,
 		};
 		if (event.isTrusted) target.setPointerCapture(event.pointerId);
+		for (const type of ["pointermove", "pointerup", "pointercancel"])
+			window.addEventListener(type, this.handleMarkerDragPointer, true);
 		this.setAttribute("data-marker-drag", kind);
+	}
+
+	/** @param {PointerEvent} event */
+	handleMarkerDragPointer(event) {
+		if (event.type === "pointermove") this.moveMarkerDrag(event);
+		else this.endMarkerDrag(event, event.type === "pointerup");
+	}
+
+	stopMarkerDragPointerEvents() {
+		for (const type of ["pointermove", "pointerup", "pointercancel"])
+			window.removeEventListener(type, this.handleMarkerDragPointer, true);
 	}
 
 	/** @param {PointerEvent} event */
@@ -977,6 +984,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		const previous = this.drag;
 		const { kind } = previous;
 		this.drag = null;
+		this.stopMarkerDragPointerEvents();
 		this.removeAttribute("data-marker-drag");
 		if (!commit) {
 			this.writeMarkers(previous);
@@ -996,6 +1004,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		if (!this.drag) return;
 		const previous = this.drag;
 		this.drag = null;
+		this.stopMarkerDragPointerEvents();
 		this.removeAttribute("data-marker-drag");
 		this.writeMarkers(previous);
 		if (previous.target.hasPointerCapture?.(previous.pointerId))
