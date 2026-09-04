@@ -1502,7 +1502,7 @@ export class CompostNoteEditor extends HTMLElement {
 			new CustomEvent(type, {
 				bubbles: true,
 				composed: true,
-				detail: { start: this.rangeStart, end: this.rangeEnd },
+				detail: { start: this.rangeStart, end: this.rangeEnd, beats: this.beats },
 			}),
 		);
 	}
@@ -2535,7 +2535,10 @@ export class CompostNoteEditor extends HTMLElement {
 						? this.beats
 						: current + increment * direction;
 			if (kind === "start") nextStart = clamp(beat, 0, nextEnd - minimum);
-			else nextEnd = clamp(beat, nextStart + minimum, this.beats);
+			else
+				nextEnd = scope === "range"
+					? Math.max(nextStart + minimum, beat)
+					: clamp(beat, nextStart + minimum, this.beats);
 		}
 		if (nextStart === start && nextEnd === end) return;
 		if (scope === "range") {

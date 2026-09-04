@@ -520,6 +520,32 @@ test("MIDI loop-to-selection preserves the current zoom and scroll", () => {
 	assert.deepEqual([editor.zoomPxPerBeat, editor.offset], [150, 75]);
 });
 
+test("MIDI playback end extends content while inward range edits preserve it", () => {
+	const events = [];
+	const editor = Object.create(CompostNoteEditor.prototype);
+	Object.assign(editor, {
+		beats: 8,
+		rangeStart: 0,
+		rangeEnd: 8,
+		loopStart: 0,
+		loopEnd: 4,
+		loopEnabled: false,
+		setAttribute(name, value) {
+			if (name === "start") this.rangeStart = Number(value);
+			if (name === "end") {
+				this.rangeEnd = Number(value);
+				this.beats = Math.max(this.beats, this.rangeEnd);
+			}
+		},
+		dispatchEvent(event) { events.push(event); },
+	});
+	editor.setRange(0, 12);
+	editor.emitRange();
+	assert.deepEqual(events.at(-1).detail, {start: 0, end: 12, beats: 12});
+	editor.setRange(2, 6);
+	assert.equal(editor.beats, 12);
+});
+
 test("envelope curve hover distinguishes point insertion from the segment handle around it", () => {
 	const editor = Object.create(CompostEnvelopeEditor.prototype);
 	Object.assign(editor, {

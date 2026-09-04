@@ -9,6 +9,7 @@ import {
 	timeSignatureOf,
 } from "../time-grid.js";
 import { clamp, defineElement, numberAttr } from "../utils.js";
+import { CompostNumberBox } from "./compost-number-box.js";
 import { CompostWaveform } from "./compost-waveform.js";
 
 const MIN_TIME = 1e-9;
@@ -128,18 +129,12 @@ export class CompostAudioClipEditor extends HTMLElement {
           padding: 0.35em 0.5em;
           min-width: 0;
         }
-        .corner-label,
-        .gain-value {
+        .corner-label {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
         }
         .corner-label { font-size: 0.73em; }
-        .gain-value {
-          color: var(--compost-audio-clip-editor-muted);
-          font-size: 0.73em;
-          font-variant-numeric: lining-nums tabular-nums;
-        }
         .rulerwrap { grid-column: 2; grid-row: 1; position: relative; overflow: hidden; }
         .ruler { position: absolute; top: 0; bottom: 0; left: 0; touch-action: none; }
         .ruler::before {
@@ -250,14 +245,10 @@ export class CompostAudioClipEditor extends HTMLElement {
           font-size: 0.73em;
           text-align: center;
         }
-        .gain input {
-          box-sizing: border-box;
-          width: 100%;
-          min-height: 1.5em;
-          margin: 0;
-          accent-color: var(--compost-audio-clip-editor-signal);
-          cursor: ew-resize;
-          touch-action: none;
+        .gain compost-number-box {
+          --number-box-width: 100%;
+          --number-box-height: 1.65em;
+          --number-box-font-size: 0.73em;
         }
         .gridwrap {
           grid-column: 2;
@@ -357,7 +348,6 @@ export class CompostAudioClipEditor extends HTMLElement {
       <div class="frame" part="frame">
         <div class="corner" part="corner">
           <span class="corner-label">Gain</span>
-          <output class="gain-value">0.0 dB</output>
         </div>
         <div class="rulerwrap" part="ruler">
           <div class="ruler">
@@ -370,8 +360,8 @@ export class CompostAudioClipEditor extends HTMLElement {
           </div>
         </div>
         <div class="gain" part="gain">
-          <input type="range" min="-90" max="24" step="0.1" value="0" aria-label="Clip gain">
-          <label>Drag to set</label>
+          <compost-number-box min="-90" max="24" step="0.1" value="0" reset-value="0"
+            unit="dB" label="Clip gain" aria-label="Clip gain" split-drag></compost-number-box>
         </div>
         <div class="gridwrap" part="waveform">
           <compost-waveform></compost-waveform>
@@ -414,12 +404,10 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.loopEndLine = part(".loop-end-line");
 		this.playheadElement = part(".playhead");
 		this.division = part(".division");
-		this.gainInput = /** @type {HTMLInputElement} */ (
-			this.root.querySelector('.gain input[type="range"]')
-		);
-		this.gainValue = /** @type {HTMLOutputElement} */ (
-			this.root.querySelector(".gain-value")
-		);
+		const gainInput = this.root.querySelector(".gain compost-number-box");
+		if (!(gainInput instanceof CompostNumberBox))
+			throw new Error("compost-audio-clip-editor needs its gain number box");
+		this.gainInput = gainInput;
 
 		for (const [element, kind] of [
 			[this.rangeStartHandle, "range-start"],
@@ -459,11 +447,11 @@ export class CompostAudioClipEditor extends HTMLElement {
 				passive: false,
 			});
 		}
-		this.gainInput.addEventListener("input", () => {
-			this.setAttribute("gain", this.gainInput.value);
+		this.gainInput.addEventListener("parameter-input", () => {
+			this.setAttribute("gain", String(this.gainInput.value));
 			this.emitGain("gain-input");
 		});
-		this.gainInput.addEventListener("change", () =>
+		this.gainInput.addEventListener("parameter-end", () =>
 			this.emitGain("gain-change"),
 		);
 		this.gridWrap.addEventListener("dragenter", (event) =>
@@ -523,8 +511,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		if (name === "gain") {
 			this._gainDb = clamp(numberAttr(this, "gain", this._gainDb), -90, 24);
 			if (this.gainInput && Number(this.gainInput.value) !== this._gainDb)
-				this.gainInput.value = String(this._gainDb);
-			if (this.gainValue) this.gainValue.textContent = this.gainText;
+				this.gainInput.value = this._gainDb;
 			this.renderWaveformGain();
 			return;
 		}
@@ -564,10 +551,9 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
 		if (this.gainInput && Number(this.gainInput.value) !== this._gainDb)
-			this.gainInput.value = String(this._gainDb);
+			this.gainInput.value = this._gainDb;
 		if (this.gainInput)
 			this.gainInput.disabled = this.disabled || this.readonly;
-		if (this.gainValue) this.gainValue.textContent = this.gainText;
 	}
 
 	get gain() {
