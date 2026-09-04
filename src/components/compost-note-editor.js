@@ -242,8 +242,13 @@ export class CompostNoteEditor extends HTMLElement {
           top: 1.35em;
           height: 0.7em;
           left: 0;
+          box-sizing: border-box;
+          border: 0;
+          padding: 0;
           background: var(--compost-note-editor-loop);
           box-shadow: inset 0 0 0 1px currentColor;
+          color: inherit;
+          font: inherit;
           cursor: grab;
           touch-action: none;
         }
@@ -276,6 +281,7 @@ export class CompostNoteEditor extends HTMLElement {
         .range-handle::after { content: ""; position: absolute; top: 0.46em; width: 0; height: 0; border-top: 0.28em solid transparent; border-bottom: 0.28em solid transparent; }
         .range-handle.start::after { left: 1px; border-left: 0.45em solid var(--compost-note-editor-range); }
         .range-handle.end::after { right: 1px; border-right: 0.45em solid var(--compost-note-editor-range); }
+        .handle:focus-visible, .region:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         /* a host whose clips always start at zero keeps the start where it is */
         :host([lock-loop-start]) .loop-handle.start { display: none; }
         :host([lock-loop-start]) .region { cursor: default; }
@@ -392,11 +398,11 @@ export class CompostNoteEditor extends HTMLElement {
         <div class="corner" part="corner"></div>
         <div class="rulerwrap" part="ruler">
           <div class="ruler">
-            <div class="handle start range-handle" part="range-start"></div>
-            <div class="handle end range-handle" part="range-end"></div>
-            <div class="region" part="loop"></div>
-            <div class="handle start loop-handle" part="loop-start"></div>
-            <div class="handle end loop-handle" part="loop-end"></div>
+            <div class="handle start range-handle" part="range-start" role="slider" tabindex="0"></div>
+            <div class="handle end range-handle" part="range-end" role="slider" tabindex="0"></div>
+            <button class="region" part="loop" type="button" aria-label="Move loop region"></button>
+            <div class="handle start loop-handle" part="loop-start" role="slider" tabindex="0"></div>
+            <div class="handle end loop-handle" part="loop-end" role="slider" tabindex="0"></div>
             <div class="time-selection-ruler" part="time-selection-ruler"></div>
           </div>
         </div>
@@ -519,6 +525,9 @@ export class CompostNoteEditor extends HTMLElement {
 			node.addEventListener("pointercancel", (event) =>
 				this.endMarkerDrag(event),
 			);
+			node.addEventListener("keydown", (event) =>
+				this.handleMarkerKey(event, "loop", kind),
+			);
 		}
 		for (const [node, kind] of [
 			[this.rangeStartHandle, "start"],
@@ -533,6 +542,9 @@ export class CompostNoteEditor extends HTMLElement {
 			node.addEventListener("pointerup", (event) => this.endMarkerDrag(event));
 			node.addEventListener("pointercancel", (event) =>
 				this.endMarkerDrag(event),
+			);
+			node.addEventListener("keydown", (event) =>
+				this.handleMarkerKey(event, "range", kind),
 			);
 		}
 		this.addEventListener("keydown", (event) => this.handleKey(event));
@@ -1197,6 +1209,46 @@ export class CompostNoteEditor extends HTMLElement {
 		const handle = this.startHandle.offsetWidth || 11;
 		this.startHandle.style.left = `${this.loopStart * px - 1}px`;
 		this.endHandle.style.left = `${this.loopEnd * px - handle + 1}px`;
+		const minimum = Math.min(0.001, this.beats / 1000);
+		for (const [marker, label, value, min, max] of [
+			[
+				this.rangeStartHandle,
+				"Playback start",
+				this.rangeStart,
+				0,
+				this.rangeEnd - minimum,
+			],
+			[
+				this.rangeEndHandle,
+				"Playback end",
+				this.rangeEnd,
+				this.rangeStart + minimum,
+				this.beats,
+			],
+			[
+				this.startHandle,
+				"Loop start",
+				this.loopStart,
+				0,
+				this.loopEnd - minimum,
+			],
+			[
+				this.endHandle,
+				"Loop end",
+				this.loopEnd,
+				this.loopStart + minimum,
+				this.beats,
+			],
+		]) {
+			marker.setAttribute("aria-label", label);
+			marker.setAttribute("aria-orientation", "horizontal");
+			marker.setAttribute("aria-valuemin", String(min));
+			marker.setAttribute("aria-valuemax", String(max));
+			marker.setAttribute("aria-valuenow", String(value));
+			marker.setAttribute("aria-valuetext", `${value} beats`);
+		}
+		if (this.region instanceof HTMLButtonElement)
+			this.region.disabled = this.hasAttribute("lock-loop-start");
 		for (const label of this.ruler.querySelectorAll(".bn,.rt")) label.remove();
 		const fragment = document.createDocumentFragment();
 		for (const { time: beat, kind } of timeGridLines(this.beats, {
@@ -1422,9 +1474,10 @@ export class CompostNoteEditor extends HTMLElement {
 		);
 	}
 
-	emitLoop() {
+	/** @param {"loop-input"|"loop-change"} [type] */
+	emitLoop(type = "loop-change") {
 		this.dispatchEvent(
-			new CustomEvent("loop-change", {
+			new CustomEvent(type, {
 				bubbles: true,
 				composed: true,
 				detail: { start: this.loopStart, end: this.loopEnd },
@@ -1432,9 +1485,10 @@ export class CompostNoteEditor extends HTMLElement {
 		);
 	}
 
-	emitRange() {
+	/** @param {"range-input"|"range-change"} [type] */
+	emitRange(type = "range-change") {
 		this.dispatchEvent(
-			new CustomEvent("range-change", {
+			new CustomEvent(type, {
 				bubbles: true,
 				composed: true,
 				detail: { start: this.rangeStart, end: this.rangeEnd },
@@ -2393,17 +2447,8 @@ export class CompostNoteEditor extends HTMLElement {
 		}
 		if (drag.scope === "range") this.setRange(start, end, false);
 		else this.setLoop(start, end, false);
-		const detail =
-			drag.scope === "range"
-				? { start: this.rangeStart, end: this.rangeEnd }
-				: { start: this.loopStart, end: this.loopEnd };
-		this.dispatchEvent(
-			new CustomEvent(`${drag.scope === "range" ? "range" : "loop"}-input`, {
-				bubbles: true,
-				composed: true,
-				detail,
-			}),
-		);
+		if (drag.scope === "range") this.emitRange("range-input");
+		else this.emitLoop("loop-input");
 	}
 
 	/** @param {PointerEvent} event */
@@ -2421,6 +2466,68 @@ export class CompostNoteEditor extends HTMLElement {
 				? drag.start !== this.rangeStart || drag.end !== this.rangeEnd
 				: drag.start !== this.loopStart || drag.end !== this.loopEnd;
 		if (changed) drag.scope === "range" ? this.emitRange() : this.emitLoop();
+	}
+
+	/** @param {KeyboardEvent} event @param {"range"|"loop"} scope @param {string} kind */
+	handleMarkerKey(event, scope, kind) {
+		if (
+			this.readonly ||
+			(scope === "loop" &&
+				kind !== "end" &&
+				this.hasAttribute("lock-loop-start"))
+		)
+			return;
+		const direction =
+			event.key === "ArrowLeft" || event.key === "ArrowDown"
+				? -1
+				: event.key === "ArrowRight" || event.key === "ArrowUp"
+					? 1
+					: 0;
+		if (!direction && event.key !== "Home" && event.key !== "End") return;
+		event.preventDefault();
+		event.stopPropagation();
+		const free = this.gestureIsFree(event);
+		let increment = free ? Math.min(0.001, this.beats / 1000) : this.step;
+		if (event.shiftKey) increment *= 10;
+		if (event.altKey) increment /= 10;
+		const start = scope === "range" ? this.rangeStart : this.loopStart;
+		const end = scope === "range" ? this.rangeEnd : this.loopEnd;
+		const minimum = free ? MIN_DURATION : this.step;
+		let nextStart = start;
+		let nextEnd = end;
+		if (kind === "move") {
+			const length = end - start;
+			nextStart = clamp(
+				event.key === "Home"
+					? 0
+					: event.key === "End"
+						? this.beats - length
+						: start + increment * direction,
+				0,
+				Math.max(0, this.beats - length),
+			);
+			nextEnd = nextStart + length;
+		} else {
+			const current = kind === "start" ? start : end;
+			const beat =
+				event.key === "Home"
+					? 0
+					: event.key === "End"
+						? this.beats
+						: current + increment * direction;
+			if (kind === "start") nextStart = clamp(beat, 0, nextEnd - minimum);
+			else nextEnd = clamp(beat, nextStart + minimum, this.beats);
+		}
+		if (nextStart === start && nextEnd === end) return;
+		if (scope === "range") {
+			this.setRange(nextStart, nextEnd);
+			this.emitRange("range-input");
+			this.emitRange();
+		} else {
+			this.setLoop(nextStart, nextEnd);
+			this.emitLoop("loop-input");
+			this.emitLoop();
+		}
 	}
 
 	// ---- Keyboard and wheel ---------------------------------------------------------

@@ -195,8 +195,13 @@ export class CompostAudioClipEditor extends HTMLElement {
           position: absolute;
           top: 1.35em;
           height: 0.7em;
+          box-sizing: border-box;
+          border: 0;
+          padding: 0;
           background: var(--compost-audio-clip-editor-loop);
           box-shadow: inset 0 0 0 1px currentColor;
+          color: inherit;
+          font: inherit;
           cursor: grab;
           touch-action: none;
         }
@@ -221,6 +226,7 @@ export class CompostAudioClipEditor extends HTMLElement {
         }
         .range-handle.start::after { left: 1px; border-left: 0.45em solid var(--compost-audio-clip-editor-range); }
         .range-handle.end::after { right: 1px; border-right: 0.45em solid var(--compost-audio-clip-editor-range); }
+        .handle:focus-visible, .region:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         :host([data-marker-drag]) .region,
         :host([data-marker-drag]) .handle { cursor: grabbing; }
         :host(:not([loop])) .region,

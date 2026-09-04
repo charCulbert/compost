@@ -416,3 +416,37 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 	expect(resized[1].frame).toBeCloseTo(420, 0);
 	expect(resized[1].waveform).toBeGreaterThan(resized[0].waveform);
 });
+
+test("note editor playback markers expose the same keyboard semantics", async ({
+	page,
+}) => {
+	await page.goto(`${localBaseURL}/examples/compost-note-editor/`);
+	const editor = page.locator("compost-note-editor");
+	const rangeStart = editor.locator(".range-handle.start");
+	const loopRegion = editor.locator(".region");
+
+	await expect(rangeStart).toHaveAttribute("role", "slider");
+	await expect(rangeStart).toHaveAttribute("tabindex", "0");
+	await expect(rangeStart).toHaveAttribute("aria-label", "Playback start");
+	await expect(rangeStart).toHaveAttribute("aria-valuenow", "2.5");
+	await expect(loopRegion).toHaveAttribute("aria-label", "Move loop region");
+	expect(await loopRegion.evaluate((element) => element.tagName)).toBe(
+		"BUTTON",
+	);
+
+	await editor.evaluate((element) => {
+		element.testMarkerEvents = [];
+		for (const type of ["range-input", "range-change"])
+			element.addEventListener(type, (event) =>
+				element.testMarkerEvents.push([type, event.detail]),
+			);
+	});
+	await rangeStart.focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(editor).toHaveAttribute("start", "2.75");
+	await expect(rangeStart).toHaveAttribute("aria-valuenow", "2.75");
+	expect(await editor.evaluate((element) => element.testMarkerEvents)).toEqual([
+		["range-input", { start: 2.75, end: 9 }],
+		["range-change", { start: 2.75, end: 9 }],
+	]);
+});
