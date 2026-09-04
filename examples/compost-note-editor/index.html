@@ -37,10 +37,12 @@
             <label><input type="checkbox" data-note-fold> Fold</label>
             <button type="button" data-note-playhead>Play</button>
             <button type="button" data-note-quantize>Quantize</button>
+            <button type="button" data-note-cursor>Show cursor</button>
+            <button type="button" data-note-selection>Show time selection</button>
           </div>
           <div class="usage-notes">
-            <div><strong>Desktop</strong><span>Drag to edit. Alt-drag copies. Command/Ctrl changes velocity or snapping. Shift extends or fine-tunes. Double-click adds.</span></div>
-            <div><strong>Mobile</strong><span>One finger edits. Two fingers pan or zoom. Drag the piano to navigate pitches. Hold for context.</span></div>
+            <div><strong>Desktop</strong><span>Click empty space for the edit cursor; drag it for a time-and-pitch selection. The ruler makes time-only selections. Alt-drag copies. Command/Ctrl changes velocity or snapping. Shift extends or fine-tunes. Double-click adds.</span></div>
+            <div><strong>Mobile</strong><span>Tap empty space for the edit cursor; drag to select. Two fingers pan or zoom. Drag the piano to navigate pitches. Hold for context.</span></div>
           </div>
         </div>
         </div>
@@ -112,6 +114,8 @@
       });
       fold.addEventListener('change', () => editor.toggleAttribute('fold', fold.checked));
       s.querySelector('[data-note-quantize]').addEventListener('click', () => editor.quantize());
+      s.querySelector('[data-note-cursor]').addEventListener('click', () => editor.setTimeSelection(5, 5));
+      s.querySelector('[data-note-selection]').addEventListener('click', () => editor.setTimeSelection(5, 7));
       const stopVoices = () => {
         for (const voice of voices) {
           try { voice.stop(); } catch {}

@@ -17,6 +17,7 @@ import {
 import {
 	extendSelectionRegion,
 	normalizeSelectionRegion,
+	normalizeTimeRange,
 } from "../selection-region.js";
 
 export { rulerLabels } from "../internal/time-ruler.js";
@@ -257,6 +258,11 @@ export class CompostNoteEditor extends HTMLElement {
           display: none;
           z-index: 3;
         }
+        .time-selection-ruler[data-cursor] {
+          width: 2px !important;
+          border: 0;
+          background: var(--compost-note-editor-select);
+        }
         .handle {
           position: absolute;
           top: 1.05em;
@@ -353,8 +359,14 @@ export class CompostNoteEditor extends HTMLElement {
           background: var(--compost-note-editor-time-selection);
           pointer-events: none;
           display: none;
+          z-index: 3;
         }
         .time-selection[data-box] { border-width: 1px; }
+        .time-selection[data-cursor] {
+          width: 2px !important;
+          border: 0;
+          background: var(--compost-note-editor-select);
+        }
         .tip {
           position: fixed;
           z-index: 50;
@@ -422,7 +434,7 @@ export class CompostNoteEditor extends HTMLElement {
 		this.gridWrap = part(".gridwrap");
 		this.gridElement = part(".grid");
 		this.before = part(".outside.before");
-		this.timeSelection = part(".time-selection");
+		this.timeSelectionElement = part(".time-selection");
 		this.past = part(".past");
 		this.markerGuide = part(".marker-guide");
 		this.playheadElement = part(".playhead");
@@ -697,6 +709,22 @@ export class CompostNoteEditor extends HTMLElement {
 		return [...this.selection];
 	}
 
+	get timeSelection() {
+		return this.selectionRegion
+			? {
+					start: this.selectionRegion.start,
+					end: this.selectionRegion.end,
+				}
+			: null;
+	}
+
+	/** Restore or clear the host-owned time selection or collapsed edit cursor. */
+	/** @param {number|null} start @param {number|null} end */
+	setTimeSelection(start, end) {
+		this.selectionRegion = normalizeTimeRange(start, end, this.beats);
+		this.renderSelectionRegion();
+	}
+
 	/** Sets the non-destructive playback range, in beats. */
 	/** @param {number} start @param {number} end @param {boolean} [shouldEmit] */
 	setRange(start, end, shouldEmit = false) {
@@ -749,11 +777,13 @@ export class CompostNoteEditor extends HTMLElement {
 	}
 
 	clearSelection() {
+		const hadTimeSelection = Boolean(this.selectionRegion);
 		this.selectionRegion = null;
 		this.selection.clear();
 		this.renderNotes();
 		this.renderSelectionRegion();
 		this.emitSelection();
+		if (hadTimeSelection) this.emitTimeSelection();
 	}
 
 	/** In Fold, vertical arrows move through displayed pitches without hiding the selection. */
@@ -823,7 +853,10 @@ export class CompostNoteEditor extends HTMLElement {
 			this._notes,
 			this.selection.size ? [...this.selection] : null,
 		);
-		const raw = this.selection.size && span ? span.end : this.rangeStart;
+		const raw =
+			this.selection.size && span
+				? span.end
+				: (this.timeSelection?.start ?? this.rangeStart);
 		const start = clamp(
 			this.snapBeat(raw),
 			0,
@@ -848,7 +881,10 @@ export class CompostNoteEditor extends HTMLElement {
 	/** Sets the loop to the selection's span. */
 	loopToSelection() {
 		const span =
-			this.selectionRegion ??
+			(this.selectionRegion &&
+			this.selectionRegion.end > this.selectionRegion.start
+				? this.selectionRegion
+				: null) ??
 			selectionSpan(
 				this._notes,
 				this.selection.size ? [...this.selection] : null,
@@ -1088,7 +1124,7 @@ export class CompostNoteEditor extends HTMLElement {
 
 	renderSelectionRegion() {
 		if (!this.selectionRegion) {
-			this.timeSelection.style.display = "none";
+			this.timeSelectionElement.style.display = "none";
 			this.timeSelectionRuler.style.display = "none";
 			this.division.textContent = this.gridLines
 				? this.currentGridText()
@@ -1098,15 +1134,21 @@ export class CompostNoteEditor extends HTMLElement {
 		const left = this.selectionRegion.start * this.pxPerBeat;
 		const width =
 			(this.selectionRegion.end - this.selectionRegion.start) * this.pxPerBeat;
-		for (const element of [this.timeSelection, this.timeSelectionRuler]) {
+		const cursor = this.selectionRegion.start === this.selectionRegion.end;
+		for (const element of [
+			this.timeSelectionElement,
+			this.timeSelectionRuler,
+		]) {
 			element.style.display = "block";
 			element.style.left = `${left}px`;
-			element.style.width = `${width}px`;
+			element.style.width = `${cursor ? 2 : width}px`;
+			element.toggleAttribute("data-cursor", cursor);
 		}
 		const box =
+			!cursor &&
 			Array.isArray(this.selectionRegion.pitches) &&
 			this.selectionRegion.pitches.length > 0;
-		this.timeSelection.toggleAttribute("data-box", box);
+		this.timeSelectionElement.toggleAttribute("data-box", box);
 		if (box) {
 			const rows = this.visibleKeys
 				.map((note, index) => ({ note, index }))
@@ -1120,16 +1162,22 @@ export class CompostNoteEditor extends HTMLElement {
 					Math.min(...rows.map(({ index }) => index)) * this.rowHeight;
 				const bottom =
 					(Math.max(...rows.map(({ index }) => index)) + 1) * this.rowHeight;
-				this.timeSelection.style.top = `${top}px`;
-				this.timeSelection.style.bottom = "auto";
-				this.timeSelection.style.height = `${bottom - top}px`;
-			} else this.timeSelection.style.display = "none";
+				this.timeSelectionElement.style.top = `${top}px`;
+				this.timeSelectionElement.style.bottom = "auto";
+				this.timeSelectionElement.style.height = `${bottom - top}px`;
+			} else this.timeSelectionElement.style.display = "none";
 		} else {
-			this.timeSelection.style.top = "0px";
-			this.timeSelection.style.bottom = "0px";
-			this.timeSelection.style.height = "auto";
+			this.timeSelectionElement.style.top = "0px";
+			this.timeSelectionElement.style.bottom = "0px";
+			this.timeSelectionElement.style.height = "auto";
 		}
 		const beats = this.selectionRegion.end - this.selectionRegion.start;
+		if (cursor) {
+			this.division.textContent = this.gridLines
+				? this.currentGridText()
+				: "off";
+			return;
+		}
 		const bars = beats / this.beatsPerBar;
 		this.division.textContent =
 			Math.abs(bars - Math.round(bars)) < 1e-9
@@ -1406,6 +1454,17 @@ export class CompostNoteEditor extends HTMLElement {
 		);
 	}
 
+	/** @param {"time-select"|"time-select-input"} [type] @param {{start: number, end: number}|null} [selection] */
+	emitTimeSelection(type = "time-select", selection = this.timeSelection) {
+		this.dispatchEvent(
+			new CustomEvent(type, {
+				bubbles: true,
+				composed: true,
+				detail: selection ?? { start: null },
+			}),
+		);
+	}
+
 	/** Duplication time always contains every selected note from start to end. */
 	expandSelectionRegionToNotes(notes = this._preview ?? this._notes) {
 		if (!this.selectionRegion || !this.selection.size) return;
@@ -1533,11 +1592,16 @@ export class CompostNoteEditor extends HTMLElement {
 		delete this.keys.dataset.axis;
 		if (pan.previewing) this.endPreview(pan.note);
 		if (event.type === "pointercancel" || pan.moved) return;
-		if (!pan.shiftKey) this.selection.clear();
+		const clearedTimeSelection = !pan.shiftKey && Boolean(this.selectionRegion);
+		if (!pan.shiftKey) {
+			this.selectionRegion = null;
+			this.selection.clear();
+		}
 		for (const entry of this._notes)
 			if (entry.note === pan.note) this.selection.add(entry.id);
 		this.renderNotes();
 		this.emitSelection();
+		if (clearedTimeSelection) this.emitTimeSelection();
 	}
 
 	/** @param {string} text @param {{clientX: number, clientY: number}} event */
@@ -1773,6 +1837,9 @@ export class CompostNoteEditor extends HTMLElement {
 		const note = this._notes.find((entry) => entry.id === element.dataset.id);
 		if (!note) return;
 		event.preventDefault();
+		const clearedTimeSelection =
+			!event.shiftKey && Boolean(this.selectionRegion);
+		if (clearedTimeSelection) this.selectionRegion = null;
 		if (!event.shiftKey && !this.selection.has(note.id))
 			this.selection = new Set([note.id]);
 		else this.selection.add(note.id);
@@ -1816,6 +1883,7 @@ export class CompostNoteEditor extends HTMLElement {
 			copy: false,
 			selectionBefore,
 			regionBefore,
+			clearedTimeSelection,
 		};
 		if (copying) this.setCopyDrag(this.drag, true);
 		if (mode === "move" && !copying) {
@@ -1890,6 +1958,7 @@ export class CompostNoteEditor extends HTMLElement {
 							pitches: [Math.min(fromNote, toNote), Math.max(fromNote, toNote)],
 						}
 					: { start, end };
+			this.emitTimeSelection("time-select-input", { start, end });
 			this.selection = drag.shiftKey ? new Set(drag.base) : new Set();
 			for (const note of notesInBox(this._notes, box)) {
 				// a folded view has gaps between rows; only rows that are shown count
@@ -2019,8 +2088,14 @@ export class CompostNoteEditor extends HTMLElement {
 			this.emitSelection();
 			return;
 		}
+		if (drag.clearedTimeSelection) this.emitTimeSelection();
 		if (drag.mode === "marq") {
 			if (drag.moved) {
+				const timeRange = normalizeTimeRange(
+					drag.region?.start,
+					drag.region?.end,
+					this.beats,
+				);
 				const region = normalizeSelectionRegion(
 					drag.region?.start,
 					drag.region?.end,
@@ -2033,7 +2108,7 @@ export class CompostNoteEditor extends HTMLElement {
 							end: region.end,
 							...(region.items ? { pitches: region.items } : {}),
 						}
-					: null;
+					: timeRange;
 			} else if (drag.shiftKey && (drag.regionBefore || drag.base.size)) {
 				const free = this.gestureIsFree(event);
 				const point = this.gridPoint(event);
@@ -2048,10 +2123,12 @@ export class CompostNoteEditor extends HTMLElement {
 					drag.regionBefore?.pitches ?? selected.map((note) => note.note);
 				const pitches =
 					drag.kind === "box"
-						? [
-								Math.min(...existing, this.yToNote(point.y)),
-								Math.max(...existing, this.yToNote(point.y)),
-							]
+						? existing.length
+							? [
+									Math.min(...existing, this.yToNote(point.y)),
+									Math.max(...existing, this.yToNote(point.y)),
+								]
+							: [this.yToNote(point.y), this.yToNote(point.y)]
 						: undefined;
 				const region = extendSelectionRegion(
 					drag.regionBefore,
@@ -2066,7 +2143,11 @@ export class CompostNoteEditor extends HTMLElement {
 							end: region.end,
 							...(region.items ? { pitches: region.items } : {}),
 						}
-					: null;
+					: normalizeTimeRange(
+							drag.regionBefore?.start ?? span?.start ?? clickedBeat,
+							clickedBeat,
+							this.beats,
+						);
 				if (this.selectionRegion) {
 					const box = {
 						fromBeat: this.selectionRegion.start,
@@ -2088,12 +2169,14 @@ export class CompostNoteEditor extends HTMLElement {
 						Math.hypot(drag.x - pending.x, drag.y - pending.y) <=
 							DOUBLE_TAP_DISTANCE;
 					if (doubleClick) {
+						const hadTimeSelection = Boolean(this.selectionRegion);
 						this.pendingEmptyClick = null;
 						this.selectionRegion = null;
 						this.selection.clear();
 						this.renderNotes();
 						this.renderSelectionRegion();
 						this.emitSelection();
+						if (hadTimeSelection) this.emitTimeSelection();
 						this.ignoreDoubleClick = true;
 						setTimeout(() => {
 							this.ignoreDoubleClick = false;
@@ -2110,12 +2193,16 @@ export class CompostNoteEditor extends HTMLElement {
 						};
 					}
 				}
-				this.selectionRegion = null;
+				this.selectionRegion = {
+					start: drag.startBeat,
+					end: drag.startBeat,
+				};
 				this.selection.clear();
 			}
 			this.renderNotes();
 			this.renderSelectionRegion();
 			this.emitSelection();
+			this.emitTimeSelection();
 			return;
 		}
 		if (drag.copy && !drag.moved) {

@@ -1,4 +1,6 @@
+import { DRAG_SLOP } from "../internal/gestures.js";
 import { rulerLabels } from "../internal/time-ruler.js";
+import { normalizeTimeRange } from "../selection-region.js";
 import {
 	gridStepForView,
 	gridTextForStep,
@@ -7,7 +9,7 @@ import {
 	timeSignatureOf,
 } from "../time-grid.js";
 import { clamp, defineElement, numberAttr } from "../utils.js";
-import "./compost-waveform.js";
+import { CompostWaveform } from "./compost-waveform.js";
 
 const MIN_TIME = 1e-9;
 
@@ -57,10 +59,12 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.adaptiveGrid = false;
 		this.gridLines = true;
 		/** @type {'grid'|'off'} */ this.snapMode = "grid";
-		/** @type {import('./compost-waveform.js').WaveformPeak[]} */ this._peaks =
-			[];
+		/** @type {{min: number, max: number}[]} */ this._peaks = [];
+		/** @type {{start: number, end: number}|null} */ this._timeSelection = null;
 		/** @type {{pointerId: number, kind: string, startX: number, width: number, rangeStart: number, rangeEnd: number, loopStart: number, loopEnd: number}|null} */
 		this.drag = null;
+		/** @type {{pointerId: number, startX: number, startBeat: number, moved: boolean, target: HTMLElement, origin: {start: number, end: number}|null, preview?: {start: number, end: number}}|null} */
+		this.selectionDrag = null;
 
 		this.root = this.attachShadow({ mode: "open" });
 		this.root.innerHTML = `
@@ -74,6 +78,8 @@ export class CompostAudioClipEditor extends HTMLElement {
           --compost-audio-clip-editor-signal: var(--compost-accent, AccentColor);
           --compost-audio-clip-editor-range: var(--compost-audio-clip-editor-text);
           --compost-audio-clip-editor-loop: var(--compost-audio-clip-editor-signal);
+          --compost-audio-clip-editor-select: var(--compost-audio-clip-editor-signal);
+          --compost-audio-clip-editor-time-selection: color-mix(in srgb, var(--compost-audio-clip-editor-select) 10%, transparent);
           --compost-audio-clip-editor-past: color-mix(in srgb, currentColor 13%, transparent);
           --compost-audio-clip-editor-playhead: var(--compost-audio-clip-editor-text);
           --compost-audio-clip-editor-control-width: 5em;
@@ -125,7 +131,7 @@ export class CompostAudioClipEditor extends HTMLElement {
           font-variant-numeric: lining-nums tabular-nums;
         }
         .rulerwrap { grid-column: 2; grid-row: 1; position: relative; overflow: hidden; }
-        .ruler { position: absolute; inset: 0; }
+        .ruler { position: absolute; inset: 0; touch-action: none; }
         .ruler::before {
           content: "";
           position: absolute;
@@ -161,6 +167,22 @@ export class CompostAudioClipEditor extends HTMLElement {
         .ruler .rt.beat { top: 0.9em; background: color-mix(in srgb, currentColor 18%, transparent); }
         .ruler .rt.pulse { top: 0.82em; background: color-mix(in srgb, currentColor 24%, transparent); }
         .ruler .rt.bar { top: 0.75em; background: var(--compost-audio-clip-editor-bar-line); }
+        .ruler-time-selection {
+          position: absolute;
+          bottom: 0.15em;
+          z-index: 3;
+          display: none;
+          box-sizing: border-box;
+          height: 0.45em;
+          border: solid var(--compost-audio-clip-editor-select);
+          border-width: 0 1px 1px;
+          pointer-events: none;
+        }
+        .ruler-time-selection[data-cursor] {
+          width: 2px !important;
+          border: 0;
+          background: var(--compost-audio-clip-editor-select);
+        }
         .region {
           position: absolute;
           top: 1.35em;
@@ -228,6 +250,7 @@ export class CompostAudioClipEditor extends HTMLElement {
           min-height: 0;
           overflow: hidden;
           background: var(--compost-audio-clip-editor-bg);
+          touch-action: none;
         }
         compost-waveform {
           position: absolute;
@@ -251,6 +274,23 @@ export class CompostAudioClipEditor extends HTMLElement {
           z-index: 1;
           background: var(--compost-audio-clip-editor-past);
           pointer-events: none;
+        }
+        .time-selection {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          z-index: 2;
+          display: none;
+          box-sizing: border-box;
+          border: solid var(--compost-audio-clip-editor-select);
+          border-width: 0 1px;
+          background: var(--compost-audio-clip-editor-time-selection);
+          pointer-events: none;
+        }
+        .time-selection[data-cursor] {
+          width: 2px !important;
+          border: 0;
+          background: var(--compost-audio-clip-editor-select);
         }
         .timeline-line {
           position: absolute;
@@ -308,6 +348,7 @@ export class CompostAudioClipEditor extends HTMLElement {
             <button class="region" part="loop" type="button" aria-label="Move loop region"></button>
             <div class="handle start loop-handle" part="loop-start" role="slider" tabindex="0"></div>
             <div class="handle end loop-handle" part="loop-end" role="slider" tabindex="0"></div>
+            <div class="ruler-time-selection" part="time-selection-ruler"></div>
           </div>
         </div>
         <div class="gain" part="gain">
@@ -319,6 +360,7 @@ export class CompostAudioClipEditor extends HTMLElement {
           <div class="grid"></div>
           <div class="outside before" part="before"></div>
           <div class="outside past" part="past"></div>
+          <div class="time-selection" part="time-selection"></div>
           <div class="timeline-line range-start-line" part="range-start-line"></div>
           <div class="timeline-line range-end-line" part="range-end-line"></div>
           <div class="timeline-line loop loop-start-line" part="loop-start-line"></div>
@@ -335,17 +377,19 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.ruler = part(".ruler");
 		this.gridWrap = part(".gridwrap");
 		this.gridElement = part(".grid");
-		this.waveform =
-			/** @type {import('./compost-waveform.js').CompostWaveform} */ (
-				this.root.querySelector("compost-waveform")
-			);
+		const waveform = this.root.querySelector("compost-waveform");
+		if (!(waveform instanceof CompostWaveform))
+			throw new Error("compost-audio-clip-editor needs its waveform");
+		this.waveform = waveform;
 		this.rangeStartHandle = part(".range-handle.start");
 		this.rangeEndHandle = part(".range-handle.end");
 		this.loopRegion = part(".region");
 		this.loopStartHandle = part(".loop-handle.start");
 		this.loopEndHandle = part(".loop-handle.end");
+		this.rulerTimeSelection = part(".ruler-time-selection");
 		this.before = part(".outside.before");
 		this.past = part(".outside.past");
+		this.timeSelectionElement = part(".time-selection");
 		this.rangeStartLine = part(".range-start-line");
 		this.rangeEndLine = part(".range-end-line");
 		this.loopStartLine = part(".loop-start-line");
@@ -381,6 +425,20 @@ export class CompostAudioClipEditor extends HTMLElement {
 		);
 		this.ruler.addEventListener("pointercancel", (event) =>
 			this.endMarkerDrag(/** @type {PointerEvent} */ (event), false),
+		);
+		this.ruler.addEventListener("pointerdown", (event) =>
+			this.startTimeSelection(/** @type {PointerEvent} */ (event)),
+		);
+		for (const type of ["pointermove", "pointerup", "pointercancel"]) {
+			this.ruler.addEventListener(type, (event) =>
+				this.handleTimeSelectionPointer(/** @type {PointerEvent} */ (event)),
+			);
+			this.gridWrap.addEventListener(type, (event) =>
+				this.handleTimeSelectionPointer(/** @type {PointerEvent} */ (event)),
+			);
+		}
+		this.gridWrap.addEventListener("pointerdown", (event) =>
+			this.startTimeSelection(/** @type {PointerEvent} */ (event)),
 		);
 		this.gainInput.addEventListener("input", () => {
 			this.setAttribute("gain", this.gainInput.value);
@@ -456,6 +514,12 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.label = this.getAttribute("label")?.trim() || "Audio clip";
 		this.setAttribute("aria-label", this.label);
 		this.beats = Math.max(MIN_TIME, numberAttr(this, "beats", this.beats));
+		if (this._timeSelection)
+			this._timeSelection = normalizeTimeRange(
+				this._timeSelection.start,
+				this._timeSelection.end,
+				this.beats,
+			);
 		Object.assign(this, this.markersFromAttributes());
 		this.loopEnabled = this.hasAttribute("loop");
 		this._gainDb = clamp(numberAttr(this, "gain", this._gainDb), -90, 24);
@@ -509,6 +573,17 @@ export class CompostAudioClipEditor extends HTMLElement {
 	set peaks(value) {
 		this.waveform.peaks = value;
 		this._peaks = this.waveform.peaks;
+	}
+
+	get timeSelection() {
+		return this._timeSelection ? { ...this._timeSelection } : null;
+	}
+
+	/** Restore or clear the host-owned time selection or collapsed edit cursor. */
+	/** @param {number|null} start @param {number|null} end */
+	setTimeSelection(start, end) {
+		this._timeSelection = normalizeTimeRange(start, end, this.beats);
+		this.renderTimeSelection();
 	}
 
 	get pxPerBeat() {
@@ -637,9 +712,111 @@ export class CompostAudioClipEditor extends HTMLElement {
 				this.setAttribute(name, String(value));
 	}
 
+	/** @param {number} clientX @param {boolean} [invert] */
+	beatAtPoint(clientX, invert = false) {
+		const bounds = this.gridWrap.getBoundingClientRect();
+		const beat =
+			((clientX - bounds.left) / Math.max(1, bounds.width)) * this.beats;
+		return this.snapBeat(beat, invert);
+	}
+
+	/** @param {PointerEvent} event */
+	startTimeSelection(event) {
+		if (
+			event.button !== 0 ||
+			this.readonly ||
+			this.drag ||
+			this.selectionDrag ||
+			event
+				.composedPath()
+				.some(
+					(node) =>
+						node instanceof HTMLElement &&
+						(node.classList.contains("handle") ||
+							node.classList.contains("region")),
+				)
+		)
+			return;
+		const target = /** @type {HTMLElement} */ (event.currentTarget);
+		event.preventDefault();
+		this.focus({ preventScroll: true });
+		this.selectionDrag = {
+			pointerId: event.pointerId,
+			startX: event.clientX,
+			startBeat: this.beatAtPoint(
+				event.clientX,
+				event.metaKey || event.ctrlKey,
+			),
+			moved: false,
+			target,
+			origin: this.timeSelection,
+		};
+		if (event.isTrusted) target.setPointerCapture(event.pointerId);
+	}
+
+	/** @param {PointerEvent} event */
+	handleTimeSelectionPointer(event) {
+		const drag = this.selectionDrag;
+		if (!drag || event.pointerId !== drag.pointerId) return;
+		if (event.type === "pointermove") {
+			if (!drag.moved && Math.abs(event.clientX - drag.startX) <= DRAG_SLOP)
+				return;
+			drag.moved = true;
+			const end = this.beatAtPoint(
+				event.clientX,
+				event.metaKey || event.ctrlKey,
+			);
+			drag.preview = normalizeTimeRange(drag.startBeat, end, this.beats) ?? {
+				start: drag.startBeat,
+				end,
+			};
+			this.renderTimeSelection(drag.preview);
+			this.emit("time-select-input", drag.preview);
+			return;
+		}
+		this.selectionDrag = null;
+		if (event.type === "pointercancel") {
+			this.renderTimeSelection();
+			return;
+		}
+		const beat = this.beatAtPoint(
+			event.clientX,
+			event.metaKey || event.ctrlKey,
+		);
+		const extend = event.shiftKey || event.metaKey || event.ctrlKey;
+		const next =
+			drag.moved && drag.preview
+				? drag.preview
+				: extend && drag.origin
+					? normalizeTimeRange(
+							Math.min(drag.origin.start, beat),
+							Math.max(drag.origin.end, beat),
+							this.beats,
+						)
+					: normalizeTimeRange(beat, beat, this.beats);
+		this._timeSelection = next;
+		this.renderTimeSelection();
+		if (next) this.emit("time-select", next);
+	}
+
+	cancelTimeSelectionDrag() {
+		const drag = this.selectionDrag;
+		if (!drag) return;
+		this.selectionDrag = null;
+		this.renderTimeSelection();
+		if (drag.target.hasPointerCapture?.(drag.pointerId))
+			drag.target.releasePointerCapture(drag.pointerId);
+	}
+
 	/** @param {PointerEvent} event @param {string} kind */
 	startMarkerDrag(event, kind) {
-		if (event.button !== 0 || this.readonly || this.disabled) return;
+		if (
+			event.button !== 0 ||
+			this.readonly ||
+			this.disabled ||
+			this.selectionDrag
+		)
+			return;
 		event.preventDefault();
 		this.drag = {
 			pointerId: event.pointerId,
@@ -708,10 +885,21 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	/** @param {KeyboardEvent} event */
 	handleWindowKey(event) {
-		if (event.key !== "Escape" || !this.drag) return;
+		if (event.key !== "Escape") return;
+		if (
+			!this.drag &&
+			!this.selectionDrag &&
+			(!this._timeSelection || !event.composedPath().includes(this))
+		)
+			return;
 		event.preventDefault();
 		event.stopPropagation();
-		this.cancelMarkerDrag();
+		if (this.drag) this.cancelMarkerDrag();
+		else if (this.selectionDrag) this.cancelTimeSelectionDrag();
+		else {
+			this.setTimeSelection(null, null);
+			this.emit("time-select", { start: null });
+		}
 	}
 
 	/** @param {KeyboardEvent} event @param {string} kind */
@@ -853,6 +1041,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.renderRuler();
 		this.renderGrid();
 		this.renderRanges();
+		this.renderTimeSelection();
 		this.renderPlayhead();
 	}
 
@@ -968,6 +1157,31 @@ export class CompostAudioClipEditor extends HTMLElement {
 			handle.setAttribute("aria-valuemax", String(maximum));
 			handle.setAttribute("aria-valuenow", String(value));
 			handle.setAttribute("aria-valuetext", `${value} beats`);
+		}
+	}
+
+	/** Paint a gesture preview, or the committed host-restorable selection. */
+	/** @param {{start: number, end: number}|null} [selection] */
+	renderTimeSelection(selection = this._timeSelection) {
+		if (!this.timeSelectionElement || !this.rulerTimeSelection) return;
+		if (!selection) {
+			this.timeSelectionElement.style.display = "none";
+			this.rulerTimeSelection.style.display = "none";
+			return;
+		}
+		const cursor = selection.start === selection.end;
+		const left = `${(selection.start / this.beats) * 100}%`;
+		const width = cursor
+			? "2px"
+			: `${((selection.end - selection.start) / this.beats) * 100}%`;
+		for (const element of [
+			this.timeSelectionElement,
+			this.rulerTimeSelection,
+		]) {
+			element.style.display = "block";
+			element.style.left = left;
+			element.style.width = width;
+			element.toggleAttribute("data-cursor", cursor);
 		}
 	}
 

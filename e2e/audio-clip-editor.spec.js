@@ -95,6 +95,8 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 			"loop-change",
 			"gain-input",
 			"gain-change",
+			"time-select-input",
+			"time-select",
 			"audio-file-drop",
 		])
 			element.addEventListener(type, (event) =>
@@ -175,6 +177,40 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 		await editor.evaluate((element) => [element.loopStart, element.loopEnd]),
 	).toEqual([6, 14]);
 
+	const gridWrap = editor.locator(".gridwrap");
+	const gridBox = await gridWrap.boundingBox();
+	const gridY = gridBox.y + gridBox.height / 2;
+	await page.mouse.click(gridBox.x + 3 * targets.px, gridY);
+	expect(await editor.evaluate((element) => element.timeSelection)).toEqual({
+		start: 3,
+		end: 3,
+	});
+	await expect(editor.locator(".time-selection")).toHaveAttribute(
+		"data-cursor",
+		"",
+	);
+
+	await page.mouse.move(gridBox.x + 4 * targets.px, gridY);
+	await page.mouse.down();
+	await page.mouse.move(gridBox.x + 6 * targets.px, gridY, { steps: 4 });
+	await page.mouse.up();
+	expect(await editor.evaluate((element) => element.timeSelection)).toEqual({
+		start: 4,
+		end: 6,
+	});
+
+	await page.mouse.move(gridBox.x + 8 * targets.px, gridY);
+	await page.mouse.down();
+	await page.mouse.move(gridBox.x + 10 * targets.px, gridY, { steps: 4 });
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	expect(await editor.evaluate((element) => element.timeSelection)).toEqual({
+		start: 4,
+		end: 6,
+	});
+	await page.keyboard.press("Escape");
+	expect(await editor.evaluate((element) => element.timeSelection)).toBeNull();
+
 	const gain = await editor.evaluate((element) => {
 		const input = element.shadowRoot.querySelector('.gain input[type="range"]');
 		input.value = "-6";
@@ -220,6 +256,8 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 			"loop-change",
 			"gain-input",
 			"gain-change",
+			"time-select-input",
+			"time-select",
 			"audio-file-drop",
 		]),
 	);
@@ -228,6 +266,9 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 	]);
 	expect(events).toContainEqual(["loop-change", { start: 6, end: 14 }]);
 	expect(events).toContainEqual(["gain-change", { gain: -6 }]);
+	expect(events).toContainEqual(["time-select", { start: 3, end: 3 }]);
+	expect(events).toContainEqual(["time-select", { start: 4, end: 6 }]);
+	expect(events).toContainEqual(["time-select", { start: null }]);
 	expect(events).toContainEqual(["audio-file-drop", "take.wav"]);
 
 	const resized = await editor.evaluate(async (element) => {

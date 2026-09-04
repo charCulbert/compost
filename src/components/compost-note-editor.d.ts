@@ -27,6 +27,10 @@ export interface NoteSelectionRegion {
 export interface NoteSelectionDetail {
 	ids: string[];
 }
+/** `time-select` and `time-select-input`; equal bounds are an edit cursor. */
+export type NoteTimeSelectDetail =
+	| { start: number; end: number }
+	| { start: null };
 /** The host-owned quantize request. */
 export interface NoteQuantizeDetail {
 	ids: string[];
@@ -67,7 +71,8 @@ export function gridText(
  * `<compost-note-editor>`: a MIDI note editor. It edits a note list and
  * draws the playhead position it is given; it neither plays nor schedules
  * anything. Emits `notes-change`, `loop-input`/`loop-change`,
- * `range-input`/`range-change`, `selection-change`, `note-preview`,
+ * `range-input`/`range-change`, `time-select-input`/`time-select`,
+ * `selection-change`, `note-preview`,
  * `note-preview-end`, `note-context` and `note-quantize` CustomEvents.
  * A two-finger pinch zooms and pans time or pitch. Touch long-press emits
  * `note-context` for either a note or the empty grid.
@@ -121,7 +126,7 @@ export class CompostNoteEditor extends HTMLElement {
 	loopEnd: number;
 	/** Whether the loop bar and boundaries are shown; reflected by the `loop` attribute. */
 	loopEnabled: boolean;
-	/** The last marquee's snapped time span, independently of its selected notes. */
+	/** The snapped time span or collapsed edit cursor, independently of selected notes. */
 	selectionRegion: NoteSelectionRegion | null;
 	/** Pitch-class offsets displayed as in-scale when both `scale` and `root` are set. */
 	scale: number[];
@@ -161,12 +166,15 @@ export class CompostNoteEditor extends HTMLElement {
 	get disabled(): boolean;
 	set disabled(value: boolean);
 	get selectedIds(): string[];
+	get timeSelection(): { start: number; end: number } | null;
 	get pxPerBeat(): number;
 
 	/** Sets the non-destructive playback range, independently of the loop. */
 	setRange(start: number, end: number, shouldEmit?: boolean): void;
 	/** Sets the loop region, in beats. */
 	setLoop(start: number, end: number, shouldEmit?: boolean): void;
+	/** Restore or clear the host-owned time selection or collapsed edit cursor. */
+	setTimeSelection(start: number | null, end: number | null): void;
 	/** Emits a quantize intent for the selection, or everything when none is selected. */
 	quantize(options?: { lengths?: boolean; division?: string | number }): void;
 	selectAll(): void;

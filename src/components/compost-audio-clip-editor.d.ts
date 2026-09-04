@@ -11,6 +11,16 @@ export interface AudioClipGainDetail {
 	gain: number;
 }
 
+export interface AudioClipTimeSelection {
+	start: number;
+	end: number;
+}
+
+/** `time-select` and `time-select-input`; equal bounds are an edit cursor. */
+export type AudioClipTimeSelectDetail =
+	| AudioClipTimeSelection
+	| { start: null };
+
 export interface AudioFileDropDetail {
 	file: File;
 }
@@ -19,7 +29,8 @@ export interface AudioFileDropDetail {
  * `<compost-audio-clip-editor>` composes `<compost-waveform>` with audio-clip
  * gain, playback-range and loop controls. The host owns audio and playback.
  * Emits `range-input`/`range-change`, `loop-input`/`loop-change`,
- * `gain-input`/`gain-change` and `audio-file-drop` CustomEvents.
+ * `gain-input`/`gain-change`, `time-select-input`/`time-select` and
+ * `audio-file-drop` CustomEvents.
  *
  * @attribute label
  * @attribute beats - total clip length in quarter-note beats
@@ -61,6 +72,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	/** Copied peak buckets. Setting updates the composed waveform. */
 	get peaks(): WaveformPeak[];
 	set peaks(value: WaveformPeak[]);
+	get timeSelection(): AudioClipTimeSelection | null;
 	get pxPerBeat(): number;
 	get step(): number;
 	get readonly(): boolean;
@@ -73,6 +85,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 	setRange(start: number, end: number, shouldEmit?: boolean): void;
 	setLoop(start: number, end: number, shouldEmit?: boolean): void;
 	setGain(gainDb: number, shouldEmit?: boolean): void;
+	/** Restore or clear the host-owned time selection or collapsed edit cursor. */
+	setTimeSelection(start: number | null, end: number | null): void;
 }
 
 declare global {

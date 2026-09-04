@@ -29,10 +29,12 @@
               <label><input type="checkbox" data-adaptive> Adaptive grid</label>
               <label>Height <input data-height type="range" min="120" max="420" value="256"></label>
               <button type="button" data-playhead>Animate playhead</button>
+              <button type="button" data-cursor>Show cursor</button>
+              <button type="button" data-selection>Show time selection</button>
             </div>
             <div class="usage-notes">
-              <div><strong>Desktop</strong><span>Drag range and loop markers. Drag the loop bar to move it. Command/Ctrl toggles snapping; Shift fine-tunes.</span></div>
-              <div><strong>Mobile</strong><span>The marker targets are larger than their visible arrows. Drag an audio file over the waveform to replace it.</span></div>
+              <div><strong>Desktop</strong><span>Click the waveform for the edit cursor; drag it for a time selection. Drag range and loop markers separately. Command/Ctrl toggles snapping; Shift fine-tunes markers or extends a selection.</span></div>
+              <div><strong>Mobile</strong><span>Tap the waveform for the edit cursor; drag to select. Marker targets are larger than their visible arrows. Drag an audio file over the waveform to replace it.</span></div>
             </div>
           </div>
         </div>
@@ -63,6 +65,8 @@
       s.querySelector('[data-height]').addEventListener('input', (event) => {
         editor.style.height = `${event.target.value}px`;
       });
+      s.querySelector('[data-cursor]').addEventListener('click', () => editor.setTimeSelection(7, 7));
+      s.querySelector('[data-selection]').addEventListener('click', () => editor.setTimeSelection(6, 9));
       let playing = false;
       let position = 6.25;
       let previous = performance.now();

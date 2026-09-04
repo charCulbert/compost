@@ -4,7 +4,14 @@ import test from "node:test";
 import {
 	extendSelectionRegion,
 	normalizeSelectionRegion,
+	normalizeTimeRange,
 } from "../src/selection-region.js";
+
+test("time ranges preserve a collapsed edit cursor", () => {
+	assert.deepEqual(normalizeTimeRange(2, 2, 8), { start: 2, end: 2 });
+	assert.deepEqual(normalizeTimeRange(7, 3, 6), { start: 3, end: 6 });
+	assert.equal(normalizeTimeRange(null, 2, 8), null);
+});
 
 test("selection regions normalize time and optional rows for editors", () => {
 	assert.deepEqual(

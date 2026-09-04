@@ -6805,14 +6805,19 @@ test("note editor keeps a snapped time span separate from its selected pitches",
 	);
 });
 
-test("note editor defers empty-click semantics and Shift-click extends the prior box", async ({
+test("note editor clicks place a cursor and Shift-click extends the prior box", async ({
 	page,
 }) => {
 	await openNoteEditor(page);
 	const editor = page.locator(
 		'compost-note-editor[data-option-target="editor"]',
 	);
-	await editor.evaluate((element) =>
+	await editor.evaluate((element) => {
+		element.testTimeEvents = [];
+		for (const type of ["time-select-input", "time-select"])
+			element.addEventListener(type, (event) =>
+				element.testTimeEvents.push({ type, detail: event.detail }),
+			);
 		element.setNotes([
 			{
 				id: "low",
@@ -6830,8 +6835,8 @@ test("note editor defers empty-click semantics and Shift-click extends the prior
 				velocity: 100,
 				channel: 0,
 			},
-		]),
-	);
+		]);
+	});
 	const geometry = await editor.evaluate((element) => ({
 		px: element.pxPerBeat,
 		lowY: element.noteToY(60),
@@ -6896,7 +6901,24 @@ test("note editor defers empty-click semantics and Shift-click extends the prior
 			ids: element.selectedIds,
 			range: element.selectionRegion,
 		})),
-	).toEqual({ ids: [], range: null });
+	).toEqual({ ids: [], range: { start: 8, end: 8 } });
+	await expect(editor.locator(".time-selection")).toHaveAttribute(
+		"data-cursor",
+		"",
+	);
+	expect(
+		await editor.evaluate((element) => ({
+			selection: element.timeSelection,
+			last: element.testTimeEvents.at(-1),
+			hadInput: element.testTimeEvents.some(
+				(event) => event.type === "time-select-input",
+			),
+		})),
+	).toEqual({
+		selection: { start: 8, end: 8 },
+		last: { type: "time-select", detail: { start: 8, end: 8 } },
+		hadInput: true,
+	});
 
 	const beforeCreate = await editor.evaluate((element) => element.notes.length);
 	await page.mouse.dblclick(empty.x, empty.y, { delay: 60 });
