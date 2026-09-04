@@ -65,7 +65,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.zoomPxPerBeat = 0;
 		/** @type {{min: number, max: number}[]} */ this._peaks = [];
 		/** @type {{start: number, end: number}|null} */ this._timeSelection = null;
-		/** @type {{pointerId: number, kind: string, startX: number, pxPerBeat: number, rangeStart: number, rangeEnd: number, loopStart: number, loopEnd: number}|null} */
+		/** @type {{pointerId: number, kind: string, startX: number, pxPerBeat: number, rangeStart: number, rangeEnd: number, loopStart: number, loopEnd: number, target: HTMLElement}|null} */
 		this.drag = null;
 		/** @type {{pointerId: number, startX: number, startBeat: number, moved: boolean, target: HTMLElement, origin: {start: number, end: number}|null, preview?: {start: number, end: number}}|null} */
 		this.selectionDrag = null;
@@ -927,6 +927,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		)
 			return;
 		event.preventDefault();
+		const target = /** @type {HTMLElement} */ (event.currentTarget);
 		this.drag = {
 			pointerId: event.pointerId,
 			kind,
@@ -936,8 +937,9 @@ export class CompostAudioClipEditor extends HTMLElement {
 			rangeEnd: this.rangeEnd,
 			loopStart: this.loopStart,
 			loopEnd: this.loopEnd,
+			target,
 		};
-		this.ruler.setPointerCapture(event.pointerId);
+		if (event.isTrusted) target.setPointerCapture(event.pointerId);
 		this.setAttribute("data-marker-drag", kind);
 	}
 
@@ -986,8 +988,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.drag = null;
 		this.removeAttribute("data-marker-drag");
 		this.writeMarkers(previous);
-		if (this.ruler.hasPointerCapture?.(previous.pointerId))
-			this.ruler.releasePointerCapture(previous.pointerId);
+		if (previous.target.hasPointerCapture?.(previous.pointerId))
+			previous.target.releasePointerCapture(previous.pointerId);
 	}
 
 	/** @param {KeyboardEvent} event */

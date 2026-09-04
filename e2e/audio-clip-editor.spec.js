@@ -417,6 +417,47 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 	expect(resized[1].waveform).toBeGreaterThan(resized[0].waveform);
 });
 
+test("audio marker drag stays active over the waveform and ends there", async ({
+	page,
+}) => {
+	await page.goto(`${localBaseURL}/examples/compost-audio-clip-editor/`);
+	const editor = page.locator("compost-audio-clip-editor");
+	const handle = editor.locator(".range-handle.start");
+	const grid = editor.locator(".gridwrap");
+	const handleBox = await handle.boundingBox();
+	const gridBox = await grid.boundingBox();
+	const pxPerBeat = await editor.evaluate((element) => element.pxPerBeat);
+	const startX = handleBox.x + handleBox.width / 2;
+	const startY = handleBox.y + handleBox.height / 2;
+
+	await page.mouse.move(startX, startY);
+	await page.mouse.down();
+	expect(
+		await editor.evaluate((element) => {
+			const marker = element.shadowRoot.querySelector(".range-handle.start");
+			return (
+				element.drag?.target === marker &&
+				marker.hasPointerCapture(element.drag.pointerId)
+			);
+		}),
+	).toBe(true);
+	await page.mouse.move(startX + pxPerBeat, gridBox.y + gridBox.height / 2, {
+		steps: 4,
+	});
+	expect(await editor.evaluate((element) => element.rangeStart)).toBe(2);
+	await page.mouse.up();
+	expect(
+		await editor.evaluate((element) => ({
+			start: element.rangeStart,
+			drag: element.drag,
+			active: element.hasAttribute("data-marker-drag"),
+		})),
+	).toEqual({ start: 2, drag: null, active: false });
+
+	await page.mouse.move(startX + 2 * pxPerBeat, startY);
+	expect(await editor.evaluate((element) => element.rangeStart)).toBe(2);
+});
+
 test("note editor playback markers expose the same keyboard semantics", async ({
 	page,
 }) => {
