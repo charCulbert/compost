@@ -471,7 +471,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.gridWrap.addEventListener("drop", (event) =>
 			this.handleFileDrop(event),
 		);
-		for (const target of [this.gridWrap, this.rulerWrap])
+		for (const target of [this.gridWrap, this.ruler])
 			target.addEventListener("contextmenu", (event) =>
 				this.handleContextMenu(event),
 			);
