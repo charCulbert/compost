@@ -259,15 +259,15 @@ export class CompostNoteEditor extends HTMLElement {
         }
         .handle {
           position: absolute;
-          top: 1.25em;
-          height: 0.9em;
-          width: 1em;
+          top: 1.05em;
+          height: 1.2em;
+          width: 1.5em;
           cursor: col-resize;
           z-index: 3;
           touch-action: none;
         }
-        .range-handle { top: 2em; height: 0.9em; z-index: 4; }
-        .range-handle::after { content: ""; position: absolute; top: 0.16em; width: 0; height: 0; border-top: 0.28em solid transparent; border-bottom: 0.28em solid transparent; }
+        .range-handle { top: 1.7em; height: 1.3em; width: 2em; z-index: 4; }
+        .range-handle::after { content: ""; position: absolute; top: 0.46em; width: 0; height: 0; border-top: 0.28em solid transparent; border-bottom: 0.28em solid transparent; }
         .range-handle.start::after { left: 1px; border-left: 0.45em solid var(--compost-note-editor-range); }
         .range-handle.end::after { right: 1px; border-right: 0.45em solid var(--compost-note-editor-range); }
         /* a host whose clips always start at zero keeps the start where it is */
