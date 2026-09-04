@@ -450,3 +450,34 @@ test("note editor playback markers expose the same keyboard semantics", async ({
 		["range-change", { start: 2.75, end: 9 }],
 	]);
 });
+
+test("note editor wheel zoom stays anchored at the pointer", async ({
+	page,
+}) => {
+	await page.goto(`${localBaseURL}/examples/compost-note-editor/`);
+	const editor = page.locator("compost-note-editor");
+	const zoom = await editor.evaluate((element) => {
+		element.zoomReset();
+		const target = element.shadowRoot.querySelector(".gridwrap");
+		const rect = target.getBoundingClientRect();
+		const x = rect.width * 0.75;
+		const before = (element.offset + x) / element.pxPerBeat;
+		target.dispatchEvent(
+			new WheelEvent("wheel", {
+				bubbles: true,
+				cancelable: true,
+				ctrlKey: true,
+				deltaY: -100,
+				clientX: rect.left + x,
+				clientY: rect.top + rect.height / 2,
+			}),
+		);
+		return {
+			before,
+			after: (element.offset + x) / element.pxPerBeat,
+			offset: element.offset,
+		};
+	});
+	expect(zoom.after).toBeCloseTo(zoom.before, 2);
+	expect(zoom.offset).toBeGreaterThan(0);
+});

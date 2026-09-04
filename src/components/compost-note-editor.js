@@ -2659,15 +2659,18 @@ export class CompostNoteEditor extends HTMLElement {
 			return;
 		}
 		if (event.metaKey || event.ctrlKey) {
-			const at = (this.offset + width / 2) / this.pxPerBeat;
+			const rect = this.gridWrap.getBoundingClientRect();
+			const x = clamp(event.clientX - rect.left, 0, width);
+			const old = this.pxPerBeat;
+			const at = (this.offset + x) / old;
 			const fit = width / Math.max(1, this.beats);
 			this.zoomPxPerBeat = clamp(
-				this.pxPerBeat * (delta > 0 ? 0.86 : 1.16),
+				old * (delta > 0 ? 0.86 : 1.16),
 				fit,
 				MAX_PX_PER_BEAT,
 			);
 			this.offset = clamp(
-				at * this.pxPerBeat - width / 2,
+				at * this.pxPerBeat - x,
 				0,
 				Math.max(0, this.beats * this.pxPerBeat - width),
 			);
