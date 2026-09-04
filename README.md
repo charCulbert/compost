@@ -10,10 +10,11 @@ through DOM events. Application data and policy remain outside the elements.
 Controls: `compost-knob`, `compost-slider`, `compost-number-box`,
 `compost-button`, `compost-select`.
 
-Displays: `compost-meter`, `compost-scope`.
+Displays: `compost-meter`, `compost-scope`, `compost-waveform`.
 
-Editors: `compost-envelope-editor`, `compost-note-editor`, `compost-clip-grid`,
-`compost-timeline`. `compost-piano` is a keyboard you can play.
+Editors: `compost-envelope-editor`, `compost-note-editor`,
+`compost-audio-clip-editor`, `compost-clip-grid`, `compost-timeline`.
+`compost-piano` is a keyboard you can play.
 
 Panels: `compost-drawer`, `compost-window`, `compost-popup`.
 
@@ -45,8 +46,9 @@ straight through.
 
 Editors fire `<thing>-input` while you drag and `<thing>-change` when you let
 go: `envelope-input` / `envelope-change`, `loop-input` / `loop-change`,
-`automation-input` / `automation-change`, `notes-change`. Both carry the same
-payload, so you can preview the drag or ignore it until it commits.
+`range-input` / `range-change`, `gain-input` / `gain-change`,
+`automation-input` / `automation-change`, `notes-change`. Both events in a
+pair carry the same payload, so you can preview the drag or ignore it until it commits.
 `notes-change` stands alone: the note editor commits each change as it
 happens, so there is no `-input`/`-change` pair for notes. Escape
 cancels a gesture: the element goes back to where it started and a control

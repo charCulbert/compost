@@ -2,6 +2,7 @@ import "./example-page.js";
 
 const EVENT_READOUT_IDS = new Set([
 	"compost-audio",
+	"compost-audio-clip-editor",
 	"compost-button",
 	"compost-clip-grid",
 	"compost-device-selector",
@@ -85,6 +86,9 @@ const EVENT_TYPES = [
 	"loop-toggle",
 	"range-input",
 	"range-change",
+	"gain-input",
+	"gain-change",
+	"audio-file-drop",
 	"selection-change",
 	"note-preview",
 	"note-preview-end",

@@ -1,5 +1,6 @@
 export const elementIDs = [
 	"compost-audio",
+	"compost-audio-clip-editor",
 	"compost-midi",
 	"compost-device-selector",
 	"compost-drawer",
@@ -11,6 +12,7 @@ export const elementIDs = [
 	"compost-select",
 	"compost-piano",
 	"compost-scope",
+	"compost-waveform",
 	"compost-midi-monitor",
 	"compost-midi-mappings",
 	"compost-clip-grid",
@@ -23,6 +25,7 @@ export const elementIDs = [
 
 const elementSummaries = {
 	"compost-audio": "Starts, suspends, and resumes Web Audio.",
+	"compost-audio-clip-editor": "Edits audio clip gain, ranges, and loops.",
 	"compost-midi": "Selects MIDI inputs and outputs.",
 	"compost-device-selector": "Edits audio and MIDI device settings.",
 	"compost-drawer": "Opens and resizes an edge drawer.",
@@ -34,6 +37,7 @@ const elementSummaries = {
 	"compost-select": "Chooses a discrete parameter value.",
 	"compost-piano": "Plays notes from pointer, touch, or keyboard input.",
 	"compost-scope": "Draws a supplied waveform.",
+	"compost-waveform": "Renders a supplied min/max waveform overview.",
 	"compost-midi-monitor": "Displays recent MIDI messages.",
 	"compost-midi-mappings": "Lists and edits MIDI CC mappings.",
 	"compost-clip-grid": "Launches and edits clips across tracks and scenes.",

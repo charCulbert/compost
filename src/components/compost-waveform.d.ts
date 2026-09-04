@@ -1,0 +1,26 @@
+/** One minimum/maximum amplitude bucket in a waveform overview. */
+export interface WaveformPeak {
+	min: number;
+	max: number;
+}
+
+/**
+ * `<compost-waveform>`: a responsive renderer for a caller-prepared min/max
+ * audio envelope. Audio decoding, peak generation, time units and editing stay
+ * outside the component.
+ *
+ * @attribute label - accessible name used when aria-label is absent
+ */
+export class CompostWaveform extends HTMLElement {
+	/** Copies of the currently displayed peak buckets. */
+	get peaks(): WaveformPeak[];
+	set peaks(value: WaveformPeak[]);
+	/** Repaints the current envelope at the rendered size. */
+	paint(): void;
+}
+
+declare global {
+	interface HTMLElementTagNameMap {
+		"compost-waveform": CompostWaveform;
+	}
+}

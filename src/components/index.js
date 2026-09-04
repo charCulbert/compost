@@ -1,3 +1,4 @@
+import "./compost-audio-clip-editor.js";
 import "./compost-audio.js";
 import "./compost-button.js";
 import "./compost-clip-grid.js";
@@ -17,4 +18,5 @@ import "./compost-popup.js";
 import "./compost-scope.js";
 import "./compost-select.js";
 import "./compost-slider.js";
+import "./compost-waveform.js";
 import "./compost-window.js";

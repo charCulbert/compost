@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-audio-clip-editor · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-audio-clip-editor">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-audio-clip-editor</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <div class="row">
+          <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .65em">
+            <span>Drum break · 4/4 · four-bar clip</span>
+            <compost-audio-clip-editor label="Drum break" beats="16"
+              play-start="1" play-end="15" loop loop-start="4" loop-end="12"
+              time-signature="4/4" grid="1/16" playhead="6.25"
+              style="height: 16em"></compost-audio-clip-editor>
+            <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
+              <label><input type="checkbox" data-loop checked> Loop</label>
+              <label><input type="checkbox" data-snap checked> Snap</label>
+              <label><input type="checkbox" data-adaptive> Adaptive grid</label>
+              <label>Height <input data-height type="range" min="120" max="420" value="256"></label>
+              <button type="button" data-playhead>Animate playhead</button>
+            </div>
+            <div class="usage-notes">
+              <div><strong>Desktop</strong><span>Drag range and loop markers. Drag the loop bar to move it. Command/Ctrl toggles snapping; Shift fine-tunes.</span></div>
+              <div><strong>Mobile</strong><span>The marker targets are larger than their visible arrows. Drag an audio file over the waveform to replace it.</span></div>
+            </div>
+          </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+    </main>
+    <script type="module">
+      import { elementDemo } from '../shared/element-page.js';
+
+      const { s } = await elementDemo('compost-audio-clip-editor');
+      const editor = s.querySelector('compost-audio-clip-editor');
+      editor.peaks = Array.from({ length: 1600 }, (_, index) => {
+        const time = index / 1600;
+        const hit = Math.exp(-((time * 16) % 1) * 6);
+        const accent = index % 400 < 80 ? 1 : .62;
+        const level = Math.min(1, .07 + hit * accent + Math.abs(Math.sin(index * .027)) * .12);
+        return { min: -level * (.7 + Math.sin(index * .13) * .25), max: level };
+      });
+      s.querySelector('[data-loop]').addEventListener('change', (event) => {
+        editor.toggleAttribute('loop', event.target.checked);
+      });
+      s.querySelector('[data-snap]').addEventListener('change', (event) => {
+        editor.setAttribute('snap', event.target.checked ? 'grid' : 'off');
+      });
+      s.querySelector('[data-adaptive]').addEventListener('change', (event) => {
+        editor.toggleAttribute('adaptive-grid', event.target.checked);
+      });
+      s.querySelector('[data-height]').addEventListener('input', (event) => {
+        editor.style.height = `${event.target.value}px`;
+      });
+      let playing = false;
+      let position = 6.25;
+      let previous = performance.now();
+      s.querySelector('[data-playhead]').addEventListener('click', (event) => {
+        playing = !playing;
+        event.target.textContent = playing ? 'Stop playhead' : 'Animate playhead';
+        if (!playing) editor.setAttribute('playhead', position.toFixed(3));
+      });
+      const animate = (now) => {
+        const elapsed = Math.min(.05, (now - previous) / 1000);
+        previous = now;
+        if (playing) {
+          position += elapsed * 2;
+          if (position >= editor.loopEnd) position = editor.loopStart;
+          editor.setAttribute('playhead', position.toFixed(3));
+        }
+        requestAnimationFrame(animate);
+      };
+      requestAnimationFrame(animate);
+    </script>
+  </body>
+</html>

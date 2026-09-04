@@ -7,6 +7,7 @@ const root = path.resolve(new URL("..", import.meta.url).pathname);
 
 // Common boolean contracts. Components absent from a column do not promise it.
 const componentContracts = [
+	{ id: "compost-audio-clip-editor", disabled: true, readonly: true },
 	{ id: "compost-button", disabled: true },
 	{ id: "compost-clip-grid", disabled: true },
 	{ id: "compost-device-selector", disabled: true },

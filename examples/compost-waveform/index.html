@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-waveform · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+  </head>
+  <body data-example-id="compost-waveform">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-waveform</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <div class="row">
+          <div style="width: min(48em, calc(100vw - 64px)); display: grid; gap: .75em">
+            <span>Caller-prepared peak envelope</span>
+            <compost-waveform label="Percussive audio waveform" style="height: 12em"></compost-waveform>
+            <label>Height <input data-height type="range" min="40" max="260" value="192"></label>
+          </div>
+        </div>
+        <output>last event: —</output>
+      </section>
+    </main>
+    <script type="module">
+      import { elementDemo } from '../shared/element-page.js';
+
+      await elementDemo('compost-waveform', { output: false });
+      const waveform = document.querySelector('compost-waveform');
+      waveform.peaks = Array.from({ length: 1200 }, (_, index) => {
+        const time = index / 1200;
+        const pulse = Math.exp(-((time * 8) % 1) * 5);
+        const body = Math.sin(index * .071) * .38 + Math.sin(index * .019) * .22;
+        const level = Math.min(1, .1 + pulse * .65 + Math.sin(time * Math.PI) * .25);
+        return { min: Math.min(0, body - level * .68), max: Math.max(0, body + level * .68) };
+      });
+      document.querySelector('[data-height]').addEventListener('input', (event) => {
+        waveform.style.height = `${event.target.value}px`;
+      });
+    </script>
+  </body>
+</html>
