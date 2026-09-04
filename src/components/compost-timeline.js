@@ -250,6 +250,7 @@ export class CompostTimeline extends HTMLElement {
 			"time-signature",
 			"grid",
 			"adaptive-grid",
+			"adaptive-grid-density",
 			"snap",
 			"follow",
 			"playing",
@@ -272,6 +273,7 @@ export class CompostTimeline extends HTMLElement {
 		this.timeSignature = "4/4";
 		this.grid = "1/4";
 		this.adaptiveGrid = false;
+		this.adaptiveGridDensity = 1;
 		this.snapMode = "grid";
 		this.follow = false;
 		this.playing = false;
@@ -624,6 +626,11 @@ export class CompostTimeline extends HTMLElement {
 		this.pulseLength = meter.pulseLength;
 		this.grid = this.getAttribute("grid")?.trim() || this.grid;
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
+		this.adaptiveGridDensity = clamp(
+			numberAttr(this, "adaptive-grid-density", 1),
+			0.5,
+			2,
+		);
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
 		this.follow = this.hasAttribute("follow");
 		this.playing = this.hasAttribute("playing");
@@ -2610,6 +2617,7 @@ export class CompostTimeline extends HTMLElement {
 			this.grid,
 			this._pxPerBeat,
 			this.adaptiveGrid,
+			this.adaptiveGridDensity,
 		);
 	}
 

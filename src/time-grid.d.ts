@@ -23,6 +23,9 @@ export interface SnapTimeOptions {
 }
 
 export const MIN_TIME: number;
+export const MIN_ADAPTIVE_GRID_DENSITY: 0.5;
+export const MAX_ADAPTIVE_GRID_DENSITY: 2;
+export const DEFAULT_ADAPTIVE_GRID_DENSITY: 1;
 export function timeSignatureOf(value?: string | null): TimeSignature;
 export function timeGridLines(
 	end: number,
@@ -44,6 +47,7 @@ export function gridStepForView(
 	grid: GridValue,
 	pxPerBeat: number,
 	adaptive?: boolean,
+	density?: number,
 ): number;
 export function gridTextForStep(step: number, beatsPerBar?: number): string;
 export function gridTextOf(grid: GridValue, beatsPerBar?: number): string;

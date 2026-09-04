@@ -8,6 +8,9 @@
 
 /** A numerical guard, not a tick or musical resolution. */
 export const MIN_TIME = 1e-9;
+export const MIN_ADAPTIVE_GRID_DENSITY = 0.5;
+export const MAX_ADAPTIVE_GRID_DENSITY = 2;
+export const DEFAULT_ADAPTIVE_GRID_DENSITY = 1;
 
 const TIME_SIGNATURE_DENOMINATORS = new Set([1, 2, 4, 8, 16]);
 
@@ -110,9 +113,17 @@ export function gridStepForView(
 	grid,
 	pxPerBeat,
 	adaptive = false,
+	density = DEFAULT_ADAPTIVE_GRID_DENSITY,
 ) {
+	const boundedDensity = Math.min(
+		MAX_ADAPTIVE_GRID_DENSITY,
+		Math.max(
+			MIN_ADAPTIVE_GRID_DENSITY,
+			Number(density) || DEFAULT_ADAPTIVE_GRID_DENSITY,
+		),
+	);
 	return adaptive
-		? adaptiveGridStep(pxPerBeat, beatsPerBar)
+		? adaptiveGridStep(pxPerBeat, beatsPerBar, 12 / boundedDensity)
 		: gridStepOf(beatsPerBar, grid);
 }
 

@@ -87,6 +87,7 @@ export function gridText(
  * @attribute musical-origin - source-relative beat displayed as bar 1 and used as the grid phase
  * @attribute grid - default grid, a note value or legacy cells
  * @attribute adaptive-grid - lets zoom choose the effective grid step
+ * @attribute adaptive-grid-density - adaptive line density from 0.5 (sparse) to 2 (dense); default 1
  * @attribute snap - 'off' frees edits from the grid
  * @attribute start - first visible beat
  * @attribute end - last visible beat
@@ -123,6 +124,8 @@ export class CompostNoteEditor extends HTMLElement {
 	grid: string | number;
 	/** Whether zoom chooses the effective grid step; absent `adaptive-grid` keeps the declared grid fixed. */
 	adaptiveGrid: boolean;
+	/** Adaptive line density, clamped to 0.5–2; ignored for a fixed grid. */
+	adaptiveGridDensity: number;
 	/** Whether time-grid lines are drawn; set `grid-lines="off"` to hide them. */
 	gridLines: boolean;
 	snapMode: "grid" | "off";

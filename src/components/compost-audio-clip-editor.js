@@ -35,6 +35,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			"playhead",
 			"grid",
 			"adaptive-grid",
+			"adaptive-grid-density",
 			"snap",
 			"time-signature",
 			"musical-origin",
@@ -62,6 +63,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		/** @type {number|null} */ this.pulseLength = null;
 		/** @type {string|number} */ this.grid = "1/16";
 		this.adaptiveGrid = false;
+		this.adaptiveGridDensity = 1;
 		this.gridLines = true;
 		/** @type {'grid'|'off'} */ this.snapMode = "grid";
 		this.offset = 0;
@@ -548,6 +550,11 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.musicalOriginBeat = numberAttr(this, "musical-origin", 0);
 		this.grid = this.getAttribute("grid")?.trim() || "1/16";
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
+		this.adaptiveGridDensity = clamp(
+			numberAttr(this, "adaptive-grid-density", 1),
+			0.5,
+			2,
+		);
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
 		if (this.gainInput && Number(this.gainInput.value) !== this._gainDb)
@@ -639,6 +646,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 			this.grid,
 			this.pxPerBeat,
 			this.adaptiveGrid,
+			this.adaptiveGridDensity,
 		);
 	}
 

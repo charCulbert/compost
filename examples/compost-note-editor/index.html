@@ -17,12 +17,13 @@
       <div id="media"></div>
       <section class="plain">
         <div class="row">
-        <div style="width: min(64em, calc(100vw - 64px)); display: grid; gap: .5em">
+        <div class="editor-demo">
           <span>Clip notes · 6/8 · two-bar loop with pickup</span>
-          <compost-note-editor data-option-target="editor" label="Clip notes" beats="12" start="2.5" end="9" loop loop-start="3" loop-end="9"
-            time-signature="6/8" grid="1/16" root-note="48" note-count="25" scale="0 2 4 5 7 9 11" root="0"
-            style="height: 24em"></compost-note-editor>
-          <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
+          <div class="editor-demo-layout">
+            <compost-note-editor data-option-target="editor" label="Clip notes" beats="12" start="2.5" end="9" loop loop-start="3" loop-end="9"
+              time-signature="6/8" grid="1/16" root-note="48" note-count="25" scale="0 2 4 5 7 9 11" root="0"
+              style="height: 24em"></compost-note-editor>
+            <div class="editor-demo-controls">
             <label>Grid <select data-note-grid>
               <option value="off">Off</option><option value="bar">1 bar</option>
               <option value="1/4">1/4</option><option value="1/4T">1/4 triplet</option>
@@ -32,6 +33,7 @@
             </select></label>
             <label><input type="checkbox" data-note-snap checked> Snap</label>
             <label><input type="checkbox" data-note-adaptive> Adaptive grid</label>
+            <label>Density <input type="range" data-note-density min="0.5" max="2" step="0.25" value="1" aria-label="Adaptive grid density"></label>
             <label><input type="checkbox" data-note-loop checked> Loop</label>
             <label><input type="checkbox" data-note-draw> Draw</label>
             <label><input type="checkbox" data-note-fold> Fold</label>
@@ -40,6 +42,7 @@
             <button type="button" data-note-quantize>Quantize</button>
             <button type="button" data-note-cursor>Show cursor</button>
             <button type="button" data-note-selection>Show time selection</button>
+            </div>
           </div>
           <div class="usage-notes">
             <div><strong>Desktop</strong><span>Click empty space for the edit cursor; drag it for a time-and-pitch selection. The ruler makes time-only selections. Command/Ctrl-wheel zooms at the pointer; the lower-right readout shows the effective grid. Alt-drag copies. Command/Ctrl changes velocity or snapping. Shift extends or fine-tunes. Double-click adds.</span></div>
@@ -60,6 +63,7 @@
       const grid = s.querySelector('[data-note-grid]');
       const snap = s.querySelector('[data-note-snap]');
       const adaptive = s.querySelector('[data-note-adaptive]');
+      const density = s.querySelector('[data-note-density]');
       const loop = s.querySelector('[data-note-loop]');
       const draw = s.querySelector('[data-note-draw]');
       const fold = s.querySelector('[data-note-fold]');
@@ -104,6 +108,7 @@
       });
       snap.addEventListener('change', () => editor.setAttribute('snap', snap.checked ? 'grid' : 'off'));
       adaptive.addEventListener('change', () => editor.toggleAttribute('adaptive-grid', adaptive.checked));
+      density.addEventListener('input', () => editor.setAttribute('adaptive-grid-density', density.value));
       loop.addEventListener('change', () => editor.toggleAttribute('loop', loop.checked));
       draw.addEventListener('change', () => editor.toggleAttribute('draw', draw.checked));
       s.addEventListener('keydown', (event) => {

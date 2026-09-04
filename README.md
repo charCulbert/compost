@@ -96,7 +96,8 @@ line placement. Grid values are meter-independent note values such as `1/8`,
 Compound x/8 meters show a pulse every three eighths. Meter changes within a
 song are host data and are not represented by these elements. Grid resolution
 stays fixed by default; `adaptive-grid` lets zoom choose the effective step in
-all three editors.
+all three editors. `adaptive-grid-density` accepts 0.5 (sparse) through 2
+(dense), defaults to 1, and has no effect unless `adaptive-grid` is present.
 `compost-note-editor` emits `note-quantize` with the selected IDs, grid step
 and whether lengths were requested; the host applies its own strength and swing.
 `compost-clip-grid` renders a complete multi-track session launcher from

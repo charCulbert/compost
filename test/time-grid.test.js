@@ -112,6 +112,11 @@ test("adaptive grids share one readable zoom rule", () => {
 	assert.equal(adaptiveGridStep(4, 3), 3);
 	assert.equal(gridStepForView(4, "1/32", 24, false), 0.125);
 	assert.equal(gridStepForView(4, "1/32", 24, true), 0.5);
+	assert.equal(gridStepForView(4, "1/32", 24, true, 2), 0.25);
+	assert.equal(gridStepForView(4, "1/32", 24, true, 0.5), 1);
+	assert.equal(gridStepForView(4, "1/32", 24, true, 20), 0.25);
+	assert.equal(gridStepForView(4, "1/32", 24, true, 0.01), 1);
+	assert.equal(gridStepForView(4, "1/32", 24, false, 2), 0.125);
 	assert.equal(gridTextForStep(0.25, 4), "1/16");
 	assert.equal(gridTextForStep(3, 3), "1 bar");
 });

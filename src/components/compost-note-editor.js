@@ -79,6 +79,7 @@ export class CompostNoteEditor extends HTMLElement {
 			"musical-origin",
 			"grid",
 			"adaptive-grid",
+			"adaptive-grid-density",
 			"snap",
 			"start",
 			"end",
@@ -113,6 +114,7 @@ export class CompostNoteEditor extends HTMLElement {
 		this.musicalOriginBeat = 0;
 		this.grid = "1/16";
 		this.adaptiveGrid = false;
+		this.adaptiveGridDensity = 1;
 		this.gridLines = true;
 		this.snapMode = "grid";
 		this.rangeStart = 0;
@@ -594,6 +596,11 @@ export class CompostNoteEditor extends HTMLElement {
 		this.musicalOriginBeat = numberAttr(this, "musical-origin", 0);
 		this.grid = this.getAttribute("grid")?.trim() || this.grid;
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
+		this.adaptiveGridDensity = clamp(
+			numberAttr(this, "adaptive-grid-density", 1),
+			0.5,
+			2,
+		);
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
 		const rawStart = Math.max(0, numberAttr(this, "start", this.rangeStart));
@@ -688,6 +695,7 @@ export class CompostNoteEditor extends HTMLElement {
 			this.grid,
 			this.pxPerBeat,
 			this.adaptiveGrid,
+			this.adaptiveGridDensity,
 		);
 	}
 
