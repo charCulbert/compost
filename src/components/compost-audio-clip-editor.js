@@ -149,7 +149,9 @@ export class CompostAudioClipEditor extends HTMLElement {
         }
         .warp-marker::before { content: '◆'; font-size: .7em; }
         .warp-candidate { color: var(--compost-audio-clip-editor-muted); cursor: pointer; }
-        .warp-candidate::before { content: '◇'; }
+        .warp-candidate::before { content: ''; display: block; width: 1px; height: .4em; margin: auto; background: currentColor; }
+        .warp-candidate:hover, .warp-candidate:focus-visible { color: var(--compost-audio-clip-editor-text); }
+        .warp-candidate:hover::before, .warp-candidate:focus-visible::before { width: 2px; height: .8em; }
         .warp-marker:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
         .warp-marker:disabled { cursor: default; }
         :host(:focus-visible) { outline: 2px solid currentColor; outline-offset: -2px; }
