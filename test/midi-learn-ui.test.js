@@ -168,8 +168,8 @@ test("MIDILearnUI restores the mapped target focus after host confirmation", () 
 	ui.disconnect();
 });
 
-test("MIDILearnUI maps two plug-in targets in one map-mode run", () => {
-	const { target, secondTarget, mappings, ui } = setup();
+test("MIDILearnUI maps two plug-in targets in one map-mode run", async () => {
+	const { target, secondTarget, mappings, ui, status } = setup();
 
 	ui.beginSelecting();
 	assert.equal(ui.selectTarget(target, { focus: false }), true);
@@ -181,6 +181,9 @@ test("MIDILearnUI maps two plug-in targets in one map-mode run", () => {
 	assert.equal(ui.state, "learning");
 	assert.equal(hasMIDIMapState(target, "active"), false);
 	assert.equal(hasMIDIMapState(secondTarget, "active"), true);
+	await tick();
+	assert.match(status.textContent, /Tone.*Move a CC to map/u);
+	assert.doesNotMatch(status.textContent, /CC 7|Mapped to/u);
 
 	mappings.applyMapping({ parameterID: "tone", cc: 74, channel: null });
 	assert.equal(ui.state, "learning");

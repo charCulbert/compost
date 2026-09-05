@@ -368,6 +368,7 @@ export class MIDILearnUI {
 			this.isRetargeting = false;
 		}
 
+		this.lastTarget = target;
 		if (!this.mappings?.beginLearn?.(mappableTargetParameterID(target))) {
 			this.announce("That control cannot be MIDI mapped.");
 			this.setModeState("idle");
@@ -378,7 +379,6 @@ export class MIDILearnUI {
 			return;
 		}
 
-		this.lastTarget = target;
 		this.setModeState("learning");
 		this.syncLearnVisuals("learning", target);
 	}
