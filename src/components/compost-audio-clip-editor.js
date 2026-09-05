@@ -2,8 +2,11 @@ import { DRAG_SLOP } from "../internal/gestures.js";
 import { rulerLabels } from "../internal/time-ruler.js";
 import { normalizeTimeRange } from "../selection-region.js";
 import {
+	DEFAULT_ADAPTIVE_GRID_DENSITY,
 	gridStepForView,
 	gridTextForStep,
+	MAX_ADAPTIVE_GRID_DENSITY,
+	MIN_ADAPTIVE_GRID_DENSITY,
 	snapModeWith,
 	timeGridLines,
 	timeSignatureOf,
@@ -14,6 +17,8 @@ import { CompostWaveform } from "./compost-waveform.js";
 const MIN_TIME = 1e-9;
 const MAX_PX_PER_BEAT = 600;
 const MIN_PINCH_SPAN = 24;
+const MIN_GAIN_DB = -90;
+const MAX_GAIN_DB = 36;
 
 /** @param {{id: string, beat: number}[]} value @param {number} beats */
 function copyWarpAnchors(value, beats) {
@@ -551,7 +556,11 @@ export class CompostAudioClipEditor extends HTMLElement {
 			return;
 		}
 		if (name === "gain") {
-			this._gainDb = clamp(numberAttr(this, "gain", this._gainDb), -90, 24);
+			this._gainDb = clamp(
+				numberAttr(this, "gain", this._gainDb),
+				MIN_GAIN_DB,
+				MAX_GAIN_DB,
+			);
 			this.renderWaveformGain();
 			return;
 		}
@@ -576,7 +585,11 @@ export class CompostAudioClipEditor extends HTMLElement {
 			);
 		Object.assign(this, this.markersFromAttributes());
 		this.loopEnabled = this.hasAttribute("loop");
-		this._gainDb = clamp(numberAttr(this, "gain", this._gainDb), -90, 24);
+		this._gainDb = clamp(
+			numberAttr(this, "gain", this._gainDb),
+			MIN_GAIN_DB,
+			MAX_GAIN_DB,
+		);
 		this.playhead = this.hasAttribute("playhead")
 			? clamp(numberAttr(this, "playhead", 0), 0, this.beats)
 			: null;
@@ -589,9 +602,13 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.grid = this.getAttribute("grid")?.trim() || "1/16";
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.adaptiveGridDensity = clamp(
-			numberAttr(this, "adaptive-grid-density", 1),
-			0.5,
-			2,
+			numberAttr(
+				this,
+				"adaptive-grid-density",
+				DEFAULT_ADAPTIVE_GRID_DENSITY,
+			),
+			MIN_ADAPTIVE_GRID_DENSITY,
+			MAX_ADAPTIVE_GRID_DENSITY,
 		);
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
@@ -602,7 +619,10 @@ export class CompostAudioClipEditor extends HTMLElement {
 	}
 
 	set gain(value) {
-		this.setAttribute("gain", String(clamp(Number(value) || 0, -90, 24)));
+		this.setAttribute(
+			"gain",
+			String(clamp(Number(value) || 0, MIN_GAIN_DB, MAX_GAIN_DB)),
+		);
 	}
 
 	/** Interior beat anchors only. Source times and all audio processing belong to the host. */
@@ -815,7 +835,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 	}
 
 	renderWaveformGain() {
-		const amplitude = 10 ** (this._gainDb / 20);
+		const amplitude =
+			this._gainDb <= MIN_GAIN_DB ? 0 : 10 ** (this._gainDb / 20);
 		this.waveform.peaks = this._peaks.map(({ min, max }) => ({
 			min: min * amplitude,
 			max: max * amplitude,
@@ -922,7 +943,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	/** Set host-owned clip gain used only to scale waveform rendering. */
 	/** @param {number} gain */
 	setGain(gain) {
-		const value = clamp(Number(gain) || 0, -90, 24);
+		const value = clamp(Number(gain) || 0, MIN_GAIN_DB, MAX_GAIN_DB);
 		this.setAttribute("gain", String(value));
 	}
 

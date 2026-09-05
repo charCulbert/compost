@@ -2,8 +2,11 @@ import { createLongPress, DRAG_SLOP } from "../internal/gestures.js";
 import { rulerLabels } from "../internal/time-ruler.js";
 import { installTouchDoubleClick } from "../internal/touch-double-click.js";
 import {
+	DEFAULT_ADAPTIVE_GRID_DENSITY,
 	gridStepForView,
 	gridStepOf,
+	MAX_ADAPTIVE_GRID_DENSITY,
+	MIN_ADAPTIVE_GRID_DENSITY,
 	snapModeWith,
 	snapTime,
 	timeGridLines,
@@ -627,9 +630,13 @@ export class CompostTimeline extends HTMLElement {
 		this.grid = this.getAttribute("grid")?.trim() || this.grid;
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.adaptiveGridDensity = clamp(
-			numberAttr(this, "adaptive-grid-density", 1),
-			0.5,
-			2,
+			numberAttr(
+				this,
+				"adaptive-grid-density",
+				DEFAULT_ADAPTIVE_GRID_DENSITY,
+			),
+			MIN_ADAPTIVE_GRID_DENSITY,
+			MAX_ADAPTIVE_GRID_DENSITY,
 		);
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
 		this.follow = this.hasAttribute("follow");

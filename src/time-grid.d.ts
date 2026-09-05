@@ -23,8 +23,8 @@ export interface SnapTimeOptions {
 }
 
 export const MIN_TIME: number;
-export const MIN_ADAPTIVE_GRID_DENSITY: 0.5;
-export const MAX_ADAPTIVE_GRID_DENSITY: 2;
+export const MIN_ADAPTIVE_GRID_DENSITY: 0.125;
+export const MAX_ADAPTIVE_GRID_DENSITY: 8;
 export const DEFAULT_ADAPTIVE_GRID_DENSITY: 1;
 export function timeSignatureOf(value?: string | null): TimeSignature;
 export function timeGridLines(

@@ -52,13 +52,13 @@ export interface AudioClipContextDetail {
  * @attribute loop-start
  * @attribute loop-end
  * @attribute loop - shows loop controls
- * @attribute gain - clip gain in dB from -90 to +24
+ * @attribute gain - clip gain in dB from -90 to +36
  * @attribute playhead - host-supplied playhead in beats; absent hides it
  * @attribute time-signature - meter as N/D
  * @attribute musical-origin - source-relative beat displayed as bar 1 and used as the grid phase
  * @attribute grid - a note value or legacy cells per bar
  * @attribute adaptive-grid - lets zoom choose the effective grid step
- * @attribute adaptive-grid-density - adaptive line density from 0.5 (sparse) to 2 (dense); default 1
+ * @attribute adaptive-grid-density - adaptive line density from 0.125 (sparse) to 8 (dense); default 1
  * @attribute grid-lines - 'off' hides grid lines
  * @attribute snap - 'off' frees edits from the grid
  * @attribute warp - shows optional interior warp pins; double-click waveform requests a pin
@@ -80,7 +80,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	pulseLength: number | null;
 	grid: string | number;
 	adaptiveGrid: boolean;
-	/** Adaptive line density, clamped to 0.5–2; ignored for a fixed grid. */
+	/** Adaptive line density, clamped to 0.125–8; ignored for a fixed grid. */
 	adaptiveGridDensity: number;
 	gridLines: boolean;
 	snapMode: "grid" | "off";

@@ -29,10 +29,13 @@ import {
 } from "../internal/gestures.js";
 import { installTouchDoubleClick } from "../internal/touch-double-click.js";
 import {
+	DEFAULT_ADAPTIVE_GRID_DENSITY,
 	gridStepForView,
 	gridStepOf,
 	gridTextForStep,
 	gridTextOf,
+	MAX_ADAPTIVE_GRID_DENSITY,
+	MIN_ADAPTIVE_GRID_DENSITY,
 	timeGridLines,
 	timeSignatureOf,
 } from "../time-grid.js";
@@ -605,9 +608,13 @@ export class CompostNoteEditor extends HTMLElement {
 		this.grid = this.getAttribute("grid")?.trim() || this.grid;
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.adaptiveGridDensity = clamp(
-			numberAttr(this, "adaptive-grid-density", 1),
-			0.5,
-			2,
+			numberAttr(
+				this,
+				"adaptive-grid-density",
+				DEFAULT_ADAPTIVE_GRID_DENSITY,
+			),
+			MIN_ADAPTIVE_GRID_DENSITY,
+			MAX_ADAPTIVE_GRID_DENSITY,
 		);
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
