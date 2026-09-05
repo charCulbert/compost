@@ -6,9 +6,17 @@ export interface AudioEventDetail {
 	[key: string]: unknown;
 }
 
+/** `audio-restarting` fires after the new context starts, before the old one closes.
+ * Call waitUntil synchronously to retain application state before closing the old context.
+ * Rejection aborts the replacement and emits audio-error. */
+export interface AudioRestartDetail extends AudioEventDetail {
+	previousContext: AudioContext;
+	waitUntil(promise: Promise<unknown>): void;
+}
+
 /**
  * `<compost-audio>`: an audio power button that owns an AudioContext.
- * Emits `audio-started`, `audio-resumed`, `audio-suspended`,
+ * Emits `audio-started`, `audio-resumed`, `audio-restarting`, `audio-suspended`,
  * `audio-stopped`, `audio-state-change` and `audio-error` CustomEvents.
  *
  * @attribute start-label - power-button label while stopped

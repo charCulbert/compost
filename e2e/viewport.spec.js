@@ -103,12 +103,35 @@ test("interrupted context replacement is opt-in and announces the new context", 
 		audio.addEventListener("audio-started", (event) => {
 			announced = event.detail.context;
 		});
-		const replacement = await audio.start();
+		let finish;
+		let retainedBeforeClose = false;
+		audio.addEventListener(
+			"audio-restarting",
+			(event) => {
+				retainedBeforeClose =
+					event.detail.previousContext === original &&
+					!original.closed &&
+					audio.context.state === "running";
+				event.detail.waitUntil(
+					new Promise((resolve) => {
+						finish = resolve;
+					}),
+				);
+			},
+			{ once: true },
+		);
+		const restarting = audio.start();
+		await Promise.resolve();
+		const waited = !original.closed;
+		finish();
+		const replacement = await restarting;
 		let staleEvents = 0;
 		audio.addEventListener("audio-state-change", () => staleEvents++);
 		original.dispatchEvent(new Event("statechange"));
 		return {
 			defaultResumes,
+			retainedBeforeClose,
+			waited,
 			replaced: replacement !== original,
 			closed: original.closed,
 			announced: announced === replacement,
@@ -117,6 +140,8 @@ test("interrupted context replacement is opt-in and announces the new context", 
 	});
 	expect(result).toEqual({
 		defaultResumes: true,
+		retainedBeforeClose: true,
+		waited: true,
 		replaced: true,
 		closed: true,
 		announced: true,

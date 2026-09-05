@@ -218,16 +218,13 @@ export class CompostAudio extends HTMLElement {
 			return null;
 		}
 
+		const interrupted =
+			this.context?.state === "interrupted" &&
+			this.hasAttribute("restart-interrupted")
+				? this.context
+				: null;
 		try {
-			if (
-				this.context?.state === "interrupted" &&
-				this.hasAttribute("restart-interrupted")
-			) {
-				const interrupted = this.context;
-				this.context = null;
-				// Do not await close: creation must stay within the user's activation.
-				void interrupted.close().catch(() => {});
-			}
+			if (interrupted) this.context = null;
 			const previousState = this.context?.state;
 			const wasResumable = Boolean(
 				previousState &&
@@ -253,6 +250,16 @@ export class CompostAudio extends HTMLElement {
 				await this.context.resume();
 			}
 
+			if (interrupted) {
+				// Start the new context during user activation, then let the app retain state.
+				const pending = [];
+				this.dispatchAudioEvent("audio-restarting", {
+					previousContext: interrupted,
+					waitUntil: (promise) => pending.push(Promise.resolve(promise)),
+				});
+				await Promise.all(pending);
+				void interrupted.close().catch(() => {});
+			}
 			this.handleStateChange();
 			if (this.context.state === "running") {
 				this.dispatchAudioEvent(
@@ -261,6 +268,11 @@ export class CompostAudio extends HTMLElement {
 			}
 			return this.context;
 		} catch (error) {
+			if (interrupted) {
+				if (this.context && this.context !== interrupted)
+					void this.context.close().catch(() => {});
+				this.context = interrupted;
+			}
 			this.setStatus(`Could not start audio: ${error.message}`);
 			this.dispatchAudioEvent("audio-error", { error });
 			return null;
