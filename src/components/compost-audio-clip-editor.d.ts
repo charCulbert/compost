@@ -44,6 +44,10 @@ export interface AudioClipContextDetail {
  * Emits `range-input`/`range-change`, `loop-input`/`loop-change`,
  * `gain-input`/`gain-change`, `time-select-input`/`time-select`,
  * `audio-context` and `audio-file-drop` CustomEvents.
+ * Gain consumes the number box's standard parameter-begin/edit/end gestures,
+ * which still bubble unchanged. gain-input previews; gain-change commits once.
+ * Cancellation restores gain and emits gain-input, not gain-change.
+ * Programmatic setGain is silent unless explicitly asked to emit a change.
  * Optional warping emits `warp-add` ({beat, candidateId?}), `warp-remove` ({id}), and
  * `warp-input` / `warp-change` (AudioClipWarpMarker). Input previews a move;
  * change commits it. Cancellation emits input with the original beat, no change.

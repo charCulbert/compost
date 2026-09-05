@@ -159,3 +159,75 @@ test("transient suggestions remain intent only and nearby insertion snaps to the
 	await editor.evaluate((element) => element.setAttribute("readonly", ""));
 	await expect(editor.locator('[part="warp-candidate"]')).toBeDisabled();
 });
+
+test("gain uses standard parameter gestures, scales peaks and cancels without committing", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-audio-clip-editor/");
+	const editor = page.locator("compost-audio-clip-editor").first();
+	await expect(editor).toHaveAttribute("role", "group");
+	await editor.evaluate((element) => {
+		element.setGain(0);
+		element.peaks = [{ min: -0.5, max: 0.5 }];
+		element.gainEvents = [];
+		for (const type of [
+			"parameter-begin",
+			"parameter-edit",
+			"parameter-end",
+			"gain-input",
+			"gain-change",
+		])
+			element.addEventListener(type, (event) =>
+				element.gainEvents.push({ type, ...event.detail }),
+			);
+	});
+	const control = editor.locator(".gain compost-number-box");
+	const spin = control.getByRole("spinbutton");
+	await spin.focus();
+	await spin.press("ArrowDown");
+	const state = await editor.evaluate((element) => ({
+		gain: element.gain,
+		peaks: element.waveform.peaks,
+		events: element.gainEvents,
+	}));
+	expect(state.gain).toBe(-0.1);
+	expect(state.peaks[0].max).toBeCloseTo(0.5 * 10 ** (-0.1 / 20), 6);
+	expect(
+		state.events
+			.filter((event) => event.type.startsWith("parameter-"))
+			.map((event) => event.type),
+	).toEqual(["parameter-begin", "parameter-edit", "parameter-end"]);
+	expect(
+		state.events.filter((event) => event.type === "gain-change"),
+	).toHaveLength(1);
+	await editor.evaluate((element) => {
+		element.gainEvents = [];
+	});
+	const box = await spin.boundingBox();
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2 + 25, box.y - 40, { steps: 5 });
+	expect(await editor.evaluate((element) => element.gain)).not.toBe(-0.1);
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	const cancelled = await editor.evaluate((element) => ({
+		gain: element.gain,
+		peaks: element.waveform.peaks,
+		events: element.gainEvents,
+	}));
+	expect(cancelled.gain).toBe(-0.1);
+	expect(cancelled.peaks).toEqual(state.peaks);
+	expect(
+		cancelled.events.filter((event) => event.type === "gain-change"),
+	).toHaveLength(0);
+	expect(
+		cancelled.events.find((event) => event.type === "parameter-end").cancelled,
+	).toBe(true);
+	expect(
+		await editor.evaluate((element) => {
+			element.gainEvents = [];
+			element.setGain(-6);
+			return element.gainEvents;
+		}),
+	).toEqual([]);
+});

@@ -499,13 +499,15 @@ export class CompostAudioClipEditor extends HTMLElement {
 				passive: false,
 			});
 		}
-		this.gainInput.addEventListener("parameter-input", () => {
+		this.gainInput.addEventListener("parameter-edit", () => {
 			this.setAttribute("gain", String(this.gainInput.value));
 			this.emitGain("gain-input");
 		});
-		this.gainInput.addEventListener("parameter-end", () =>
-			this.emitGain("gain-change"),
-		);
+		this.gainInput.addEventListener("parameter-end", (event) => {
+			// Standard parameter-end restores the value before a cancelled gesture.
+			this.setAttribute("gain", String(this.gainInput.value));
+			this.emitGain(event.detail.cancelled ? "gain-input" : "gain-change");
+		});
 		this.gridWrap.addEventListener("dragenter", (event) =>
 			this.handleFileDrag(event),
 		);
