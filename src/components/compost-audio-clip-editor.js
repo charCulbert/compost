@@ -9,7 +9,6 @@ import {
 	timeSignatureOf,
 } from "../time-grid.js";
 import { clamp, defineElement, numberAttr } from "../utils.js";
-import { CompostNumberBox } from "./compost-number-box.js";
 import { CompostWaveform } from "./compost-waveform.js";
 
 const MIN_TIME = 1e-9;
@@ -40,9 +39,9 @@ function copyWarpAnchors(value, beats) {
 }
 
 /**
- * An audio-clip editor that composes the generic waveform display with clip
- * gain, playback-range and loop controls. It edits metadata and emits intent;
- * the host owns the audio and supplies peaks and playhead position.
+ * An audio-clip editor that composes the generic waveform display with
+ * playback-range and loop controls. It edits metadata and emits intent; the
+ * host owns the audio and supplies peaks, clip gain and playhead position.
  */
 export class CompostAudioClipEditor extends HTMLElement {
 	static get observedAttributes() {
@@ -128,7 +127,6 @@ export class CompostAudioClipEditor extends HTMLElement {
           --compost-audio-clip-editor-time-selection: color-mix(in srgb, var(--compost-audio-clip-editor-select) 10%, transparent);
           --compost-audio-clip-editor-past: color-mix(in srgb, currentColor 13%, transparent);
           --compost-audio-clip-editor-playhead: var(--compost-audio-clip-editor-text);
-          --compost-audio-clip-editor-control-width: 5em;
           --compost-audio-clip-editor-ruler-height: 3em;
           display: block;
           box-sizing: border-box;
@@ -161,7 +159,6 @@ export class CompostAudioClipEditor extends HTMLElement {
         .frame {
           position: relative;
           display: grid;
-          grid-template-columns: var(--compost-audio-clip-editor-control-width) minmax(0, 1fr);
           grid-template-rows: var(--compost-audio-clip-editor-ruler-height) minmax(0, 1fr);
           height: 100%;
           min-height: 0;
@@ -169,24 +166,7 @@ export class CompostAudioClipEditor extends HTMLElement {
           border: 1px solid currentColor;
           overflow: hidden;
         }
-        .corner {
-          grid-column: 1;
-          grid-row: 1;
-          box-sizing: border-box;
-          display: grid;
-          align-content: center;
-          gap: 0.15em;
-          border-right: 1px solid var(--compost-audio-clip-editor-line);
-          padding: 0.35em 0.5em;
-          min-width: 0;
-        }
-        .corner-label {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .corner-label { font-size: 0.73em; }
-        .rulerwrap { grid-column: 2; grid-row: 1; position: relative; overflow: hidden; }
+        .rulerwrap { grid-row: 1; position: relative; overflow: hidden; }
         .ruler { position: absolute; top: 0; bottom: 0; left: 0; touch-action: none; }
         .ruler::before {
           content: "";
@@ -280,29 +260,7 @@ export class CompostAudioClipEditor extends HTMLElement {
         :host(:not([loop])) .region,
         :host(:not([loop])) .loop-handle,
         :host(:not([loop])) .timeline-line.loop { display: none; }
-        .gain {
-          grid-column: 1;
-          grid-row: 2;
-          display: grid;
-          align-content: center;
-          gap: 0.6em;
-          box-sizing: border-box;
-          min-height: 0;
-          border-right: 1px solid var(--compost-audio-clip-editor-line);
-          padding: 0.5em;
-        }
-        .gain label {
-          color: var(--compost-audio-clip-editor-muted);
-          font-size: 0.73em;
-          text-align: center;
-        }
-        .gain compost-number-box {
-          --number-box-width: 100%;
-          --number-box-height: 1.65em;
-          --number-box-font-size: 0.73em;
-        }
         .gridwrap {
-          grid-column: 2;
           grid-row: 2;
           position: relative;
           min-height: 0;
@@ -397,9 +355,6 @@ export class CompostAudioClipEditor extends HTMLElement {
         :host([data-file-drag]) .drop { display: grid; }
       </style>
       <div class="frame" part="frame">
-        <div class="corner" part="corner">
-          <span class="corner-label">Gain</span>
-        </div>
         <div class="rulerwrap" part="ruler">
           <div class="ruler">
             <div class="handle start range-handle" part="range-start" role="slider" tabindex="0"></div>
@@ -411,10 +366,6 @@ export class CompostAudioClipEditor extends HTMLElement {
             <div class="warp-markers" part="warp-candidates"></div>
             <div class="warp-markers" part="warp-markers"></div>
           </div>
-        </div>
-        <div class="gain" part="gain">
-          <compost-number-box min="-90" max="24" step="0.1" value="0" reset-value="0"
-            unit="dB" label="Clip gain" aria-label="Clip gain" split-drag></compost-number-box>
         </div>
         <div class="gridwrap" part="waveform">
           <compost-waveform></compost-waveform>
@@ -459,10 +410,6 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.loopEndLine = part(".loop-end-line");
 		this.playheadElement = part(".playhead");
 		this.division = part(".division");
-		const gainInput = this.root.querySelector(".gain compost-number-box");
-		if (!(gainInput instanceof CompostNumberBox))
-			throw new Error("compost-audio-clip-editor needs its gain number box");
-		this.gainInput = gainInput;
 
 		for (const [element, kind] of [
 			[this.rangeStartHandle, "range-start"],
@@ -502,15 +449,6 @@ export class CompostAudioClipEditor extends HTMLElement {
 				passive: false,
 			});
 		}
-		this.gainInput.addEventListener("parameter-edit", () => {
-			this.setAttribute("gain", String(this.gainInput.value));
-			this.emitGain("gain-input");
-		});
-		this.gainInput.addEventListener("parameter-end", (event) => {
-			// Standard parameter-end restores the value before a cancelled gesture.
-			this.setAttribute("gain", String(this.gainInput.value));
-			this.emitGain(event.detail.cancelled ? "gain-input" : "gain-change");
-		});
 		this.gridWrap.addEventListener("dragenter", (event) =>
 			this.handleFileDrag(event),
 		);
@@ -614,8 +552,6 @@ export class CompostAudioClipEditor extends HTMLElement {
 		}
 		if (name === "gain") {
 			this._gainDb = clamp(numberAttr(this, "gain", this._gainDb), -90, 24);
-			if (this.gainInput && Number(this.gainInput.value) !== this._gainDb)
-				this.gainInput.value = this._gainDb;
 			this.renderWaveformGain();
 			return;
 		}
@@ -659,10 +595,6 @@ export class CompostAudioClipEditor extends HTMLElement {
 		);
 		this.gridLines = this.getAttribute("grid-lines") !== "off";
 		this.snapMode = this.getAttribute("snap") === "off" ? "off" : "grid";
-		if (this.gainInput && Number(this.gainInput.value) !== this._gainDb)
-			this.gainInput.value = this._gainDb;
-		if (this.gainInput)
-			this.gainInput.disabled = this.disabled || this.readonly;
 	}
 
 	get gain() {
@@ -939,10 +871,6 @@ export class CompostAudioClipEditor extends HTMLElement {
 		return Math.min(0.001, this.beats / 1000);
 	}
 
-	get gainText() {
-		return `${this._gainDb.toFixed(1)} dB`;
-	}
-
 	zoomReset() {
 		this.zoomPxPerBeat = 0;
 		this.offset = 0;
@@ -991,11 +919,11 @@ export class CompostAudioClipEditor extends HTMLElement {
 		if (shouldEmit) this.emitLoop("loop-change");
 	}
 
-	/** @param {number} gain @param {boolean} [shouldEmit] */
-	setGain(gain, shouldEmit = false) {
+	/** Set host-owned clip gain used only to scale waveform rendering. */
+	/** @param {number} gain */
+	setGain(gain) {
 		const value = clamp(Number(gain) || 0, -90, 24);
 		this.setAttribute("gain", String(value));
-		if (shouldEmit) this.emitGain("gain-change");
 	}
 
 	/**
@@ -1542,11 +1470,6 @@ export class CompostAudioClipEditor extends HTMLElement {
 	/** @param {'loop-input'|'loop-change'} name */
 	emitLoop(name) {
 		this.emit(name, { start: this.loopStart, end: this.loopEnd });
-	}
-
-	/** @param {'gain-input'|'gain-change'} name */
-	emitGain(name) {
-		this.emit(name, { gain: this._gainDb });
 	}
 
 	refresh() {

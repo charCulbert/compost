@@ -86,8 +86,6 @@ const EVENT_TYPES = [
 	"loop-toggle",
 	"range-input",
 	"range-change",
-	"gain-input",
-	"gain-change",
 	"audio-file-drop",
 	"selection-change",
 	"note-preview",

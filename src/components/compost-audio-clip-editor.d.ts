@@ -6,11 +6,6 @@ export interface AudioClipRangeDetail {
 	end: number;
 }
 
-/** The detail on gain input/change events. */
-export interface AudioClipGainDetail {
-	gain: number;
-}
-
 /** Interior clip-beat anchor; source seconds are deliberately host-owned. */
 export interface AudioClipWarpMarker {
 	id: string;
@@ -39,15 +34,12 @@ export interface AudioClipContextDetail {
 }
 
 /**
- * `<compost-audio-clip-editor>` composes `<compost-waveform>` with audio-clip
- * gain, playback-range and loop controls. The host owns audio and playback.
+ * `<compost-audio-clip-editor>` composes `<compost-waveform>` with playback-range
+ * and loop controls. The host owns audio, clip gain and playback.
  * Emits `range-input`/`range-change`, `loop-input`/`loop-change`,
- * `gain-input`/`gain-change`, `time-select-input`/`time-select`,
- * `audio-context` and `audio-file-drop` CustomEvents.
- * Gain consumes the number box's standard parameter-begin/edit/end gestures,
- * which still bubble unchanged. gain-input previews; gain-change commits once.
- * Cancellation restores gain and emits gain-input, not gain-change.
- * Programmatic setGain is silent unless explicitly asked to emit a change.
+ * `time-select-input`/`time-select`, `audio-context` and `audio-file-drop`
+ * CustomEvents. The gain input and setGain only scale waveform rendering and
+ * never emit events.
  * Optional warping emits `warp-add` ({beat, candidateId?}), `warp-remove` ({id}), and
  * `warp-input` / `warp-change` (AudioClipWarpMarker). Input previews a move;
  * change commits it. Cancellation emits input with the original beat, no change.
@@ -127,7 +119,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 	zoomReset(): void;
 	setRange(start: number, end: number, shouldEmit?: boolean): void;
 	setLoop(start: number, end: number, shouldEmit?: boolean): void;
-	setGain(gainDb: number, shouldEmit?: boolean): void;
+	/** Set host-owned clip gain used only to scale waveform rendering. */
+	setGain(gainDb: number): void;
 	/** Restore or clear the host-owned time selection or collapsed edit cursor. */
 	setTimeSelection(start: number | null, end: number | null): void;
 	/** Sets and enables the loop for a non-empty time selection. */

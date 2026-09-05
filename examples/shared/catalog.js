@@ -25,7 +25,7 @@ export const elementIDs = [
 
 const elementSummaries = {
 	"compost-audio": "Starts, suspends, and resumes Web Audio.",
-	"compost-audio-clip-editor": "Edits audio clip gain, ranges, and loops.",
+	"compost-audio-clip-editor": "Edits audio clip ranges and loops.",
 	"compost-midi": "Selects MIDI inputs and outputs.",
 	"compost-device-selector": "Edits audio and MIDI device settings.",
 	"compost-drawer": "Opens and resizes an edge drawer.",

@@ -22,7 +22,7 @@
             <div class="editor-demo-layout">
               <compost-audio-clip-editor label="Drum break" beats="16"
                 start="1" end="15" loop loop-start="4" loop-end="12"
-                time-signature="4/4" grid="1/16" playhead="6.25"
+                gain="-3" time-signature="4/4" grid="1/16" playhead="6.25"
                 style="height: 16em"></compost-audio-clip-editor>
               <div class="editor-demo-controls">
               <label>Grid <select data-grid>
@@ -44,6 +44,7 @@
               </div>
             </div>
             <div class="usage-notes">
+              <div><strong>Host state</strong><span>The host-supplied -3 dB clip gain scales the waveform. Gain controls, audio processing, persistence, and undo belong to the host.</span></div>
               <div><strong>Desktop</strong><span>Click the waveform for the edit cursor; drag it for a time selection. Command/Ctrl-wheel zooms at the pointer; Shift-wheel or a horizontal wheel pans. The lower-right readout shows the effective grid.</span></div>
               <div><strong>Mobile</strong><span>Tap the waveform for the edit cursor; drag to select. Two fingers pan or zoom. Marker targets are larger than their visible arrows. Drag an audio file over the waveform to replace it.</span></div>
             </div>

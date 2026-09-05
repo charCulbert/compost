@@ -46,8 +46,8 @@ straight through.
 
 Editors fire `<thing>-input` while you drag and `<thing>-change` when you let
 go: `envelope-input` / `envelope-change`, `loop-input` / `loop-change`,
-`range-input` / `range-change`, `gain-input` / `gain-change`, and
-`automation-input` / `automation-change`. Time selections use the same
+`range-input` / `range-change`, and `automation-input` / `automation-change`.
+Time selections use the same
 preview/commit shape as `time-select-input` / `time-select`. Both events in a
 pair carry the same payload, so you can preview the drag or ignore it until it commits.
 `notes-change` stands alone: the note editor commits each change as it
@@ -88,6 +88,9 @@ mode over your full-precision values, never a stored grid.
 audio decoding and peak generation remain host policy.
 `compost-audio-clip-editor` composes that waveform with clip metadata and
 editing, and emits one-shot `audio-file-drop` intent with the caller-owned file.
+Its `gain` attribute/property and silent `setGain(gainDb)` input scale the
+waveform display from host-owned clip gain; gain controls and persistence remain
+in the host UI.
 The note editor, audio clip editor, and timeline take a single
 `time-signature="N/D"` meter, with `D` equal to 1, 2, 4, 8 or 16. Model time
 remains quarter-note beats; the denominator only changes ruler counting and

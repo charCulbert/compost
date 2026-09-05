@@ -96,8 +96,6 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 			"range-change",
 			"loop-input",
 			"loop-change",
-			"gain-input",
-			"gain-change",
 			"time-select-input",
 			"time-select",
 			"audio-file-drop",
@@ -122,6 +120,15 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 				loopEnd: element.loopEnd,
 				gain: element.gain,
 			},
+			layout: [".frame", ".rulerwrap", ".gridwrap"].map((selector) => {
+				const bounds = element.shadowRoot
+					.querySelector(selector)
+					.getBoundingClientRect();
+				return { left: bounds.left, right: bounds.right };
+			}),
+			gainControls: element.shadowRoot.querySelectorAll(
+				".corner, .gain, compost-number-box",
+			).length,
 		};
 	});
 	expect(targets.range[0]).toBeGreaterThanOrEqual(30);
@@ -133,8 +140,13 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 		end: 15,
 		loopStart: 4,
 		loopEnd: 12,
-		gain: 0,
+		gain: -3,
 	});
+	expect(targets.gainControls).toBe(0);
+	for (const bounds of targets.layout.slice(1)) {
+		expect(bounds.left).toBeCloseTo(targets.layout[0].left + 1, 0);
+		expect(bounds.right).toBeCloseTo(targets.layout[0].right - 1, 0);
+	}
 
 	const rangeStart = editor.locator(".range-handle.start");
 	const rangeBox = await rangeStart.boundingBox();
@@ -214,24 +226,11 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 	await page.keyboard.press("Escape");
 	expect(await editor.evaluate((element) => element.timeSelection)).toBeNull();
 
-	const gain = await editor.evaluate((element) => {
-		const input = element.shadowRoot.querySelector('.gain input[type="range"]');
-		input.value = "-6";
-		input.dispatchEvent(new Event("input", { bubbles: true }));
+	await editor.evaluate((element) => {
 		element.setAttribute("playhead", "7");
-		input.dispatchEvent(new Event("change", { bubbles: true }));
 		element.disabled = true;
-		return {
-			value: element.gain,
-			attribute: element.getAttribute("gain"),
-			disabledIsReadonly: element.readonly,
-		};
 	});
-	expect(gain).toEqual({
-		value: -6,
-		attribute: "-6",
-		disabledIsReadonly: true,
-	});
+	expect(await editor.evaluate((element) => element.readonly)).toBe(true);
 	await editor.evaluate((element) => {
 		element.disabled = false;
 	});
@@ -377,8 +376,6 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 			"range-change",
 			"loop-input",
 			"loop-change",
-			"gain-input",
-			"gain-change",
 			"time-select-input",
 			"time-select",
 			"audio-file-drop",
@@ -388,7 +385,6 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 		["range-change", { start: 2, end: 15 }],
 	]);
 	expect(events).toContainEqual(["loop-change", { start: 6, end: 14 }]);
-	expect(events).toContainEqual(["gain-change", { gain: -6 }]);
 	expect(events).toContainEqual(["time-select", { start: 3, end: 3 }]);
 	expect(events).toContainEqual(["time-select", { start: 4, end: 6 }]);
 	expect(events).toContainEqual(["time-select", { start: null }]);
@@ -470,16 +466,25 @@ test("audio clip gain scales the waveform without changing source peaks", async 
 	const state = await editor.evaluate((element) => {
 		element.peaks = [{ min: -0.25, max: 0.5 }];
 		const waveform = element.shadowRoot.querySelector("compost-waveform");
+		const gainEvents = [];
+		for (const type of ["gain-input", "gain-change"])
+			element.addEventListener(type, (event) => gainEvents.push(event));
 		element.setGain(-6);
 		const attenuated = waveform.peaks[0];
-		element.setGain(6);
+		element.gain = 6;
 		return {
 			attenuated,
 			amplified: waveform.peaks[0],
 			source: element.peaks[0],
+			gain: element.gain,
+			attribute: element.getAttribute("gain"),
+			events: gainEvents.length,
 		};
 	});
 
+	expect(state.gain).toBe(6);
+	expect(state.attribute).toBe("6");
+	expect(state.events).toBe(0);
 	expect(state.source).toEqual({ min: -0.25, max: 0.5 });
 	expect(state.attenuated.min).toBeCloseTo(-0.1253, 4);
 	expect(state.attenuated.max).toBeCloseTo(0.2506, 4);
