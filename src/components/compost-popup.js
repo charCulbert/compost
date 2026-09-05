@@ -197,6 +197,11 @@ export class CompostPopup extends HTMLElement {
       </style>
       <div class="menu" part="menu" role="menu" popover="manual" tabindex="-1"></div>`;
 
+		this.fixedOriginProbe = document.createElement("span");
+		this.fixedOriginProbe.style.cssText =
+			"position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none";
+		this.root.append(this.fixedOriginProbe);
+
 		this.menu = /** @type {HTMLElement} */ (this.root.querySelector(".menu"));
 		this.menu.id = this.listID;
 		this.menu.addEventListener("pointerdown", (event) => {
@@ -404,6 +409,8 @@ export class CompostPopup extends HTMLElement {
 			document.addEventListener("keydown", this.handleDocumentKeyDown, true);
 			window.addEventListener("resize", this.position);
 			window.addEventListener("scroll", this.position, true);
+			window.visualViewport?.addEventListener("scroll", this.position);
+			window.visualViewport?.addEventListener("resize", this.position);
 		}
 		if (!this.hasAttribute("open")) this.setAttribute("open", "");
 		this.position();
@@ -456,6 +463,8 @@ export class CompostPopup extends HTMLElement {
 		document.removeEventListener("keydown", this.handleDocumentKeyDown, true);
 		window.removeEventListener("resize", this.position);
 		window.removeEventListener("scroll", this.position, true);
+		window.visualViewport?.removeEventListener("scroll", this.position);
+		window.visualViewport?.removeEventListener("resize", this.position);
 	}
 
 	/** Lays the menu out for the current anchor request and viewport. */
@@ -466,13 +475,21 @@ export class CompostPopup extends HTMLElement {
 		const viewportHeight = window.innerHeight;
 		const contentWidth = this.menu.scrollWidth;
 		const contentHeight = this.menu.scrollHeight;
-		const anchor =
+		let anchor =
 			request.anchor instanceof Element
 				? request.anchor.getBoundingClientRect()
 				: request.anchor instanceof DOMRect
 					? request.anchor
 					: null;
+		// Safari's client coordinates and fixed CSS coordinates can differ after zoom.
+		const origin = this.fixedOriginProbe.getBoundingClientRect();
 		if (anchor) {
+			anchor = new DOMRect(
+				anchor.left - origin.left,
+				anchor.top - origin.top,
+				anchor.width,
+				anchor.height,
+			);
 			const placement = popupPlacement({
 				trigger: anchor,
 				viewportWidth,
@@ -496,8 +513,8 @@ export class CompostPopup extends HTMLElement {
 			return;
 		}
 		const placement = pointPlacement({
-			x: Number(request.x) || 0,
-			y: Number(request.y) || 0,
+			x: (Number(request.x) || 0) - origin.left,
+			y: (Number(request.y) || 0) - origin.top,
 			viewportWidth,
 			viewportHeight,
 			contentWidth,

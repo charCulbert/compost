@@ -219,6 +219,15 @@ export class CompostAudio extends HTMLElement {
 		}
 
 		try {
+			if (
+				this.context?.state === "interrupted" &&
+				this.hasAttribute("restart-interrupted")
+			) {
+				const interrupted = this.context;
+				this.context = null;
+				// Do not await close: creation must stay within the user's activation.
+				void interrupted.close().catch(() => {});
+			}
 			const previousState = this.context?.state;
 			const wasResumable = Boolean(
 				previousState &&
@@ -234,9 +243,10 @@ export class CompostAudio extends HTMLElement {
 					this.context = new AudioContextConstructor();
 				}
 
-				this.context.addEventListener("statechange", () =>
-					this.handleStateChange(),
-				);
+				const context = this.context;
+				context.addEventListener("statechange", () => {
+					if (this.context === context) this.handleStateChange();
+				});
 			}
 
 			if (this.context.state !== "running" && this.context.state !== "closed") {

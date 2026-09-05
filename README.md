@@ -21,7 +21,8 @@ Panels: `compost-drawer`, `compost-window`, `compost-popup`.
 Devices: `compost-audio`, `compost-midi`, `compost-device-selector`,
 `compost-midi-monitor`, `compost-midi-mappings`.
 
-Utilities: `parameter-controller` (wires controls to your backend),
+Utilities: `touch-double-click` (touch double-click gestures),
+`parameter-controller` (wires controls to your backend),
 `parameter-scale` (linear/log/gain curves), `midi`, `midi-mapping`,
 `midi-mappings` and `midi-learn-ui` (message parsing, CC mapping, MIDI
 learn), `device-settings`, `envelope-model`, `piano-roll-model`,

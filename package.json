@@ -1,6 +1,6 @@
 {
 	"name": "compost",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"private": false,
 	"type": "module",
 	"description": "Web Components and utilities for audio app UIs.",
@@ -49,6 +49,7 @@
 		"./selection-region": "./src/selection-region.js",
 		"./time-grid": "./src/time-grid.js",
 		"./parameter-scale": "./src/parameter-scale.js",
+		"./touch-double-click": "./src/internal/touch-double-click.js",
 		"./utils": "./src/utils.js"
 	},
 	"files": [

@@ -134,6 +134,7 @@ export class CompostWindow extends HTMLElement {
 		this.drag = null;
 		/** @type {{pointerId: number, x: number, y: number, width: number, height: number}|null} */
 		this.resize = null;
+		this.layoutViewportWidth = window.innerWidth;
 		this.handleViewportResize = this.handleViewportResize.bind(this);
 
 		this.root = this.attachShadow({ mode: "open" });
@@ -339,6 +340,7 @@ export class CompostWindow extends HTMLElement {
 		this.setAttribute("role", "dialog");
 		this.readAttributes();
 		this.refresh();
+		this.layoutViewportWidth = window.innerWidth;
 		window.addEventListener("resize", this.handleViewportResize);
 		if (this.hasAttribute("open")) this.raise();
 	}
@@ -494,6 +496,15 @@ export class CompostWindow extends HTMLElement {
 	}
 
 	handleViewportResize() {
+		const widthChanged = this.layoutViewportWidth !== window.innerWidth;
+		this.layoutViewportWidth = window.innerWidth;
+		// Mobile browser chrome and keyboards change height without a layout rotation.
+		// Desktop height-only resizes must still bring windows back into view.
+		if (
+			!widthChanged &&
+			window.matchMedia("(hover: none) and (pointer: coarse)").matches
+		)
+			return;
 		if (
 			!this.open ||
 			this.hasAttribute("fullscreen") ||

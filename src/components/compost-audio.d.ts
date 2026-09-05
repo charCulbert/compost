@@ -17,6 +17,7 @@ export interface AudioEventDetail {
  * @attribute stop-aria-label - accessible name while running
  * @attribute modal - covers the viewport with a start-audio prompt while stopped
  * @attribute centered-while-off - centres the panel while stopped in modal mode
+ * @attribute restart-interrupted - replace an interrupted context on start; rebuild your graph on audio-started
  * @attribute latency-hint - AudioContext latency category or seconds
  */
 export class CompostAudio extends HTMLElement {
@@ -36,7 +37,7 @@ export class CompostAudio extends HTMLElement {
 	start(): Promise<AudioContext | null>;
 	/** Suspends the context, or closes and drops it when forced. */
 	stop(forceClose?: boolean): Promise<void>;
-	toggle(): Promise<AudioContext | null | void>;
+	toggle(): Promise<AudioContext | null | undefined>;
 	getContext(): AudioContext | null;
 }
 

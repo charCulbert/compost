@@ -242,6 +242,7 @@ test("an interrupted audio context resumes from the next user start gesture", as
 	const previousWindow = globalThis.window;
 	globalThis.window = { AudioContext: class AudioContext {} };
 	const audio = Object.create(CompostAudio.prototype);
+	audio.attributes = new Set();
 	const events = [];
 	let resumes = 0;
 	const context = {
