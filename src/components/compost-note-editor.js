@@ -146,6 +146,7 @@ export class CompostNoteEditor extends HTMLElement {
 		/** @type {Map<number, {x: number, y: number}>} */ this.pointers =
 			new Map();
 		/** @type {any} */ this.pinch = null;
+		this.touchNavigation = false;
 		this.longPress = createLongPress();
 		/** The last marquee's extent, kept so a duplicate can space itself by the
 		 * selected time. Pitch bounds mean a box; their absence means time only.
@@ -163,7 +164,9 @@ export class CompostNoteEditor extends HTMLElement {
 		this.handleWindowBlur = () => {
 			this.removeAttribute("data-velmod");
 			this.removeAttribute("data-copymod");
+			this.clearNavigation();
 		};
+		this.handleNavigationEnd = (event) => this.endNavigation(event);
 		this.refresh = this.refresh.bind(this);
 
 		this.root = this.attachShadow({ mode: "open" });
@@ -569,6 +572,8 @@ export class CompostNoteEditor extends HTMLElement {
 		window.addEventListener("keydown", this.handleModifierKey, true);
 		window.addEventListener("keyup", this.handleModifierKey, true);
 		window.addEventListener("blur", this.handleWindowBlur);
+		window.addEventListener("pointerup", this.handleNavigationEnd, true);
+		window.addEventListener("pointercancel", this.handleNavigationEnd, true);
 	}
 
 	disconnectedCallback() {
@@ -577,6 +582,9 @@ export class CompostNoteEditor extends HTMLElement {
 		window.removeEventListener("keydown", this.handleModifierKey, true);
 		window.removeEventListener("keyup", this.handleModifierKey, true);
 		window.removeEventListener("blur", this.handleWindowBlur);
+		window.removeEventListener("pointerup", this.handleNavigationEnd, true);
+		window.removeEventListener("pointercancel", this.handleNavigationEnd, true);
+		this.clearNavigation();
 	}
 
 	attributeChangedCallback() {
@@ -1042,7 +1050,8 @@ export class CompostNoteEditor extends HTMLElement {
 	startNavigation(event) {
 		if (event.pointerType !== "touch") return false;
 		this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-		if (this.pointers.size < 2) return false;
+		if (this.pointers.size < 2) return this.touchNavigation;
+		this.touchNavigation = true;
 		if (this.drag)
 			this.endPointer({
 				type: "pointercancel",
@@ -1060,8 +1069,8 @@ export class CompostNoteEditor extends HTMLElement {
 		if (event.pointerType !== "touch" || !this.pointers.has(event.pointerId))
 			return false;
 		this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-		if (!this.pinch) return false;
-		this.movePinch();
+		if (!this.touchNavigation) return false;
+		if (this.pinch) this.movePinch();
 		event.preventDefault();
 		event.stopPropagation();
 		return true;
@@ -1070,14 +1079,21 @@ export class CompostNoteEditor extends HTMLElement {
 	endNavigation(event) {
 		if (event.pointerType !== "touch" || !this.pointers.has(event.pointerId))
 			return false;
-		const navigating = Boolean(this.pinch);
+		const navigating = this.touchNavigation;
 		this.pointers.delete(event.pointerId);
-		if (this.pointers.size === 0) this.pinch = null;
+		this.pinch = null;
+		if (this.pointers.size === 0) this.touchNavigation = false;
 		if (navigating) {
 			event.preventDefault();
 			event.stopPropagation();
 		}
 		return navigating;
+	}
+
+	clearNavigation() {
+		this.pointers.clear();
+		this.pinch = null;
+		this.touchNavigation = false;
 	}
 
 	startPinch() {

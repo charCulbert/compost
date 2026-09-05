@@ -108,6 +108,9 @@ export class CompostAudioClipEditor extends HTMLElement {
 			new Map();
 		/** @type {{xDistance: number, pxPerBeat: number, beat: number}|null} */
 		this.pinch = null;
+		this.touchNavigation = false;
+		this.handleNavigationEnd = (event) => this.endNavigation(event);
+		this.handleNavigationBlur = () => this.clearNavigation();
 
 		this.root = this.attachShadow({ mode: "open" });
 		this.root.innerHTML = `
@@ -580,6 +583,9 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.readAttributes();
 		this.resizeObserver?.observe(this);
 		window.addEventListener("keydown", this.handleWindowKey, true);
+		window.addEventListener("pointerup", this.handleNavigationEnd, true);
+		window.addEventListener("pointercancel", this.handleNavigationEnd, true);
+		window.addEventListener("blur", this.handleNavigationBlur);
 		this.refresh();
 	}
 
@@ -587,6 +593,10 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.endWarpDrag(false);
 		this.resizeObserver?.disconnect();
 		window.removeEventListener("keydown", this.handleWindowKey, true);
+		window.removeEventListener("pointerup", this.handleNavigationEnd, true);
+		window.removeEventListener("pointercancel", this.handleNavigationEnd, true);
+		window.removeEventListener("blur", this.handleNavigationBlur);
+		this.clearNavigation();
 		if (this.drag) this.cancelMarkerDrag();
 		else this.stopMarkerDragPointerEvents();
 	}
@@ -1071,9 +1081,10 @@ export class CompostAudioClipEditor extends HTMLElement {
 	startNavigation(event) {
 		if (event.pointerType !== "touch") return false;
 		this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-		if (this.pointers.size < 2) return false;
+		if (this.pointers.size < 2) return this.touchNavigation;
+		this.touchNavigation = true;
 		if (this.drag) this.cancelMarkerDrag();
-		if (this.selectionDrag) this.cancelTimeSelectionDrag();
+		if (this.selectionDrag) this.cancelTimeSelectionDrag(true);
 		this.startPinch();
 		event.preventDefault();
 		event.stopPropagation();
@@ -1085,8 +1096,8 @@ export class CompostAudioClipEditor extends HTMLElement {
 		if (event.pointerType !== "touch" || !this.pointers.has(event.pointerId))
 			return false;
 		this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-		if (!this.pinch) return false;
-		this.movePinch();
+		if (!this.touchNavigation) return false;
+		if (this.pinch) this.movePinch();
 		event.preventDefault();
 		event.stopPropagation();
 		return true;
@@ -1096,14 +1107,21 @@ export class CompostAudioClipEditor extends HTMLElement {
 	endNavigation(event) {
 		if (event.pointerType !== "touch" || !this.pointers.has(event.pointerId))
 			return false;
-		const navigating = Boolean(this.pinch);
+		const navigating = this.touchNavigation;
 		this.pointers.delete(event.pointerId);
-		if (this.pointers.size === 0) this.pinch = null;
+		this.pinch = null;
+		if (this.pointers.size === 0) this.touchNavigation = false;
 		if (navigating) {
 			event.preventDefault();
 			event.stopPropagation();
 		}
 		return navigating;
+	}
+
+	clearNavigation() {
+		this.pointers.clear();
+		this.pinch = null;
+		this.touchNavigation = false;
 	}
 
 	startPinch() {
@@ -1219,12 +1237,13 @@ export class CompostAudioClipEditor extends HTMLElement {
 		if (next) this.emit("time-select", next);
 	}
 
-	cancelTimeSelectionDrag() {
+	/** @param {boolean} [retainCapture] */
+	cancelTimeSelectionDrag(retainCapture = false) {
 		const drag = this.selectionDrag;
 		if (!drag) return;
 		this.selectionDrag = null;
 		this.renderTimeSelection();
-		if (drag.target.hasPointerCapture?.(drag.pointerId))
+		if (!retainCapture && drag.target.hasPointerCapture?.(drag.pointerId))
 			drag.target.releasePointerCapture(drag.pointerId);
 	}
 
