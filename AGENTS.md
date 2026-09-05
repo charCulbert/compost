@@ -64,6 +64,11 @@ If rebase conflicts occur:
 - Never force push.
 
 
+## Npm
+
+Be sure to bump the version number on each push to github. Make sure that the numeric bump amount is right.
+Ask the user if you are not already certain what the version bump amount should be -- it should usually be very small.
+
 ## User Override
 
 If the user's instructions conflict with any rule in this document, ask for explicit confirmation before overriding. Only then execute their instructions.
