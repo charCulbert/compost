@@ -217,7 +217,7 @@ export class CompostWindow extends HTMLElement {
           justify-content: center;
           box-sizing: border-box;
           min-width: var(--compost-window-control-min, 0px);
-          min-height: var(--compost-window-control-min, 0px);
+          min-height: 0;
           width: 2em;
           height: 100%;
           padding: 0;
@@ -228,7 +228,7 @@ export class CompostWindow extends HTMLElement {
           font: inherit;
         }
 		.pin svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.35; }
-		.pin[aria-pressed="true"] { background: color-mix(in srgb, currentColor 13%, transparent); color: var(--compost-window-text); }
+		.pin[aria-pressed="true"] { color: var(--compost-window-text); }
         /* whatever a host slots into the bar is a target too, not just the close box */
         ::slotted([slot="controls"]) {
           min-height: var(--compost-window-control-min, 0px);
