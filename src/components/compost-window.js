@@ -1,7 +1,19 @@
 import { clamp, defineElement, numberAttr } from "../utils.js";
 
 let nextWindowID = 1;
-let topZIndex = 0;
+let nextStackOrder = 0;
+const connectedWindows = new Set();
+
+function refreshWindowStacking() {
+	const ordered = [...connectedWindows].sort(
+		(a, b) => a.stackOrder - b.stackOrder,
+	);
+	const normal = ordered.filter((window_) => !window_.alwaysOnTop);
+	const pinned = ordered.filter((window_) => window_.alwaysOnTop);
+	for (const [index, window_] of [...normal, ...pinned].entries()) {
+		window_.style.zIndex = String(901 + index);
+	}
+}
 
 /**
  * Where a window goes when asked to move: the whole frame stays inside the
@@ -118,6 +130,7 @@ export class CompostWindow extends HTMLElement {
 			"fullscreen",
 			"sheet",
 			"static",
+			"always-on-top",
 		];
 	}
 
@@ -125,6 +138,7 @@ export class CompostWindow extends HTMLElement {
 		super();
 
 		this.windowID = `compost-window-${nextWindowID++}`;
+		this.stackOrder = ++nextStackOrder;
 		this.minWidth = 200;
 		this.minHeight = 120;
 		this.maxWidth = Infinity;
@@ -196,7 +210,7 @@ export class CompostWindow extends HTMLElement {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        .close {
+        .pin, .close {
           flex: none;
           display: flex;
           align-items: center;
@@ -213,14 +227,16 @@ export class CompostWindow extends HTMLElement {
           cursor: pointer;
           font: inherit;
         }
+		.pin svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.35; }
+		.pin[aria-pressed="true"] { background: color-mix(in srgb, currentColor 13%, transparent); color: var(--compost-window-text); }
         /* whatever a host slots into the bar is a target too, not just the close box */
         ::slotted([slot="controls"]) {
           min-height: var(--compost-window-control-min, 0px);
           display: flex;
           align-items: center;
         }
-        .close:hover { background: color-mix(in srgb, currentColor 10%, transparent); color: var(--compost-window-close-hover-color); }
-        .close:focus-visible { outline: 2px solid var(--compost-window-focus); outline-offset: -2px; }
+        .pin:hover, .close:hover { background: color-mix(in srgb, currentColor 10%, transparent); color: var(--compost-window-close-hover-color); }
+        .pin:focus-visible, .close:focus-visible { outline: 2px solid var(--compost-window-focus); outline-offset: -2px; }
         .content {
           flex: 1 1 auto;
           min-width: 0;
@@ -288,6 +304,7 @@ export class CompostWindow extends HTMLElement {
       <header part="header">
         <slot name="title"><span class="title" part="title"></span></slot>
         <slot name="controls"></slot>
+		<button class="pin" part="pin" type="button" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 2.5h5M6.5 2.5v4l-2 2v1h7v-1l-2-2v-4M8 9.5v4"/></svg></button>
         <button class="close" part="close" type="button" aria-label="Close">&times;</button>
       </header>
       <div class="content" part="content"><slot></slot></div>
@@ -302,6 +319,9 @@ export class CompostWindow extends HTMLElement {
 		this.closeButton = /** @type {HTMLButtonElement} */ (
 			this.root.querySelector(".close")
 		);
+		this.pinButton = /** @type {HTMLButtonElement} */ (
+			this.root.querySelector(".pin")
+		);
 		this.content = /** @type {HTMLElement} */ (
 			this.root.querySelector(".content")
 		);
@@ -310,6 +330,18 @@ export class CompostWindow extends HTMLElement {
 		this.closeButton.addEventListener("click", (event) => {
 			event.stopPropagation();
 			this.requestClose("button");
+		});
+		this.pinButton.addEventListener("click", (event) => {
+			event.stopPropagation();
+			this.alwaysOnTop = !this.alwaysOnTop;
+			this.raise();
+			this.dispatchEvent(
+				new CustomEvent("window-pin", {
+					bubbles: true,
+					composed: true,
+					detail: { pinned: this.alwaysOnTop },
+				}),
+			);
 		});
 		this.header.addEventListener("pointerdown", (event) =>
 			this.beginDrag(event),
@@ -336,6 +368,7 @@ export class CompostWindow extends HTMLElement {
 	}
 
 	connectedCallback() {
+		connectedWindows.add(this);
 		if (!this.hasAttribute("tabindex")) this.tabIndex = -1;
 		this.setAttribute("role", "dialog");
 		this.readAttributes();
@@ -346,6 +379,8 @@ export class CompostWindow extends HTMLElement {
 	}
 
 	disconnectedCallback() {
+		connectedWindows.delete(this);
+		refreshWindowStacking();
 		window.removeEventListener("resize", this.handleViewportResize);
 	}
 
@@ -359,6 +394,7 @@ export class CompostWindow extends HTMLElement {
 				new CustomEvent("window-open", { bubbles: true, composed: true }),
 			);
 		}
+		if (name === "always-on-top") refreshWindowStacking();
 		this.refresh();
 	}
 
@@ -384,6 +420,14 @@ export class CompostWindow extends HTMLElement {
 
 	set heading(value) {
 		this.setAttribute("heading", String(value ?? ""));
+	}
+
+	get alwaysOnTop() {
+		return this.hasAttribute("always-on-top");
+	}
+
+	set alwaysOnTop(value) {
+		this.toggleAttribute("always-on-top", Boolean(value));
 	}
 
 	get resizable() {
@@ -518,8 +562,8 @@ export class CompostWindow extends HTMLElement {
 
 	/** Brings the window above every other compost-window. */
 	raise() {
-		topZIndex += 1;
-		this.style.zIndex = String(900 + topZIndex);
+		this.stackOrder = ++nextStackOrder;
+		refreshWindowStacking();
 		if (!this.hasAttribute("data-raised")) this.setAttribute("data-raised", "");
 		this.dispatchEvent(
 			new CustomEvent("window-focus", { bubbles: true, composed: true }),
@@ -549,6 +593,14 @@ export class CompostWindow extends HTMLElement {
 			"aria-label",
 			this.heading ? `Close ${this.heading}` : "Close",
 		);
+		this.pinButton.setAttribute("aria-pressed", String(this.alwaysOnTop));
+		this.pinButton.setAttribute(
+			"aria-label",
+			this.alwaysOnTop
+				? `Stop keeping ${this.heading || "window"} on top`
+				: `Keep ${this.heading || "window"} on top`,
+		);
+		this.pinButton.title = this.alwaysOnTop ? "Unpin window" : "Keep on top";
 		this.closeButton.title = "close";
 		if (!this.open) return;
 		const width = numberAttr(this, "width", NaN);
@@ -594,6 +646,7 @@ export class CompostWindow extends HTMLElement {
 						node instanceof Element &&
 						node !== this.header &&
 						(node === this.closeButton ||
+							node === this.pinButton ||
 							node.closest?.('[slot="controls"]') ||
 							(node instanceof HTMLElement &&
 								node.tagName.includes("-") &&

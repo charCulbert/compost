@@ -16,6 +16,11 @@ export interface WindowCloseDetail {
 	reason: string;
 }
 
+/** The detail on `window-pin`. */
+export interface WindowPinDetail {
+	pinned: boolean;
+}
+
 /** Where a window goes when asked to move: the whole frame stays inside the viewport. */
 export function boundedPosition(request: {
 	x: number;
@@ -44,7 +49,7 @@ export function constrainedSize(request: {
  * from a corner grip, never allowed past the viewport's edges. `width` and
  * `height` name the content size; the frame adds its own chrome. Emits
  * `window-open`, `window-close` (cancelable), `window-move`,
- * `window-resize` and `window-focus` CustomEvents.
+ * `window-resize`, `window-focus` and `window-pin` CustomEvents.
  *
  * @attribute open - reflected open state
  * @attribute heading - visible title-bar text
@@ -61,6 +66,7 @@ export function constrainedSize(request: {
  * @attribute fullscreen - fills the viewport
  * @attribute sheet - bottom-sheet presentation
  * @attribute static - ignores drag and resize gestures
+ * @attribute always-on-top - keeps this window above unpinned windows
  */
 export class CompostWindow extends HTMLElement {
 	minWidth: number;
@@ -73,6 +79,8 @@ export class CompostWindow extends HTMLElement {
 	set open(value: boolean);
 	get heading(): string;
 	set heading(value: string);
+	get alwaysOnTop(): boolean;
+	set alwaysOnTop(value: boolean);
 	get resizable(): "both" | "horizontal" | "vertical" | "none";
 
 	/** The content box's size, in CSS pixels. */

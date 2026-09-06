@@ -35,6 +35,7 @@ const EVENT_TYPES = [
 	"window-move",
 	"window-resize",
 	"window-focus",
+	"window-pin",
 	"popup-open",
 	"popup-close",
 	"popup-select",

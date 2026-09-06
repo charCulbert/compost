@@ -7680,6 +7680,36 @@ test("window stays in the viewport, resizes in bounds, and asks before closing",
 	const window_ = page.locator('compost-window[data-option-target="window"]');
 	await expect(window_).toHaveAttribute("open", "");
 	await expect(window_).toHaveAttribute("role", "dialog");
+	await window_.getByRole("button", { name: "Keep Plug-in on top" }).click();
+	await expect(window_).toHaveAttribute("always-on-top", "");
+	const otherWindow = await page.evaluate(() => {
+		const other = document.createElement("compost-window");
+		other.heading = "Other";
+		other.open = true;
+		document.body.append(other);
+		other.moveTo(500, 300);
+		other.raise();
+		return other.style.zIndex;
+	});
+	expect(
+		Number(await window_.evaluate((element) => element.style.zIndex)),
+	).toBeGreaterThan(Number(otherWindow));
+	await page
+		.locator('compost-window[heading="Other"]')
+		.evaluate((element) => element.raise());
+	expect(
+		Number(await window_.evaluate((element) => element.style.zIndex)),
+	).toBeGreaterThan(
+		Number(
+			await page
+				.locator('compost-window[heading="Other"]')
+				.evaluate((element) => element.style.zIndex),
+		),
+	);
+	await window_
+		.getByRole("button", { name: "Stop keeping Plug-in on top" })
+		.click();
+	await expect(window_).not.toHaveAttribute("always-on-top", "");
 
 	const header = await window_.locator("header").boundingBox();
 	await page.mouse.move(header.x + 40, header.y + 8);
