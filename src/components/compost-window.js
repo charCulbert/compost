@@ -293,8 +293,13 @@ export class CompostWindow extends HTMLElement {
         /* the bar clears the notch when the frame owns an edge of the screen */
         :host([fullscreen]) header, :host([sheet]) header {
           height: calc(var(--compost-window-header-height) + env(safe-area-inset-top, 0px));
+          min-height: var(--compost-window-control-min, 0px);
           padding-top: env(safe-area-inset-top, 0px);
         }
+		:host([fullscreen]) .pin, :host([fullscreen]) .close,
+		:host([sheet]) .pin, :host([sheet]) .close {
+			min-height: var(--compost-window-control-min, 0px);
+		}
         :host([sheet]) header {
           height: var(--compost-window-header-height);
           padding-top: 0;
