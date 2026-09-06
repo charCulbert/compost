@@ -33,13 +33,13 @@
 
       await elementDemo('compost-waveform', { output: false });
       const waveform = document.querySelector('compost-waveform');
-      waveform.peaks = Array.from({ length: 1200 }, (_, index) => {
+      waveform.peaks = [Array.from({ length: 1200 }, (_, index) => {
         const time = index / 1200;
         const pulse = Math.exp(-((time * 8) % 1) * 5);
         const body = Math.sin(index * .071) * .38 + Math.sin(index * .019) * .22;
         const level = Math.min(1, .1 + pulse * .65 + Math.sin(time * Math.PI) * .25);
         return { min: Math.min(0, body - level * .68), max: Math.max(0, body + level * .68) };
-      });
+      })];
       document.querySelector('[data-height]').addEventListener('input', (event) => {
         waveform.style.height = `${event.target.value}px`;
       });
@@ -53,19 +53,17 @@
           const buffer = await context.decodeAudioData(await file.arrayBuffer());
           const bucketCount = Math.min(buffer.length, 4000, Math.max(256, Math.ceil(buffer.duration * 120)));
           const channels = Array.from({ length: buffer.numberOfChannels }, (_, channel) => buffer.getChannelData(channel));
-          waveform.peaks = Array.from({ length: bucketCount }, (_, bucket) => {
+          waveform.peaks = channels.map((samples) => Array.from({ length: bucketCount }, (_, bucket) => {
             const start = Math.floor(bucket * buffer.length / bucketCount);
             const end = Math.max(start + 1, Math.floor((bucket + 1) * buffer.length / bucketCount));
             let min = 1;
             let max = -1;
-            for (const samples of channels) {
-              for (let index = start; index < end; index += 1) {
-                min = Math.min(min, samples[index]);
-                max = Math.max(max, samples[index]);
-              }
+            for (let index = start; index < end; index += 1) {
+              min = Math.min(min, samples[index]);
+              max = Math.max(max, samples[index]);
             }
             return { min, max };
-          });
+          }));
           waveform.setAttribute('label', `${file.name} waveform`);
           status.textContent = `${file.name}: the demo wrapper decoded ${buffer.numberOfChannels} channel${buffer.numberOfChannels === 1 ? '' : 's'} and prepared ${bucketCount} min/max buckets. The component only draws them.`;
         } catch (error) {

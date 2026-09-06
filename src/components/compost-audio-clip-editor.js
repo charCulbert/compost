@@ -102,7 +102,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		/** @type {'grid'|'off'} */ this.snapMode = "grid";
 		this.offset = 0;
 		this.zoomPxPerBeat = 0;
-		/** @type {{min: number, max: number}[]} */ this._peaks = [];
+		/** @type {{min: number, max: number}[][]} */ this._peaks = [];
 		/** @type {{start: number, end: number}|null} */ this._timeSelection = null;
 		/** @type {{pointerId: number, kind: string, startX: number, pxPerBeat: number, rangeStart: number, rangeEnd: number, loopStart: number, loopEnd: number, target: HTMLElement}|null} */
 		this.drag = null;
@@ -602,11 +602,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 		this.grid = this.getAttribute("grid")?.trim() || "1/16";
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.adaptiveGridDensity = clamp(
-			numberAttr(
-				this,
-				"adaptive-grid-density",
-				DEFAULT_ADAPTIVE_GRID_DENSITY,
-			),
+			numberAttr(this, "adaptive-grid-density", DEFAULT_ADAPTIVE_GRID_DENSITY),
 			MIN_ADAPTIVE_GRID_DENSITY,
 			MAX_ADAPTIVE_GRID_DENSITY,
 		);
@@ -825,7 +821,7 @@ export class CompostAudioClipEditor extends HTMLElement {
 	}
 
 	get peaks() {
-		return this._peaks.map((peak) => ({ ...peak }));
+		return this._peaks.map((channel) => channel.map((peak) => ({ ...peak })));
 	}
 
 	set peaks(value) {
@@ -837,10 +833,12 @@ export class CompostAudioClipEditor extends HTMLElement {
 	renderWaveformGain() {
 		const amplitude =
 			this._gainDb <= MIN_GAIN_DB ? 0 : 10 ** (this._gainDb / 20);
-		this.waveform.peaks = this._peaks.map(({ min, max }) => ({
-			min: min * amplitude,
-			max: max * amplitude,
-		}));
+		this.waveform.peaks = this._peaks.map((channel) =>
+			channel.map(({ min, max }) => ({
+				min: min * amplitude,
+				max: max * amplitude,
+			})),
+		);
 	}
 
 	get timeSelection() {

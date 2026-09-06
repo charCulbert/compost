@@ -89,9 +89,11 @@ export class CompostAudioClipEditor extends HTMLElement {
 
 	get gain(): number;
 	set gain(value: number);
-	/** Copied peak buckets. Setting updates the composed waveform. */
-	get peaks(): WaveformPeak[];
-	set peaks(value: WaveformPeak[]);
+	/** Copied channel envelopes: [mono] or [left, right], with the same time span.
+	 * Uses the waveform's peak contract. Gain scales every lane equally;
+	 * zoom, selection and playback markers span all channels. */
+	get peaks(): WaveformPeak[][];
+	set peaks(value: WaveformPeak[][]);
 	/** Copied, unique-ID anchors strictly inside (0, beats), sorted by beat.
 	 * Peaks must already represent the warped clip-beat domain; no DSP occurs here.
 	 * Replacing anchors cancels an active gesture. */

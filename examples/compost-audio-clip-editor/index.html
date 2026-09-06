@@ -18,13 +18,14 @@
       <section class="plain">
         <div class="row">
           <div class="editor-demo">
-            <span>Drum break · 4/4 · four-bar clip</span>
+            <span>seq1 · 10-second stereo excerpt · illustrative four-bar grid</span>
             <div class="editor-demo-layout">
-              <compost-audio-clip-editor label="Drum break" beats="16"
+              <compost-audio-clip-editor label="seq1 excerpt" beats="16"
                 start="1" end="15" loop loop-start="4" loop-end="12"
                 gain="-3" time-signature="4/4" grid="1/16" playhead="6.25"
                 style="height: 16em"></compost-audio-clip-editor>
               <div class="editor-demo-controls">
+              <label>Channels <select data-channels><option value="2">Stereo</option><option value="1">Mono</option></select></label>
               <label>Grid <select data-grid>
                 <option value="off">Off</option><option value="bar">1 bar</option>
                 <option value="1/4">1/4</option><option value="1/4T">1/4 triplet</option>
@@ -43,6 +44,7 @@
               <button type="button" data-selection>Show time selection</button>
               </div>
             </div>
+            <small data-status>Loading seq1 excerpt…</small>
             <div class="usage-notes">
               <div><strong>Host state</strong><span>The host-supplied -3 dB clip gain scales the waveform. Gain controls, audio processing, persistence, and undo belong to the host.</span></div>
               <div><strong>Desktop</strong><span>Click the waveform for the edit cursor; drag it for a time selection. Command/Ctrl-wheel zooms at the pointer; Shift-wheel or a horizontal wheel pans. The lower-right readout shows the effective grid.</span></div>
@@ -58,12 +60,10 @@
 
       const { s } = await elementDemo('compost-audio-clip-editor');
       const editor = s.querySelector('compost-audio-clip-editor');
-      editor.peaks = Array.from({ length: 1600 }, (_, index) => {
-        const time = index / 1600;
-        const hit = Math.exp(-((time * 16) % 1) * 6);
-        const accent = index % 400 < 80 ? 1 : .62;
-        const level = Math.min(1, .07 + hit * accent + Math.abs(Math.sin(index * .027)) * .12);
-        return { min: -level * (.7 + Math.sin(index * .13) * .25), max: level };
+      let channels = [];
+      let mono = [];
+      s.querySelector('[data-channels]').addEventListener('change', (event) => {
+        editor.peaks = event.target.value === '1' ? [mono] : channels;
       });
       s.querySelector('[data-grid]').addEventListener('change', (event) => {
         if (event.target.value === 'off') editor.setAttribute('grid-lines', 'off');
@@ -109,6 +109,32 @@
         requestAnimationFrame(animate);
       };
       requestAnimationFrame(animate);
+
+      try {
+        const response = await fetch('./seq1-excerpt.wav');
+        if (!response.ok) throw new Error(`Audio request failed (${response.status})`);
+        const context = new OfflineAudioContext(2, 1, 48000);
+        const buffer = await context.decodeAudioData(await response.arrayBuffer());
+        const samples = Array.from({ length: buffer.numberOfChannels }, (_, channel) => buffer.getChannelData(channel));
+        const mixed = Float32Array.from(samples[0], (_, index) => (samples[0][index] + samples[1][index]) / 2);
+        const envelopes = [...samples, mixed].map((channel) => Array.from({ length: 1600 }, (_, bucket) => {
+          const start = Math.floor(bucket * channel.length / 1600);
+          const end = Math.floor((bucket + 1) * channel.length / 1600);
+          let min = 1;
+          let max = -1;
+          for (let index = start; index < end; index += 1) {
+            min = Math.min(min, channel[index]);
+            max = Math.max(max, channel[index]);
+          }
+          return { min, max };
+        }));
+        channels = envelopes.slice(0, 2);
+        mono = envelopes[2];
+        editor.peaks = s.querySelector('[data-channels]').value === '1' ? [mono] : channels;
+        s.querySelector('[data-status]').textContent = 'seq1 by Charlie Culbert · first 10 seconds · stereo. Mono averages left and right.';
+      } catch (error) {
+        s.querySelector('[data-status]').textContent = `Could not load excerpt: ${error.message}`;
+      }
     </script>
   </body>
 </html>

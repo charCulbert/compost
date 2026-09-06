@@ -18,9 +18,12 @@ export interface WaveformView {
  * @attribute label - accessible name used when aria-label is absent
  */
 export class CompostWaveform extends HTMLElement {
-	/** Copies of the currently displayed peak buckets. */
-	get peaks(): WaveformPeak[];
-	set peaks(value: WaveformPeak[]);
+	/** Copied channel envelopes: [mono] or [left, right], stacked in source order.
+	 * Each channel covers the same time span, with uniformly spaced buckets.
+	 * All lanes share the -1 to 1 amplitude scale. Invalid buckets become silence;
+	 * empty channels retain their lane. [] clears the display. */
+	get peaks(): WaveformPeak[][];
+	set peaks(value: WaveformPeak[][]);
 	get view(): WaveformView;
 	/** Displays a normalized slice without changing the peak envelope. */
 	setView(start: number, end: number): void;

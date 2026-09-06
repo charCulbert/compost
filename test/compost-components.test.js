@@ -506,14 +506,14 @@ test("audio editor waveform gain accepts the full host range", () => {
 	const editor = Object.create(CompostAudioClipEditor.prototype);
 	let gain = null;
 	editor._gainDb = -90;
-	editor._peaks = [{ min: -0.5, max: 0.5 }];
+	editor._peaks = [[{ min: -0.5, max: 0.5 }]];
 	editor.waveform = { peaks: [] };
 	editor.setAttribute = (name, value) => {
 		if (name === "gain") gain = value;
 	};
 
 	editor.renderWaveformGain();
-	assert.ok(editor.waveform.peaks.every((peak) => peak.min === 0 && peak.max === 0));
+	assert.ok(editor.waveform.peaks[0].every((peak) => peak.min === 0 && peak.max === 0));
 	editor.gain = 30;
 	assert.equal(gain, "30");
 	editor.setGain(48);

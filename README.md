@@ -85,8 +85,11 @@ Events name what the user asked for, never which input did it. Elements show
 the state you give them; saving, undo, menus and what happens next are yours.
 Editors take IDs you own for the things they create, and snapping is a view
 mode over your full-precision values, never a stored grid.
-`compost-waveform` only draws caller-prepared `{ min, max }` peak buckets;
-audio decoding and peak generation remain host policy.
+`compost-waveform` draws caller-prepared `{ min, max }` peak buckets grouped
+by channel: `peaks = [monoPeaks]` or `peaks = [leftPeaks, rightPeaks]`.
+This replaces the flat peak array. Channels cover the same time span and stack
+in source order, with left above right for stereo and a shared amplitude scale.
+Audio decoding and peak generation remain host policy.
 `compost-audio-clip-editor` composes that waveform with clip metadata and
 editing, and emits one-shot `audio-file-drop` intent with the caller-owned file.
 Its `gain` attribute/property and silent `setGain(gainDb)` input scale the

@@ -2,6 +2,119 @@ import { expect, test } from "@playwright/test";
 
 const localBaseURL = process.env.COMPOST_TEST_BASE_URL ?? "";
 
+test("channel lanes share amplitude and time scales through zoom and replacement", async ({
+	page,
+}) => {
+	await page.goto(`${localBaseURL}/examples/compost-waveform/`);
+	const state = await page.locator("compost-waveform").evaluate((element) => {
+		element.style.height = "202px";
+		const loud = { min: -0.8, max: 0.8 };
+		const quiet = { min: -0.2, max: 0.2 };
+		const silent = { min: 0, max: 0 };
+		element.peaks = [
+			[loud, silent],
+			[quiet, silent],
+		];
+		const copy = element.peaks;
+		copy[0][0].max = 0;
+		const canvas = element.shadowRoot.querySelector("canvas");
+		const context = canvas.getContext("2d");
+		const rows = (fraction) => {
+			const data = context.getImageData(
+				Math.floor(canvas.width * fraction),
+				0,
+				1,
+				canvas.height,
+			).data;
+			return Array.from({ length: canvas.height }, (_, y) => y).filter(
+				(y) => data[y * 4 + 3] > 0,
+			);
+		};
+		const stereo = rows(0.25);
+		const top = stereo.filter((y) => y < canvas.height / 2);
+		const bottom = stereo.filter((y) => y >= canvas.height / 2);
+		const centres = [
+			(top[0] + top.at(-1)) / canvas.height,
+			(bottom[0] + bottom.at(-1)) / canvas.height,
+		];
+		element.setView(0.5, 1);
+		const zoomed = rows(0.25).length;
+		element.setView(0, 1);
+		element.peaks = [[], [quiet, silent]];
+		const emptyLeft = rows(0.25).every((y) => y >= canvas.height / 2);
+		element.peaks = [[loud, silent]];
+		const mono = rows(0.25);
+		const monoCentre = (mono[0] + mono.at(-1)) / canvas.height;
+		element.peaks = [];
+		return {
+			ratio: top.length / bottom.length,
+			centres,
+			zoomed,
+			emptyLeft,
+			monoCentre,
+			cleared: rows(0.25).length,
+		};
+	});
+	expect(state.ratio).toBeGreaterThan(3.5);
+	expect(state.ratio).toBeLessThan(4.5);
+	expect(state.centres[0]).toBeCloseTo(0.5, 1);
+	expect(state.centres[1]).toBeCloseTo(1.5, 1);
+	expect(state.zoomed).toBeLessThanOrEqual(4);
+	expect(state.emptyLeft).toBe(true);
+	expect(state.monoCentre).toBeCloseTo(1, 1);
+	expect(state.cleared).toBe(0);
+});
+
+test("stereo editor shares gain and overlays and switches back to mono", async ({
+	page,
+}) => {
+	await page.goto(`${localBaseURL}/examples/compost-audio-clip-editor/`);
+	await expect(page.locator("[data-status]")).toContainText(
+		"first 10 seconds · stereo",
+	);
+	const editor = page.locator("compost-audio-clip-editor");
+	const excerpt = await editor.evaluate((element) => element.peaks);
+	expect(excerpt.map((channel) => channel.length)).toEqual([1600, 1600]);
+	expect(excerpt[0]).not.toEqual(excerpt[1]);
+	await expect(editor.locator("compost-waveform")).toHaveAttribute(
+		"aria-description",
+		/Stereo waveform; left above right/,
+	);
+	const state = await editor.evaluate((element) => {
+		const input = [[{ min: -0.8, max: 0.8 }], [{ min: -0.2, max: 0.2 }]];
+		element.peaks = input;
+		input[1][0].max = 1;
+		element.setGain(-6);
+		element.setTimeSelection(2, 4);
+		const waveform = element.shadowRoot.querySelector("compost-waveform");
+		const peaks = waveform.peaks;
+		const source = element.peaks;
+		source[0][0].max = 0;
+		const height = element.shadowRoot
+			.querySelector(".gridwrap")
+			.getBoundingClientRect().height;
+		const overlays = [".time-selection", ".playhead", ".loop-start-line"].map(
+			(selector) =>
+				element.shadowRoot.querySelector(selector).getBoundingClientRect()
+					.height,
+		);
+		return { peaks, source: element.peaks, height, overlays };
+	});
+	expect(state.peaks[0][0].max).toBeCloseTo(0.8 * 10 ** (-6 / 20));
+	expect(state.peaks[1][0].max).toBeCloseTo(0.2 * 10 ** (-6 / 20));
+	expect(state.source).toEqual([
+		[{ min: -0.8, max: 0.8 }],
+		[{ min: -0.2, max: 0.2 }],
+	]);
+	for (const height of state.overlays) expect(height).toBe(state.height);
+	await page.locator("[data-channels]").selectOption("1");
+	await expect(editor.locator("compost-waveform")).toHaveAttribute(
+		"aria-description",
+		/Mono waveform/,
+	);
+	expect(await editor.evaluate((element) => element.peaks.length)).toBe(1);
+});
+
 test("waveform owns a clamped copy of peaks and repaints at rendered size", async ({
 	page,
 }) => {
@@ -15,7 +128,7 @@ test("waveform owns a clamped copy of peaks and repaints at rendered size", asyn
 			{ min: 0.8, max: -0.4 },
 			{ min: Number.NaN, max: 1 },
 		];
-		element.peaks = input;
+		element.peaks = [input];
 		input[0].min = 0;
 		element.setAttribute("label", "Updated waveform");
 		element.style.height = "72px";
@@ -36,34 +149,37 @@ test("waveform owns a clamped copy of peaks and repaints at rendered size", asyn
 	});
 
 	expect(state.peaks).toEqual([
-		{ min: -1, max: 1 },
-		{ min: -0.4, max: 0.8 },
+		[
+			{ min: -1, max: 1 },
+			{ min: -0.4, max: 0.8 },
+			{ min: 0, max: 0 },
+		],
 	]);
 	expect(state.view).toEqual({ start: 0.25, end: 0.75 });
 	expect(state.canvas[0]).toBeGreaterThanOrEqual(Math.round(state.css[0]));
 	expect(state.canvas[1]).toBeGreaterThanOrEqual(Math.round(state.css[1]));
 	expect(state.label).toBe("Updated waveform");
-	expect(state.description).toContain("2 peak buckets");
+	expect(state.description).toContain("3 peak buckets");
 
 	const sampleRate = 8000;
 	const sampleCount = 800;
-	const audio = Buffer.alloc(44 + sampleCount * 2);
+	const audio = Buffer.alloc(44 + sampleCount * 4);
 	audio.write("RIFF", 0);
 	audio.writeUInt32LE(audio.length - 8, 4);
 	audio.write("WAVEfmt ", 8);
 	audio.writeUInt32LE(16, 16);
 	audio.writeUInt16LE(1, 20);
-	audio.writeUInt16LE(1, 22);
+	audio.writeUInt16LE(2, 22);
 	audio.writeUInt32LE(sampleRate, 24);
-	audio.writeUInt32LE(sampleRate * 2, 28);
-	audio.writeUInt16LE(2, 32);
+	audio.writeUInt32LE(sampleRate * 4, 28);
+	audio.writeUInt16LE(4, 32);
 	audio.writeUInt16LE(16, 34);
 	audio.write("data", 36);
-	audio.writeUInt32LE(sampleCount * 2, 40);
+	audio.writeUInt32LE(sampleCount * 4, 40);
 	for (let index = 0; index < sampleCount; index += 1)
 		audio.writeInt16LE(
 			Math.round(Math.sin((index * Math.PI * 2 * 440) / sampleRate) * 12000),
-			44 + index * 2,
+			44 + index * 4,
 		);
 	await page.locator("[data-file]").setInputFiles({
 		name: "tone.wav",
@@ -71,14 +187,25 @@ test("waveform owns a clamped copy of peaks and repaints at rendered size", asyn
 		buffer: audio,
 	});
 	await expect(page.locator("[data-status]")).toContainText(
-		"the demo wrapper decoded 1 channel",
+		"the demo wrapper decoded 2 channels",
 	);
 	expect(
 		await waveform.evaluate((element) => ({
 			label: element.getAttribute("aria-label"),
-			peaks: element.peaks.length,
+			peaks: element.peaks[0].length,
+			channels: element.peaks.length,
+			leftHasSignal: element.peaks[0].some((peak) => peak.max > 0.1),
+			rightIsSilent: element.peaks[1].every(
+				(peak) => peak.min === 0 && peak.max === 0,
+			),
 		})),
-	).toEqual({ label: "tone.wav waveform", peaks: 256 });
+	).toEqual({
+		label: "tone.wav waveform",
+		peaks: 256,
+		channels: 2,
+		leftHasSignal: true,
+		rightIsSilent: true,
+	});
 });
 
 test("audio clip editor composes the waveform and edits bounded clip metadata", async ({
@@ -464,18 +591,18 @@ test("audio clip gain scales the waveform without changing source peaks", async 
 	await page.goto(`${localBaseURL}/examples/compost-audio-clip-editor/`);
 	const editor = page.locator("compost-audio-clip-editor");
 	const state = await editor.evaluate((element) => {
-		element.peaks = [{ min: -0.25, max: 0.5 }];
+		element.peaks = [[{ min: -0.25, max: 0.5 }]];
 		const waveform = element.shadowRoot.querySelector("compost-waveform");
 		const gainEvents = [];
 		for (const type of ["gain-input", "gain-change"])
 			element.addEventListener(type, (event) => gainEvents.push(event));
 		element.setGain(-6);
-		const attenuated = waveform.peaks[0];
+		const attenuated = waveform.peaks[0][0];
 		element.gain = 6;
 		return {
 			attenuated,
-			amplified: waveform.peaks[0],
-			source: element.peaks[0],
+			amplified: waveform.peaks[0][0],
+			source: element.peaks[0][0],
 			gain: element.gain,
 			attribute: element.getAttribute("gain"),
 			events: gainEvents.length,
@@ -521,8 +648,8 @@ test("note editor playback markers expose the same keyboard semantics", async ({
 	await expect(editor).toHaveAttribute("start", "2.75");
 	await expect(rangeStart).toHaveAttribute("aria-valuenow", "2.75");
 	expect(await editor.evaluate((element) => element.testMarkerEvents)).toEqual([
-		["range-input", { start: 2.75, end: 9 }],
-		["range-change", { start: 2.75, end: 9 }],
+		["range-input", { start: 2.75, end: 9, beats: 12 }],
+		["range-change", { start: 2.75, end: 9, beats: 12 }],
 	]);
 });
 

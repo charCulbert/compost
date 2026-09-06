@@ -13,7 +13,7 @@ export class CompostWaveform extends HTMLElement {
 
 	constructor() {
 		super();
-		/** @type {WaveformPeak[]} */
+		/** @type {WaveformPeak[][]} */
 		this._peaks = [];
 		this._viewStart = 0;
 		this._viewEnd = 1;
@@ -89,27 +89,28 @@ export class CompostWaveform extends HTMLElement {
 
 	/** Copies the peak envelope so caller mutation cannot change the display. */
 	get peaks() {
-		return this._peaks.map((peak) => ({ ...peak }));
+		return this._peaks.map((channel) => channel.map((peak) => ({ ...peak })));
 	}
 
 	set peaks(value) {
 		this._peaks = Array.isArray(value)
-			? value
-					.filter(
-						(peak) =>
-							peak &&
-							typeof peak === "object" &&
-							Number.isFinite(Number(peak.min)) &&
-							Number.isFinite(Number(peak.max)),
-					)
-					.map((peak) => {
+			? value.map((channel) =>
+					(Array.isArray(channel) ? channel : []).map((peak) => {
+						// Keep bucket positions aligned across channels, even for invalid input.
+						if (
+							!peak ||
+							!Number.isFinite(Number(peak.min)) ||
+							!Number.isFinite(Number(peak.max))
+						)
+							return { min: 0, max: 0 };
 						const minimum = clamp(Number(peak.min), -1, 1);
 						const maximum = clamp(Number(peak.max), -1, 1);
 						return {
 							min: Math.min(minimum, maximum),
 							max: Math.max(minimum, maximum),
 						};
-					})
+					}),
+				)
 			: [];
 		this.refreshAccessibility();
 		this.paint();
@@ -146,8 +147,15 @@ export class CompostWaveform extends HTMLElement {
 		}
 		const current = this.getAttribute("aria-description");
 		if (current && current !== this.generatedAriaDescription) return;
-		const description = this._peaks.length
-			? `Audio waveform overview from ${this._peaks.length} peak buckets.`
+		const count = this._peaks.length;
+		const layout =
+			count === 1
+				? "Mono waveform."
+				: count === 2
+					? "Stereo waveform; left above right."
+					: `${count}-channel waveform; channels stacked in source order.`;
+		const description = count
+			? `${layout} ${this._peaks.map((channel) => channel.length).join(", ")} peak buckets per channel; shared amplitude scale -1 to 1.`
 			: "Empty audio waveform overview.";
 		this.generatedAriaDescription = description;
 		this.setAttribute("aria-description", description);
@@ -171,33 +179,37 @@ export class CompostWaveform extends HTMLElement {
 		context.clearRect(0, 0, width, height);
 		if (!this._peaks.length) return;
 		context.fillStyle = this.color();
-		const middle = height / 2;
-		const scaleY = Math.max(0, middle - 3 * ratio);
-		const viewStart = this._viewStart * this._peaks.length;
-		const viewLength = (this._viewEnd - this._viewStart) * this._peaks.length;
-		for (let x = 0; x < width; x += 1) {
-			const start = Math.min(
-				this._peaks.length - 1,
-				Math.floor(viewStart + (x * viewLength) / width),
-			);
-			const end = Math.max(
-				start + 1,
-				Math.ceil(viewStart + ((x + 1) * viewLength) / width),
-			);
-			let minimum = Infinity;
-			let maximum = -Infinity;
-			for (
-				let index = start;
-				index < end && index < this._peaks.length;
-				index += 1
-			) {
-				minimum = Math.min(minimum, this._peaks[index].min);
-				maximum = Math.max(maximum, this._peaks[index].max);
+		const laneHeight = height / this._peaks.length;
+		const scaleY = Math.max(0, laneHeight / 2 - 3 * ratio);
+		for (const [channelIndex, peaks] of this._peaks.entries()) {
+			if (!peaks.length) continue;
+			const middle = (channelIndex + 0.5) * laneHeight;
+			const viewStart = this._viewStart * peaks.length;
+			const viewLength = (this._viewEnd - this._viewStart) * peaks.length;
+			for (let x = 0; x < width; x += 1) {
+				const start = Math.min(
+					peaks.length - 1,
+					Math.floor(viewStart + (x * viewLength) / width),
+				);
+				const end = Math.max(
+					start + 1,
+					Math.ceil(viewStart + ((x + 1) * viewLength) / width),
+				);
+				let minimum = Infinity;
+				let maximum = -Infinity;
+				for (
+					let index = start;
+					index < end && index < peaks.length;
+					index += 1
+				) {
+					minimum = Math.min(minimum, peaks[index].min);
+					maximum = Math.max(maximum, peaks[index].max);
+				}
+				if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) continue;
+				const top = middle - maximum * scaleY;
+				const bottom = middle - minimum * scaleY;
+				context.fillRect(x, top, 1, Math.max(1, bottom - top));
 			}
-			if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) continue;
-			const top = middle - maximum * scaleY;
-			const bottom = middle - minimum * scaleY;
-			context.fillRect(x, top, 1, Math.max(1, bottom - top));
 		}
 	}
 }
