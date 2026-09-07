@@ -1,148 +1,153 @@
 # Compost
 
-Compost is a collection of Web Components and utilities I find useful for making
-UIs for audio apps, either ones that run in the browser or as the web UI of a
-native plugin. Elements manage presentation and interaction, and emit UI intent
-through DOM events. Application data and policy remain outside the elements.
+Web Components and utilities I use to build UIs for audio apps, in the
+browser or as the web UI of a native plugin. Elements handle presentation
+and interaction and emit intent as DOM events: a knob fires
+`parameter-edit` with a parameter ID and a value in real units, an editor
+fires `envelope-change` with the new points. The consuming application
+links those events to its actual parameters and model, and stays the owner
+of state, persistence and undo.
+
+## Install
+
+It is plain ES modules with no build step, so either route works.
+
+As a submodule, which is how I use it in my own plugin UIs:
+
+```sh
+git submodule add https://github.com/charCulbert/compost vendor/compost
+```
+
+Then point a `file:` dependency at it so the `compost/...` import paths
+resolve, or serve the folder directly and import from `vendor/compost/src`.
+
+Or from GitHub with npm, which pins to a commit:
+
+```sh
+npm install github:charCulbert/compost
+```
+
+```js
+import 'compost/components/compost-knob';
+import { createParameterController } from 'compost/parameter-controller';
+```
 
 ## What's in it
 
 Controls: `compost-knob`, `compost-slider`, `compost-number-box`,
 `compost-button`, `compost-select`.
 
+<details><summary><code>compost-knob</code></summary>
+
+<img src="docs/images/compost-knob.png" width="672" alt="compost-knob, light and dark">
+
+</details>
+<details><summary><code>compost-slider</code></summary>
+
+<img src="docs/images/compost-slider.png" width="560" alt="compost-slider, light and dark">
+
+</details>
+
 Displays: `compost-meter`, `compost-scope`, `compost-waveform`.
+
+<details><summary><code>compost-meter</code></summary>
+
+<img src="docs/images/compost-meter.png" width="290" alt="compost-meter, light and dark">
+
+</details>
+<details><summary><code>compost-scope</code></summary>
+
+<img src="docs/images/compost-scope.png" width="1384" alt="compost-scope, light and dark">
+
+</details>
 
 Editors: `compost-envelope-editor`, `compost-note-editor`,
 `compost-audio-clip-editor`, `compost-clip-grid`, `compost-timeline`.
-`compost-piano` is a keyboard you can play.
+
+<details><summary><code>compost-envelope-editor</code></summary>
+
+<img src="docs/images/compost-envelope-editor.png" width="1256" alt="compost-envelope-editor, light and dark">
+
+</details>
+<details><summary><code>compost-note-editor</code></summary>
+
+<img src="docs/images/compost-note-editor.png" width="1504" alt="compost-note-editor, light and dark">
+
+</details>
+<details><summary><code>compost-audio-clip-editor</code></summary>
+
+<img src="docs/images/compost-audio-clip-editor.png" width="1504" alt="compost-audio-clip-editor, light and dark">
+
+</details>
+<details><summary><code>compost-clip-grid</code></summary>
+
+<img src="docs/images/compost-clip-grid.png" width="1512" alt="compost-clip-grid, light and dark">
+
+</details>
+<details><summary><code>compost-timeline</code></summary>
+
+<img src="docs/images/compost-timeline.png" width="2088" alt="compost-timeline, light and dark">
+
+</details>
+
+Input: `compost-piano`, a playable keyboard that emits note events.
+
+<details><summary><code>compost-piano</code></summary>
+
+<img src="docs/images/compost-piano.png" width="644" alt="compost-piano, light and dark">
+
+</details>
 
 Panels: `compost-drawer`, `compost-window`, `compost-popup`.
 
 Devices: `compost-audio`, `compost-midi`, `compost-device-selector`,
 `compost-midi-monitor`, `compost-midi-mappings`.
 
-Utilities: `touch-double-click` (touch double-click gestures),
-`parameter-controller` (wires controls to your backend),
+Utilities: `parameter-controller` (wires controls to your backend),
 `parameter-scale` (linear/log/gain curves), `midi`, `midi-mapping`,
-`midi-mappings` and `midi-learn-ui` (message parsing, CC mapping, MIDI
-learn), `device-settings`, `envelope-model`, `piano-roll-model`,
-`selection-region`, `time-grid` and `utils`.
+`midi-mappings`, `midi-learn-ui`, `device-settings`, `envelope-model`,
+`piano-roll-model`, `selection-region`, `time-grid`, `touch-double-click`
+and `utils`.
 
-Each element's supported attributes are declared with `@attribute` tags on the
-class in its type declaration next to the source
-(`src/components/<element>.d.ts`), which also lists its properties and events;
-a conformance test keeps the tags and the element's observed attributes in
-lockstep. Every element is shown in its example page.
+Each element's attributes, properties and events are declared in its type
+declaration next to the source (`src/components/<element>.d.ts`), and every
+element has an [example page](https://charculbert.github.io/compost/).
 
 ## Events
 
-Controls fire `parameter-begin`, `parameter-edit`, `parameter-end`. Each
-carries the parameter ID and the value in real units. That's the begin /
-change / end shape CLAP, VST3 and JUCE use, so a plugin UI can pass them
-straight through.
+Controls fire `parameter-begin`, `parameter-edit` and `parameter-end`, each
+carrying the parameter ID and the value in real units. That's the
+begin / change / end shape many plugin APIs use, so a plugin UI can pass
+them straight through.
 
 ```js
 { parameterID, value, kind: 'continuous' | 'discrete' | 'trigger', source, cancelled }
 ```
 
-Editors fire `<thing>-input` while you drag and `<thing>-change` when you let
-go: `envelope-input` / `envelope-change`, `loop-input` / `loop-change`,
-`range-input` / `range-change`, and `automation-input` / `automation-change`.
-Time selections use the same
-preview/commit shape as `time-select-input` / `time-select`. Both events in a
-pair carry the same payload, so you can preview the drag or ignore it until it commits.
-`notes-change` stands alone: the note editor commits each change as it
-happens, so there is no `-input`/`-change` pair for notes. Escape
-cancels a gesture: the element goes back to where it started and a control
-sends `parameter-end` with `cancelled: true`.
+Editors fire `<thing>-input` while you drag and `<thing>-change` when you
+let go (`envelope`, `loop`, `range`, `automation`, and `time-select-input` /
+`time-select`). Both carry the same payload, so you can preview the drag or
+wait for the commit. `notes-change` stands alone: the note editor commits
+each change as it happens.
 
-Right-click, long-press or Shift+F10 on anything fires a `<thing>-context`
-event with `clientX` / `clientY`; you decide what the menu contains.
-On touch, context means one-finger long-press; two fingers remain available
-for editor pan and zoom gestures.
+Escape cancels a gesture. The element snaps back and a control sends
+`parameter-end` with `cancelled: true`.
+
+Right-click or long-press fires `<thing>-context` with
+`clientX` / `clientY`. The application decides what the menu contains.
+
 `compost-piano` sends `note-down` and `note-up`.
 
-Across the time editors, Command/Ctrl inverts time snapping, Shift provides
-fine control on value drags and extends selection on an item drag, and Alt
-copies item moves. The clip grid uses Shift or a drag from an empty slot for
-rectangular selection, Command/Ctrl for sparse selection, occupied-clip Select
-All and clipboard commands, and Alt for drag-copy.
-`compost-note-editor` also uses Command/Ctrl on a note body to edit velocity.
-Double-click resets a control. On touch, double-tap resets knobs and sliders;
-a number-box tap opens its numeric editor while a drag still adjusts it.
-The timeline uses a two-finger pinch to zoom time and pan time or lanes. The
-note editor pinches horizontally for time and vertically for pitch; moving the
-pinch pans both axes. The audio clip editor pinches horizontally to zoom and
-pan time. One-finger gestures remain edits or selections.
-`readonly` still shows live state and navigates but changes nothing;
-`disabled` is inert.
+## Keyboard and touch
 
-The controls are not form-associated. They represent backend parameters and
-editor state rather than named form fields, so the application owns
-serialization and submission.
+Across the editors: Command/Ctrl inverts time snapping, Shift gives fine
+control on value drags and extends selection on item drags, Alt copies.
+Double-click resets a control; on touch, double-tap does.
 
-Events name what the user asked for, never which input did it. Elements show
-the state you give them; saving, undo, menus and what happens next are yours.
-Editors take IDs you own for the things they create, and snapping is a view
-mode over your full-precision values, never a stored grid.
-`compost-waveform` draws caller-prepared `{ min, max }` peak buckets grouped
-by channel: `peaks = [monoPeaks]` or `peaks = [leftPeaks, rightPeaks]`.
-This replaces the flat peak array. Channels cover the same time span and stack
-in source order, with left above right for stereo and a shared amplitude scale.
-Audio decoding and peak generation remain host policy.
-`compost-audio-clip-editor` composes that waveform with clip metadata and
-editing, and emits one-shot `audio-file-drop` intent with the caller-owned file.
-Its `gain` attribute/property and silent `setGain(gainDb)` input scale the
-waveform display from host-owned clip gain; gain controls and persistence remain
-in the host UI.
-The note editor, audio clip editor, and timeline take a single
-`time-signature="N/D"` meter, with `D` equal to 1, 2, 4, 8 or 16. Model time
-remains quarter-note beats; the denominator only changes ruler counting and
-line placement. Grid values are meter-independent note values such as `1/8`,
-`1/16T` or `bar`; bare numbers remain supported as legacy cells per bar.
-Compound x/8 meters show a pulse every three eighths. Meter changes within a
-song are host data and are not represented by these elements. Grid resolution
-stays fixed by default; `adaptive-grid` lets zoom choose the effective step in
-all three editors. `adaptive-grid-density` accepts 0.125 (sparse) through 8
-(dense), defaults to 1, and has no effect unless `adaptive-grid` is present.
-`compost-note-editor` emits `note-quantize` with the selected IDs, grid step
-and whether lengths were requested; the host applies its own strength and swing.
-`compost-clip-grid` renders a complete multi-track session launcher from
-`setTracks()`. It owns the discrete track/slot cursor, rectangular and sparse
-selection, keyboard clipboard recognition, and multi-clip drag geometry.
-`clips-copy`, `clips-cut`, `clips-paste`, `clips-delete`, `clips-duplicate`, and
-`clips-move`
-carry stable track IDs and slot coordinates, including selected empty slots.
-The host owns clipboard contents, new IDs, collision policy, mutation, undo,
-and conversion into timeline clips. To reproduce a copied rectangle exactly,
-store empty slots as `null` and clear their corresponding destinations on paste.
-`compost-timeline` never moves automation with arrangement material; a host
-that wants that shifts the lane's points when it applies `time-move`.
-With the timeline's `automation` attribute present, each lane shows its one
-automation curve over dimmed clips when the host has chosen a parameter; lanes
-without one remain ordinary clip lanes. In an automated lane the curve owns
-the whole row and dimmed clips are display-only context. Otherwise a clip's
-name strip moves the selected arrangement material, opens and renames it while
-its body selects time; right-click asks for its menu anywhere in its box. The
-host chooses that curve through
-`lane.automation` or `setLaneAutomation()`, usually from a menu in the lane
-header it slots in.
-The timeline has one arrangement selection: a beat interval across contiguous
-lanes. Equal edges are a lane-scoped edit cursor. Clicking a clip selects its
-exact bounds; dragging a clip title moves every intersecting material slice and
-emits `time-move-input` followed by `time-move`. The host owns splitting,
-mutation, collision policy and whether automation follows the move.
-`time-duplicate` asks the host to copy the exact selected span, including partial
-clips, immediately after itself. Command/Ctrl+D advances the selection to that
-new rectangle, and Alt-drag shows translucent destination slices while copying.
-Clip overlap and audio-source trim limits are also host policy; the timeline
-draws the clip state handed back to it. Follow mode re-anchors the view only
-while the `playing` attribute is present. Pinch and Command/Ctrl-wheel zoom
-time; Alt-wheel scales lane height. Lane scaling stops at a font-relative
-minimum that keeps clip titles usable.
-Arrow keys move a timeline time selection by one grid step or lane;
-Shift+Arrow grows its time or lane extent instead. Command/Ctrl+A selects the
-finite occupied arrangement bounds, including empty lanes between them.
+Touch: one finger edits or selects, long-press opens context, two fingers
+pinch to zoom and pan. The note editor pinches horizontally for time and
+vertically for pitch. A number-box tap opens its editor while a drag still
+adjusts it.
 
 ## Talking to a backend
 
@@ -173,54 +178,57 @@ is `linear`, `log` or `gain`; `mid` puts a chosen value at the centre. The
 parameter, handles incoming messages, and drives `compost-midi-mappings` and
 MIDI learn; ranges follow the parameter's curve.
 
-## Style
+## Element notes
 
-If the browser shipped `<compost-knob>`, what would it look like? That's the
-test for every visual decision. The elements bring behaviour, not a palette:
+Things that only apply to one element and aren't obvious from its type
+declaration.
 
-- Text is `currentColor`; elements inherit `color` and `font` from the page.
-- Fills and selection use `--compost-accent`, which defaults to the OS accent.
-- Surfaces follow `color-scheme`: a dark page gets dark controls.
-- Muted tones are `currentColor` mixed down (65% secondary text, 30% tracks,
-  18% hairlines).
-- Focus is a square 2px ring in `currentColor`; MIDI learn is the same ring
-  in the accent.
-- 1px lines, no rounded corners, no motion, sizes in `em` so `font-size`
-  scales a control the way it scales a native one.
-- Labels sit above a horizontal control and below a knob or vertical fader.
+**`compost-waveform`** takes `{ min, max }` peak buckets per channel:
+`peaks = [mono]` or `peaks = [left, right]`. Decoding and peak generation
+are host policy.
 
-Piano keys are the physical exception: their key bed uses light `Canvas` and
-`CanvasText` so natural and accidental keys remain white and black on any page.
-Active notes still use `--compost-accent`.
+**`compost-audio-clip-editor`** wraps that waveform with clip metadata and
+editing. It has no gain control of its own: set `gain` (in dB) to the
+host's clip gain and the waveform scales vertically to match. Dropping a
+file emits `audio-file-drop`.
 
-Timeline clips use their own colour, then their lane's colour, and otherwise
-the accent supplied by the page.
+**Meter and grid** (note editor, audio clip editor, timeline):
+`time-signature="N/D"` with `D` in 1, 2, 4, 8, 16. Model time is always
+quarter-note beats; the denominator only affects ruler counting. Grid
+values are note values like `1/8`, `1/16T` or `bar`. `adaptive-grid` lets
+zoom pick the step; `adaptive-grid-density` (0.125 to 8, default 1) tunes it.
+The elements don't model meter changes within a song, for example; that
+stays host data.
 
-With no CSS you get black on white, system font, OS accent. To change the
-look, set `color`, `font`, `color-scheme` and `--compost-accent` on the page;
-use `::part()` for anything finer.
+**`compost-note-editor`** does not quantize notes itself. It emits
+`note-quantize` with the selected IDs and grid step, and the application
+decides what that means: open a settings menu, quantize with its own
+strength and swing, and so on. Command/Ctrl on a note body edits velocity.
 
-## Install
+**`compost-clip-grid`** renders a session launcher from `setTracks()` and
+owns the cursor, selection and drag geometry. `clips-copy` / `-cut` /
+`-paste` / `-delete` / `-duplicate` / `-move` carry track IDs and slot
+coordinates, including selected empty slots. The host owns the clipboard, new
+IDs, collision policy and undo. Store empty slots as `null` to reproduce a
+copied rectangle exactly. Shift or a drag from an empty slot does
+rectangular selection, Command/Ctrl does sparse selection.
 
-```sh
-npm install github:charCulbert/compost
-```
-
-```js
-import 'compost/components/compost-knob';
-import { createParameterController } from 'compost/parameter-controller';
-```
-
-[Examples](https://charculbert.github.io/compost/)
+**`compost-timeline`** has one selection: a beat interval across contiguous
+lanes. Dragging a clip title emits `time-move-input` then `time-move` for
+every intersecting slice; the host owns splitting, collisions and whether
+automation follows (the timeline never moves it for you). `time-duplicate`
+asks the host to copy the selected span right after itself. With the
+`automation` attribute, a lane shows the curve the host picks via
+`lane.automation` or `setLaneAutomation()` over dimmed clips. Follow mode
+only re-anchors while `playing` is present. Command/Ctrl-wheel zooms time,
+Alt-wheel scales lane height, arrows move the selection, Shift+Arrow grows
+it, Command/Ctrl+A selects the bounds within which all the clips lie.
 
 ## Working on it
 
-`npm test` runs the unit tests, `npm run test:e2e` the Playwright suite.
-`npm run dev` serves the repo without caching; every element has its own
-example page under `examples/<element>/` with a live readout of the events it
-emits. Every example shares the same
-light/dark color-scheme toggle and an "All examples" link back to the
-catalog. The scope omits its `scope-frame` readout because that event fires
-for every drawn frame. The Mono Synth, MIDI Controller, and Parameter Sync pages
-show current multi-element integration.
-`node examples/check-example.mjs <element>` checks an element headlessly.
+`npm test` runs the unit tests, `npm run test:e2e` the Playwright suite,
+`npm run dev` serves the repo without caching. Every element has an example
+page under `examples/<element>/` with a live readout of its events;
+`node examples/check-example.mjs <element>` checks one headlessly. A
+conformance test keeps each element's `@attribute` tags and observed
+attributes in lockstep.
