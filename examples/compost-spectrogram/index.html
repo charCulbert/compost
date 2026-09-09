@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>compost-spectrogram · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <style>
+      .spectrogram-demo {
+        width: min(54em, calc(100vw - 64px));
+        display: grid;
+        gap: .75em;
+      }
+      .drop-target { position: relative; }
+      compost-spectrogram { height: min(24em, 48vh); }
+      .drop-hint {
+        position: absolute;
+        inset: 1px;
+        display: grid;
+        place-items: center;
+        border: 1px dashed currentColor;
+        background: color-mix(in srgb, Canvas 86%, transparent);
+        font-size: .8em;
+        letter-spacing: .04em;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .drop-target[data-drag] .drop-hint { opacity: 1; }
+      #media audio { width: min(32em, 100%); }
+      .file-input {
+        display: grid;
+        gap: .3em;
+      }
+      .readout {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: .75em 1em;
+      }
+      .readout label { display: grid; gap: .3em; }
+      .performance {
+        color: var(--muted);
+        font-size: .8em;
+        font-variant-numeric: tabular-nums;
+      }
+      .responsibilities {
+        display: grid;
+        gap: .35em;
+        max-width: 72ch;
+        font-size: .88em;
+        line-height: 1.45;
+      }
+    </style>
+  </head>
+  <body data-example-id="compost-spectrogram">
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>Compost</p>
+          <h1>compost-spectrogram</h1>
+        </div>
+      </header>
+      <div id="media"></div>
+      <section class="plain">
+        <div class="row">
+          <div class="spectrogram-demo">
+            <div class="drop-target" data-drop-target>
+              <compost-spectrogram
+                aria-label="Audio spectrogram"
+                time-span="6"
+                min-frequency="20"
+                max-frequency="20000"
+                frequency-scale="log"
+                min-value="-80"
+                max-value="0"></compost-spectrogram>
+              <span class="drop-hint">Drop an audio file</span>
+            </div>
+            <div class="readout">
+              <label class="file-input">Audio file
+                <input data-file type="file" accept="audio/*">
+              </label>
+              <label>Colour range
+                <select data-range>
+                  <option value="-60">60 dB</option>
+                  <option value="-80" selected>80 dB</option>
+                  <option value="-100">100 dB</option>
+                </select>
+              </label>
+              <label>Frequency position
+                <select data-scale>
+                  <option value="linear">Linear</option>
+                  <option value="log" selected>Log</option>
+                  <option value="mel">Mel · 96 filterbank bands</option>
+                </select>
+              </label>
+              <label>History
+                <select data-span>
+                  <option value="3">3 seconds</option>
+                  <option value="6" selected>6 seconds</option>
+                  <option value="12">12 seconds</option>
+                </select>
+              </label>
+              <label>Palette
+                <select data-palette>
+                  <option value="">Theme-aware monochrome</option>
+                  <option value="magma">Magma · sequential</option>
+                  <option value="gray-r">Gray reversed · boolean</option>
+                  <option value="coolwarm">Coolwarm · diverging</option>
+                </select>
+              </label>
+            </div>
+            <small data-status>plucky.wav ready. Play it above or drop another audio file here.</small>
+            <small class="performance" data-performance>Frame cadence: play audio to measure this screen.</small>
+            <div class="responsibilities">
+              <p><strong>Demo consumer:</strong> loads and plays the audio, turns it into FFT values, optionally combines those values into 96 Mel bands, and sends each result with its time and centre frequencies. <span data-analysis>The analyser starts when playback begins.</span></p>
+              <p><strong>Compost component:</strong> never reads or analyses audio. It copies the supplied numbers, keeps a bounded history, places them by time and frequency, maps their values to colours, scrolls the visible time window, and draws the canvas.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module">
+      import '../../src/components/compost-spectrogram.js';
+      import { elementDemo } from '../shared/element-page.js';
+
+      await elementDemo('compost-spectrogram', { output: false });
+
+      const melBandCount = 96;
+      const analysisInterval = 1 / 30;
+
+      function hertzToMel(frequency) {
+        return 2595 * Math.log10(1 + frequency / 700);
+      }
+
+      function melToHertz(mel) {
+        return 700 * (10 ** (mel / 2595) - 1);
+      }
+
+      function createMelFilterbank(frequencies, minimum, maximum) {
+        const minimumMel = hertzToMel(minimum);
+        const maximumMel = hertzToMel(maximum);
+        const edges = Float64Array.from(
+          { length: melBandCount + 2 },
+          (_, index) => melToHertz(
+            minimumMel + (maximumMel - minimumMel) * index / (melBandCount + 1),
+          ),
+        );
+        const bands = [];
+        for (let band = 0; band < melBandCount; band += 1) {
+          const left = edges[band];
+          const centre = edges[band + 1];
+          const right = edges[band + 2];
+          let start = 0;
+          while (start < frequencies.length && frequencies[start] < left) start += 1;
+          let end = start;
+          while (end < frequencies.length && frequencies[end] <= right) end += 1;
+          const weights = new Float32Array(end - start);
+          let weightSum = 0;
+          for (let index = start; index < end; index += 1) {
+            const frequency = frequencies[index];
+            const weight = frequency <= centre
+              ? (frequency - left) / (centre - left)
+              : (right - frequency) / (right - centre);
+            weights[index - start] = Math.max(0, weight);
+            weightSum += weights[index - start];
+          }
+          if (weightSum > 0) {
+            for (let index = 0; index < weights.length; index += 1) {
+              weights[index] /= weightSum;
+            }
+          }
+          bands.push({ start, weights });
+        }
+        return {
+          bands,
+          frequencies: edges.slice(1, -1),
+          values: new Float32Array(melBandCount),
+        };
+      }
+
+      function applyMelFilterbank(input, filterbank) {
+        for (let band = 0; band < filterbank.bands.length; band += 1) {
+          const { start, weights } = filterbank.bands[band];
+          let power = 0;
+          for (let index = 0; index < weights.length; index += 1) {
+            const decibels = input[start + index];
+            if (Number.isFinite(decibels)) {
+              power += weights[index] * 10 ** (decibels / 10);
+            }
+          }
+          filterbank.values[band] = power > 0
+            ? 10 * Math.log10(power)
+            : Number.NEGATIVE_INFINITY;
+        }
+        return filterbank.values;
+      }
+
+      const spectrogram = document.querySelector('compost-spectrogram');
+      const media = document.getElementById('media');
+      const dropTarget = document.querySelector('[data-drop-target]');
+      const fileInput = document.querySelector('[data-file]');
+      const rangeSelect = document.querySelector('[data-range]');
+      const scaleSelect = document.querySelector('[data-scale]');
+      const spanSelect = document.querySelector('[data-span]');
+      const paletteSelect = document.querySelector('[data-palette]');
+      const status = document.querySelector('[data-status]');
+      const analysis = document.querySelector('[data-analysis]');
+      const performanceOutput = document.querySelector('[data-performance]');
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.preload = 'metadata';
+      audio.src = '../shared/assets/plucky.wav';
+      media.append(audio);
+      let context;
+      let analyser;
+      let decibelValues;
+      let fftFrequencies;
+      let melFilterbank;
+      let previousAudioTime;
+      let nextAnalysisTime;
+      let objectUrl;
+      let previousFrameTime;
+      let lastPerformanceReport = 0;
+      const frameIntervals = [];
+
+      function clearHistory() {
+        previousAudioTime = undefined;
+        nextAnalysisTime = undefined;
+        spectrogram.viewEndTime = null;
+        spectrogram.clear();
+      }
+
+      function configureFrequencyData() {
+        const scale = scaleSelect.value;
+        spectrogram.setAttribute('frequency-scale', scale);
+        if (!fftFrequencies) return;
+        if (scale === 'mel') {
+          spectrogram.frequencies = melFilterbank.frequencies;
+          analysis.textContent = `${melBandCount} triangular Mel filters are active at 30 analysis columns per second.`;
+        } else {
+          spectrogram.frequencies = fftFrequencies;
+          analysis.textContent = `${fftFrequencies.length} Web Audio FFT bins are active at 30 analysis columns per second on a ${scale} frequency axis.`;
+        }
+        previousAudioTime = undefined;
+        nextAnalysisTime = undefined;
+      }
+
+      function reportFrameCadence(time) {
+        if (!analyser || audio.paused || audio.ended) {
+          previousFrameTime = time;
+          return;
+        }
+        if (previousFrameTime !== undefined) {
+          frameIntervals.push({ interval: time - previousFrameTime, time });
+          while (frameIntervals[0]?.time < time - 5000) frameIntervals.shift();
+        }
+        previousFrameTime = time;
+        if (time - lastPerformanceReport < 1000 || frameIntervals.length < 30) return;
+        lastPerformanceReport = time;
+        const intervals = frameIntervals
+          .map(sample => sample.interval)
+          .sort((left, right) => left - right);
+        const percentile = amount =>
+          intervals[Math.min(intervals.length - 1, Math.floor(intervals.length * amount))];
+        const median = percentile(.5);
+        const missed = intervals.reduce(
+          (total, interval) => total + Math.max(0, Math.round(interval / median) - 1),
+          0,
+        );
+        performanceOutput.textContent = `Observed frame cadence: ${(1000 / median).toFixed(0)} Hz · ${median.toFixed(1)} ms median · ${percentile(.95).toFixed(1)} ms p95 · ${percentile(.99).toFixed(1)} ms p99 · ${missed} estimated missed frames / 5 s.`;
+      }
+
+      async function prepareAnalyser() {
+        if (!context) {
+          context = new AudioContext();
+          analyser = new AnalyserNode(context, {
+            fftSize: 2048,
+            minDecibels: -120,
+            maxDecibels: 0,
+            smoothingTimeConstant: .65,
+          });
+          const source = context.createMediaElementSource(audio);
+          source.connect(analyser).connect(context.destination);
+          decibelValues = new Float32Array(analyser.frequencyBinCount);
+          fftFrequencies = Float64Array.from(
+            { length: analyser.frequencyBinCount },
+            (_, index) => index * context.sampleRate / analyser.fftSize,
+          );
+          const maximumFrequency = Math.min(20000, context.sampleRate / 2);
+          melFilterbank = createMelFilterbank(fftFrequencies, 20, maximumFrequency);
+          spectrogram.setAttribute('max-frequency', String(maximumFrequency));
+          configureFrequencyData();
+        }
+        await context.resume();
+      }
+
+      function update(frameTime) {
+        reportFrameCadence(frameTime);
+        const audioTime = audio.currentTime;
+        if (previousAudioTime !== undefined && audioTime < previousAudioTime) {
+          clearHistory();
+        }
+        if (analyser && !audio.paused && !audio.ended) {
+          spectrogram.viewEndTime = audioTime;
+          if (nextAnalysisTime === undefined) nextAnalysisTime = audioTime;
+          if (audioTime >= nextAnalysisTime) {
+            analyser.getFloatFrequencyData(decibelValues);
+            const values = scaleSelect.value === 'mel'
+              ? applyMelFilterbank(decibelValues, melFilterbank)
+              : decibelValues;
+            spectrogram.appendColumns(values, {
+              startTime: nextAnalysisTime,
+              timeStep: analysisInterval,
+            });
+            nextAnalysisTime += analysisInterval;
+            if (audioTime - nextAnalysisTime > analysisInterval) {
+              nextAnalysisTime = audioTime;
+            }
+          }
+          previousAudioTime = audioTime;
+        }
+        requestAnimationFrame(update);
+      }
+
+      function loadFile(file) {
+        if (!file) return;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(file);
+        audio.src = objectUrl;
+        audio.load();
+        clearHistory();
+        status.textContent = `${file.name} ready. Play to analyse it.`;
+      }
+
+      audio.addEventListener('play', async () => {
+        await prepareAnalyser();
+        frameIntervals.length = 0;
+        previousFrameTime = undefined;
+        lastPerformanceReport = 0;
+        status.textContent = 'Analysing playback. The demo prepares the FFT values; Compost draws them.';
+      });
+      audio.addEventListener('seeking', clearHistory);
+      fileInput.addEventListener('change', () => loadFile(fileInput.files[0]));
+      for (const eventName of ['dragenter', 'dragover']) {
+        dropTarget.addEventListener(eventName, event => {
+          event.preventDefault();
+          dropTarget.dataset.drag = '';
+        });
+      }
+      dropTarget.addEventListener('dragleave', event => {
+        if (!dropTarget.contains(event.relatedTarget)) delete dropTarget.dataset.drag;
+      });
+      dropTarget.addEventListener('drop', event => {
+        event.preventDefault();
+        delete dropTarget.dataset.drag;
+        loadFile(event.dataTransfer.files[0]);
+      });
+      rangeSelect.addEventListener('change', () => {
+        spectrogram.setAttribute('min-value', rangeSelect.value);
+        clearHistory();
+      });
+      scaleSelect.addEventListener('change', configureFrequencyData);
+      spanSelect.addEventListener('change', () =>
+        spectrogram.setAttribute('time-span', spanSelect.value));
+      paletteSelect.addEventListener('change', () => {
+        if (paletteSelect.value) {
+          spectrogram.setAttribute('palette', paletteSelect.value);
+        } else {
+          spectrogram.removeAttribute('palette');
+        }
+      });
+
+      requestAnimationFrame(update);
+    </script>
+  </body>
+</html>

@@ -18,5 +18,6 @@ import "./compost-popup.js";
 import "./compost-scope.js";
 import "./compost-select.js";
 import "./compost-slider.js";
+import "./compost-spectrogram.js";
 import "./compost-waveform.js";
 import "./compost-window.js";

@@ -48,7 +48,8 @@ Controls: `compost-knob`, `compost-slider`, `compost-number-box`,
 
 </details>
 
-Displays: `compost-meter`, `compost-scope`, `compost-waveform`.
+Displays: `compost-meter`, `compost-scope`, `compost-spectrogram`,
+`compost-waveform`.
 
 <details><summary><code>compost-meter</code></summary>
 
@@ -186,6 +187,38 @@ declaration.
 **`compost-waveform`** takes `{ min, max }` peak buckets per channel:
 `peaks = [mono]` or `peaks = [left, right]`. Decoding and peak generation
 are host policy.
+
+**`compost-spectrogram`** draws numbers that have already been produced by an
+audio analyser. A column is one vertical slice of the picture at one point in
+time. `appendColumns(values, { startTime, timeStep })` supplies those columns,
+and `frequencies` supplies the ascending centre frequency for each row.
+
+The Compost component copies the supplied data, keeps a bounded history,
+places each column by its timestamp, positions rows by frequency, maps values
+to colours, scrolls the visible `time-span`, and redraws at the rendered size.
+It does not open audio files, listen to a microphone, run an FFT, create Mel
+bands, choose a channel, smooth results or convert values to dB. The consuming
+app does that work and decides how many frequency rows to send.
+
+By default the newest column sits at the right edge. A live consumer can set
+`viewEndTime` from its audio clock on every display frame, allowing the picture
+to move smoothly between analysis columns. Holding that property steady freezes
+the view; setting it to `null` follows the newest column again.
+
+History retains at most four million scalar values or 65,536 columns. Large
+frequency arrays therefore retain fewer columns. `retainedTimeRange` reports
+the actual `{ startTime, endTime }` still available, so a consumer that needs a
+longer range can reduce its bin count or analysis cadence.
+
+Values may be amplitude, power, dB or another caller-defined quantity;
+`min-value` and `max-value` choose which values reach the ends of the colour
+ramp. `frequency-scale="mel"` positions the supplied Hz centres on a Mel axis;
+the consuming app still computes the Mel filterbank and chooses its band count.
+
+The default palette follows `Canvas` and `CanvasText`; `palette="magma"`,
+`"gray-r"` and `"coolwarm"` are built in. Set
+`--compost-spectrogram-background` and `--compost-spectrogram-ramp-0` through
+`--compost-spectrogram-ramp-4` for a custom palette.
 
 **`compost-audio-clip-editor`** wraps that waveform with clip metadata and
 editing. It has no gain control of its own: set `gain` (in dB) to the
