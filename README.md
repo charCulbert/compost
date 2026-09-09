@@ -63,7 +63,7 @@ Displays: `compost-meter`, `compost-scope`, `compost-spectrogram`,
 </details>
 <details><summary><code>compost-spectrogram</code></summary>
 
-<img src="docs/images/compost-spectrogram.png" width="1728" alt="compost-spectrogram with Magma and Coolwarm palettes">
+<img src="docs/images/compost-spectrogram-palettes.png" width="1728" alt="compost-spectrogram with Magma and Coolwarm palettes">
 
 </details>
 
