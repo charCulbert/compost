@@ -1,18 +1,19 @@
 # Compost
 
-Web Components and utilities I use to build UIs for audio apps, in the
-browser or as the web UI of a native plugin. Elements handle presentation
-and interaction and emit intent as DOM events: a knob fires
-`parameter-edit` with a parameter ID and a value in real units, an editor
+Web Components and utilities that I use to build UIs for audio apps, in the
+browser or as the webview UI of a native app/plugin. 
+
+The components here handle presentation
+and interaction and emit intent as DOM events. For example, a knob fires
+`parameter-edit` with a parameter ID and a value, and an editor
 fires `envelope-change` with the new points. The consuming application
-links those events to its actual parameters and model, and stays the owner
-of state, persistence and undo.
+links those events to its actual parameters and data model.
 
 ## Install
 
 It is plain ES modules with no build step, so either route works.
 
-As a submodule, which is how I use it in my own plugin UIs:
+As a submodule, which is how I use it most often:
 
 ```sh
 git submodule add https://github.com/charCulbert/compost vendor/compost
