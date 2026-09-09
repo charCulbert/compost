@@ -61,6 +61,11 @@ Displays: `compost-meter`, `compost-scope`, `compost-spectrogram`,
 <img src="docs/images/compost-scope.png" width="1384" alt="compost-scope, light and dark">
 
 </details>
+<details><summary><code>compost-spectrogram</code></summary>
+
+<img src="docs/images/compost-spectrogram.png" width="1728" alt="compost-spectrogram, light and dark">
+
+</details>
 
 Editors: `compost-envelope-editor`, `compost-note-editor`,
 `compost-audio-clip-editor`, `compost-clip-grid`, `compost-timeline`.
