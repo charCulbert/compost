@@ -259,6 +259,12 @@ not part of this interface.
 Things that only apply to one element and aren't obvious from its type
 declaration.
 
+**`compost-button`** supports `mode="cycle"` for a discrete choice displayed as
+a button. Put the visible choices in `text="First|Second|Third"` and provide a
+stable `label`; pressing advances and Shift-pressing reverses. Arrows move in
+their direction and Home/End select the endpoints. Incoming `setValue()` and
+controller values update the displayed choice silently.
+
 **`compost-waveform`** takes `{ min, max }` peak buckets per channel:
 `peaks = [mono]` or `peaks = [left, right]`. Decoding and peak generation
 are host policy.

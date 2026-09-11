@@ -34,7 +34,7 @@ const elementSummaries = {
 	"compost-slider": "Edits a continuous parameter with a slider.",
 	"compost-meter": "Displays live peak, average, and held levels.",
 	"compost-number-box": "Edits an exact numeric parameter value.",
-	"compost-button": "Triggers actions and toggles parameters.",
+	"compost-button": "Triggers actions, toggles parameters, and cycles choices.",
 	"compost-select": "Chooses a discrete parameter value.",
 	"compost-piano": "Plays notes from pointer, touch, or keyboard input.",
 	"compost-scope": "Draws a supplied waveform.",

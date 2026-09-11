@@ -1,10 +1,18 @@
 import {
 	beginParameterGesture,
+	clamp,
 	defineElement,
 	editParameterGesture,
 	endParameterGesture,
 	numberAttr,
+	splitValueTextOptions,
 } from "../utils.js";
+
+function choiceLabels(button) {
+	return splitValueTextOptions(button.getAttribute("text") || "").filter(
+		Boolean,
+	);
+}
 
 export class CompostButton extends HTMLElement {
 	static get observedAttributes() {
@@ -15,6 +23,7 @@ export class CompostButton extends HTMLElement {
 			"parameter-id",
 			"section",
 			"pressed",
+			"text",
 			"value",
 			"disabled",
 			"aria-label",
@@ -136,6 +145,9 @@ export class CompostButton extends HTMLElement {
           word-break: normal;
           white-space: normal;
         }
+        .cycle-fallback { display: none; }
+        :host([mode="cycle"]) slot { display: none; }
+        :host([mode="cycle"]) .cycle-fallback { display: block; }
         ::slotted(*) {
           display: block;
           line-height: 1.05;
@@ -146,14 +158,23 @@ export class CompostButton extends HTMLElement {
         }
       </style>
       <button part="button" type="button">
-        <span class="content" part="label"><slot><span class="fallback"></span></slot></span>
+        <span class="content" part="label">
+          <slot><span class="fallback"></span></slot>
+          <span class="fallback cycle-fallback"></span>
+        </span>
         <span class="midi-map-label" part="midi-map-label" aria-hidden="true"></span>
       </button>`;
 
 		this.button = this.root.querySelector("button");
 		this.fallback = this.root.querySelector(".fallback");
+		this.cycleFallback = this.root.querySelector(".cycle-fallback");
 
-		this.button.addEventListener("click", () => {
+		this.button.addEventListener("click", (event) => {
+			if (this.mode === "cycle") {
+				this.stepChoice(event.shiftKey ? -1 : 1);
+				return;
+			}
+
 			if (this.mode !== "switch") {
 				this.trigger("control");
 				return;
@@ -170,6 +191,9 @@ export class CompostButton extends HTMLElement {
 			);
 			endParameterGesture(this, this.value);
 		});
+		this.button.addEventListener("keydown", (event) =>
+			this.handleCycleKeyDown(event),
+		);
 	}
 
 	connectedCallback() {
@@ -193,11 +217,14 @@ export class CompostButton extends HTMLElement {
 		// for symmetry with the other parameter controls and maps onto it.
 		if (name === "value")
 			this.setValue(numberAttr(this, "value", this.value), false);
+		else if ((name === "mode" || name === "text") && this.mode === "cycle")
+			this.setValue(this.value, false);
 		this.refresh();
 	}
 
 	get mode() {
-		return this.getAttribute("mode") === "switch" ? "switch" : "trigger";
+		const mode = this.getAttribute("mode");
+		return mode === "switch" || mode === "cycle" ? mode : "trigger";
 	}
 
 	get pressed() {
@@ -209,6 +236,10 @@ export class CompostButton extends HTMLElement {
 	}
 
 	get value() {
+		if (this.mode === "cycle") {
+			const maximum = Math.max(0, choiceLabels(this).length - 1);
+			return clamp(Math.round(numberAttr(this, "value", 0)), 0, maximum);
+		}
 		return this.pressed ? 1 : 0;
 	}
 
@@ -221,11 +252,31 @@ export class CompostButton extends HTMLElement {
 	}
 
 	get parameterKind() {
-		return this.mode === "switch" ? "discrete" : "trigger";
+		return this.mode === "trigger" ? "trigger" : "discrete";
 	}
 
 	get transientParameter() {
-		return this.mode !== "switch";
+		return this.mode === "trigger";
+	}
+
+	get parameterValues() {
+		return this.mode === "cycle"
+			? choiceLabels(this).map((_, index) => index)
+			: null;
+	}
+
+	get min() {
+		return this.mode === "cycle" ? 0 : undefined;
+	}
+
+	get max() {
+		return this.mode === "cycle"
+			? Math.max(0, choiceLabels(this).length - 1)
+			: undefined;
+	}
+
+	get step() {
+		return this.mode === "cycle" ? 1 : undefined;
 	}
 
 	get disabled() {
@@ -237,6 +288,29 @@ export class CompostButton extends HTMLElement {
 	}
 
 	setValue(value, shouldEmit = true, source = "api") {
+		if (this.mode === "cycle") {
+			const choices = choiceLabels(this);
+			const requested = Number(value);
+			if (!choices.length || !Number.isFinite(requested)) return false;
+
+			const previous = this.value;
+			const next = clamp(Math.round(requested), 0, choices.length - 1);
+			const changed = previous !== next;
+			if (!changed && this.getAttribute("value") === String(next)) return false;
+
+			if (shouldEmit && changed)
+				beginParameterGesture(this, previous, { source });
+			this.setAttribute("value", String(next));
+			if (shouldEmit && changed) {
+				editParameterGesture(this, next, { source });
+				this.dispatchEvent(
+					new Event("change", { bubbles: true, composed: true }),
+				);
+				endParameterGesture(this, next, { source });
+			}
+			return changed;
+		}
+
 		const active = Number(value) >= 0.5;
 
 		if (this.mode !== "switch") {
@@ -263,7 +337,33 @@ export class CompostButton extends HTMLElement {
 		}
 	}
 
+	stepChoice(delta, source = "control") {
+		const count = choiceLabels(this).length;
+		if (this.mode !== "cycle" || this.disabled || !count) return false;
+		return this.setValue((this.value + delta + count) % count, true, source);
+	}
+
+	handleCycleKeyDown(event) {
+		if (this.mode !== "cycle" || this.disabled) return;
+
+		const deltas = {
+			ArrowUp: 1,
+			ArrowRight: 1,
+			ArrowDown: -1,
+			ArrowLeft: -1,
+		};
+		if (event.key in deltas) {
+			event.preventDefault();
+			this.stepChoice(deltas[event.key]);
+		} else if (event.key === "Home" || event.key === "End") {
+			event.preventDefault();
+			this.setValue(event.key === "Home" ? 0 : this.max, true, "control");
+		}
+	}
+
 	trigger(source = "control") {
+		if (this.mode === "cycle") return;
+
 		if (this.mode !== "switch") {
 			this.flashActive();
 		}
@@ -312,13 +412,17 @@ export class CompostButton extends HTMLElement {
 	refresh() {
 		const label = this.getAttribute("label") || "";
 		this.fallback.textContent = label;
-		this.button.disabled = this.disabled;
+		const choices = choiceLabels(this);
+		const choice = choices[this.value] || "";
+		this.cycleFallback.textContent = choice;
+		this.button.disabled =
+			this.disabled || (this.mode === "cycle" && !choices.length);
+		const accessibleLabel = this.getAttribute("aria-label") || label;
 		this.button.setAttribute(
 			"aria-label",
-			this.getAttribute("aria-label") ||
-				label ||
-				this.textContent.trim() ||
-				"Button",
+			this.mode === "cycle"
+				? [accessibleLabel, choice].filter(Boolean).join(": ") || "Choice"
+				: accessibleLabel || this.textContent.trim() || "Button",
 		);
 
 		if (this.hasAttribute("aria-description")) {
