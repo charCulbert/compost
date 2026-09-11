@@ -113,7 +113,7 @@ test("every timeline intent is present in its public detail map", () => {
 
 // Public attributes supported outside attributeChangedCallback.
 const publicAttributeExtras = new Map([
-	["compost-audio", ["modal"]],
+	["compost-audio", ["modal", "restart-interrupted"]],
 	["compost-button", ["parameter-kind"]],
 	["compost-drawer", ["resizable"]],
 	["compost-knob", ["parameter-kind"]],

@@ -3,8 +3,8 @@ import { createParameterController } from "../../src/parameter-controller.js";
 import { createValueControl } from "../../src/value-control.js";
 
 const canvas = document.querySelector("#custom-canvas");
-const amountElement = document.querySelector("#amount-control");
-const stepsElement = document.querySelector("#steps-control");
+const driveElement = document.querySelector("#drive-control");
+const repeatsElement = document.querySelector("#repeats-control");
 const eventReadout = document.querySelector("#events");
 const controlStates = [null, null];
 
@@ -12,18 +12,18 @@ const parameters = createParameterController({
 	root: document,
 	definitions: [
 		{
-			parameterID: "amount",
+			parameterID: "drive",
 			kind: "continuous",
-			name: "Amount",
+			name: "Drive",
 			min: 0,
 			max: 1,
 			defaultValue: 0.25,
 			step: 0.01,
 		},
 		{
-			parameterID: "steps",
+			parameterID: "repeats",
 			kind: "continuous",
-			name: "Steps",
+			name: "Number of repeats",
 			min: 1,
 			max: 16,
 			defaultValue: 4,
@@ -32,36 +32,37 @@ const parameters = createParameterController({
 	],
 });
 
-const amountControl = createValueControl(amountElement, {
-	parameterID: "amount",
-	label: "Amount",
+const driveControl = createValueControl(driveElement, {
+	parameterID: "drive",
+	label: "Drive",
 	min: 0,
 	max: 1,
 	value: 0.25,
 	resetValue: 0.25,
 	step: 0.01,
-	formatValue: (value) => Number(value).toFixed(2),
+	formatValue: (value) => `${Math.round(Number(value) * 100)}%`,
 	eventTarget: canvas,
 	pointerTarget: null,
 	draw: (state) => drawControl(state, 0),
 });
 
-const stepsControl = createValueControl(stepsElement, {
-	parameterID: "steps",
-	label: "Steps",
+const repeatsControl = createValueControl(repeatsElement, {
+	parameterID: "repeats",
+	label: "Number of repeats",
 	min: 1,
 	max: 16,
 	value: 4,
 	resetValue: 4,
 	step: 1,
+	drag: { axis: "x", mode: "position" },
 	formatValue: (value) => String(Math.round(value)),
 	eventTarget: canvas,
-	pointerTarget: null,
+	pointerTarget: repeatsElement,
 	draw: (state) => drawControl(state, 1),
 });
 
-parameters.registerControl(amountControl);
-parameters.registerControl(stepsControl);
+parameters.registerControl(driveControl);
+parameters.registerControl(repeatsControl);
 
 const eventLines = [];
 for (const type of ["parameter-begin", "parameter-edit", "parameter-end"]) {
@@ -79,17 +80,11 @@ for (const type of ["parameter-begin", "parameter-edit", "parameter-end"]) {
 document
 	.querySelector("#host-value")
 	.addEventListener("click", () =>
-		parameters.applyValue("amount", 0.75, { source: "host" }),
+		parameters.applyValue("drive", 0.75, { source: "host" }),
 	);
-document.querySelector("#refresh-controls").addEventListener("click", () => {
-	parameters.refresh();
-	resizeCanvas();
-});
-
 canvas.addEventListener("pointerdown", (event) => {
 	if (event.button !== 0) return;
-	const index = controlIndexForEvent(event);
-	(index === 0 ? amountControl : stepsControl).startPointerDrag(event);
+	if (controlIndexForEvent(event) === 0) driveControl.startPointerDrag(event);
 });
 
 const resizeObserver = new ResizeObserver(resizeCanvas);
@@ -132,28 +127,22 @@ function drawControls() {
 	if (!(width > 0 && height > 0)) return;
 	context.clearRect(0, 0, width, height);
 	if (controlStates[0])
-		drawAmountWave(context, controlStates[0], 0, width / 2, height);
+		drawDriveCurve(context, controlStates[0], 0, width / 2, height);
 	if (controlStates[1])
-		drawStepGrid(context, controlStates[1], width / 2, width / 2, height);
+		drawRepeats(context, controlStates[1], width / 2, width / 2, height);
 }
 
-function drawFrame(context, state, left, width, height, title, subtitle) {
+function drawFrame(context, state, left, width, height, dragLabel) {
 	const centerX = left + width / 2;
 	const color = getComputedStyle(canvas).color;
 	context.fillStyle = color;
-	context.globalAlpha = 0.7;
-	context.font = "700 12px ui-sans-serif, system-ui, sans-serif";
-	context.textAlign = "center";
-	context.fillText(title, centerX, 24);
-	context.globalAlpha = 0.45;
-	context.font = "10px ui-sans-serif, system-ui, sans-serif";
-	context.fillText(subtitle, centerX, 40);
 	context.globalAlpha = 1;
 	context.font = "13px ui-sans-serif, system-ui, sans-serif";
+	context.textAlign = "center";
 	context.fillText(state.valueText, centerX, height - 16);
 	context.globalAlpha = 0.45;
 	context.font = "700 10px ui-sans-serif, system-ui, sans-serif";
-	context.fillText("DRAG ↑↓", centerX, height - 34);
+	context.fillText(dragLabel, centerX, height - 34);
 	context.globalAlpha = 1;
 
 	if (!state.focused) return;
@@ -164,13 +153,13 @@ function drawFrame(context, state, left, width, height, title, subtitle) {
 	context.setLineDash([]);
 }
 
-function drawAmountWave(context, state, left, width, height) {
-	drawFrame(context, state, left, width, height, "AMOUNT", "WAVE AMPLITUDE");
-	const centerX = left + width / 2;
-	const centerY = height / 2;
-	const waveWidth = Math.max(60, width - 58);
-	const startX = centerX - waveWidth / 2;
-	const amplitude = 5 + state.position * Math.min(48, height * 0.2);
+function drawDriveCurve(context, state, left, width, height) {
+	drawFrame(context, state, left, width, height, "DRAG ↑↓");
+	const size = Math.min(width - 76, height - 120, 190);
+	const startX = left + (width - size) / 2;
+	const startY = 24 + (height - 70 - size) / 2;
+	const centerX = startX + size / 2;
+	const centerY = startY + size / 2;
 	const color = getComputedStyle(canvas).color;
 
 	context.strokeStyle = color;
@@ -178,17 +167,23 @@ function drawAmountWave(context, state, left, width, height) {
 	context.globalAlpha = 0.18;
 	context.beginPath();
 	context.moveTo(startX, centerY);
-	context.lineTo(startX + waveWidth, centerY);
+	context.lineTo(startX + size, centerY);
+	context.moveTo(centerX, startY);
+	context.lineTo(centerX, startY + size);
+	context.moveTo(startX, startY + size);
+	context.lineTo(startX + size, startY);
 	context.stroke();
 
-	context.lineWidth = state.dragging ? 5 : 3;
+	const gain = 0.2 + state.position * 5.8;
+	const limit = Math.tanh(gain);
+	context.lineWidth = state.dragging ? 5 : 3.5;
 	context.globalAlpha = 0.9;
 	context.beginPath();
 	for (let point = 0; point <= 64; point += 1) {
-		const phase = point / 64;
-		const x = startX + phase * waveWidth;
-		const envelope = Math.sin(phase * Math.PI);
-		const y = centerY + Math.sin(phase * Math.PI * 6) * amplitude * envelope;
+		const input = (point / 64) * 2 - 1;
+		const output = Math.tanh(input * gain) / limit;
+		const x = centerX + input * (size / 2);
+		const y = centerY - output * (size / 2);
 		if (point === 0) context.moveTo(x, y);
 		else context.lineTo(x, y);
 	}
@@ -196,29 +191,52 @@ function drawAmountWave(context, state, left, width, height) {
 	context.globalAlpha = 1;
 }
 
-function drawStepGrid(context, state, left, width, height) {
-	drawFrame(context, state, left, width, height, "STEPS", "ACTIVE CELLS");
-	const gridSize = Math.min(132, width - 54, height - 92);
-	const gap = Math.max(4, gridSize * 0.06);
-	const cellSize = (gridSize - gap * 3) / 4;
-	const startX = left + (width - gridSize) / 2;
-	const startY = 52 + (height - 92 - gridSize) / 2;
-	const activeCells = Math.round(state.value);
-	context.fillStyle = getComputedStyle(canvas).color;
+function drawRepeats(context, state, left, width, height) {
+	drawFrame(context, state, left, width, height, "PLACE END ←→");
+	const color = getComputedStyle(canvas).color;
+	const count = Math.round(state.value);
+	const startX = left + 42;
+	const endX = left + width - 42;
+	const centerY = height / 2 + 6;
+	const spacing = (endX - startX) / 15;
+	context.strokeStyle = color;
+	context.fillStyle = color;
+	context.lineCap = "round";
+	context.globalAlpha = 0.16;
+	context.lineWidth = 1;
+	context.beginPath();
+	context.moveTo(startX, centerY);
+	context.lineTo(endX, centerY);
+	context.stroke();
 
-	for (let cell = 0; cell < 16; cell += 1) {
-		const column = cell % 4;
-		const row = Math.floor(cell / 4);
-		context.globalAlpha = cell < activeCells ? 0.9 : 0.13;
-		const inset = state.dragging && cell < activeCells ? 0 : 2;
-		context.fillRect(
-			startX + column * (cellSize + gap) + inset,
-			startY + row * (cellSize + gap) + inset,
-			cellSize - inset * 2,
-			cellSize - inset * 2,
-		);
+	for (let echo = 0; echo < 16; echo += 1) {
+		const x = startX + echo * spacing;
+		const strength = 1 - echo / 20;
+		const pulseHeight = Math.max(18, (height - 150) * strength);
+		context.globalAlpha = echo < count ? 0.92 * strength : 0.12;
+		context.lineWidth = state.dragging && echo < count ? 5 : 3;
+		context.beginPath();
+		context.moveTo(x, centerY - pulseHeight / 2);
+		context.lineTo(x, centerY + pulseHeight / 2);
+		context.stroke();
+		context.beginPath();
+		context.arc(x, centerY, echo < count ? 4 : 2.5, 0, Math.PI * 2);
+		context.fill();
 	}
-	context.font = "13px ui-sans-serif, system-ui, sans-serif";
+
+	const handleX = startX + (count - 1) * spacing;
+	const handleHeight = Math.max(18, height - 150);
+	const handleTop = centerY - handleHeight / 2 - 7;
+	const handleBottom = centerY + handleHeight / 2 + 7;
+	context.globalAlpha = 1;
+	context.lineWidth = state.dragging ? 4 : 2.5;
+	context.beginPath();
+	context.moveTo(handleX - 9, handleTop);
+	context.lineTo(handleX, handleTop);
+	context.lineTo(handleX, handleBottom);
+	context.lineTo(handleX - 9, handleBottom);
+	context.stroke();
+	context.lineCap = "butt";
 	context.globalAlpha = 1;
 }
 
@@ -231,9 +249,9 @@ function formatEventValue(value) {
 function cleanup() {
 	resizeObserver.disconnect();
 	colorObserver.disconnect();
-	amountControl.dispose();
-	stepsControl.dispose();
-	parameters.unregisterControl(amountControl);
-	parameters.unregisterControl(stepsControl);
+	driveControl.dispose();
+	repeatsControl.dispose();
+	parameters.unregisterControl(driveControl);
+	parameters.unregisterControl(repeatsControl);
 	parameters.disconnect();
 }

@@ -156,7 +156,7 @@ tool exposes those settings but does not expose a separate service-tier switch.
 
 - Shared numeric behavior, explicit registration, built-in adoption, declarations,
   README guidance, and the custom-canvas example are implemented.
-- 143 focused unit/regression tests and 19 headless browser tests pass. The
+- 143 focused unit/regression tests and 20 headless browser tests pass. The
   browser checks include property-driven initialization, reconnects, silent host
   updates, cancellation after detachment, keyboard semantics, typed entry, and
   touch double-tap.

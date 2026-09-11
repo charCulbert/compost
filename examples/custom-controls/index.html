@@ -19,29 +19,19 @@
       </header>
 
       <section class="workbench">
-        <div class="panel wide">
-          <h2>What this demonstrates</h2>
-          <p class="muted">
-            This page owns the canvas drawing and hit testing. Compost turns its waveform and pad grid into two independent numeric controls, supplying parameter events, host-value synchronization, dragging, keyboard operation, and accessible slider semantics.
-          </p>
-        </div>
-
         <div class="panel custom-controls-panel">
           <div class="custom-controls-stage">
             <canvas id="custom-canvas" aria-hidden="true"></canvas>
-            <div id="amount-control" class="custom-control-hit"></div>
-            <div id="steps-control" class="custom-control-hit"></div>
+            <div id="drive-control" class="custom-control-hit"></div>
+            <div id="repeats-control" class="custom-control-hit"></div>
           </div>
-          <p class="custom-controls-hint">
-            <strong>How to use:</strong> Drag the waveform or pad grid up to increase and down to decrease. Tab moves between their semantic controls; Shift makes dragging finer, and Escape cancels an active drag.
-          </p>
         </div>
 
         <div class="panel sibling-panel">
           <h2>Same parameter, built-in view</h2>
           <compost-knob
-            parameter-id="amount"
-            label="Amount"
+            parameter-id="drive"
+            label="Drive"
             min="0"
             max="1"
             value="0.25"
@@ -49,10 +39,7 @@
             step="0.01"
             editable
           ></compost-knob>
-          <div class="custom-controls-actions">
-            <button class="example-nav-button" id="host-value" type="button">Host sets Amount to 0.75</button>
-            <button class="example-nav-button" id="refresh-controls" type="button">Refresh controls</button>
-          </div>
+          <button class="example-nav-button" id="host-value" type="button">Host sets Drive to 75%</button>
         </div>
 
         <div class="panel wide">
@@ -60,7 +47,6 @@
           <output id="events" class="log" aria-live="polite">Waiting for parameter events...</output>
         </div>
       </section>
-      <div class="demo-corner-title">Custom canvas controls</div>
     </main>
   </body>
 </html>
