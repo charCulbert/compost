@@ -1,7 +1,7 @@
 /** Registers a custom element unless the name is already taken. */
 export function defineElement(
 	name: string,
-	constructor: CustomElementConstructor,
+	elementConstructor: CustomElementConstructor,
 ): void;
 
 export function clamp(value: number, min: number, max: number): number;
@@ -59,13 +59,58 @@ export function formatValue(
 	} | null,
 ): string;
 
-/** A control that carries a parameter identity and value. */
-export interface ParameterControl extends HTMLElement {
+/** Numeric configuration understood by controller-compatible controls. */
+export interface ParameterControlConfiguration {
+	parameterID?: string;
+	kind?: ParameterKind;
+	name?: string;
+	label?: string;
+	min?: number;
+	max?: number;
+	defaultValue?: number;
+	resetValue?: number;
+	step?: number;
+	values?: readonly number[] | null;
+	unit?: string;
+	readOnly?: boolean;
+	disabled?: boolean;
+	mid?: number | null;
+	curve?: string | null;
+	shape?: number | null;
+}
+
+/** A structural numeric control; it need not be an element or event target. */
+export interface ParameterControl {
 	value?: number | null;
 	parameterID?: string;
 	parameterKind?: ParameterKind;
+	name?: string;
+	label?: string;
+	min?: number;
+	max?: number;
+	resetValue?: number;
+	step?: number;
+	parameterValues?: readonly number[] | null;
+	unit?: string;
+	readOnly?: boolean;
+	disabled?: boolean;
+	mid?: number | null;
+	curve?: string | null;
+	shape?: number | null;
+	eventTarget?: EventTarget;
 	setValue?: (value: number, shouldEmit?: boolean, source?: string) => void;
+	configure?(configuration: ParameterControlConfiguration): void;
+	getParameterValue?(): number;
+	getAttribute?(name: string): string | null;
+	setAttribute?(name: string, value: string): void;
+	removeAttribute?(name: string): void;
+	hasAttribute?(name: string): boolean;
+	toggleAttribute?(name: string, force?: boolean): boolean;
 }
+
+/** A parameter control that emits its own gesture events. */
+export type ParameterEventControl = ParameterControl &
+	Pick<EventTarget, "dispatchEvent">;
 
 /** The three shapes a parameter edit can take: free values, fixed choices, momentary presses. */
 export type ParameterKind = "continuous" | "discrete" | "trigger";
@@ -92,21 +137,21 @@ export function parameterEventDetail(
 
 /** Dispatches `parameter-begin` once for the gesture. */
 export function beginParameterGesture(
-	control: ParameterControl,
+	control: ParameterEventControl,
 	value?: number,
 	extra?: Record<string, unknown>,
 ): void;
 
 /** Dispatches `parameter-edit`, beginning the gesture first when needed. */
 export function editParameterGesture(
-	control: ParameterControl,
+	control: ParameterEventControl,
 	value?: number,
 	extra?: Record<string, unknown>,
 ): void;
 
 /** Dispatches `parameter-end`; `{cancelled: true}` restores the start value. */
 export function endParameterGesture(
-	control: ParameterControl,
+	control: ParameterEventControl,
 	value?: number,
 	extra?: Record<string, unknown>,
 ): void;

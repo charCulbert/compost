@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Custom canvas controls · Compost</title>
+    <link rel="stylesheet" href="../shared/styles.css">
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="../shared/example-page.js"></script>
+    <script type="module" src="./main.js"></script>
+  </head>
+  <body data-example-id="custom-controls">
+    <main class="shell custom-controls-shell">
+      <header class="topbar" data-example-nav>
+        <div>
+          <p>Compost example</p>
+          <h1>Custom canvas controls</h1>
+        </div>
+      </header>
+
+      <section class="workbench">
+        <div class="panel wide">
+          <h2>What this demonstrates</h2>
+          <p class="muted">
+            This page owns the canvas drawing and hit testing. Compost turns its waveform and pad grid into two independent numeric controls, supplying parameter events, host-value synchronization, dragging, keyboard operation, and accessible slider semantics.
+          </p>
+        </div>
+
+        <div class="panel custom-controls-panel">
+          <div class="custom-controls-stage">
+            <canvas id="custom-canvas" aria-hidden="true"></canvas>
+            <div id="amount-control" class="custom-control-hit"></div>
+            <div id="steps-control" class="custom-control-hit"></div>
+          </div>
+          <p class="custom-controls-hint">
+            <strong>How to use:</strong> Drag the waveform or pad grid up to increase and down to decrease. Tab moves between their semantic controls; Shift makes dragging finer, and Escape cancels an active drag.
+          </p>
+        </div>
+
+        <div class="panel sibling-panel">
+          <h2>Same parameter, built-in view</h2>
+          <compost-knob
+            parameter-id="amount"
+            label="Amount"
+            min="0"
+            max="1"
+            value="0.25"
+            reset-value="0.25"
+            step="0.01"
+            editable
+          ></compost-knob>
+          <div class="custom-controls-actions">
+            <button class="example-nav-button" id="host-value" type="button">Host sets Amount to 0.75</button>
+            <button class="example-nav-button" id="refresh-controls" type="button">Refresh controls</button>
+          </div>
+        </div>
+
+        <div class="panel wide">
+          <h2>Parameter events</h2>
+          <output id="events" class="log" aria-live="polite">Waiting for parameter events...</output>
+        </div>
+      </section>
+      <div class="demo-corner-title">Custom canvas controls</div>
+    </main>
+  </body>
+</html>

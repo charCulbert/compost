@@ -27,7 +27,8 @@ function definitionFromControl(control) {
 	if (!parameterID) return null;
 
 	const value = number(control.getParameterValue?.() ?? control.value, 0);
-	const declaredDefault = control.getAttribute?.("reset-value");
+	const declaredDefault =
+		control.resetValue ?? control.getAttribute?.("reset-value");
 	const defaultValue = number(declaredDefault, value);
 	const kind =
 		control.parameterKind ||
@@ -39,14 +40,19 @@ function definitionFromControl(control) {
 
 	const scale = {};
 	for (const field of ["mid", "curve", "shape"]) {
-		if (control.hasAttribute?.(field))
+		if (control[field] !== null && control[field] !== undefined) {
+			scale[field] = control[field];
+		} else if (control.hasAttribute?.(field)) {
 			scale[field] = control.getAttribute(field);
+		}
 	}
 
 	return normaliseDefinition({
 		parameterID,
 		kind,
 		name:
+			control.name ||
+			control.label ||
 			control.getAttribute?.("name") ||
 			control.getAttribute?.("label") ||
 			parameterID,
@@ -175,6 +181,11 @@ function validValue(definition, value) {
 }
 
 function applyDefinition(control, definition) {
+	if (typeof control.configure === "function") {
+		control.configure(definition);
+		return;
+	}
+
 	const fields = {
 		"parameter-kind": definition.kind,
 		min: definition.min,
@@ -220,11 +231,94 @@ function eventValue(detail, fallback = null) {
 	return parsed;
 }
 
+function parameterIDFromControl(control) {
+	return String(
+		control.parameterID || control.getAttribute?.("parameter-id") || "",
+	);
+}
+
+function controlEventTarget(control) {
+	const target = control.eventTarget ?? control;
+	return typeof target?.addEventListener === "function" &&
+		typeof target?.removeEventListener === "function"
+		? target
+		: null;
+}
+
+function addControl(controller, control) {
+	const parameterID = parameterIDFromControl(control);
+	if (!parameterID) return false;
+
+	let definition = controller.definitions.get(parameterID);
+	if (definition && controller.externalDefinitions.has(parameterID)) {
+		applyDefinition(control, definition);
+	} else {
+		const local = definitionFromControl(control);
+		if (!local) return false;
+		if (definition && !sameDefinition(definition, local)) {
+			throw new Error(`Conflicting parameter definition for "${parameterID}".`);
+		}
+		if (!definition) {
+			definition = local;
+			controller.definitions.set(parameterID, local);
+		}
+	}
+
+	const controls = controller.controls.get(parameterID) || new Set();
+	controls.add(control);
+	controller.controls.set(parameterID, controls);
+	controller.controlIDs.set(control, parameterID);
+
+	const target = controlEventTarget(control);
+	if (target && target !== controller.root) {
+		const targetControls = controller.controlTargets.get(target) || new Set();
+		if (targetControls.size === 0) {
+			target.addEventListener("parameter-begin", controller.handleEvent);
+			target.addEventListener("parameter-edit", controller.handleEvent);
+			target.addEventListener("parameter-end", controller.handleEvent);
+		}
+		targetControls.add(control);
+		controller.controlTargets.set(target, targetControls);
+	}
+
+	if (!controller.values.has(parameterID)) {
+		controller.values.set(parameterID, definition.defaultValue);
+	}
+
+	setControlValue(control, controller.values.get(parameterID), "controller");
+	return true;
+}
+
+function removeControl(controller, control) {
+	const parameterID = controller.controlIDs.get(control);
+	if (!parameterID) return;
+
+	const controls = controller.controls.get(parameterID);
+	controls?.delete(control);
+	if (!controls?.size) controller.controls.delete(parameterID);
+	controller.controlIDs.delete(control);
+
+	const target = controlEventTarget(control);
+	const targetControls = target ? controller.controlTargets.get(target) : null;
+	targetControls?.delete(control);
+	if (target && targetControls?.size === 0) {
+		target.removeEventListener("parameter-begin", controller.handleEvent);
+		target.removeEventListener("parameter-edit", controller.handleEvent);
+		target.removeEventListener("parameter-end", controller.handleEvent);
+		controller.controlTargets.delete(target);
+	}
+}
+
 export class ParameterController extends EventTarget {
 	constructor({ root = globalThis.document ?? null, definitions = null } = {}) {
 		super();
 		this.root = root;
 		this.controls = new Map();
+		this.controlIDs = new Map();
+		this.explicitControls = new Set();
+		this.discoveredControls = new Set();
+		this.controlTargets = new Map();
+		this.handledEvents = new WeakSet();
 		this.definitions = new Map();
 		this.externalDefinitions = new Set();
 		this.values = new Map();
@@ -259,19 +353,6 @@ export class ParameterController extends EventTarget {
 			nextExternalDefinitions.add(normalised.parameterID);
 		}
 
-		const nextValues = new Map(
-			[...previousValues].filter(
-				([parameterID]) =>
-					nextDefinitions.has(parameterID) || this.controls.has(parameterID),
-			),
-		);
-		for (const [parameterID, definition] of nextDefinitions) {
-			const previous = previousValues.get(parameterID);
-			nextValues.set(
-				parameterID,
-				validValue(definition, previous) ? previous : definition.defaultValue,
-			);
-		}
 		for (const [parameterID, controls] of this.controls) {
 			let definition = nextDefinitions.get(parameterID);
 			if (!definition) {
@@ -291,7 +372,23 @@ export class ParameterController extends EventTarget {
 				}
 				nextDefinitions.set(parameterID, definition);
 			}
+		}
 
+		for (const [parameterID, controls] of this.controls) {
+			const definition = nextDefinitions.get(parameterID);
+			if (!definition) continue;
+			controls.forEach((control) => {
+				applyDefinition(control, definition);
+			});
+		}
+
+		const nextValues = new Map(
+			[...previousValues].filter(
+				([parameterID]) =>
+					nextDefinitions.has(parameterID) || this.controls.has(parameterID),
+			),
+		);
+		for (const [parameterID, definition] of nextDefinitions) {
 			const previous = previousValues.get(parameterID);
 			nextValues.set(
 				parameterID,
@@ -306,10 +403,9 @@ export class ParameterController extends EventTarget {
 		for (const [parameterID, controls] of this.controls) {
 			const definition = this.definitions.get(parameterID);
 			if (!definition) continue;
-			controls.forEach((control) => applyDefinition(control, definition));
-			controls.forEach((control) =>
-				setControlValue(control, this.values.get(parameterID), "definitions"),
-			);
+			controls.forEach((control) => {
+				setControlValue(control, this.values.get(parameterID), "definitions");
+			});
 		}
 
 		return this;
@@ -324,42 +420,33 @@ export class ParameterController extends EventTarget {
 	}
 
 	registerControl(control) {
+		if (!control || !this.connected) return control;
+
+		const registeredID = this.controlIDs.get(control);
+		if (
+			this.explicitControls.has(control) &&
+			registeredID === parameterIDFromControl(control)
+		)
+			return control;
+		if (this.explicitControls.has(control)) this.unregisterControl(control);
+
+		if (!this.controlIDs.has(control) && !addControl(this, control))
+			return control;
+		this.explicitControls.add(control);
+		return control;
+	}
+
+	unregisterControl(control) {
 		if (!control) return control;
 
-		const parameterID =
-			control.parameterID || control.getAttribute?.("parameter-id") || "";
-		if (!parameterID) return control;
-
-		let definition = this.definitions.get(parameterID);
-		if (definition && this.externalDefinitions.has(parameterID)) {
-			applyDefinition(control, definition);
-		} else {
-			const local = definitionFromControl(control);
-			if (!local) return control;
-			if (definition && !sameDefinition(definition, local)) {
-				throw new Error(
-					`Conflicting parameter definition for "${parameterID}".`,
-				);
-			}
-			if (!definition) {
-				definition = local;
-				this.definitions.set(parameterID, local);
-			}
-		}
-
-		const controls = this.controls.get(parameterID) || new Set();
-		controls.add(control);
-		this.controls.set(parameterID, controls);
-
-		if (!this.values.has(parameterID)) {
-			this.values.set(parameterID, definition.defaultValue);
-		}
-
-		setControlValue(control, this.values.get(parameterID), "controller");
+		this.explicitControls.delete(control);
+		this.discoveredControls.delete(control);
+		removeControl(this, control);
 		return control;
 	}
 
 	refresh() {
+		if (!this.connected) return this;
 		const query = this.root?.querySelectorAll;
 		if (typeof query !== "function" && typeof this.root?.matches !== "function")
 			return this;
@@ -370,13 +457,19 @@ export class ParameterController extends EventTarget {
 			controls.push(...query.call(this.root, PARAMETER_SELECTOR));
 
 		const seen = new Set(controls);
-		controls.forEach((control) => this.registerControl(control));
-
-		for (const [parameterID, registered] of this.controls) {
-			for (const control of registered) {
-				if (!seen.has(control)) registered.delete(control);
+		for (const control of seen) {
+			const registeredID = this.controlIDs.get(control);
+			if (registeredID && registeredID !== parameterIDFromControl(control)) {
+				removeControl(this, control);
 			}
-			if (!registered.size) this.controls.delete(parameterID);
+			if (!this.controlIDs.has(control)) addControl(this, control);
+			this.discoveredControls.add(control);
+		}
+
+		for (const control of this.discoveredControls) {
+			if (seen.has(control)) continue;
+			this.discoveredControls.delete(control);
+			if (!this.explicitControls.has(control)) removeControl(this, control);
 		}
 
 		return this;
@@ -434,7 +527,24 @@ export class ParameterController extends EventTarget {
 	}
 
 	handleEvent(event) {
+		if (this.handledEvents.has(event)) return;
 		const id = String(event.detail?.parameterID || "");
+		const targetControls = this.controlTargets.get(event.currentTarget);
+		if (targetControls) {
+			if (event.target !== event.currentTarget) return;
+			let registered = false;
+			for (const control of targetControls) {
+				if (this.controlIDs.get(control) === id) {
+					registered = true;
+					break;
+				}
+			}
+			if (!registered) {
+				this.handledEvents.add(event);
+				return;
+			}
+		}
+		this.handledEvents.add(event);
 		const definition = this.definition(id);
 		if (!definition || definition.readOnly) return;
 
@@ -456,8 +566,7 @@ export class ParameterController extends EventTarget {
 		) {
 			this.values.set(id, parsed);
 			for (const control of this.controls.get(id) || []) {
-				if (control !== event.target)
-					setControlValue(control, parsed, "sibling");
+				setControlValue(control, parsed, "sibling");
 			}
 		}
 
@@ -470,7 +579,16 @@ export class ParameterController extends EventTarget {
 		this.root?.removeEventListener?.("parameter-begin", this.handleEvent);
 		this.root?.removeEventListener?.("parameter-edit", this.handleEvent);
 		this.root?.removeEventListener?.("parameter-end", this.handleEvent);
+		for (const target of this.controlTargets.keys()) {
+			target.removeEventListener("parameter-begin", this.handleEvent);
+			target.removeEventListener("parameter-edit", this.handleEvent);
+			target.removeEventListener("parameter-end", this.handleEvent);
+		}
+		this.controlTargets.clear();
+		this.explicitControls.clear();
+		this.discoveredControls.clear();
 		this.controls.clear();
+		this.controlIDs.clear();
 	}
 }
 

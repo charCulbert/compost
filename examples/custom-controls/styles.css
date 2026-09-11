@@ -1,0 +1,75 @@
+.custom-controls-shell {
+	max-width: 1120px;
+}
+
+.custom-controls-shell .topbar {
+	align-items: flex-start;
+}
+
+.custom-controls-shell .topbar > div {
+	min-width: 0;
+}
+
+.custom-controls-shell .topbar h1 {
+	overflow-wrap: anywhere;
+}
+
+.custom-controls-panel {
+	min-width: 0;
+	grid-column: 1 / -1;
+}
+
+.custom-controls-stage {
+	position: relative;
+	width: 100%;
+	max-width: 720px;
+	height: clamp(220px, 32vw, 360px);
+}
+
+#custom-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border: 1px solid var(--line);
+	background: var(--bg);
+	cursor: ns-resize;
+	touch-action: none;
+	user-select: none;
+}
+
+.custom-control-hit {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 50%;
+	pointer-events: none;
+}
+
+#amount-control {
+	left: 0;
+}
+
+#steps-control {
+	right: 0;
+}
+
+.custom-controls-hint {
+	margin: 0;
+}
+
+.sibling-panel {
+	align-content: start;
+	justify-items: start;
+	grid-column: 1 / -1;
+}
+
+.sibling-panel h2,
+.wide h2 {
+	font-size: 16px;
+}
+
+.custom-controls-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}

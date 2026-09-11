@@ -1,9 +1,9 @@
 {
 	"name": "compost",
-	"version": "0.1.7",
+	"version": "0.2.0",
 	"private": false,
 	"type": "module",
-	"description": "Web Components and utilities for audio app UIs.",
+	"description": "Customizable Web Components and intent-emitting UI controls.",
 	"author": "Charlie Culbert",
 	"license": "MIT",
 	"repository": {
@@ -50,6 +50,7 @@
 		"./selection-region": "./src/selection-region.js",
 		"./time-grid": "./src/time-grid.js",
 		"./parameter-scale": "./src/parameter-scale.js",
+		"./value-control": "./src/value-control.js",
 		"./touch-double-click": "./src/internal/touch-double-click.js",
 		"./utils": "./src/utils.js"
 	},
@@ -57,6 +58,7 @@
 		"src"
 	],
 	"scripts": {
+		"check": "biome check . --max-diagnostics=none",
 		"dev": "python3 examples/serve.py",
 		"test": "node --test 'test/*.test.js'",
 		"test:e2e": "playwright test"

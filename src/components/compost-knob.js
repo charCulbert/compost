@@ -1,25 +1,8 @@
-import { installTouchDoubleClick } from "../internal/touch-double-click.js";
-import {
-	moveValueByNormalisedDelta,
-	normaliseCurveName,
-	normalisedKeyboardStep,
-	normalisedPositionToValue,
-	valueToNormalisedPosition,
-} from "../parameter-scale.js";
-import {
-	beginParameterGesture,
-	clamp,
-	defineElement,
-	editParameterGesture,
-	endParameterGesture,
-	formatNumber,
-	formatValue,
-	numberAttr,
-	snap,
-} from "../utils.js";
+import { normaliseCurveName } from "../parameter-scale.js";
+import { defineElement, formatNumber, numberAttr } from "../utils.js";
+import { createValueControl } from "../value-control.js";
 
 let nextKnobID = 1;
-const FINE_DRAG_SCALE = 0.1;
 
 export class CompostKnob extends HTMLElement {
 	static get observedAttributes() {
@@ -65,14 +48,14 @@ export class CompostKnob extends HTMLElement {
 		this.displayFractionDigits = null;
 		this.unit = "";
 		this.valueText = "";
-		this._value = 0.5;
+		this.disconnectedValue = 0.5;
 		this.resetValue = 0.5;
 		this.minLabel = "";
 		this.maxLabel = "";
 		this.inputID = `compost-knob-${nextKnobID++}`;
 		this.labelID = `${this.inputID}-label`;
 		this.lastUpdateSource = "control";
-		this.lastClickTime = 0;
+		this.valueControl = null;
 
 		this.root = this.attachShadow({ mode: "open" });
 		this.root.innerHTML = `
@@ -244,35 +227,45 @@ export class CompostKnob extends HTMLElement {
 		this.labelElement = this.root.querySelector(".label");
 		this.valueElement = this.root.querySelector(".value");
 
-		this.dial.addEventListener("pointerdown", (event) => this.beginDrag(event));
-		installTouchDoubleClick(this.dial, { dispatch: false });
-		this.addEventListener("keydown", (event) => this.handleKey(event));
 		this.valueElement.addEventListener("click", (event) => {
 			event.preventDefault();
 			event.stopPropagation();
 			this.beginValueEdit();
 		});
+		this.dial.addEventListener("pointerdown", () => this.syncValueControl());
+		this.addEventListener("keydown", (event) => {
+			this.syncValueControl();
+			this.handleValueEditKey(event);
+		});
 	}
 
 	connectedCallback() {
+		this.connectValueControl();
 		this.readAttributes();
-		this.refresh();
 	}
 
-	attributeChangedCallback() {
-		this.readAttributes();
-		this.refresh();
+	disconnectedCallback() {
+		if (!this.valueControl) return;
+		this.finishValueEdit?.(false);
+		this.valueControl.dispose();
+		this.disconnectedValue = this.valueControl.value;
+		this.valueControl = null;
+	}
+
+	attributeChangedCallback(name) {
+		this.readAttributes(name);
 	}
 
 	get value() {
-		return this._value;
+		return this.valueControl?.value ?? this.disconnectedValue;
 	}
 
 	set value(value) {
 		this.setValue(value, false);
 	}
 
-	readAttributes() {
+	readAttributes(changedAttribute = null) {
+		this.finishValueEdit?.(false);
 		this.name = this.getAttribute("name") || this.name;
 		this.parameterID = this.getAttribute("parameter-id") || "";
 		this.label = this.getAttribute("label") || this.label;
@@ -302,7 +295,93 @@ export class CompostKnob extends HTMLElement {
 		this.resetValue = numberAttr(this, "reset-value", this.resetValue);
 		this.minLabel = this.getAttribute("min-label") ?? "";
 		this.maxLabel = this.getAttribute("max-label") ?? "";
-		this.setValue(numberAttr(this, "value", this._value), false);
+		const value = numberAttr(this, "value", this.value);
+		if (!this.valueControl) {
+			this.disconnectedValue = value;
+			return;
+		}
+
+		this.valueControl.configure(
+			this.valueControlOptions(
+				changedAttribute === "value" ? value : undefined,
+			),
+		);
+		this.valueControlConfigurationKey = this.configurationKey();
+	}
+
+	valueControlOptions(value) {
+		return {
+			parameterID: this.parameterID,
+			parameterKind: this.parameterKind,
+			name: this.name,
+			label: this.label,
+			min: this.min,
+			max: this.max,
+			mid: this.mid,
+			curve: this.curve,
+			shape: this.shape,
+			positionStep: this.positionStep,
+			step: this.step,
+			...(value === undefined ? {} : { value }),
+			resetValue: this.resetValue,
+			unit: this.unit,
+			text: this.valueText,
+			displayFractionDigits: this.displayFractionDigits,
+			minLabel: this.minLabel,
+			maxLabel: this.maxLabel,
+			disabled: this.disabled,
+			orientation: "vertical",
+			pointerTarget: this.dial,
+			drag: {
+				axis: "y",
+				mode: "relative",
+				distance: 180,
+				fineScale: 0.1,
+				pointerLock: this.hasAttribute("pointer-lock"),
+			},
+			draw: (state) => this.refresh(state),
+		};
+	}
+
+	connectValueControl() {
+		if (this.valueControl) return;
+		this.valueControl = createValueControl(
+			this,
+			this.valueControlOptions(this.disconnectedValue),
+		);
+		this.valueControlConfigurationKey = this.configurationKey();
+	}
+
+	configurationKey() {
+		return JSON.stringify([
+			this.parameterID,
+			this.parameterKind,
+			this.name,
+			this.label,
+			this.min,
+			this.max,
+			this.mid,
+			this.curve,
+			this.shape,
+			this.positionStep,
+			this.step,
+			this.resetValue,
+			this.unit,
+			this.valueText,
+			this.displayFractionDigits,
+			this.minLabel,
+			this.maxLabel,
+			this.disabled,
+			this.hasAttribute("pointer-lock"),
+		]);
+	}
+
+	syncValueControl() {
+		if (!this.valueControl) return;
+		const key = this.configurationKey();
+		if (key === this.valueControlConfigurationKey) return;
+		this.valueControl.configure(this.valueControlOptions());
+		this.valueControlConfigurationKey = key;
 	}
 
 	get editable() {
@@ -322,299 +401,16 @@ export class CompostKnob extends HTMLElement {
 	}
 
 	setValue(value, shouldEmit = true, source = "control") {
-		const numericValue = Number(value);
-		if (!Number.isFinite(numericValue)) return;
-		const nextValue = clamp(snap(numericValue, this.step), this.min, this.max);
-
-		if (nextValue === this._value) {
+		if (!this.valueControl) {
+			const numericValue = Number(value);
+			if (Number.isFinite(numericValue)) this.disconnectedValue = numericValue;
 			return;
 		}
-
-		this.lastUpdateSource = source;
-		this._value = nextValue;
-		this.refresh();
-
-		if (shouldEmit) {
-			editParameterGesture(this, this.value, { source });
-		}
-	}
-
-	beginDrag(event) {
-		// Only the primary button drags. A secondary button opens the context
-		// menu, which swallows the pointerup and would leave the drag running.
-		if (this.disabled || (event.button !== undefined && event.button !== 0))
-			return;
-
-		event.preventDefault();
-		HTMLElement.prototype.focus.call(this, { preventScroll: true });
-		this.dial.setPointerCapture(event.pointerId);
-
-		let ended = false;
-		const drag = {
-			pointerId: event.pointerId,
-			startX: event.clientX,
-			startY: event.clientY,
-			startValue: this.value,
-			distance: 0,
-			moved: false,
-			fineCandidate:
-				this.lastClickTime > 0 && performance.now() - this.lastClickTime < 380,
-			fine: Boolean(event.shiftKey),
-			locked: false,
-		};
-		beginParameterGesture(this, this.value);
-
-		let lockFallbackTimer = null;
-
-		const applyDistance = (distance, sourceEvent) => {
-			if (drag.fineCandidate && Math.abs(distance) <= 4) {
-				sourceEvent?.preventDefault?.();
-				return;
-			}
-
-			if (drag.fineCandidate && Math.abs(distance) > 4) {
-				drag.fine = true;
-			}
-			drag.moved = drag.moved || Math.abs(distance) > 4;
-			const scale = drag.fine || sourceEvent?.shiftKey ? FINE_DRAG_SCALE : 1;
-			this.setValue(
-				moveValueByNormalisedDelta(
-					drag.startValue,
-					(distance / 180) * scale,
-					this.scaleOptions(),
-				),
-			);
-			sourceEvent?.preventDefault?.();
-		};
-
-		const isPointerLocked = () => {
-			const root = this.dial?.getRootNode?.();
-			return (
-				document.pointerLockElement === this.dial ||
-				document.pointerLockElement === this ||
-				root?.pointerLockElement === this.dial
-			);
-		};
-
-		const clearLockFallbackTimer = () => {
-			if (lockFallbackTimer) {
-				clearTimeout(lockFallbackTimer);
-				lockFallbackTimer = null;
-			}
-		};
-
-		const fallbackPointerLock = () => {
-			clearLockFallbackTimer();
-			if (isPointerLocked()) {
-				document.exitPointerLock?.();
-			}
-			drag.locked = false;
-		};
-
-		const startLockFallbackTimer = () => {
-			clearLockFallbackTimer();
-			drag.lockDeltaEvents = 0;
-			lockFallbackTimer = setTimeout(() => {
-				if (
-					!ended &&
-					drag.locked &&
-					drag.lockDeltaEvents === 0 &&
-					isPointerLocked()
-				) {
-					fallbackPointerLock();
-				}
-			}, 350);
-		};
-
-		const move = (moveEvent) => {
-			if (moveEvent.pointerId !== drag.pointerId) {
-				return;
-			}
-
-			if (drag.locked) {
-				return;
-			}
-
-			applyDistance(drag.startY - moveEvent.clientY, moveEvent);
-		};
-
-		const lockedMove = (moveEvent) => {
-			if (!isPointerLocked()) {
-				return;
-			}
-
-			drag.locked = true;
-			const movementY = Number(moveEvent.movementY);
-			if (!Number.isFinite(movementY)) {
-				fallbackPointerLock();
-				return;
-			}
-
-			if (movementY !== 0) {
-				drag.lockDeltaEvents = (drag.lockDeltaEvents || 0) + 1;
-			}
-
-			drag.distance -= movementY;
-			applyDistance(drag.distance, moveEvent);
-		};
-
-		const lockedMouseUp = () => {
-			end({ pointerId: drag.pointerId, type: "pointerup" });
-		};
-
-		const pointerLockChange = () => {
-			if (ended) {
-				return;
-			}
-
-			if (isPointerLocked()) {
-				drag.locked = true;
-				startLockFallbackTimer();
-				return;
-			}
-
-			if (drag.locked) {
-				end({ pointerId: drag.pointerId, type: "pointerup" });
-			}
-		};
-
-		const cleanup = () => {
-			clearLockFallbackTimer();
-			this.dial.removeEventListener("pointerup", end);
-			this.dial.removeEventListener("pointercancel", end);
-			window.removeEventListener("pointermove", move);
-			window.removeEventListener("pointerup", end);
-			window.removeEventListener("pointercancel", end);
-			window.removeEventListener("blur", cancel);
-			document.removeEventListener("mousemove", lockedMove);
-			document.removeEventListener("mouseup", lockedMouseUp);
-			document.removeEventListener("pointerlockchange", pointerLockChange);
-			document.removeEventListener("pointerlockerror", fallbackPointerLock);
-			if (isPointerLocked()) {
-				document.exitPointerLock?.();
-			}
-		};
-
-		const cancel = () => {
-			if (ended) {
-				return;
-			}
-
-			ended = true;
-			cleanup();
-			this.lastClickTime = 0;
-			endParameterGesture(this, this.value, { cancelled: true });
-		};
-
-		const end = (endEvent) => {
-			if (ended) {
-				return;
-			}
-
-			if (endEvent.pointerId !== drag.pointerId) {
-				return;
-			}
-
-			ended = true;
-			if (this.dial.hasPointerCapture?.(endEvent.pointerId)) {
-				this.dial.releasePointerCapture(endEvent.pointerId);
-			}
-			cleanup();
-
-			if (endEvent.type === "pointercancel") {
-				this.lastClickTime = 0;
-				endParameterGesture(this, this.value, { cancelled: true });
-				return;
-			}
-
-			if (!drag.moved && this.handleClickReset()) {
-				return;
-			}
-
-			if (drag.moved) {
-				this.lastClickTime = 0;
-			}
-
-			endParameterGesture(this, this.value);
-		};
-
-		this.dial.addEventListener("pointerup", end);
-		this.dial.addEventListener("pointercancel", end);
-		window.addEventListener("pointermove", move);
-		window.addEventListener("pointerup", end);
-		window.addEventListener("pointercancel", end);
-		window.addEventListener("blur", cancel);
-		document.addEventListener("mousemove", lockedMove);
-		document.addEventListener("mouseup", lockedMouseUp);
-		document.addEventListener("pointerlockchange", pointerLockChange);
-		document.addEventListener("pointerlockerror", fallbackPointerLock);
-
-		if (this.hasAttribute("pointer-lock")) {
-			try {
-				const pointerLockRequest = this.dial.requestPointerLock?.();
-				pointerLockRequest?.catch?.(() => fallbackPointerLock());
-			} catch {
-				fallbackPointerLock();
-			}
-		}
-	}
-
-	handleKey(event) {
-		if (this.disabled) return;
-
-		if (this.handleValueEditKey(event)) {
-			return;
-		}
-
-		const smallStep = this.normalisedKeyboardStep();
-		const largeStep = this.largeNormalisedKeyboardStep();
-		const arrowStep = event.altKey ? largeStep : smallStep;
-		const deltas = {
-			ArrowUp: arrowStep,
-			ArrowRight: arrowStep,
-			ArrowDown: -arrowStep,
-			ArrowLeft: -arrowStep,
-			PageUp: largeStep,
-			PageDown: -largeStep,
-		};
-
-		if (
-			event.key === "Escape" ||
-			event.key === "Delete" ||
-			event.key === "Backspace"
-		) {
-			event.preventDefault();
-			this.reset();
-			return;
-		}
-
-		if (event.key === "Home") {
-			event.preventDefault();
-			this.setValue(this.min);
-			endParameterGesture(this, this.value);
-			return;
-		}
-
-		if (event.key === "End") {
-			event.preventDefault();
-			this.setValue(this.max);
-			endParameterGesture(this, this.value);
-			return;
-		}
-
-		if (deltas[event.key] === undefined) {
-			return;
-		}
-
-		event.preventDefault();
-		this.setValue(
-			normalisedPositionToValue(
-				valueToNormalisedPosition(this.value, this.scaleOptions()) +
-					deltas[event.key],
-				this.scaleOptions(),
-			),
-		);
-		endParameterGesture(this, this.value);
+		this.syncValueControl();
+		const previousValue = this.value;
+		if (shouldEmit) this.valueControl.editValue(value, source);
+		else this.valueControl.setValue(value, false, source);
+		if (this.value !== previousValue) this.lastUpdateSource = source;
 	}
 
 	handleValueEditKey(event) {
@@ -634,44 +430,15 @@ export class CompostKnob extends HTMLElement {
 			return true;
 		}
 
-		if (!/^[0-9.+-]$/u.test(event.key)) {
-			return false;
-		}
-
+		if (!/^[0-9.+-]$/u.test(event.key)) return false;
 		event.preventDefault();
 		this.beginValueEdit(event.key, false);
 		return true;
 	}
 
-	normalisedKeyboardStep() {
-		return normalisedKeyboardStep({
-			min: this.min,
-			max: this.max,
-			step: this.step,
-			positionStep: this.positionStep,
-		});
-	}
-
-	largeNormalisedKeyboardStep() {
-		return clamp(this.normalisedKeyboardStep() * 10, 0, 1);
-	}
-
-	handleClickReset() {
-		const now = performance.now();
-
-		if (now - this.lastClickTime < 380) {
-			this.lastClickTime = 0;
-			this.reset();
-			return true;
-		} else {
-			this.lastClickTime = now;
-			return false;
-		}
-	}
-
 	reset() {
-		this.setValue(this.resetValue);
-		endParameterGesture(this, this.value);
+		this.syncValueControl();
+		this.valueControl?.reset();
 	}
 
 	editableValueText() {
@@ -679,10 +446,16 @@ export class CompostKnob extends HTMLElement {
 	}
 
 	beginValueEdit(initialValue = this.editableValueText(), selectValue = true) {
-		if (this.disabled || !this.editable || this.isEditingValue) return;
+		if (
+			this.disabled ||
+			!this.editable ||
+			this.isEditingValue ||
+			!this.valueControl
+		)
+			return;
 
 		this.isEditingValue = true;
-		beginParameterGesture(this, this.value);
+		this.valueControl.beginGesture();
 
 		const input = document.createElement("input");
 		input.className = "value-editor";
@@ -699,13 +472,14 @@ export class CompostKnob extends HTMLElement {
 
 			const nextValue = Number(input.value);
 			this.isEditingValue = false;
+			this.finishValueEdit = null;
 
 			if (commit && input.value.trim() !== "" && Number.isFinite(nextValue)) {
-				this.setValue(nextValue);
-				endParameterGesture(this, this.value);
+				this.valueControl.editValue(nextValue);
+				this.valueControl.endGesture();
 			} else {
 				this.refresh();
-				endParameterGesture(this, this.value, { cancelled: true });
+				this.valueControl.endGesture(true);
 			}
 
 			if (restoreFocus) {
@@ -714,6 +488,7 @@ export class CompostKnob extends HTMLElement {
 				);
 			}
 		};
+		this.finishValueEdit = finish;
 
 		input.addEventListener("keydown", (event) => {
 			event.stopPropagation();
@@ -739,56 +514,24 @@ export class CompostKnob extends HTMLElement {
 		}
 	}
 
-	refresh() {
+	refresh(state = this.valueState) {
 		if (!this.dial) {
 			return;
 		}
+		if (state) this.valueState = state;
+		else return;
 
-		const normalised = valueToNormalisedPosition(
-			this.value,
-			this.scaleOptions(),
-		);
-		const arcRatio = clamp(normalised, 0, 1);
+		const normalised = state.position;
+		const arcRatio = Math.min(1, Math.max(0, normalised));
 		this.dial.style.setProperty("--arc-ratio", String(arcRatio));
 		this.dial.style.setProperty("--arc", `${arcRatio * 270}deg`);
 		this.cap.style.transform = `rotate(${-135 + normalised * 270}deg)`;
 		this.labelElement.textContent = this.label;
 		this.labelElement.id = this.labelID;
-		const valueText = formatValue(
-			this.value,
-			this.step,
-			this.unit,
-			this.valueText,
-			this.displayFractionDigits,
-			{
-				min: this.min,
-				max: this.max,
-				minLabel: this.minLabel,
-				maxLabel: this.maxLabel,
-			},
-		);
 		if (!this.isEditingValue) {
-			this.valueElement.textContent = valueText;
+			this.valueElement.textContent = state.valueText;
 		}
 		this.refreshEditableValue();
-		this.tabIndex = this.disabled ? -1 : 0;
-		this.setAttribute("role", "slider");
-		this.setAttribute("aria-label", this.label);
-		this.setAttribute("aria-valuemin", String(this.min));
-		this.setAttribute("aria-valuemax", String(this.max));
-		this.setAttribute("aria-valuenow", String(this.value));
-		this.setAttribute("aria-valuetext", valueText);
-		this.setAttribute("aria-disabled", this.disabled ? "true" : "false");
-	}
-
-	scaleOptions() {
-		return {
-			min: this.min,
-			max: this.max,
-			mid: this.mid,
-			curve: this.curve,
-			shape: this.shape,
-		};
 	}
 
 	refreshEditableValue() {

@@ -1,13 +1,14 @@
 # Compost
 
-Web Components and utilities that I use to build UIs for audio apps, in the
-browser or as the webview UI of a native app/plugin. 
+Customizable Web Components and utilities for interactive UIs, in the browser
+or a native app's webview. Audio apps are one use, not a requirement.
 
-The components here handle presentation
-and interaction and emit intent as DOM events. For example, a knob fires
+The components provide useful default presentation and interaction, emit intent
+as DOM events, and can receive values without emitting new intent. A knob fires
 `parameter-edit` with a parameter ID and a value, and an editor
 fires `envelope-change` with the new points. The consuming application
-links those events to its actual parameters and data model.
+decides what those edits mean and can synchronize the controls with its own
+state. Local interaction works without a controller or backend.
 
 ## Install
 
@@ -111,6 +112,7 @@ Devices: `compost-audio`, `compost-midi`, `compost-device-selector`,
 `compost-midi-monitor`, `compost-midi-mappings`.
 
 Utilities: `parameter-controller` (wires controls to your backend),
+`value-control` (numeric controls with your own graphics),
 `parameter-scale` (linear/log/gain curves), `midi`, `midi-mapping`,
 `midi-mappings`, `midi-learn-ui`, `device-settings`, `envelope-model`,
 `piano-roll-model`, `selection-region`, `time-grid`, `touch-double-click`
@@ -173,7 +175,8 @@ backend.onValue = (id, value) => parameters.applyValue(id, value, { source: 'bac
 ```
 
 `backend.setValue()` can set a Web Audio `AudioParam`, post to an
-AudioWorklet, or call a WebView bridge. Pass `definitions` for parameter
+AudioWorklet, call a WebView bridge, or update ordinary application state.
+Pass `definitions` for parameter
 metadata; without it, the first matching control supplies the range,
 default, step, values and unit.
 
@@ -184,6 +187,72 @@ is `linear`, `log` or `gain`; `mid` puts a chosen value at the centre. The
 `createMIDIMappings({ parameterProvider: parameters })` stores one CC per
 parameter, handles incoming messages, and drives `compost-midi-mappings` and
 MIDI learn; ranges follow the parameter's curve.
+
+## Bring your own graphics
+
+Use `<compost-knob>` or `<compost-slider>` for ready-made controls, with styling
+parts and attributes for customization. For different graphics, `value-control`
+supplies the numeric behavior without supplying the drawing:
+
+```js
+import { createValueControl } from 'compost/value-control';
+import { createParameterController } from 'compost/parameter-controller';
+
+const parameters = createParameterController({ root: document });
+const amount = createValueControl(document.querySelector('#amount'), {
+  parameterID: 'amount',
+  label: 'Amount',
+  min: 0,
+  max: 1,
+  value: 0.25,
+  resetValue: 0.25,
+  step: 0.01,
+  drag: { axis: 'y', distance: 180, fineScale: 0.1 },
+  draw: ({ position, valueText, focused, dragging }) => {
+    drawAmount({ position, valueText, focused, dragging });
+  },
+});
+parameters.registerControl(amount);
+
+parameters.applyValue('amount', 0.75); // Silent; updates every registered view.
+
+// When removing the view, cancel before detaching its event route.
+amount.dispose();
+parameters.unregisterControl(amount);
+// parameters.disconnect() when the whole controller is no longer needed.
+```
+
+The supplied element is one focusable semantic control. Compost supplies its
+slider role, accessible name/range/value, keyboard input, and gesture lifecycle.
+You supply a meaningful label/value formatter and draw visible focus using
+`focused`. Customize the description and appearance, not away the keyboard or
+accessible equivalent. These controls are not form-associated.
+
+Several controls can share a canvas as `eventTarget`. Give each its own semantic
+element and use `pointerTarget: null`; after your hit testing selects a control,
+call its `startPointerDrag(event)`. Set `touch-action: none` on the pointer
+surface so touch gestures adjust values instead of scrolling or zooming the page.
+Their gesture states stay independent and
+their events use the same parameter payload as built-in controls. Explicit
+`registerControl()` registrations survive `refresh()`. See the
+[custom canvas example](examples/custom-controls/) for drawing, hit testing,
+sibling synchronization, and cleanup together.
+
+`setValue(value)` receives a value silently without a controller. `editValue()`
+emits an edit; `beginGesture()` and `endGesture()` bracket a custom interaction.
+`configure()` updates numeric metadata and presentation options. Relative and
+positional drags, axis, sensitivity, Shift fine adjustment, and optional pointer
+lock are configurable. Escape during a drag cancels; double-click/double-tap and
+idle Escape reset. Incoming values update the display without an event loop.
+
+When a controller supplies definitions, update shared numeric metadata with
+`parameters.setDefinitions(...)`; use `configure()` for presentation options.
+After changing a control's `parameterID`, register it again to update its route.
+
+This interface covers continuous and stepped numeric values. Drawing geometry,
+hit testing, relationships between parameters, and product-specific gestures
+remain application code. Canvas sizing, tick generation, and snapping policy are
+not part of this interface.
 
 ## Element notes
 
@@ -265,7 +334,8 @@ it, Command/Ctrl+A selects the bounds within which all the clips lie.
 
 ## Working on it
 
-`npm test` runs the unit tests, `npm run test:e2e` the Playwright suite,
+`npm run check` checks formatting and lint, `npm test` runs the unit tests,
+`npm run test:e2e` the Playwright suite,
 `npm run dev` serves the repo without caching. Every element has an example
 page under `examples/<element>/` with a live readout of its events;
 `node examples/check-example.mjs <element>` checks one headlessly. A

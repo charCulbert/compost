@@ -107,6 +107,15 @@ export const examples = [
 		utilities: ["ParameterController"],
 		runtime: "DOM only.",
 	},
+	{
+		id: "custom-controls",
+		href: "./custom-controls/",
+		title: "Custom numeric controls",
+		summary: "Draws two numeric controls on one canvas.",
+		components: ["compost-knob"],
+		utilities: ["createValueControl", "ParameterController"],
+		runtime: "DOM and canvas.",
+	},
 ];
 
 export function getExample(id) {

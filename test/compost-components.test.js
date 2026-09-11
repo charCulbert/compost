@@ -17,8 +17,8 @@ globalThis.customElements = {
 	get(name) {
 		return this.elements.get(name);
 	},
-	define(name, constructor) {
-		this.elements.set(name, constructor);
+	define(name, elementConstructor) {
+		this.elements.set(name, elementConstructor);
 	},
 };
 
@@ -42,6 +42,7 @@ const { CompostPiano } = await import("../src/components/compost-piano.js");
 const { CompostSlider } = await import("../src/components/compost-slider.js");
 const { CompostDrawer } = await import("../src/components/compost-drawer.js");
 const { CompostButton } = await import("../src/components/compost-button.js");
+const { createValueControl } = await import("../src/value-control.js");
 const { CompostMIDIMappings } = await import(
 	"../src/components/compost-midi-mappings.js"
 );
@@ -513,7 +514,9 @@ test("audio editor waveform gain accepts the full host range", () => {
 	};
 
 	editor.renderWaveformGain();
-	assert.ok(editor.waveform.peaks[0].every((peak) => peak.min === 0 && peak.max === 0));
+	assert.ok(
+		editor.waveform.peaks[0].every((peak) => peak.min === 0 && peak.max === 0),
+	);
 	editor.gain = 30;
 	assert.equal(gain, "30");
 	editor.setGain(48);
@@ -558,11 +561,13 @@ test("MIDI playback end extends content while inward range edits preserve it", (
 				this.beats = Math.max(this.beats, this.rangeEnd);
 			}
 		},
-		dispatchEvent(event) { events.push(event); },
+		dispatchEvent(event) {
+			events.push(event);
+		},
 	});
 	editor.setRange(0, 12);
 	editor.emitRange();
-	assert.deepEqual(events.at(-1).detail, {start: 0, end: 12, beats: 12});
+	assert.deepEqual(events.at(-1).detail, { start: 0, end: 12, beats: 12 });
 	editor.setRange(2, 6);
 	assert.equal(editor.beats, 12);
 });
@@ -771,39 +776,23 @@ test("knobs and sliders share range and curve attributes while sliders add orien
 	}
 });
 
-test("relative slider drag preserves the grabbed value and follows rail travel", () => {
-	const control = Object.create(CompostSlider.prototype);
-	const values = [];
+test("relative slider refreshes shared drag travel from the rendered rail", () => {
+	const { control } = lifecycleHarness(CompostSlider);
+	const configurations = [];
 	Object.assign(control, {
-		min: 0,
-		max: 1,
-		mid: null,
-		curve: "linear",
-		shape: 1,
 		input: { getBoundingClientRect: () => ({ width: 200, height: 100 }) },
-		pointerStart: {
-			pointerId: 1,
-			x: 40,
-			y: 50,
-			value: 0.25,
-			fineCandidate: false,
-			fine: false,
-			moved: false,
-			orientation: "horizontal",
-			relative: true,
+		getAttribute(name) {
+			return name === "interaction" ? "relative" : null;
 		},
-		setValue(value) {
-			values.push(value);
+		valueControl: {
+			configure(options) {
+				configurations.push(options);
+			},
 		},
 	});
 
-	control.movePointer({
-		pointerId: 1,
-		clientX: 90,
-		clientY: 50,
-		preventDefault() {},
-	});
-	assert.equal(values.at(-1), 0.5);
+	control.refreshDragDistance();
+	assert.deepEqual(configurations.at(-1), { drag: { distance: 200 } });
 });
 
 test("slider exposes separate track, fill, and thumb styling parts", () => {
@@ -817,13 +806,11 @@ test("slider exposes separate track, fill, and thumb styling parts", () => {
 	assert.doesNotMatch(source, /\.range-input::after/u);
 });
 
-test("slider orientation controls pointer travel and accessible metadata", () => {
+test("slider orientation controls shared behavior and rendered position", () => {
 	const control = Object.create(CompostSlider.prototype);
-	const aria = new Map();
-	const values = [];
-	let orientation = "vertical";
+	const configured = [];
 	Object.assign(control, {
-		_value: 0.5,
+		disconnectedValue: 0.5,
 		min: 0,
 		max: 1,
 		mid: null,
@@ -836,86 +823,46 @@ test("slider orientation controls pointer travel and accessible metadata", () =>
 		unit: "",
 		label: "Level",
 		isEditingValue: false,
-		input: {
-			getBoundingClientRect: () => ({
-				left: 10,
-				top: 20,
-				width: 200,
-				height: 200,
-			}),
-		},
+		input: {},
 		labelElement: {},
 		output: { removeAttribute() {} },
-		style: { setProperty() {} },
+		style: {
+			setProperty(name, value) {
+				this[name] = value;
+			},
+		},
 		hasAttribute: () => false,
-		getAttribute: (name) => (name === "orientation" ? orientation : null),
-		setAttribute(name, value) {
-			aria.set(name, value);
+		getAttribute(name) {
+			return name === "orientation" ? "vertical" : null;
 		},
-		setValue(value) {
-			values.push(value);
+		valueControl: {
+			value: 0.5,
+			configure(options) {
+				configured.push(options);
+			},
 		},
 	});
 
-	assert.equal(control.valueFromPointer({ clientX: 10, clientY: 20 }), 1);
-	assert.equal(control.valueFromPointer({ clientX: 10, clientY: 220 }), 0);
-	control.pointerStart = {
-		pointerId: 1,
-		x: 10,
-		y: 200,
-		value: 0.5,
-		fineCandidate: true,
-		fine: false,
-		moved: false,
-		orientation: "vertical",
-	};
-	control.movePointer({
-		pointerId: 1,
-		clientX: 10,
-		clientY: 110,
-		preventDefault() {},
-	});
-	assert.equal(values.at(-1), 0.55);
-
-	control.pointerStart = null;
-	control.refresh();
-	assert.equal(aria.get("aria-orientation"), "vertical");
-	orientation = null;
-	assert.equal(control.orientation, "horizontal");
+	control.readAttributes();
+	assert.equal(configured.at(-1).orientation, "vertical");
+	assert.equal(configured.at(-1).drag.axis, "y");
+	control.refresh({ position: 0.5, valueText: "0.5" });
+	assert.equal(control.style["--slider-percent"], "50%");
 });
 
 test("knobs and sliders use global fine and coarse keyboard travel", () => {
 	for (const Control of [CompostKnob, CompostSlider]) {
-		const control = Object.create(Control.prototype);
-		Object.defineProperties(control, {
-			disabled: { value: false },
-			value: {
-				get() {
-					return this.currentValue;
-				},
-			},
-		});
-		Object.assign(control, {
-			currentValue: 0.2,
-			min: 0,
-			max: 1,
-			mid: null,
-			curve: "linear",
-			shape: 1,
+		const { control } = lifecycleHarness(Control);
+		control.valueControl = createValueControl(control, {
+			value: 0.2,
 			step: 0.000001,
-			positionStep: null,
 			resetValue: 0.5,
-			handleValueEditKey: () => false,
-			parameterID: "keyboard-test",
-			dispatchEvent: () => {},
-			setValue(value) {
-				this.currentValue = value;
-			},
+			pointerTarget: null,
 		});
 
 		const press = (key, altKey = false) => {
 			let prevented = false;
-			control.handleKey({
+			control.dispatchLocal("keydown", {
 				key,
 				altKey,
 				preventDefault() {
@@ -933,6 +880,48 @@ test("knobs and sliders use global fine and coarse keyboard travel", () => {
 		assert.ok(Math.abs(control.value - 0.21) < 1e-9);
 		press("Delete");
 		assert.equal(control.value, 0.5);
+		control.valueControl.dispose();
+	}
+});
+
+test("built-ins initialize and resync shared behavior from writable numeric properties", () => {
+	for (const Control of [CompostKnob, CompostSlider]) {
+		const { control } = lifecycleHarness(Control);
+		const pointerTarget = {
+			addEventListener() {},
+			removeEventListener() {},
+			getBoundingClientRect: () => ({ width: 180, height: 180 }),
+		};
+		Object.assign(control, {
+			name: "gain",
+			parameterID: "gain",
+			label: "Gain",
+			min: 0,
+			max: 100,
+			mid: null,
+			curve: "linear",
+			shape: 1,
+			positionStep: null,
+			step: 1,
+			resetValue: 50,
+			unit: "",
+			valueText: "",
+			displayFractionDigits: null,
+			minLabel: "",
+			maxLabel: "",
+			disconnectedValue: 50,
+			dial: pointerTarget,
+			input: pointerTarget,
+		});
+
+		control.connectValueControl();
+		assert.equal(control.value, 50);
+		control.max = 200;
+		control.value = 150;
+		assert.equal(control.value, 150);
+		assert.equal(control.valueControl.max, 200);
+		assert.equal(control.getAttribute("aria-valuemax"), "200");
+		control.valueControl.dispose();
 	}
 });
 
@@ -941,6 +930,7 @@ test("exact-value editors use the shared visible precision", () => {
 		const control = Object.create(Control.prototype);
 		Object.assign(control, {
 			_value: 0.68471234,
+			disconnectedValue: 0.68471234,
 			step: 0,
 			displayFractionDigits: null,
 			empty: false,
@@ -1047,6 +1037,7 @@ function lifecycleHarness(Control, attrs = {}) {
 		}),
 	);
 	const events = [];
+	const listeners = new Map();
 	const control = Object.create(Control.prototype);
 
 	Object.assign(control, {
@@ -1055,6 +1046,16 @@ function lifecycleHarness(Control, attrs = {}) {
 		dispatchEvent(event) {
 			events.push(event);
 			return true;
+		},
+		addEventListener(type, listener) {
+			if (!listeners.has(type)) listeners.set(type, new Set());
+			listeners.get(type).add(listener);
+		},
+		removeEventListener(type, listener) {
+			listeners.get(type)?.delete(listener);
+		},
+		dispatchLocal(type, event) {
+			for (const listener of listeners.get(type) ?? []) listener(event);
 		},
 		getAttribute(name) {
 			return attributes.has(name) ? attributes.get(name) : null;
@@ -1084,49 +1085,35 @@ function lifecycleTypes(events) {
 		.map((event) => event.type);
 }
 
-test("knob executes keyboard/reset edits and keeps silent backend updates silent", () => {
-	const { control, events } = lifecycleHarness(CompostKnob, {
-		min: "0",
-		max: "1",
-	});
+test("knob delegates user, reset, and silent updates to shared behavior", () => {
+	const { control } = lifecycleHarness(CompostKnob);
+	const calls = [];
 	Object.assign(control, {
-		_value: 0.5,
-		min: 0,
-		max: 1,
-		step: 0,
-		mid: null,
-		curve: "linear",
-		shape: 1,
-		positionStep: null,
-		resetValue: 0.25,
-		displayFractionDigits: null,
-		valueText: "",
-		unit: "",
+		valueControl: {
+			value: 0.5,
+			configure() {},
+			editValue(value, source) {
+				calls.push(["edit", value, source]);
+				this.value = value;
+			},
+			setValue(value, shouldEmit, source) {
+				calls.push(["set", value, shouldEmit, source]);
+				this.value = value;
+			},
+			reset() {
+				calls.push(["reset"]);
+			},
+		},
 	});
 
-	control.mid = 0.8;
-	assert.equal(control.scaleOptions().mid, 0.8);
-	control.handleKey({ key: "ArrowRight", preventDefault() {} });
-	assert.deepEqual(lifecycleTypes(events), [
-		"parameter-begin",
-		"parameter-edit",
-		"parameter-end",
-	]);
-	assert.ok(control.value > 0.5);
-
-	events.length = 0;
-	control.handleKey({ key: "Delete", preventDefault() {} });
-	assert.equal(control.value, 0.25);
-	assert.deepEqual(lifecycleTypes(events), [
-		"parameter-begin",
-		"parameter-edit",
-		"parameter-end",
-	]);
-
-	events.length = 0;
+	control.setValue(0.75, true, "control");
 	control.setValue(0.8, false, "backend");
-	assert.equal(control.value, 0.8);
-	assert.deepEqual(events, []);
+	control.reset();
+	assert.deepEqual(calls, [
+		["edit", 0.75, "control"],
+		["set", 0.8, false, "backend"],
+		["reset"],
+	]);
 });
 
 test("knob pointer and typed gestures close once with cancellation details", () => {
@@ -1168,7 +1155,6 @@ test("knob pointer and typed gestures close once with cancellation details", () 
 			"parameter-id": "gain",
 		});
 		Object.assign(control, {
-			_value: 0.5,
 			min: 0,
 			max: 1,
 			step: 0,
@@ -1200,8 +1186,15 @@ test("knob pointer and typed gestures close once with cancellation details", () 
 				},
 			},
 		});
+		control.valueControl = createValueControl(control, {
+			value: 0.5,
+			resetValue: 0.25,
+			pointerTarget: control.dial,
+			drag: { axis: "y", mode: "relative", distance: 180 },
+		});
+		control.valueControlConfigurationKey = control.configurationKey();
 
-		control.beginDrag({
+		control.valueControl.startPointerDrag({
 			pointerId: 1,
 			clientX: 0,
 			clientY: 0,
@@ -1217,7 +1210,7 @@ test("knob pointer and typed gestures close once with cancellation details", () 
 		assert.equal(events.at(-1).detail.cancelled, false);
 
 		events.length = 0;
-		control.beginDrag({
+		control.valueControl.startPointerDrag({
 			pointerId: 2,
 			clientX: 0,
 			clientY: 0,
@@ -1235,7 +1228,7 @@ test("knob pointer and typed gestures close once with cancellation details", () 
 
 		// A secondary button (context menu) must not start a drag at all.
 		events.length = 0;
-		control.beginDrag({
+		control.valueControl.startPointerDrag({
 			pointerId: 3,
 			button: 2,
 			clientX: 0,
@@ -1266,6 +1259,33 @@ test("knob pointer and typed gestures close once with cancellation details", () 
 			"parameter-begin",
 			"parameter-end",
 		]);
+		assert.equal(events.at(-1).detail.cancelled, true);
+
+		events.length = 0;
+		control.beginValueEdit("0.5");
+		const staleInput = control.valueElement.child;
+		control.readAttributes();
+		assert.equal(control.isEditingValue, false);
+		assert.deepEqual(lifecycleTypes(events), [
+			"parameter-begin",
+			"parameter-end",
+		]);
+		assert.equal(events.at(-1).detail.cancelled, true);
+		staleInput.dispatch("blur");
+		assert.equal(lifecycleTypes(events).length, 2);
+
+		events.length = 0;
+		const dragStartValue = control.value;
+		control.valueControl.startPointerDrag({
+			pointerId: 4,
+			clientX: 0,
+			clientY: 0,
+			preventDefault() {},
+		});
+		control.setValue(0.9);
+		control.toggleAttribute("disabled", true);
+		control.attributeChangedCallback("disabled");
+		assert.equal(control.value, dragStartValue);
 		assert.equal(events.at(-1).detail.cancelled, true);
 	} finally {
 		HTMLElement.prototype.focus = previousFocus;
@@ -1301,7 +1321,6 @@ test("slider pointer cancellation, typed edits, reset, and silent updates close 
 			"parameter-id": "gain",
 		});
 		Object.assign(control, {
-			_value: 0.5,
 			min: 0,
 			max: 1,
 			step: 0,
@@ -1320,11 +1339,21 @@ test("slider pointer cancellation, typed edits, reset, and silent updates close 
 				},
 			},
 		});
-		control.handleWindowBlur = () => control.cancelPointer();
+		control.valueControl = createValueControl(control, {
+			value: 0.5,
+			resetValue: 0.25,
+			pointerTarget: null,
+			drag: { axis: "x", mode: "relative", distance: 180 },
+		});
+		control.valueControlConfigurationKey = control.configurationKey();
 
-		control.beginPointer({ pointerId: 1, clientX: 0, clientY: 0 });
+		control.valueControl.startPointerDrag({
+			pointerId: 1,
+			clientX: 0,
+			clientY: 0,
+		});
 		control.setValue(0.7, true, "control");
-		control.endPointer({ pointerId: 1, clientX: 0, clientY: 10 });
+		windowListeners.get("pointerup")?.({ pointerId: 1 });
 		assert.deepEqual(lifecycleTypes(events), [
 			"parameter-begin",
 			"parameter-edit",
@@ -1333,10 +1362,14 @@ test("slider pointer cancellation, typed edits, reset, and silent updates close 
 		assert.equal(events.at(-1).detail.cancelled, false);
 
 		events.length = 0;
-		control.beginPointer({ pointerId: 2, clientX: 0, clientY: 0 });
+		control.valueControl.startPointerDrag({
+			pointerId: 2,
+			clientX: 0,
+			clientY: 0,
+		});
 		control.setValue(0.8, true, "control");
-		control.cancelPointer();
-		control.cancelPointer();
+		windowListeners.get("pointercancel")?.({ pointerId: 2 });
+		windowListeners.get("pointercancel")?.({ pointerId: 2 });
 		assert.deepEqual(lifecycleTypes(events), [
 			"parameter-begin",
 			"parameter-edit",
@@ -1345,7 +1378,11 @@ test("slider pointer cancellation, typed edits, reset, and silent updates close 
 		assert.equal(events.at(-1).detail.cancelled, true);
 
 		events.length = 0;
-		control.beginPointer({ pointerId: 3, clientX: 0, clientY: 0 });
+		control.valueControl.startPointerDrag({
+			pointerId: 3,
+			clientX: 0,
+			clientY: 0,
+		});
 		control.setValue(0.6, true, "control");
 		windowListeners.get("blur")?.();
 		windowListeners.get("blur")?.();
@@ -1357,7 +1394,10 @@ test("slider pointer cancellation, typed edits, reset, and silent updates close 
 		assert.equal(events.at(-1).detail.cancelled, true);
 
 		events.length = 0;
-		control.handleKey({ key: "ArrowRight", preventDefault() {} });
+		control.dispatchLocal("keydown", {
+			key: "ArrowRight",
+			preventDefault() {},
+		});
 		assert.deepEqual(lifecycleTypes(events), [
 			"parameter-begin",
 			"parameter-edit",
@@ -1403,6 +1443,61 @@ test("slider pointer cancellation, typed edits, reset, and silent updates close 
 	} finally {
 		if (previousWindow === undefined) delete globalThis.window;
 		else globalThis.window = previousWindow;
+		if (previousDocument === undefined) delete globalThis.document;
+		else globalThis.document = previousDocument;
+	}
+});
+
+test("built-in disconnect cancels typed editing before shared behavior is recreated", () => {
+	const previousDocument = globalThis.document;
+	globalThis.document = { createElement: () => fakeInput() };
+
+	try {
+		for (const Control of [CompostKnob, CompostSlider]) {
+			const { control } = lifecycleHarness(Control, { editable: "" });
+			const valueElement = {
+				replaceChildren(input) {
+					this.child = input;
+				},
+			};
+			let cancelled = false;
+			let disposed = false;
+			Object.assign(control, {
+				label: "Gain",
+				min: 0,
+				max: 1,
+				step: 0,
+				displayFractionDigits: null,
+				valueElement,
+				output: valueElement,
+				valueControl: {
+					value: 0.5,
+					beginGesture() {},
+					endGesture(wasCancelled) {
+						cancelled = wasCancelled;
+					},
+					dispose() {
+						disposed = true;
+					},
+				},
+			});
+
+			control.beginValueEdit();
+			assert.equal(control.isEditingValue, true);
+			control.disconnectedCallback();
+			assert.equal(control.isEditingValue, false);
+			assert.equal(cancelled, true);
+			assert.equal(disposed, true);
+			assert.equal(control.valueControl, null);
+
+			control.connectValueControl = () => {
+				control.valueControl = { value: control.disconnectedValue };
+			};
+			control.readAttributes = () => {};
+			control.connectedCallback();
+			assert.equal(control.valueControl.value, 0.5);
+		}
+	} finally {
 		if (previousDocument === undefined) delete globalThis.document;
 		else globalThis.document = previousDocument;
 	}

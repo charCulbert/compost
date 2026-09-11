@@ -1,25 +1,8 @@
-import { installTouchDoubleClick } from "../internal/touch-double-click.js";
-import {
-	moveValueByNormalisedDelta,
-	normaliseCurveName,
-	normalisedKeyboardStep,
-	normalisedPositionToValue,
-	valueToNormalisedPosition,
-} from "../parameter-scale.js";
-import {
-	beginParameterGesture,
-	clamp,
-	defineElement,
-	editParameterGesture,
-	endParameterGesture,
-	formatNumber,
-	formatValue,
-	numberAttr,
-	snap,
-} from "../utils.js";
+import { normaliseCurveName } from "../parameter-scale.js";
+import { defineElement, formatNumber, numberAttr } from "../utils.js";
+import { createValueControl } from "../value-control.js";
 
 let nextSliderID = 1;
-const FINE_DRAG_SCALE = 0.1;
 
 export class CompostSlider extends HTMLElement {
 	static get observedAttributes() {
@@ -66,16 +49,14 @@ export class CompostSlider extends HTMLElement {
 		this.displayFractionDigits = null;
 		this.unit = "";
 		this.valueText = "";
-		this._value = 0.5;
+		this.disconnectedValue = 0.5;
 		this.resetValue = 0.5;
 		this.minLabel = "";
 		this.maxLabel = "";
 		this.inputID = `compost-slider-${nextSliderID++}`;
 		this.labelID = `${this.inputID}-label`;
 		this.lastUpdateSource = "control";
-		this.lastClickTime = 0;
-		this.pointerStart = null;
-		this.handleWindowBlur = () => this.cancelPointer();
+		this.valueControl = null;
 
 		this.root = this.attachShadow({ mode: "open" });
 		this.root.innerHTML = `
@@ -260,18 +241,12 @@ export class CompostSlider extends HTMLElement {
 		this.output = this.root.querySelector("output");
 		this.input = this.root.querySelector(".range-input");
 
-		this.input.addEventListener("pointerdown", (event) => {
-			this.beginPointer(event);
-		});
-		this.input.addEventListener("pointermove", (event) =>
-			this.movePointer(event),
+		this.input.addEventListener("pointerdown", () =>
+			this.refreshDragDistance(),
 		);
-		this.input.addEventListener("pointerup", (event) => this.endPointer(event));
-		this.input.addEventListener("pointercancel", () => this.cancelPointer());
-		installTouchDoubleClick(this.input, { dispatch: false });
-
 		this.addEventListener("keydown", (event) => {
-			this.handleKey(event);
+			this.syncValueControl();
+			this.handleValueEditKey(event);
 		});
 		this.output.addEventListener("click", (event) => {
 			event.preventDefault();
@@ -281,28 +256,32 @@ export class CompostSlider extends HTMLElement {
 	}
 
 	connectedCallback() {
+		this.connectValueControl();
 		this.readAttributes();
-		this.refresh();
 	}
 
 	disconnectedCallback() {
-		window.removeEventListener("blur", this.handleWindowBlur);
+		if (!this.valueControl) return;
+		this.finishValueEdit?.(false);
+		this.valueControl.dispose();
+		this.disconnectedValue = this.valueControl.value;
+		this.valueControl = null;
 	}
 
-	attributeChangedCallback() {
-		this.readAttributes();
-		this.refresh();
+	attributeChangedCallback(name) {
+		this.readAttributes(name);
 	}
 
 	get value() {
-		return this._value;
+		return this.valueControl?.value ?? this.disconnectedValue;
 	}
 
 	set value(value) {
 		this.setValue(value, false);
 	}
 
-	readAttributes() {
+	readAttributes(changedAttribute = null) {
+		this.finishValueEdit?.(false);
 		this.name = this.getAttribute("name") || this.name;
 		this.parameterID = this.getAttribute("parameter-id") || "";
 		this.label = this.getAttribute("label") || this.label;
@@ -332,7 +311,102 @@ export class CompostSlider extends HTMLElement {
 		this.resetValue = numberAttr(this, "reset-value", this.resetValue);
 		this.minLabel = this.getAttribute("min-label") ?? "";
 		this.maxLabel = this.getAttribute("max-label") ?? "";
-		this.setValue(numberAttr(this, "value", this._value), false);
+		const value = numberAttr(this, "value", this.value);
+		if (!this.valueControl) {
+			this.disconnectedValue = value;
+			return;
+		}
+
+		this.valueControl.configure(
+			this.valueControlOptions(
+				changedAttribute === "value" ? value : undefined,
+			),
+		);
+		this.valueControlConfigurationKey = this.configurationKey();
+	}
+
+	valueControlOptions(value) {
+		return {
+			parameterID: this.parameterID,
+			parameterKind: this.parameterKind,
+			name: this.name,
+			label: this.label,
+			min: this.min,
+			max: this.max,
+			mid: this.mid,
+			curve: this.curve,
+			shape: this.shape,
+			positionStep: this.positionStep,
+			step: this.step,
+			...(value === undefined ? {} : { value }),
+			resetValue: this.resetValue,
+			unit: this.unit,
+			text: this.valueText,
+			displayFractionDigits: this.displayFractionDigits,
+			minLabel: this.minLabel,
+			maxLabel: this.maxLabel,
+			disabled: this.disabled,
+			orientation: this.orientation,
+			pointerTarget: this.input,
+			drag: {
+				axis: this.orientation === "vertical" ? "y" : "x",
+				mode: this.interaction,
+				distance: 180,
+				fineScale: 0.1,
+			},
+			draw: (state) => this.refresh(state),
+		};
+	}
+
+	connectValueControl() {
+		if (this.valueControl) return;
+		this.valueControl = createValueControl(
+			this,
+			this.valueControlOptions(this.disconnectedValue),
+		);
+		this.valueControlConfigurationKey = this.configurationKey();
+	}
+
+	configurationKey() {
+		return JSON.stringify([
+			this.parameterID,
+			this.parameterKind,
+			this.name,
+			this.label,
+			this.min,
+			this.max,
+			this.mid,
+			this.curve,
+			this.shape,
+			this.positionStep,
+			this.step,
+			this.resetValue,
+			this.unit,
+			this.valueText,
+			this.displayFractionDigits,
+			this.minLabel,
+			this.maxLabel,
+			this.disabled,
+			this.orientation,
+			this.interaction,
+		]);
+	}
+
+	syncValueControl() {
+		if (!this.valueControl) return;
+		const key = this.configurationKey();
+		if (key === this.valueControlConfigurationKey) return;
+		this.valueControl.configure(this.valueControlOptions());
+		this.valueControlConfigurationKey = key;
+	}
+
+	refreshDragDistance() {
+		if (!this.valueControl || this.interaction !== "relative") return;
+		this.syncValueControl();
+		const bounds = this.input.getBoundingClientRect();
+		const distance =
+			this.orientation === "vertical" ? bounds.height : bounds.width;
+		this.valueControl.configure({ drag: { distance: distance || 180 } });
 	}
 
 	get editable() {
@@ -364,26 +438,21 @@ export class CompostSlider extends HTMLElement {
 	}
 
 	setValue(value, shouldEmit = true, source = "control") {
-		const numericValue = Number(value);
-		if (!Number.isFinite(numericValue)) return;
-		const nextValue = clamp(snap(numericValue, this.step), this.min, this.max);
-
-		if (nextValue === this._value) {
+		if (!this.valueControl) {
+			const numericValue = Number(value);
+			if (Number.isFinite(numericValue)) this.disconnectedValue = numericValue;
 			return;
 		}
-
-		this.lastUpdateSource = source;
-		this._value = nextValue;
-		this.refresh();
-
-		if (shouldEmit) {
-			editParameterGesture(this, this.value, { source });
-		}
+		this.syncValueControl();
+		const previousValue = this.value;
+		if (shouldEmit) this.valueControl.editValue(value, source);
+		else this.valueControl.setValue(value, false, source);
+		if (this.value !== previousValue) this.lastUpdateSource = source;
 	}
 
 	reset() {
-		this.setValue(this.resetValue);
-		endParameterGesture(this, this.value);
+		this.syncValueControl();
+		this.valueControl?.reset();
 	}
 
 	editableValueText() {
@@ -391,10 +460,16 @@ export class CompostSlider extends HTMLElement {
 	}
 
 	beginValueEdit(initialValue = this.editableValueText(), selectValue = true) {
-		if (this.disabled || !this.editable || this.isEditingValue) return;
+		if (
+			this.disabled ||
+			!this.editable ||
+			this.isEditingValue ||
+			!this.valueControl
+		)
+			return;
 
 		this.isEditingValue = true;
-		beginParameterGesture(this, this.value);
+		this.valueControl.beginGesture();
 
 		const input = document.createElement("input");
 		input.className = "value-editor";
@@ -411,13 +486,14 @@ export class CompostSlider extends HTMLElement {
 
 			const nextValue = Number(input.value);
 			this.isEditingValue = false;
+			this.finishValueEdit = null;
 
 			if (commit && input.value.trim() !== "" && Number.isFinite(nextValue)) {
-				this.setValue(nextValue);
-				endParameterGesture(this, this.value);
+				this.valueControl.editValue(nextValue);
+				this.valueControl.endGesture();
 			} else {
 				this.refresh();
-				endParameterGesture(this, this.value, { cancelled: true });
+				this.valueControl.endGesture(true);
 			}
 
 			if (restoreFocus) {
@@ -426,6 +502,7 @@ export class CompostSlider extends HTMLElement {
 				);
 			}
 		};
+		this.finishValueEdit = finish;
 
 		input.addEventListener("keydown", (event) => {
 			event.stopPropagation();
@@ -449,175 +526,6 @@ export class CompostSlider extends HTMLElement {
 		} else {
 			input.setSelectionRange(input.value.length, input.value.length);
 		}
-	}
-
-	beginPointer(event) {
-		if (this.disabled || (event.button !== undefined && event.button !== 0))
-			return;
-
-		const fineCandidate =
-			this.lastClickTime > 0 && performance.now() - this.lastClickTime < 380;
-		event.preventDefault?.();
-		HTMLElement.prototype.focus?.call(this, { preventScroll: true });
-		this.input?.setPointerCapture?.(event.pointerId);
-		beginParameterGesture(this, this.value);
-		this.pointerStart = {
-			pointerId: event.pointerId,
-			x: event.clientX,
-			y: event.clientY,
-			value: this.value,
-			fineCandidate,
-			fine: Boolean(event.shiftKey),
-			moved: false,
-			orientation: this.orientation,
-			relative: this.interaction === "relative",
-		};
-		if (
-			!this.pointerStart.relative &&
-			!fineCandidate &&
-			!this.pointerStart.fine
-		) {
-			this.setValue(this.valueFromPointer(event));
-		}
-		window.addEventListener("blur", this.handleWindowBlur);
-	}
-
-	movePointer(event) {
-		const pointer = this.pointerStart;
-		if (!pointer || event.pointerId !== pointer.pointerId) return;
-
-		const distance =
-			pointer.orientation === "vertical"
-				? pointer.y - event.clientY
-				: event.clientX - pointer.x;
-		pointer.moved = pointer.moved || Math.abs(distance) > 4;
-		event.preventDefault();
-		if (pointer.relative || pointer.fineCandidate || pointer.fine) {
-			if (!pointer.moved) return;
-			const bounds = this.input?.getBoundingClientRect?.();
-			const extent =
-				pointer.orientation === "vertical" ? bounds?.height : bounds?.width;
-			const scale = pointer.relative && extent > 0 ? 1 / extent : 1 / 180;
-			const fine = pointer.fineCandidate || pointer.fine;
-			pointer.fine = fine;
-			this.setValue(
-				moveValueByNormalisedDelta(
-					pointer.value,
-					distance * scale * (fine ? FINE_DRAG_SCALE : 1),
-					this.scaleOptions(),
-				),
-			);
-		} else {
-			this.setValue(this.valueFromPointer(event));
-		}
-	}
-
-	valueFromPointer(event) {
-		const bounds = this.input?.getBoundingClientRect?.();
-		if (!bounds) return this.value;
-		const orientation = this.pointerStart?.orientation ?? this.orientation;
-		const extent = orientation === "vertical" ? bounds.height : bounds.width;
-		const offset =
-			orientation === "vertical"
-				? bounds.top + bounds.height - event.clientY
-				: event.clientX - bounds.left;
-		const position =
-			extent > 0 ? clamp(offset / extent, 0, 1) : this.getPosition();
-		return normalisedPositionToValue(position, this.scaleOptions());
-	}
-
-	endPointer(event) {
-		if (!this.pointerStart || event.pointerId !== this.pointerStart.pointerId) {
-			return;
-		}
-
-		const pointer = this.pointerStart;
-		const moved =
-			pointer.moved ||
-			Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 4;
-		this.pointerStart = null;
-		window.removeEventListener("blur", this.handleWindowBlur);
-
-		if (moved) {
-			this.lastClickTime = 0;
-			endParameterGesture(this, this.value);
-			return;
-		}
-
-		const now = performance.now();
-
-		if (now - this.lastClickTime < 380) {
-			this.lastClickTime = 0;
-			this.reset();
-		} else {
-			this.lastClickTime = now;
-			endParameterGesture(this, this.value);
-		}
-	}
-
-	cancelPointer() {
-		this.pointerStart = null;
-		window.removeEventListener("blur", this.handleWindowBlur);
-		this.lastClickTime = 0;
-		endParameterGesture(this, this.value, { cancelled: true });
-	}
-
-	handleKey(event) {
-		if (this.disabled) return;
-
-		if (this.handleValueEditKey(event)) {
-			return;
-		}
-
-		const smallStep = this.normalisedKeyboardStep();
-		const largeStep = Math.min(1, smallStep * 10);
-		const arrowStep = event.altKey ? largeStep : smallStep;
-		const deltas = {
-			ArrowUp: arrowStep,
-			ArrowRight: arrowStep,
-			ArrowDown: -arrowStep,
-			ArrowLeft: -arrowStep,
-			PageUp: largeStep,
-			PageDown: -largeStep,
-		};
-
-		if (
-			event.key === "Escape" ||
-			event.key === "Delete" ||
-			event.key === "Backspace"
-		) {
-			event.preventDefault();
-			this.reset();
-			return;
-		}
-
-		if (event.key === "Home") {
-			event.preventDefault();
-			this.setValue(this.min);
-			endParameterGesture(this, this.value);
-			return;
-		}
-
-		if (event.key === "End") {
-			event.preventDefault();
-			this.setValue(this.max);
-			endParameterGesture(this, this.value);
-			return;
-		}
-
-		if (deltas[event.key] === undefined) {
-			return;
-		}
-
-		event.preventDefault();
-		this.setValue(
-			moveValueByNormalisedDelta(
-				this.value,
-				deltas[event.key],
-				this.scaleOptions(),
-			),
-		);
-		endParameterGesture(this, this.value);
 	}
 
 	handleValueEditKey(event) {
@@ -646,48 +554,19 @@ export class CompostSlider extends HTMLElement {
 		return true;
 	}
 
-	normalisedKeyboardStep() {
-		return normalisedKeyboardStep({
-			min: this.min,
-			max: this.max,
-			step: this.step,
-			positionStep: this.positionStep,
-		});
-	}
-
-	refresh() {
+	refresh(state = this.valueState) {
 		if (!this.input) {
 			return;
 		}
+		if (state) this.valueState = state;
+		else return;
 
 		this.labelElement.textContent = this.label;
 		this.labelElement.id = this.labelID;
-		const valueText = formatValue(
-			this.value,
-			this.step,
-			this.unit,
-			this.valueText,
-			this.displayFractionDigits,
-			{
-				min: this.min,
-				max: this.max,
-				minLabel: this.minLabel,
-				maxLabel: this.maxLabel,
-			},
-		);
 		if (!this.isEditingValue) {
-			this.output.textContent = valueText;
+			this.output.textContent = state.valueText;
 		}
-		this.style.setProperty("--slider-percent", `${this.getPercent()}%`);
-		this.tabIndex = this.disabled ? -1 : 0;
-		this.setAttribute("role", "slider");
-		this.setAttribute("aria-label", this.label);
-		this.setAttribute("aria-valuemin", String(this.min));
-		this.setAttribute("aria-valuemax", String(this.max));
-		this.setAttribute("aria-valuenow", String(this.value));
-		this.setAttribute("aria-valuetext", valueText);
-		this.setAttribute("aria-orientation", this.orientation);
-		this.setAttribute("aria-disabled", this.disabled ? "true" : "false");
+		this.style.setProperty("--slider-percent", `${state.position * 100}%`);
 		this.refreshEditableValue();
 	}
 
@@ -711,21 +590,7 @@ export class CompostSlider extends HTMLElement {
 	}
 
 	getPosition() {
-		return clamp(
-			valueToNormalisedPosition(this.value, this.scaleOptions()),
-			0,
-			1,
-		);
-	}
-
-	scaleOptions() {
-		return {
-			min: this.min,
-			max: this.max,
-			mid: this.mid,
-			curve: this.curve,
-			shape: this.shape,
-		};
+		return this.valueState?.position ?? 0;
 	}
 }
 

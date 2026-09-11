@@ -45,6 +45,7 @@ export interface ParameterValueDetail extends ParameterEventDetail {
 }
 
 export interface ParameterControllerOptions {
+	/** Set null for explicit controls; their eventTarget supplies parameter events. */
 	root?: ParentNode | Element | null;
 	definitions?:
 		| ParameterDefinitionInput[]
@@ -63,7 +64,10 @@ export class ParameterController extends EventTarget {
 	setDefinitions(definitions?: ParameterControllerOptions["definitions"]): this;
 	definition(parameterID: string): ParameterDefinition | null;
 	value(parameterID: string): number | undefined;
+	/** Explicit registration survives refresh. Register again after changing parameterID. */
 	registerControl<T extends ParameterControl>(control: T): T;
+	/** Removes controller updates and routing without disposing the control's UI. */
+	unregisterControl<T extends ParameterControl>(control: T): T;
 	refresh(): this;
 	applyValue(
 		parameterID: string,

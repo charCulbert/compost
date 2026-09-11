@@ -1,7 +1,43 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createParameterController } from "../src/parameter-controller.js";
+import { createValueControl } from "../src/value-control.js";
 import { FakeControl, FakeRoot } from "./helpers/fakes.js";
+
+function numericControl(options = {}) {
+	const eventTarget = options.eventTarget ?? new EventTarget();
+	const updates = [];
+	const configurations = [];
+	const control = {
+		parameterID: options.parameterID ?? "gain",
+		parameterKind: "continuous",
+		name: options.name ?? options.parameterID ?? "gain",
+		min: options.min ?? 0,
+		max: options.max ?? 1,
+		resetValue: options.resetValue ?? options.value ?? 0,
+		step: options.step ?? 0,
+		unit: options.unit ?? "",
+		readOnly: false,
+		value: options.value ?? 0,
+		eventTarget,
+		configure(definition) {
+			configurations.push(definition);
+			this.parameterKind = definition.kind;
+			this.name = definition.name;
+			this.min = definition.min;
+			this.max = definition.max;
+			this.resetValue = definition.defaultValue;
+			this.step = definition.step;
+			this.unit = definition.unit;
+			this.readOnly = definition.readOnly;
+		},
+		setValue(value, shouldEmit, source) {
+			this.value = value;
+			updates.push({ value, shouldEmit, source });
+		},
+	};
+	return { control, configurations, eventTarget, updates };
+}
 
 test("external definitions override control semantics but preserve presentation", () => {
 	const control = new FakeControl({
@@ -407,4 +443,338 @@ test("disconnect removes root listeners cleanly", () => {
 		}),
 	);
 	assert.equal(edits, 1);
+});
+
+test("explicit structural controls survive refresh until unregistered", () => {
+	const discovered = new FakeControl({
+		"parameter-id": "gain",
+		min: 0,
+		max: 1,
+		value: 0.2,
+	});
+	const root = new FakeRoot([discovered]);
+	const parameters = createParameterController({ root });
+	parameters.registerControl(discovered);
+
+	root.controls = [];
+	parameters.refresh();
+	assert.equal(parameters.applyValue("gain", 0.8), true);
+	assert.equal(discovered.value, 0.8);
+
+	parameters.unregisterControl(discovered);
+	assert.equal(parameters.applyValue("gain", 0.4), true);
+	assert.equal(discovered.value, 0.8);
+});
+
+test("detached discovered controls forward cancellation until refresh pruning", () => {
+	const control = new FakeControl({
+		"parameter-id": "gain",
+		min: 0,
+		max: 1,
+		value: 0.2,
+	});
+	const root = new FakeRoot([control]);
+	const parameters = createParameterController({ root });
+	parameters.refresh();
+	parameters.refresh();
+	const events = [];
+	for (const type of ["parameter-begin", "parameter-edit", "parameter-end"]) {
+		parameters.addEventListener(type, ({ detail }) =>
+			events.push([type, detail.value, detail.cancelled]),
+		);
+	}
+
+	root.controls = [];
+	control.dispatchEvent(
+		new CustomEvent("parameter-begin", {
+			detail: { parameterID: "gain", value: 0.2 },
+		}),
+	);
+	control.dispatchEvent(
+		new CustomEvent("parameter-edit", {
+			detail: { parameterID: "gain", value: 0.7 },
+		}),
+	);
+	control.dispatchEvent(
+		new CustomEvent("parameter-end", {
+			detail: { parameterID: "gain", value: 0.2, cancelled: true },
+		}),
+	);
+
+	assert.deepEqual(events, [
+		["parameter-begin", 0.2, false],
+		["parameter-edit", 0.7, false],
+		["parameter-end", 0.2, true],
+	]);
+	assert.equal(parameters.value("gain"), 0.2);
+
+	parameters.refresh();
+	control.dispatchEvent(
+		new CustomEvent("parameter-edit", {
+			detail: { parameterID: "gain", value: 0.8 },
+		}),
+	);
+	assert.equal(events.length, 3);
+});
+
+test("refresh and repeated registration reconcile changed parameter identities", () => {
+	const discovered = new FakeControl({
+		"parameter-id": "first",
+		min: 0,
+		max: 1,
+		value: 0.2,
+	});
+	const root = new FakeRoot([discovered]);
+	const parameters = createParameterController({ root });
+	discovered.setAttribute("parameter-id", "second");
+	parameters.refresh();
+	assert.equal(parameters.applyValue("first", 0.7), true);
+	assert.equal(discovered.value, 0.2);
+	assert.equal(parameters.applyValue("second", 0.8), true);
+	assert.equal(discovered.value, 0.8);
+
+	const explicit = numericControl({ parameterID: "third", value: 0.1 });
+	parameters.registerControl(explicit.control);
+	explicit.control.parameterID = "fourth";
+	parameters.registerControl(explicit.control);
+	assert.equal(parameters.applyValue("third", 0.6), true);
+	assert.equal(explicit.control.value, 0.1);
+	assert.equal(parameters.applyValue("fourth", 0.9), true);
+	assert.equal(explicit.control.value, 0.9);
+});
+
+test("structural controls derive metadata and receive controller definitions", () => {
+	const local = numericControl({
+		parameterID: "frequency",
+		min: 20,
+		max: 20000,
+		resetValue: 440,
+		value: 880,
+		unit: "Hz",
+	});
+	const parameters = createParameterController({ root: null });
+	parameters.registerControl(local.control);
+
+	assert.deepEqual(parameters.definition("frequency"), {
+		parameterID: "frequency",
+		kind: "continuous",
+		name: "frequency",
+		min: 20,
+		max: 20000,
+		defaultValue: 440,
+		step: 0,
+		values: null,
+		unit: "Hz",
+		readOnly: false,
+	});
+
+	parameters.setDefinitions([
+		{
+			parameterID: "frequency",
+			min: 100,
+			max: 1000,
+			defaultValue: 220,
+			step: 10,
+			unit: "Hz",
+		},
+	]);
+	assert.equal(local.configurations.at(-1).min, 100);
+	assert.deepEqual(local.updates.at(-1), {
+		value: 440,
+		shouldEmit: false,
+		source: "definitions",
+	});
+});
+
+test("shared explicit event targets forward each edit once", () => {
+	const canvas = new EventTarget();
+	const first = createValueControl(new FakeControl(), {
+		parameterID: "gain",
+		value: 0.2,
+		eventTarget: canvas,
+		pointerTarget: null,
+	});
+	const second = createValueControl(new FakeControl(), {
+		parameterID: "gain",
+		value: 0.2,
+		eventTarget: canvas,
+		pointerTarget: null,
+	});
+	const parameters = createParameterController({ root: null });
+	parameters.registerControl(first);
+	parameters.registerControl(second);
+	let edits = 0;
+	parameters.addEventListener("parameter-edit", () => (edits += 1));
+
+	first.editValue(0.7);
+
+	assert.equal(edits, 1);
+	assert.equal(parameters.value("gain"), 0.7);
+	assert.equal(first.value, 0.7);
+	assert.equal(second.value, 0.7);
+	first.endGesture();
+	first.dispose();
+	second.dispose();
+	parameters.unregisterControl(first);
+	parameters.unregisterControl(second);
+});
+
+test("shared event targets stop routing an unregistered parameter", () => {
+	const canvas = new EventTarget();
+	const gain = numericControl({ parameterID: "gain", eventTarget: canvas });
+	const frequency = numericControl({
+		parameterID: "frequency",
+		min: 20,
+		max: 20000,
+		value: 440,
+		eventTarget: canvas,
+	});
+	const parameters = createParameterController({ root: null });
+	parameters.registerControl(gain.control);
+	parameters.registerControl(frequency.control);
+	parameters.unregisterControl(gain.control);
+	let edits = 0;
+	parameters.addEventListener("parameter-edit", () => (edits += 1));
+
+	canvas.dispatchEvent(
+		new CustomEvent("parameter-edit", {
+			detail: { parameterID: "gain", value: 0.8 },
+		}),
+	);
+	canvas.dispatchEvent(
+		new CustomEvent("parameter-edit", {
+			detail: { parameterID: "frequency", value: 880 },
+		}),
+	);
+
+	assert.equal(edits, 1);
+	assert.equal(parameters.value("gain"), 0);
+	assert.equal(parameters.value("frequency"), 880);
+});
+
+test("an explicit event bubbling to the root is forwarded once", () => {
+	const root = new FakeRoot();
+	const target = new EventTarget();
+	const handle = numericControl({ eventTarget: target });
+	const parameters = createParameterController({ root });
+	parameters.registerControl(handle.control);
+	let edits = 0;
+	parameters.addEventListener("parameter-edit", () => (edits += 1));
+	const event = new CustomEvent("parameter-edit", {
+		detail: { parameterID: "gain", value: 0.6 },
+	});
+
+	target.dispatchEvent(event);
+	root.dispatchEvent(event);
+
+	assert.equal(edits, 1);
+});
+
+test("an explicit ancestor does not swallow discovered child events", () => {
+	const child = new FakeControl({
+		"parameter-id": "frequency",
+		min: 20,
+		max: 20000,
+		value: 440,
+	});
+	const root = new FakeRoot([child]);
+	const wrapper = new EventTarget();
+	const handle = numericControl({ eventTarget: wrapper });
+	const parameters = createParameterController({ root });
+	parameters.registerControl(handle.control);
+	let edits = 0;
+	parameters.addEventListener("parameter-edit", () => (edits += 1));
+	const event = {
+		type: "parameter-edit",
+		target: child,
+		currentTarget: wrapper,
+		detail: { parameterID: "frequency", value: 880 },
+	};
+
+	parameters.handleEvent(event);
+	event.currentTarget = root;
+	parameters.handleEvent(event);
+
+	assert.equal(edits, 1);
+	assert.equal(parameters.value("frequency"), 880);
+});
+
+test("unregister and disconnect remove explicit event routing", () => {
+	const first = numericControl();
+	const parameters = createParameterController({ root: null });
+	parameters.registerControl(first.control);
+	let edits = 0;
+	parameters.addEventListener("parameter-edit", () => (edits += 1));
+	parameters.unregisterControl(first.control);
+	first.eventTarget.dispatchEvent(
+		new CustomEvent("parameter-edit", {
+			detail: { parameterID: "gain", value: 0.5 },
+		}),
+	);
+	assert.equal(edits, 0);
+
+	const second = numericControl();
+	parameters.registerControl(second.control);
+	parameters.disconnect();
+	second.eventTarget.dispatchEvent(
+		new CustomEvent("parameter-edit", {
+			detail: { parameterID: "gain", value: 0.5 },
+		}),
+	);
+	assert.equal(edits, 0);
+	assert.equal(parameters.registerControl(first.control), first.control);
+	assert.equal(parameters.applyValue("gain", 0.8), true);
+	assert.equal(first.control.value, 0);
+	assert.equal(second.control.value, 0);
+});
+
+test("readonly definition changes forward cancellation before reconfiguration", () => {
+	const target = new EventTarget();
+	const handle = numericControl({ value: 0.2, eventTarget: target });
+	const baseConfigure = handle.control.configure;
+	handle.control.configure = function configure(definition) {
+		if (definition.readOnly && this.active) {
+			this.active = false;
+			this.value = this.startValue;
+			target.dispatchEvent(
+				new CustomEvent("parameter-end", {
+					detail: {
+						parameterID: this.parameterID,
+						value: this.value,
+						cancelled: true,
+					},
+				}),
+			);
+		}
+		baseConfigure.call(this, definition);
+	};
+	const parameters = createParameterController({ root: null });
+	parameters.registerControl(handle.control);
+	handle.control.startValue = 0.2;
+	handle.control.active = true;
+	target.dispatchEvent(
+		new CustomEvent("parameter-edit", {
+			detail: { parameterID: "gain", value: 0.7 },
+		}),
+	);
+	const ends = [];
+	parameters.addEventListener("parameter-end", ({ detail }) =>
+		ends.push(detail),
+	);
+
+	parameters.setDefinitions([
+		{
+			parameterID: "gain",
+			min: 0,
+			max: 1,
+			defaultValue: 0,
+			readOnly: true,
+		},
+	]);
+
+	assert.equal(ends.length, 1);
+	assert.equal(ends[0].cancelled, true);
+	assert.equal(ends[0].value, 0.2);
+	assert.equal(parameters.value("gain"), 0.2);
+	assert.equal(parameters.definition("gain").readOnly, true);
 });
