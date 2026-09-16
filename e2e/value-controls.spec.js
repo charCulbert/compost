@@ -122,6 +122,41 @@ test("custom canvas drag cancels once and restores both synchronized views", asy
 	]);
 });
 
+test("number-box uses min-anchored steps and shared typed editing", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-number-box/");
+	await page.waitForFunction(() => customElements.get("compost-number-box"));
+	const values = await page.evaluate(() => {
+		const box = document.createElement("compost-number-box");
+		box.setAttribute("min", "1");
+		box.setAttribute("max", "10");
+		box.setAttribute("step", "2");
+		box.setAttribute("value", "2");
+		box.setAttribute("allow-empty", "");
+		document.body.append(box);
+		const snapped = box.value;
+		box.value = null;
+		return {
+			snapped,
+			empty: box.value,
+			ariaValue: box.shadowRoot
+				.querySelector(".box")
+				.getAttribute("aria-valuenow"),
+		};
+	});
+	expect(values).toEqual({ snapped: 3, empty: null, ariaValue: null });
+
+	const box = page.locator("compost-number-box").first();
+	await box.locator(".box").focus();
+	await page.keyboard.press("5");
+	const input = box.locator("input");
+	await expect(input).toBeVisible();
+	await input.fill("900");
+	await input.press("Enter");
+	await expect(box).toHaveJSProperty("value", 900);
+});
+
 test("number-of-repeats end bracket uses absolute positioning", async ({
 	page,
 }) => {

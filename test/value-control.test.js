@@ -421,6 +421,112 @@ test("pointer-lock loss cancels and late lock completion exits cleanly", async (
 	assert.equal(events.filter(([type]) => type === "parameter-end").length, 3);
 });
 
+test("definition changes settle gestures and shadow-root pointer locks cancel", () => {
+	const element = new FakeElement();
+	const events = recordParameterEvents(element);
+	const control = createValueControl(element, {
+		parameterID: "bounded",
+		min: 0,
+		max: 10,
+		value: 8,
+		drag: { axis: "x" },
+	});
+
+	control.startPointerDrag(pointerEvent(1, 0, 0));
+	control.configure({ max: 1 });
+	assert.equal(control.value, 1);
+	assert.equal(events.at(-1)[1].cancelled, true);
+	assert.equal(events.filter(([type]) => type === "parameter-end").length, 1);
+	control.dispose();
+
+	const lockedElement = new FakeElement();
+	const lockedEvents = recordParameterEvents(lockedElement);
+	const shadowRoot = { host: {}, pointerLockElement: null };
+	lockedElement.getRootNode = () => shadowRoot;
+	const locked = createValueControl(lockedElement, {
+		parameterID: "shadow-locked",
+		value: 0.5,
+		drag: { pointerLock: true },
+	});
+	locked.startPointerDrag(pointerEvent(2, 0, 0));
+	shadowRoot.pointerLockElement = lockedElement;
+	dispatch(lockedElement.ownerDocument, "pointerlockchange");
+	shadowRoot.pointerLockElement = null;
+	dispatch(lockedElement.ownerDocument, "pointerlockchange");
+	assert.equal(
+		lockedEvents.filter(([type]) => type === "parameter-end").length,
+		1,
+	);
+	assert.equal(lockedEvents.at(-1)[1].cancelled, true);
+	assert.equal(lockedElement.getAttribute("aria-valuenow"), "0.5");
+	assert.equal(lockedElement.ownerDocument.exitCount, 0);
+	assert.equal(lockedElement.ownerDocument.pointerLockElement, null);
+	locked.dispose();
+});
+
+test("inline editors commit through the shared gesture and keep empty ARIA valid", () => {
+	const element = new FakeElement();
+	const target = new FakeElement();
+	target.replaceChildren = (child) => {
+		target.child = child;
+	};
+	element.ownerDocument.createElement = () => {
+		const listeners = new Map();
+		return {
+			value: "",
+			setAttribute() {},
+			addEventListener(type, listener) {
+				listeners.set(type, listener);
+			},
+			focus() {},
+			select() {},
+			setSelectionRange() {},
+			dispatch(type) {
+				listeners.get(type)?.({ key: type, stopPropagation() {} });
+			},
+		};
+	};
+	const events = recordParameterEvents(element);
+	const control = createValueControl(element, {
+		parameterID: "optional",
+		min: 0,
+		max: 10,
+		value: null,
+		allowEmpty: true,
+		role: "spinbutton",
+		editor: {
+			target,
+			parse: (text) =>
+				text.trim() === ""
+					? { valid: true, value: null }
+					: { valid: Number.isFinite(Number(text)), value: Number(text) },
+		},
+	});
+
+	assert.equal(control.value, null);
+	assert.equal(element.getAttribute("aria-valuenow"), null);
+	control.beginEdit();
+	target.child.value = "";
+	target.child.dispatch("blur");
+	assert.equal(control.value, null);
+	assert.deepEqual(
+		events.map(([type]) => type),
+		["parameter-begin", "parameter-end"],
+	);
+
+	control.beginEdit();
+	control.setValue(5, false, "backend");
+	assert.equal(control.editing, false);
+	assert.equal(control.value, 5);
+	assert.equal(events.filter(([type]) => type === "parameter-end").length, 2);
+
+	control.beginGesture();
+	control.configure({ text: "updated" });
+	assert.equal(events.filter(([type]) => type === "parameter-end").length, 2);
+	control.endGesture();
+	control.dispose();
+});
+
 test("event reentrancy settles without stale edits or replacement gestures", () => {
 	const disposeElement = new FakeElement();
 	const disposeControl = createValueControl(disposeElement, {

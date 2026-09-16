@@ -7,8 +7,8 @@ globalThis.customElements = {
 	get(name) {
 		return this.elements.get(name);
 	},
-	define(name, constructor) {
-		this.elements.set(name, constructor);
+	define(name, elementConstructor) {
+		this.elements.set(name, elementConstructor);
 	},
 };
 

@@ -630,11 +630,7 @@ export class CompostTimeline extends HTMLElement {
 		this.grid = this.getAttribute("grid")?.trim() || this.grid;
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.adaptiveGridDensity = clamp(
-			numberAttr(
-				this,
-				"adaptive-grid-density",
-				DEFAULT_ADAPTIVE_GRID_DENSITY,
-			),
+			numberAttr(this, "adaptive-grid-density", DEFAULT_ADAPTIVE_GRID_DENSITY),
 			MIN_ADAPTIVE_GRID_DENSITY,
 			MAX_ADAPTIVE_GRID_DENSITY,
 		);

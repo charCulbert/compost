@@ -156,7 +156,8 @@ Double-click resets a control; on touch, double-tap does.
 Touch: one finger edits or selects, long-press opens context, two fingers
 pinch to zoom and pan. The note editor pinches horizontally for time and
 vertically for pitch. A number-box tap opens its editor while a drag still
-adjusts it.
+adjusts it. Number-box keyboard steps are anchored at `min`, matching its
+displayed step grid.
 
 ## Talking to a backend
 
@@ -223,7 +224,10 @@ parameters.unregisterControl(amount);
 ```
 
 The supplied element is one focusable semantic control. Compost supplies its
-slider role, accessible name/range/value, keyboard input, and gesture lifecycle.
+slider role, accessible name/range/value, keyboard input, gesture lifecycle, and
+shared inline-editor lifecycle. An editor adapter supplies its mounting target,
+text parsing/formatting, activation triggers, and focus return without changing
+existing styling hooks.
 You supply a meaningful label/value formatter and draw visible focus using
 `focused`. Customize the description and appearance, not away the keyboard or
 accessible equivalent. These controls are not form-associated.

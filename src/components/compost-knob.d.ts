@@ -61,7 +61,7 @@ export class CompostKnob extends HTMLElement {
 	/** Returns to the reset value and ends the gesture. */
 	reset(): void;
 	/** Opens the inline value editor on an editable knob. */
-	beginValueEdit(initialValue?: string, selectValue?: boolean): void;
+	beginValueEdit(initialValue?: string, selectValue?: boolean): boolean;
 }
 
 declare global {

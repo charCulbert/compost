@@ -1,6 +1,6 @@
-export function defineElement(name, constructor) {
+export function defineElement(name, elementConstructor) {
 	if (!customElements.get(name)) {
-		customElements.define(name, constructor);
+		customElements.define(name, elementConstructor);
 	}
 }
 

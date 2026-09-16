@@ -77,8 +77,13 @@ export function createValueControl(element, options = {}) {
 	let displayFractionDigits = options.displayFractionDigits ?? null;
 	let minLabel = options.minLabel ?? "";
 	let maxLabel = options.maxLabel ?? "";
+	let role = options.role ?? "slider";
+	let ariaLabel = options.ariaLabel ?? null;
+	let editorOptions = options.editor ?? null;
+	let editorState = null;
 	let suppressDoubleClickUntil = 0;
 	let rawValue = 0;
+	let rawEmpty = Boolean(options.allowEmpty && options.value === null);
 	let rawDisabled = Boolean(options.disabled ?? options.readOnly);
 	let orientation =
 		options.orientation === "horizontal" ||
@@ -90,6 +95,7 @@ export function createValueControl(element, options = {}) {
 		mode: options.drag?.mode === "position" ? "position" : "relative",
 		distance: Math.max(1, finite(options.drag?.distance, 180)),
 		fineScale: Math.max(0, finite(options.drag?.fineScale, 0.1)),
+		scale: Math.max(0, finite(options.drag?.scale, 1)),
 		pointerLock: Boolean(options.drag?.pointerLock),
 	};
 
@@ -100,6 +106,15 @@ export function createValueControl(element, options = {}) {
 		parameterID: String(options.parameterID ?? ""),
 		parameterKind: parameterKind(options.parameterKind ?? options.kind),
 		parameterValues: null,
+		allowEmpty: Boolean(options.allowEmpty),
+		placeholder: String(options.placeholder ?? ""),
+		keyboardMode: options.keyboardMode === "value" ? "value" : "normalised",
+		get empty() {
+			return rawEmpty;
+		},
+		get editing() {
+			return Boolean(editorState);
+		},
 		name: String(
 			options.name ?? options.label ?? options.parameterID ?? "Parameter",
 		),
@@ -126,17 +141,24 @@ export function createValueControl(element, options = {}) {
 		),
 		setValue(nextValue, shouldEmit = false, source = "external") {
 			if (disposed || (shouldEmit && (control.disabled || settling))) return;
-			const numericValue = Number(nextValue);
-			if (!Number.isFinite(numericValue)) return;
-			const value = normaliseValue(numericValue);
-			if (value === control.value) return;
+			if (!shouldEmit && editorState) finishEditor(false);
+			const isEmpty =
+				control.allowEmpty &&
+				(nextValue === null || nextValue === undefined || nextValue === "");
+			if (!isEmpty) {
+				const numericValue = Number(nextValue);
+				if (!Number.isFinite(numericValue)) return;
+			}
+			const value = isEmpty ? null : normaliseValue(Number(nextValue));
+			if (value === control.value && rawEmpty === isEmpty) return;
 			const editRevision = revision;
 			if (shouldEmit) {
 				beginParameterGesture(eventAdapter, control.value, { source });
 				if (disposed || settling || revision !== editRevision) return;
 			}
-			rawValue = value;
-			if (shouldEmit && pointer) pointer.lastAppliedValue = value;
+			rawEmpty = isEmpty;
+			if (!isEmpty) rawValue = value;
+			if (shouldEmit && pointer && !isEmpty) pointer.lastAppliedValue = value;
 			refresh();
 			if (shouldEmit && !disposed && !settling && revision === editRevision)
 				editParameterGesture(eventAdapter, value, { source });
@@ -144,11 +166,16 @@ export function createValueControl(element, options = {}) {
 
 		configure(next = {}) {
 			if (disposed || settling) return control;
-			settling = true;
-			revision += 1;
-			cancelPointer();
-			if (eventAdapter._parameterGestureActive) {
-				endParameterGesture(eventAdapter, control.value, { cancelled: true });
+			const interactionChanged = configurationChangesInteraction(next);
+			const valueChanged = next.value !== undefined || next.empty === true;
+			if (interactionChanged) {
+				settling = true;
+				revision += 1;
+				finishEditor(false);
+				cancelPointer();
+				if (eventAdapter._parameterGestureActive) {
+					endParameterGesture(eventAdapter, control.value, { cancelled: true });
+				}
 			}
 
 			if (next.parameterID !== undefined)
@@ -192,6 +219,13 @@ export function createValueControl(element, options = {}) {
 			if (next.disabled !== undefined || next.readOnly !== undefined) {
 				rawDisabled = Boolean(next.disabled ?? next.readOnly);
 			}
+			if (next.allowEmpty !== undefined) {
+				control.allowEmpty = Boolean(next.allowEmpty);
+				if (!control.allowEmpty && rawEmpty)
+					control.setValue(control.min, false);
+			}
+			if (next.placeholder !== undefined)
+				control.placeholder = String(next.placeholder ?? "");
 			if (next.orientation !== undefined) {
 				orientation =
 					next.orientation === "horizontal" ? "horizontal" : "vertical";
@@ -210,6 +244,7 @@ export function createValueControl(element, options = {}) {
 							: drag.mode,
 					distance: Math.max(1, finite(next.drag.distance, drag.distance)),
 					fineScale: Math.max(0, finite(next.drag.fineScale, drag.fineScale)),
+					scale: Math.max(0, finite(next.drag.scale, drag.scale)),
 					pointerLock:
 						next.drag.pointerLock === undefined
 							? drag.pointerLock
@@ -230,14 +265,35 @@ export function createValueControl(element, options = {}) {
 				displayFractionDigits = next.displayFractionDigits;
 			if (next.minLabel !== undefined) minLabel = String(next.minLabel);
 			if (next.maxLabel !== undefined) maxLabel = String(next.maxLabel);
+			if (next.role !== undefined) role = String(next.role);
+			if (next.ariaLabel !== undefined) ariaLabel = next.ariaLabel;
+			if (next.editor !== undefined) {
+				editorOptions?.target?.removeEventListener?.(
+					"click",
+					handleEditorClick,
+				);
+				editorOptions = next.editor;
+				if (editorOptions?.triggers?.click)
+					editorOptions.target?.addEventListener?.("click", handleEditorClick);
+			}
+			if (next.keyboardMode !== undefined)
+				control.keyboardMode =
+					next.keyboardMode === "value" ? "value" : "normalised";
 
 			control.resetValue = normaliseValue(control.resetValue);
-			control.setValue(
-				next.value === undefined ? control.value : next.value,
-				false,
-				"configure",
-			);
-			settling = false;
+			if (valueChanged && !interactionChanged && editorState)
+				finishEditor(false);
+			if (interactionChanged || valueChanged)
+				control.setValue(
+					next.empty === true
+						? null
+						: next.value === undefined
+							? control.value
+							: next.value,
+					false,
+					"configure",
+				);
+			if (interactionChanged) settling = false;
 			refresh();
 			return control;
 		},
@@ -252,6 +308,14 @@ export function createValueControl(element, options = {}) {
 				control.beginGesture(source);
 				control.setValue(nextValue, true, source);
 			}
+		},
+
+		beginEdit(initialValue, selectValue = true, gestureAlreadyBegun = false) {
+			return beginEditor(initialValue, selectValue, gestureAlreadyBegun);
+		},
+
+		finishEdit(commit = true, restoreFocus = false) {
+			finishEditor(commit, restoreFocus);
 		},
 
 		endGesture(cancelled = false, source = "control") {
@@ -271,6 +335,7 @@ export function createValueControl(element, options = {}) {
 				disposed ||
 				settling ||
 				control.disabled ||
+				editorState ||
 				pointer ||
 				(event.button !== undefined && event.button !== 0)
 			) {
@@ -300,12 +365,20 @@ export function createValueControl(element, options = {}) {
 				fineCandidate,
 				relative: drag.mode === "relative" || Boolean(event.shiftKey),
 				locked: false,
-				rawPosition: valueToNormalisedPosition(control.value, scaleOptions()),
-				lastAppliedValue: control.value,
+				rawPosition:
+					control.empty || control.value === null
+						? 0
+						: valueToNormalisedPosition(control.value, scaleOptions()),
+				lastAppliedValue: control.value ?? control.min,
+				pointerType: event.pointerType,
 			};
 			const gesture = pointer;
 			const gestureRevision = revision;
-			activeTarget?.setPointerCapture?.(pointerID);
+			try {
+				activeTarget?.setPointerCapture?.(pointerID);
+			} catch {
+				// Synthetic events and a lost native pointer cannot be captured.
+			}
 			addPointerListeners();
 			control.beginGesture();
 			if (
@@ -335,6 +408,7 @@ export function createValueControl(element, options = {}) {
 			if (disposed || settling) return;
 			settling = true;
 			revision += 1;
+			finishEditor(false);
 			cancelPointer();
 			if (eventAdapter._parameterGestureActive) {
 				endParameterGesture(eventAdapter, control.value, { cancelled: true });
@@ -343,6 +417,7 @@ export function createValueControl(element, options = {}) {
 			element.removeEventListener("keydown", handleKey);
 			element.removeEventListener("focus", handleFocus);
 			element.removeEventListener("blur", handleFocus);
+			editorOptions?.target?.removeEventListener?.("click", handleEditorClick);
 			pointerTarget?.removeEventListener?.(
 				"pointerdown",
 				control.startPointerDrag,
@@ -355,7 +430,7 @@ export function createValueControl(element, options = {}) {
 	};
 	Object.defineProperty(control, "value", {
 		enumerable: true,
-		get: () => rawValue,
+		get: () => (rawEmpty ? null : rawValue),
 		set: (value) => control.setValue(value, false),
 	});
 	Object.defineProperty(control, "disabled", {
@@ -408,6 +483,7 @@ export function createValueControl(element, options = {}) {
 	}
 
 	function formattedValue() {
+		if (control.empty) return control.placeholder || "empty";
 		return valueFormatter
 			? String(valueFormatter(control.value, control))
 			: formatValue(
@@ -429,17 +505,23 @@ export function createValueControl(element, options = {}) {
 		if (disposed) return;
 		const text = formattedValue();
 		element.tabIndex = control.disabled ? -1 : 0;
-		setAttribute(element, "role", "slider");
-		setAttribute(element, "aria-label", control.label);
+		setAttribute(element, "role", role);
+		setAttribute(element, "aria-label", ariaLabel ?? control.label);
 		setAttribute(element, "aria-valuemin", control.min);
 		setAttribute(element, "aria-valuemax", control.max);
-		setAttribute(element, "aria-valuenow", control.value);
+		setAttribute(
+			element,
+			"aria-valuenow",
+			control.empty ? null : control.value,
+		);
 		setAttribute(element, "aria-valuetext", text);
 		setAttribute(element, "aria-orientation", orientation);
 		setAttribute(element, "aria-disabled", control.disabled ? "true" : "false");
 		draw({
 			value: control.value,
-			position: valueToNormalisedPosition(control.value, scaleOptions()),
+			position: control.empty
+				? 0
+				: valueToNormalisedPosition(control.value, scaleOptions()),
 			valueText: text,
 			focused,
 			dragging: Boolean(pointer),
@@ -455,6 +537,27 @@ export function createValueControl(element, options = {}) {
 	function handleKey(event) {
 		if (disposed || control.disabled || eventIsFromEditor(event, element))
 			return;
+		if (editorState) return;
+		const editor = editorOptions;
+		if (
+			editor?.triggers?.keydown &&
+			(!editor.enabled || editor.enabled(control))
+		) {
+			if (
+				!event.metaKey &&
+				!event.ctrlKey &&
+				!event.altKey &&
+				(event.key === "Enter" || /^[0-9.+-]$/u.test(event.key))
+			) {
+				event.preventDefault?.();
+				beginEditor(
+					event.key === "Enter" ? undefined : event.key,
+					event.key === "Enter",
+					false,
+				);
+				return;
+			}
+		}
 		if (event.key === "Escape" && pointer) {
 			event.preventDefault();
 			cancelPointer();
@@ -462,12 +565,8 @@ export function createValueControl(element, options = {}) {
 		}
 		if (pointer) return;
 
-		const small = normalisedKeyboardStep({
-			...scaleOptions(),
-			step: control.step,
-			positionStep: control.positionStep,
-		});
-		const large = Math.min(1, small * 10);
+		const small = keyboardStep();
+		const large = keyboardLargeStep(small);
 		const arrow = event.altKey ? large : small;
 		const delta = {
 			ArrowUp: arrow,
@@ -481,11 +580,11 @@ export function createValueControl(element, options = {}) {
 		if (event.key === "Home") nextValue = control.min;
 		else if (event.key === "End") nextValue = control.max;
 		else if (delta !== undefined) {
-			nextValue = moveValueByNormalisedDelta(
-				control.value,
-				delta,
-				scaleOptions(),
-			);
+			const currentValue = control.value ?? control.min;
+			nextValue =
+				control.keyboardMode === "value"
+					? currentValue + delta
+					: moveValueByNormalisedDelta(currentValue, delta, scaleOptions());
 		} else if (["Escape", "Delete", "Backspace"].includes(event.key)) {
 			event.preventDefault();
 			control.reset();
@@ -496,6 +595,28 @@ export function createValueControl(element, options = {}) {
 		control.beginGesture();
 		control.editValue(nextValue);
 		control.endGesture();
+	}
+
+	function keyboardStep() {
+		if (control.keyboardMode === "value") {
+			return control.step > 0
+				? control.step
+				: Math.abs(control.max - control.min) / 100 || 0.01;
+		}
+		return normalisedKeyboardStep({
+			...scaleOptions(),
+			step: control.step,
+			positionStep: control.positionStep,
+		});
+	}
+
+	function keyboardLargeStep(small) {
+		return control.keyboardMode === "value"
+			? Math.max(
+					small * 10,
+					Math.abs(control.max - control.min) / 100 || small * 10,
+				)
+			: Math.min(1, small * 10);
 	}
 
 	function pointerCoordinate(event) {
@@ -543,14 +664,14 @@ export function createValueControl(element, options = {}) {
 			const delta = pointerCoordinate(event) - previous;
 			const fine = gesture.fineCandidate || event.shiftKey;
 			if (gesture.lastAppliedValue !== control.value) {
-				gesture.rawPosition = valueToNormalisedPosition(
-					control.value,
-					scaleOptions(),
-				);
+				gesture.rawPosition =
+					control.empty || control.value === null
+						? 0
+						: valueToNormalisedPosition(control.value, scaleOptions());
 			}
 			gesture.rawPosition = clamp(
 				gesture.rawPosition +
-					(delta / drag.distance) * (fine ? drag.fineScale : 1),
+					(delta / drag.distance) * drag.scale * (fine ? drag.fineScale : 1),
 				0,
 				1,
 			);
@@ -575,7 +696,11 @@ export function createValueControl(element, options = {}) {
 		clearTimeout(active.lockFallbackTimer);
 		removePointerListeners(active.target);
 		if (active.target?.hasPointerCapture?.(active.pointerID)) {
-			active.target.releasePointerCapture(active.pointerID);
+			try {
+				active.target.releasePointerCapture(active.pointerID);
+			} catch {
+				// Capture may have been lost between the check and release.
+			}
 		}
 		exitPointerLock(active.target);
 		refresh();
@@ -592,6 +717,14 @@ export function createValueControl(element, options = {}) {
 				suppressDoubleClickUntil = now + DOUBLE_CLICK_MS;
 				control.editValue(control.resetValue);
 				control.endGesture();
+				return;
+			}
+			if (
+				active.pointerType === "touch" &&
+				(editorOptions?.touchTap || editorOptions?.triggers?.touchTap)
+			) {
+				lastClick = null;
+				beginEditor(undefined, true, true);
 				return;
 			}
 			lastClick = { time: now, x: active.startX, y: active.startY };
@@ -649,8 +782,213 @@ export function createValueControl(element, options = {}) {
 		);
 	}
 
+	function configurationChangesInteraction(next) {
+		if (
+			next.parameterID !== undefined &&
+			String(next.parameterID) !== control.parameterID
+		)
+			return true;
+		if (next.parameterKind !== undefined || next.kind !== undefined) {
+			if (
+				parameterKind(next.parameterKind ?? next.kind) !== control.parameterKind
+			)
+				return true;
+		}
+		if (
+			next.orientation !== undefined &&
+			(next.orientation === "horizontal" ? "horizontal" : "vertical") !==
+				orientation
+		)
+			return true;
+		if (next.drag !== undefined) {
+			const nextAxis =
+				next.drag.axis === "x" ? "x" : next.drag.axis === "y" ? "y" : drag.axis;
+			const nextMode =
+				next.drag.mode === "position" || next.drag.mode === "relative"
+					? next.drag.mode
+					: drag.mode;
+			const nextDistance = Math.max(
+				1,
+				finite(next.drag.distance, drag.distance),
+			);
+			const nextFineScale = Math.max(
+				0,
+				finite(next.drag.fineScale, drag.fineScale),
+			);
+			const nextScale = Math.max(0, finite(next.drag.scale, drag.scale));
+			const nextPointerLock =
+				next.drag.pointerLock === undefined
+					? drag.pointerLock
+					: Boolean(next.drag.pointerLock);
+			if (
+				nextAxis !== drag.axis ||
+				nextMode !== drag.mode ||
+				nextDistance !== drag.distance ||
+				nextFineScale !== drag.fineScale ||
+				nextScale !== drag.scale ||
+				nextPointerLock !== drag.pointerLock
+			)
+				return true;
+		}
+		if (
+			(next.disabled !== undefined || next.readOnly !== undefined) &&
+			Boolean(next.disabled ?? next.readOnly) !== rawDisabled
+		)
+			return true;
+		if (next.min !== undefined && finite(next.min, control.min) !== control.min)
+			return true;
+		if (next.max !== undefined && finite(next.max, control.max) !== control.max)
+			return true;
+		if (
+			next.mid !== undefined &&
+			(next.mid == null ? null : finite(next.mid, control.mid)) !== control.mid
+		)
+			return true;
+		if (
+			next.curve !== undefined &&
+			normaliseCurveName(next.curve) !== control.curve
+		)
+			return true;
+		if (next.shape !== undefined) {
+			const nextShape =
+				next.shape == null
+					? null
+					: Math.max(Number.EPSILON, finite(next.shape, control.shape ?? 1));
+			if (nextShape !== control.shape) return true;
+		}
+		if (next.positionStep !== undefined) {
+			const nextPositionStep =
+				next.positionStep == null
+					? null
+					: Math.max(0, finite(next.positionStep, control.positionStep ?? 0));
+			if (nextPositionStep !== control.positionStep) return true;
+		}
+		if (
+			next.step !== undefined &&
+			Math.max(0, finite(next.step, control.step)) !== control.step
+		)
+			return true;
+		if (
+			next.allowEmpty !== undefined &&
+			Boolean(next.allowEmpty) !== control.allowEmpty
+		)
+			return true;
+		if (
+			next.keyboardMode !== undefined &&
+			(next.keyboardMode === "value" ? "value" : "normalised") !==
+				control.keyboardMode
+		)
+			return true;
+		if (next.editor !== undefined && editorInteractionChanged(next.editor))
+			return true;
+		if (next.resetValue !== undefined || next.defaultValue !== undefined) {
+			const nextReset = finite(
+				next.resetValue ?? next.defaultValue,
+				control.resetValue,
+			);
+			if (normaliseValue(nextReset) !== control.resetValue) return true;
+		}
+		return false;
+	}
+
+	function editorInteractionChanged(nextEditor) {
+		if (nextEditor === editorOptions) return false;
+		if (!nextEditor || !editorOptions) return true;
+		return (
+			nextEditor.target !== editorOptions.target ||
+			nextEditor.triggers?.click !== editorOptions.triggers?.click ||
+			nextEditor.triggers?.keydown !== editorOptions.triggers?.keydown ||
+			nextEditor.triggers?.touchTap !== editorOptions.triggers?.touchTap ||
+			nextEditor.touchTap !== editorOptions.touchTap
+		);
+	}
+
+	function beginEditor(initialValue, selectValue, gestureAlreadyBegun) {
+		const editor = editorOptions;
+		if (
+			disposed ||
+			!editor ||
+			editorState ||
+			control.disabled ||
+			(editor.enabled && !editor.enabled(control))
+		)
+			return false;
+		const target = editor.target;
+		if (!target?.replaceChildren) return false;
+		const input =
+			ownerDocument?.createElement?.("input") ??
+			globalThis.document?.createElement?.("input");
+		if (!input) return false;
+		if (!gestureAlreadyBegun) control.beginGesture("control");
+		const text =
+			initialValue ??
+			editor.initialValue?.(control) ??
+			editor.format?.(control.value, control) ??
+			formattedValue();
+		input.className = editor.className ?? "value-editor";
+		if (editor.part) input.setAttribute("part", editor.part);
+		input.type = "text";
+		input.inputMode = editor.inputMode ?? "decimal";
+		input.min = String(control.min);
+		input.max = String(control.max);
+		input.step = String(control.step);
+		input.value = String(text);
+		if (editor.ariaLabel)
+			input.setAttribute("aria-label", String(editor.ariaLabel(control)));
+		const state = { input };
+		editorState = state;
+		editor.onStateChange?.(true, control);
+		const finish = (commit, restoreFocus = false) =>
+			finishEditor(commit, restoreFocus, state);
+		input.addEventListener("keydown", (event) => {
+			event.stopPropagation?.();
+			if (event.key === "Enter") {
+				event.preventDefault?.();
+				finish(true, true);
+			} else if (event.key === "Escape") {
+				event.preventDefault?.();
+				finish(false, true);
+			}
+		});
+		input.addEventListener("blur", () => finish(true));
+		target.replaceChildren(input);
+		input.focus?.();
+		if (selectValue) input.select?.();
+		else input.setSelectionRange?.(input.value.length, input.value.length);
+		return true;
+	}
+
+	function finishEditor(commit, restoreFocus, state = editorState) {
+		if (!state || state !== editorState) return;
+		editorState = null;
+		const editor = editorOptions;
+		const parsed = editor?.parse?.(state.input.value, control) ?? {
+			valid: Number.isFinite(Number(state.input.value)),
+			value: Number(state.input.value),
+		};
+		editor?.onStateChange?.(false, control);
+		if (commit && parsed.valid) {
+			control.editValue(parsed.value, "control");
+			control.endGesture(false, "control");
+		} else {
+			refresh();
+			control.endGesture(true, "control");
+		}
+		if (restoreFocus) editor?.restoreFocus?.(control);
+	}
+
+	function isPointerLockedTarget(target) {
+		if (!target) return false;
+		const root = target.getRootNode?.();
+		return (
+			ownerDocument?.pointerLockElement === target ||
+			root?.pointerLockElement === target ||
+			(root?.host && ownerDocument?.pointerLockElement === root.host)
+		);
+	}
+
 	function isPointerLocked() {
-		return ownerDocument?.pointerLockElement === pointer?.target;
+		return isPointerLockedTarget(pointer?.target);
 	}
 
 	function requestPointerLock() {
@@ -658,10 +996,7 @@ export function createValueControl(element, options = {}) {
 			const gesture = pointer;
 			const request = gesture?.target?.requestPointerLock?.();
 			request?.then?.(() => {
-				if (
-					pointer !== gesture &&
-					ownerDocument?.pointerLockElement === gesture?.target
-				) {
+				if (pointer !== gesture && isPointerLockedTarget(gesture?.target)) {
 					ownerDocument?.exitPointerLock?.();
 				}
 			});
@@ -713,14 +1048,16 @@ export function createValueControl(element, options = {}) {
 			gesture.lockDeltaEvents += 1;
 		}
 		if (gesture.lastAppliedValue !== control.value) {
-			gesture.rawPosition = valueToNormalisedPosition(
-				control.value,
-				scaleOptions(),
-			);
+			gesture.rawPosition =
+				control.empty || control.value === null
+					? 0
+					: valueToNormalisedPosition(control.value, scaleOptions());
 		}
 		gesture.rawPosition = clamp(
 			gesture.rawPosition +
-				(movement / drag.distance) * (event.shiftKey ? drag.fineScale : 1),
+				(movement / drag.distance) *
+					drag.scale *
+					(event.shiftKey ? drag.fineScale : 1),
 			0,
 			1,
 		);
@@ -736,8 +1073,13 @@ export function createValueControl(element, options = {}) {
 	}
 
 	function exitPointerLock(target = pointer?.target) {
-		if (ownerDocument?.pointerLockElement === target)
-			ownerDocument?.exitPointerLock?.();
+		if (isPointerLockedTarget(target)) ownerDocument?.exitPointerLock?.();
+	}
+
+	function handleEditorClick(event) {
+		event.preventDefault?.();
+		event.stopPropagation?.();
+		beginEditor(undefined, true, false);
 	}
 
 	function handleDoubleClick(event) {
@@ -754,12 +1096,15 @@ export function createValueControl(element, options = {}) {
 		[control.min, control.max] = [control.max, control.min];
 	control.resetValue = normaliseValue(control.resetValue);
 	rawValue = control.resetValue;
-	control.setValue(options.value ?? control.resetValue, false);
+	if (options.allowEmpty && options.value === null) rawEmpty = true;
+	else control.setValue(options.value ?? control.resetValue, false);
 	element.addEventListener("keydown", handleKey);
 	element.addEventListener("focus", handleFocus);
 	element.addEventListener("blur", handleFocus);
 	pointerTarget?.addEventListener?.("pointerdown", control.startPointerDrag);
 	pointerTarget?.addEventListener?.("dblclick", handleDoubleClick);
+	if (editorOptions?.triggers?.click)
+		editorOptions.target?.addEventListener?.("click", handleEditorClick);
 	refresh();
 	return control;
 }

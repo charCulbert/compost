@@ -7,8 +7,9 @@ with externally supplied values. A consumer can supply its own numeric control
 graphics while retaining Compost's value handling, parameter events, keyboard
 operation, accessible metadata, and pointer gestures.
 
-`<compost-knob>` and `<compost-slider>` keep their default appearance and existing
-element interfaces. Custom visuals use a small JavaScript registration interface.
+`<compost-knob>`, `<compost-slider>`, and `<compost-number-box>` keep their
+existing appearance and element interfaces. Custom visuals use a small
+JavaScript registration interface.
 Usefulness and the work saved for a caller determine scope; multiple consumers
 are not a prerequisite for accepting a feature.
 
@@ -80,8 +81,9 @@ example must agree exactly with the implemented interface.
    orientation, disabled state, and focusability follow the control configuration.
    The custom renderer supplies a visible focus treatment using the supplied
    focus state; it does not reproduce ARIA bookkeeping.
-8. Configuration/definition updates and teardown must settle any active gesture
-   coherently. Disposed controls cannot continue emitting edits or receiving
+8. Configuration/definition updates that change identity or interaction policy
+   and teardown must settle any active gesture coherently; presentation-only
+   updates do not interrupt it. Disposed controls cannot continue emitting edits or receiving
    registered updates. Multiple handles on one event target do not duplicate the
    controller's forwarded events.
 
@@ -96,15 +98,18 @@ without importing DOM-only requirements into their type.
 
 ## Built-in adoption
 
-Use the shared numeric behavior in the knob and slider; retain their markup,
-styling parts, attributes, typed entry, and public setters. Preserve slider
-orientation and absolute versus relative interaction. Extract the shared behavior
-behind an internal seam if needed; do not expose internal adapter machinery as
-additional public configuration.
+Use the shared numeric behavior in the knob, slider, and number-box; retain
+their markup, styling parts, attributes, typed entry, and public setters.
+Preserve slider orientation and absolute versus relative interaction, number-box
+empty values and split drag. Inline editor configuration defines its mounting
+target, triggers, parsing/formatting, and focus return behind the shared seam.
+Do not expose internal adapter machinery as additional public configuration.
 
 The existing parameter emitters remain useful for the other controls. Reuse their
-event contract rather than introducing a second event vocabulary. No number-box,
-button, select, or editor redesign is included.
+event contract rather than introducing a second event vocabulary. Buttons and
+selects remain separate. Inline editing is shared by the three numeric controls,
+while each control retains its existing editor styling hooks
+and tap/keyboard policy.
 
 ## Examples and documentation
 
@@ -147,15 +152,15 @@ tool exposes those settings but does not expose a separate service-tier switch.
 - Inspect the rendered custom example at desktop and narrow widths, including a
   focused control. Keep automated accessibility evidence separate from unperformed
   VoiceOver or physical touch-device acceptance.
-- Run every changed test file directly and run `npm run check` with full output.
-  The current package has no `check` script; establish it using the installed
-  checker and report any pre-existing repository diagnostics separately.
+- Run every changed test file directly and run the existing `npm run check` with
+  full output. Report any pre-existing repository diagnostics separately.
 - No `npm test`, build, commit, push, or publication is part of this request.
 
 ## Implementation verification
 
-- Shared numeric behavior, explicit registration, built-in adoption, declarations,
-  README guidance, and the custom-canvas example are implemented.
+- Shared numeric behavior, explicit registration, built-in adoption including the
+  number-box, declarations, README guidance, and the custom-canvas example are
+  implemented.
 - 143 focused unit/regression tests and 20 headless browser tests pass. The
   browser checks include property-driven initialization, reconnects, silent host
   updates, cancellation after detachment, keyboard semantics, typed entry, and

@@ -14,8 +14,8 @@ test("scope worklet publishes consecutive 1024-sample blocks", async () => {
 			};
 		}
 	};
-	globalThis.registerProcessor = (_name, constructor) => {
-		Processor = constructor;
+	globalThis.registerProcessor = (_name, processorConstructor) => {
+		Processor = processorConstructor;
 	};
 	globalThis.sampleRate = 48000;
 

@@ -11,7 +11,9 @@ export function setupExamplePage(id) {
 	const example = getExample(id);
 	if (!example) return;
 
-	document.querySelectorAll("header .navlink").forEach((link) => link.remove());
+	document.querySelectorAll("header .navlink").forEach((link) => {
+		link.remove();
+	});
 
 	const customTarget = document.querySelector("[data-example-nav]");
 	const target = customTarget || document.querySelector("header");

@@ -140,7 +140,7 @@ export function envelopeValueAtTime(
 	time,
 	min = 0,
 	max = 1,
-	scale = "linear",
+	_scale = "linear",
 	stepped = false,
 ) {
 	const range = envelopeRange(min, max);

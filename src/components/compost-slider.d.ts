@@ -65,7 +65,7 @@ export class CompostSlider extends HTMLElement {
 	/** Returns to the reset value and ends the gesture. */
 	reset(): void;
 	/** Opens the inline value editor on an editable slider. */
-	beginValueEdit(initialValue?: string, selectValue?: boolean): void;
+	beginValueEdit(initialValue?: string, selectValue?: boolean): boolean;
 	/** The value's 0..1 position along the scale. */
 	getPosition(): number;
 	getPercent(): number;

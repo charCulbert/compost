@@ -10,6 +10,9 @@
     <style>
       .controller-bank {
         display: grid;
+        padding: 0;
+        margin: 0;
+        min-inline-size: 0;
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 118px), 1fr));
         gap: 1px;
         border: 1px solid var(--line);
@@ -71,11 +74,11 @@
       }
 
       @media (max-width: 560px) {
-        .midi-controller-workbench compost-piano {
+        .midi-controller-workbench > .panel > compost-piano {
           position: relative;
           inset: auto;
-          width: 100% !important;
-          max-width: 100% !important;
+          width: 100%;
+          max-width: 100%;
           transform: none;
         }
       }
@@ -99,7 +102,7 @@
           <p>Output-only MIDI generator with a keyboard, eight assignable CC knobs, and all-channel output.</p>
         </div>
         <div class="panel wide">
-          <div class="controller-bank" role="group" aria-label="Assignable MIDI CC knobs">
+          <fieldset class="controller-bank" aria-label="Assignable MIDI CC knobs">
             <div class="cc-slot">
               <compost-knob data-cc-knob name="knob1" parameter-id="knob1" label="Knob 1" min="0" max="127" value="64" step="1" reset-value="64" editable></compost-knob>
               <label class="cc-assignment">
@@ -156,7 +159,7 @@
                 <input data-cc-assignment="knob8" type="number" min="0" max="127" step="1" value="27" inputmode="numeric" aria-label="Knob 8 CC">
               </label>
             </div>
-          </div>
+          </fieldset>
         </div>
         <div class="panel wide">
           <compost-piano root-note="36" note-count="49"></compost-piano>

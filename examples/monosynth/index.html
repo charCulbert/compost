@@ -52,6 +52,8 @@
       .audio-output > compost-slider { flex: 1 1 12em; width: min(100%, 18em); max-width: 18em; min-width: 10em; margin-inline: 1em; }
       .toolbar-action, .demo-header > .color-scheme-toggle { min-width: 6.5em; min-height: 100%; padding: 0 .75em; border: 0; border-left: 1px solid var(--line); background: Canvas; color: CanvasText; font: inherit; }
       .demo-header > .color-scheme-toggle { display: grid; place-items: center; align-self: stretch; }
+      .transport { display: flex; align-items: center; gap: .625em; }
+      .transport button { min-height: 2.25em; border: 1px solid currentColor; background: Canvas; color: CanvasText; font: inherit; }
       .header-transport { position: absolute; inset-block: 0; left: 50%; z-index: 2; gap: 0; transform: translateX(-50%); }
       .transport.header-transport button { align-self: stretch; min-width: 3.5em; min-height: 0; padding: 0 .875em; border: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); background: transparent; }
       .transport.header-transport button + button { border-left: 0; }
@@ -100,15 +102,13 @@
       .workbench { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; width: min(100%, 64em); margin: auto; border: 1px solid var(--line); }
       .synth-grid { display: grid; grid-template-columns: minmax(22em, 1fr) minmax(22em, 1fr); min-width: 0; }
       .parameter-zone { display: grid; align-content: start; gap: .75em; min-width: 0; padding: .625em; border-right: 1px solid var(--line); }
-      .oscillator-controls { display: flex; align-items: center; justify-content: center; gap: .75em; min-width: 0; }
+      .oscillator-controls { display: flex; align-items: center; justify-content: center; gap: .75em; min-width: 0; border: 0; padding: 0; margin: 0; }
       .wave-shape-select { flex: 1 1 9em; min-width: 7em; align-self: center; }
       .wave-shape-select::part(input) { min-height: 2em; padding-block: 0; }
       .oscillator-controls compost-knob { flex: 1 1 5.25em; min-width: 0; max-width: 7em; --compost-knob-size: 4.125em; }
-      .adsr-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5em; }
+      .adsr-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5em; border: 0; padding: 0; margin: 0; }
       .adsr-controls compost-knob { width: 100%; min-width: 0; --compost-knob-size: 3.5em; }
       .sequence-panel { min-width: 0; border-top: 1px solid var(--line); }
-      .transport { display: flex; align-items: center; gap: .625em; }
-      .transport button { min-height: 2.25em; border: 1px solid currentColor; background: Canvas; color: CanvasText; font: inherit; }
       .transport compost-number-box { width: 5.5em; }
       .pitch-envelope-panel { display: grid; gap: .35em; min-width: 0; }
       .panel-label { color: var(--muted); font-size: .6875em; }
@@ -123,7 +123,7 @@
       .meter-cell { display: grid; place-items: center; }
       .meter-cell compost-meter { --meter-length: var(--scope-panel-height); }
       .meter-cell compost-meter::part(label), .meter-cell compost-meter::part(legend), .meter-cell compost-meter::part(channel-labels) { display: none; }
-      .scope-number-control, .scope-label-editor { display: grid; gap: .35em; min-width: 0; color: var(--muted); font-size: .6875em; }
+      .scope-number-control, .scope-label-editor { display: grid; gap: .35em; min-width: 0; border: 0; padding: 0; margin: 0; color: var(--muted); font-size: .6875em; }
       .scope-number-control compost-number-box { width: 7.5em; }
       .scope-label-editor input { min-width: 0; min-height: 2.25em; border: 1px solid var(--line); background: Field; color: FieldText; font: inherit; }
 
@@ -182,7 +182,7 @@
         <section class="workbench">
           <div class="synth-grid">
             <div class="parameter-zone">
-              <div class="oscillator-controls" aria-label="Oscillator controls">
+              <section class="oscillator-controls" aria-label="Oscillator controls">
                 <compost-select class="wave-shape-select" parameter-id="waveShape" aria-label="Waveform" value="0">
                   <option value="0" selected>Sine</option>
                   <option value="1">Saw</option>
@@ -190,13 +190,13 @@
                 </compost-select>
                 <compost-knob parameter-id="amplitude" label="Amplitude" min="0" max="1" value=".8" step=".01" reset-value=".8" editable></compost-knob>
                 <compost-knob parameter-id="offset" label="Offset" min="-1" max="1" value="0" step=".01" reset-value="0" editable></compost-knob>
-              </div>
-              <div class="adsr-controls" aria-label="Amplitude envelope controls">
+              </section>
+              <section class="adsr-controls" aria-label="Amplitude envelope controls">
                 <compost-knob parameter-id="attack" label="Attack" min=".001" max="10" value=".001" step=".001" unit="s" curve="log" reset-value=".001" editable></compost-knob>
                 <compost-knob parameter-id="decay" label="Decay" min=".001" max="10" value=".08" step=".001" unit="s" curve="log" reset-value=".08" editable></compost-knob>
                 <compost-knob parameter-id="sustain" label="Sustain" min="0" max="1" value=".07" step=".01" reset-value=".07" editable></compost-knob>
                 <compost-knob parameter-id="release" label="Release" min=".001" max="10" value=".08" step=".001" unit="s" curve="log" reset-value=".08" editable></compost-knob>
-              </div>
+              </section>
               <div class="pitch-envelope-panel">
                 <span class="panel-label">Pitch envelope</span>
                 <compost-envelope-editor class="pitch-envelope" label="Pitch envelope" duration="1" min="-12" max="12" step="1"></compost-envelope-editor>
@@ -205,8 +205,8 @@
 
             <div class="scope-stack">
               <div class="scope-toolbar">
-                <label class="scope-number-control">Range <compost-number-box parameter-id="scopeRange" label="Range" min=".1" max="2" value="1" step=".01" reset-value="1" split-drag></compost-number-box></label>
-                <label class="scope-number-control">Offset <compost-number-box parameter-id="scopeOffset" label="Offset" min="-2" max="2" value="0" step=".01" reset-value="0" split-drag></compost-number-box></label>
+                <section class="scope-number-control" aria-label="Range">Range <compost-number-box parameter-id="scopeRange" label="Range" min=".1" max="2" value="1" step=".01" reset-value="1" split-drag></compost-number-box></section>
+                <section class="scope-number-control" aria-label="Offset">Offset <compost-number-box parameter-id="scopeOffset" label="Offset" min="-2" max="2" value="0" step=".01" reset-value="0" split-drag></compost-number-box></section>
               </div>
               <div class="scope-display">
                 <compost-scope value-range="1" x-markers="0,.5,1" y-markers="-.5,0,.5" y-marker-labels="-.5,0,.5"></compost-scope>

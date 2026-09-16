@@ -15,8 +15,8 @@ export const DOUBLE_TAP_DISTANCE = 24;
 /** Movement in px within one tap before it stops being a tap. */
 export const TAP_MOVE_DISTANCE = 12;
 /** Grab edge in px for trimming an item, by pointer type. */
-const TOUCH_TRIM_EDGE = 12;
-const MOUSE_TRIM_EDGE = 6;
+const _TOUCH_TRIM_EDGE = 12;
+const _MOUSE_TRIM_EDGE = 6;
 
 /**
  * One long-press timer. `start(fire)` schedules `fire` once, LONG_PRESS_MS

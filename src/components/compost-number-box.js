@@ -1,7 +1,6 @@
 import {
 	moveValueByNormalisedDelta,
 	normaliseCurveName,
-	valueToNormalisedPosition,
 } from "../parameter-scale.js";
 import {
 	beginParameterGesture,
@@ -13,6 +12,7 @@ import {
 	formatValue,
 	snap,
 } from "../utils.js";
+import { createValueControl } from "../value-control.js";
 
 let nextNumberBoxID = 1;
 
@@ -89,7 +89,8 @@ export class CompostNumberBox extends HTMLElement {
 		this.handleLockedMouseUp = this.handleLockedMouseUp.bind(this);
 		this.handlePointerLockChange = this.handlePointerLockChange.bind(this);
 		this.handlePointerLockError = this.handlePointerLockError.bind(this);
-		this.handleWindowBlur = () => this.endActiveDrag(false);
+		this.handleWindowBlur = () => this.valueControl?.finishEdit(false);
+		this.valueControl = null;
 
 		this.root = this.attachShadow({ mode: "open" });
 		this.root.innerHTML = `
@@ -217,31 +218,35 @@ export class CompostNumberBox extends HTMLElement {
 		this.box = this.root.querySelector(".box");
 		this.valueElement = this.root.querySelector(".value");
 
-		this.box.addEventListener("pointerdown", (event) => this.beginDrag(event));
-		this.box.addEventListener("pointermove", (event) => this.moveDrag(event));
-		this.box.addEventListener("pointerup", (event) => this.endDrag(event));
-		this.box.addEventListener("pointercancel", (event) =>
-			this.endDrag(event, false),
-		);
+		this.box.addEventListener("pointerdown", (event) => {
+			if (this.valueControl && !this.valueControl.editing) {
+				this.syncValueControl();
+				this.valueControl.configure({
+					drag: { scale: this.dragScaleFor(event) },
+				});
+			}
+		});
 		this.box.addEventListener("keydown", (event) => this.handleKey(event));
 	}
 
 	connectedCallback() {
 		this.readAttributes();
-		this.refresh();
+		this.connectValueControl();
+		this.readAttributes();
 	}
 
 	disconnectedCallback() {
-		if (this.drag) this.endActiveDrag(false);
-		else this.cleanupPointerLock();
+		this.valueControl?.finishEdit(false);
+		this.valueControl?.dispose();
+		this.valueControl = null;
 	}
 
-	attributeChangedCallback() {
-		this.readAttributes();
-		this.refresh();
+	attributeChangedCallback(name) {
+		this.readAttributes(name);
 	}
 
 	get value() {
+		if (this.valueControl) return this.valueControl.value;
 		return this.empty ? null : this._value;
 	}
 
@@ -265,7 +270,8 @@ export class CompostNumberBox extends HTMLElement {
 		return this.getAttribute("parameter-kind") || "continuous";
 	}
 
-	readAttributes() {
+	readAttributes(changedAttribute = null) {
+		if (this.valueControl?.editing) this.valueControl.finishEdit(false);
 		this.name = this.getAttribute("name") || this.name;
 		this.parameterID = this.getAttribute("parameter-id") || "";
 		this.label = this.getAttribute("label") || this.label;
@@ -296,43 +302,120 @@ export class CompostNumberBox extends HTMLElement {
 		this.minLabel = this.getAttribute("min-label") ?? "";
 		this.maxLabel = this.getAttribute("max-label") ?? "";
 
-		if (this.hasAttribute("value")) {
-			this.setValue(this.getAttribute("value"), false);
-		} else if (!this.allowEmpty || !this.empty) {
-			this.setValue(this._value, false);
+		if (!this.valueControl) {
+			this.disconnectedValue = this.hasAttribute("value")
+				? this.getAttribute("value")
+				: this.disconnectedValue;
+			return;
 		}
+		this.valueControl.configure(
+			this.valueControlOptions(
+				changedAttribute === "value" ? this.getAttribute("value") : undefined,
+			),
+		);
+	}
+
+	valueControlOptions(value) {
+		return {
+			parameterID: this.parameterID,
+			parameterKind: this.parameterKind,
+			name: this.name,
+			label: this.label,
+			ariaLabel: this.ariaLabelText || this.label,
+			role: "spinbutton",
+			min: this.min,
+			max: this.max,
+			mid: this.mid,
+			curve: this.curve,
+			shape: this.shape,
+			step: this.step,
+			value: value === undefined ? undefined : value,
+			resetValue: this.resetTargetValue(),
+			unit: this.unit,
+			text: this.valueText,
+			displayFractionDigits: this.displayFractionDigits,
+			minLabel: this.minLabel,
+			maxLabel: this.maxLabel,
+			allowEmpty: this.allowEmpty,
+			placeholder: this.placeholder,
+			keyboardMode: "value",
+			pointerTarget: this.box,
+			drag: {
+				axis: "y",
+				mode: "relative",
+				distance: 180,
+				fineScale: readNumberAttribute(
+					this,
+					"fine-drag-scale",
+					FINE_DRAG_SCALE,
+				),
+				pointerLock: this.hasAttribute("pointer-lock"),
+			},
+			editor: {
+				target: this.valueElement,
+				enabled: () => !this.disabled,
+				format: () => this.editableValueText(),
+				parse: (text) => {
+					if (text.trim() === "" && this.allowEmpty)
+						return { valid: true, value: null };
+					return {
+						valid: text.trim() !== "" && Number.isFinite(Number(text)),
+						value: Number(text),
+					};
+				},
+				part: "input",
+				ariaLabel: () => `Set ${this.label}`,
+				triggers: { keydown: true, touchTap: true },
+				onStateChange: (editing) => {
+					this.editing = editing;
+				},
+				restoreFocus: () =>
+					queueMicrotask(() => this.box?.focus({ preventScroll: true })),
+			},
+			draw: (state) => this.refresh(state),
+		};
+	}
+
+	connectValueControl() {
+		if (this.valueControl) return;
+		this.valueControl = createValueControl(
+			this.box,
+			this.valueControlOptions(
+				this.hasAttribute("value") ? this.getAttribute("value") : this._value,
+			),
+		);
 	}
 
 	setValue(value, shouldEmit = true, source = "control") {
-		if (
-			(value === null || value === undefined || value === "") &&
-			this.allowEmpty
-		) {
-			const changed = !this.empty;
-			this.empty = true;
-			this.removeAttribute("value");
-			this.refresh();
-			if (changed && shouldEmit)
-				editParameterGesture(this, this.value, { source });
+		if (!this.valueControl) {
+			if (
+				(value === null || value === undefined || value === "") &&
+				this.allowEmpty
+			) {
+				const changed = !this.empty;
+				this.empty = true;
+				if (shouldEmit && changed) editParameterGesture(this, null, { source });
+				return;
+			}
+			const number = Number(value);
+			if (!Number.isFinite(number)) return;
+			const next = clamp(
+				this.min + snap(number - this.min, this.step),
+				this.min,
+				this.max,
+			);
+			const changed = this.empty || next !== this._value;
+			this.empty = false;
+			this._value = next;
+			this.disconnectedValue = next;
+			if (shouldEmit && changed) editParameterGesture(this, next, { source });
 			return;
 		}
-
-		const number = Number(value);
-		if (!Number.isFinite(number)) return;
-
-		const nextValue = clamp(snap(number, this.step), this.min, this.max);
-		const changed = this.empty || nextValue !== this._value;
-		this.empty = false;
-		this.lastUpdateSource = source;
-		this._value = nextValue;
-		if (this.getAttribute("value") !== String(nextValue)) {
-			this.setAttribute("value", String(nextValue));
-		}
-		this.refresh();
-
-		if (changed && shouldEmit) {
-			editParameterGesture(this, this.value, { source });
-		}
+		this.syncValueControl();
+		const previous = this.value;
+		if (shouldEmit) this.valueControl.editValue(value, source);
+		else this.valueControl.setValue(value, false, source);
+		if (this.value !== previous) this.lastUpdateSource = source;
 	}
 
 	getParameterValue() {
@@ -347,11 +430,22 @@ export class CompostNumberBox extends HTMLElement {
 		this.box?.blur();
 	}
 
-	beginDrag(event) {
-		if (this.disabled || this.editing || event.button !== 0) return;
+	syncValueControl() {
+		if (this.valueControl?.configure) {
+			this.valueControl.configure(this.valueControlOptions());
+		}
+	}
 
-		event.preventDefault();
-		this.box.focus({ preventScroll: true });
+	beginDrag(event) {
+		if (this.valueControl) {
+			this.syncValueControl();
+			this.valueControl.configure({
+				drag: { scale: this.dragScaleFor(event) },
+			});
+			return this.valueControl.startPointerDrag(event);
+		}
+		if (this.disabled || this.editing || event.button !== 0) return false;
+		beginParameterGesture(this, this.value);
 		this.drag = {
 			pointerId: event.pointerId,
 			x: event.clientX,
@@ -360,21 +454,16 @@ export class CompostNumberBox extends HTMLElement {
 			distance: 0,
 			moved: false,
 			locked: false,
-			fineCandidate:
-				this.lastClickTime > 0 && performance.now() - this.lastClickTime < 380,
+			fineCandidate: false,
 			fine: Boolean(event.shiftKey),
 			zoneScale: this.dragScaleFor(event),
 			pointerType: event.pointerType,
 			lockDeltaEvents: 0,
 			lockFallbackTimer: null,
 		};
-		beginParameterGesture(this, this.value);
 		window.addEventListener("blur", this.handleWindowBlur);
-		this.setPointerCapture?.(event.pointerId);
-		this.box.setPointerCapture?.(event.pointerId);
-		if (this.hasAttribute("pointer-lock")) {
-			this.requestPointerLock();
-		}
+		if (this.hasAttribute("pointer-lock")) this.requestPointerLock();
+		return true;
 	}
 
 	dragScaleFor(event) {
@@ -614,68 +703,43 @@ export class CompostNumberBox extends HTMLElement {
 	}
 
 	handleKey(event) {
+		if (this.valueControl) {
+			if (
+				this.disabled ||
+				this.valueControl.editing ||
+				event.metaKey ||
+				event.ctrlKey
+			)
+				return;
+			if (/^[0-9.+-]$/u.test(event.key)) {
+				event.preventDefault();
+				this.beginEdit(event.key, false);
+			}
+			return;
+		}
 		if (this.disabled || this.editing || event.metaKey || event.ctrlKey) return;
-
 		if (this.drag && !["Shift", "Alt", "Control", "Meta"].includes(event.key)) {
 			if (event.key === "Escape") {
 				event.preventDefault();
 				this.endActiveDrag(false);
 				return;
 			}
-
 			this.endActiveDrag(true);
 		}
-
-		if (event.key === "Enter") {
-			event.preventDefault();
-			this.beginEdit(this.editableValueText(), false);
-			return;
-		}
-
 		if (
-			event.key === "Escape" ||
-			event.key === "Delete" ||
-			event.key === "Backspace"
+			!this.valueControl &&
+			["Escape", "Delete", "Backspace"].includes(event.key)
 		) {
 			event.preventDefault();
 			this.setValue(this.resetTargetValue());
 			endParameterGesture(this, this.value);
 			return;
 		}
-
-		const smallStep = this.keyboardStep();
-		const largeStep = this.largeKeyboardStep();
-		const arrowStep = event.altKey ? largeStep : smallStep;
-		const deltas = {
-			ArrowUp: arrowStep,
-			ArrowRight: arrowStep,
-			ArrowDown: -arrowStep,
-			ArrowLeft: -arrowStep,
-			PageUp: largeStep,
-			PageDown: -largeStep,
-		};
-
-		if (event.key === "Home") {
+		if (event.key === "Escape" && this.drag) {
 			event.preventDefault();
-			this.setValue(this.min);
-			endParameterGesture(this, this.value);
+			this.endActiveDrag(false);
 			return;
 		}
-
-		if (event.key === "End") {
-			event.preventDefault();
-			this.setValue(this.max);
-			endParameterGesture(this, this.value);
-			return;
-		}
-
-		if (deltas[event.key] !== undefined) {
-			event.preventDefault();
-			this.setValue((this.empty ? this.min : this._value) + deltas[event.key]);
-			endParameterGesture(this, this.value);
-			return;
-		}
-
 		if (/^[0-9.+-]$/u.test(event.key)) {
 			event.preventDefault();
 			this.beginEdit(event.key, false);
@@ -692,83 +756,46 @@ export class CompostNumberBox extends HTMLElement {
 		selectValue = false,
 		gestureAlreadyBegun = false,
 	) {
-		if (this.disabled || this.editing) return;
-
+		if (this.valueControl?.beginEdit) {
+			this.finishValueEdit = (commit, restoreFocus = false) => {
+				this.valueControl?.finishEdit(commit, restoreFocus);
+				if (!this.valueControl?.editing) this.finishValueEdit = null;
+			};
+			return this.valueControl.beginEdit(
+				initialValue,
+				selectValue,
+				gestureAlreadyBegun,
+			);
+		}
+		if (this.valueControl || this.disabled || this.editing) return false;
 		this.editing = true;
 		if (!gestureAlreadyBegun) beginParameterGesture(this, this.value);
 		const input = document.createElement("input");
-		input.setAttribute("part", "input");
-		input.type = "text";
-		input.inputMode = "decimal";
 		input.value = initialValue;
-		input.setAttribute("aria-label", `Set ${this.label}`);
-
-		const restoreOwnFocus = () => {
-			queueMicrotask(() => {
-				if (this.isConnected && this.box?.isConnected) {
-					this.box.focus({ preventScroll: true });
-				}
-			});
-		};
-
-		const finish = (commit, restoreFocus = false) => {
+		const finish = (commit) => {
 			if (!this.editing) return;
-
-			const raw = input.value.trim();
 			this.editing = false;
-
-			if (commit) {
-				if (raw === "" && this.allowEmpty) {
-					this.setValue(null);
-					endParameterGesture(this, this.value, {
-						source: "control",
-						restoreFocus,
-					});
-				} else {
-					const number = Number(raw);
-					if (Number.isFinite(number)) {
-						this.setValue(number);
-						endParameterGesture(this, this.value, {
-							source: "control",
-							restoreFocus,
-						});
-					} else {
-						this.refresh();
-						endParameterGesture(this, this.value, {
-							cancelled: true,
-							source: "control",
-							restoreFocus,
-						});
-					}
-				}
-			} else {
-				this.refresh();
-				endParameterGesture(this, this.value, { cancelled: true });
-			}
-
-			if (restoreFocus) restoreOwnFocus();
+			this.finishValueEdit = null;
+			const raw = input.value.trim();
+			if (
+				commit &&
+				(raw === "" ? this.allowEmpty : Number.isFinite(Number(raw)))
+			) {
+				this.setValue(raw === "" ? null : Number(raw));
+				endParameterGesture(this, this.value);
+			} else endParameterGesture(this, this.value, { cancelled: true });
 		};
-
+		this.finishValueEdit = finish;
 		input.addEventListener("keydown", (event) => {
-			event.stopPropagation();
-			if (event.key === "Enter") {
-				event.preventDefault();
-				finish(true, true);
-			}
-			if (event.key === "Escape") {
-				event.preventDefault();
-				finish(false, true);
-			}
+			event.stopPropagation?.();
+			if (event.key === "Enter") finish(true);
+			if (event.key === "Escape") finish(false);
 		});
-		input.addEventListener("blur", () => finish(true, false));
-
+		input.addEventListener("blur", () => finish(true));
 		this.valueElement.replaceChildren(input);
-		input.focus();
-		if (selectValue) {
-			input.select();
-		} else {
-			input.setSelectionRange(input.value.length, input.value.length);
-		}
+		input.focus?.();
+		if (selectValue) input.select?.();
+		return true;
 	}
 
 	keyboardStep() {
@@ -792,8 +819,13 @@ export class CompostNumberBox extends HTMLElement {
 		return this.resetValue;
 	}
 
-	refresh() {
+	refresh(state = this.valueState) {
 		if (!this.box || this.editing) return;
+		if (state) {
+			this.valueState = state;
+			this.empty = state.value === null;
+			if (!this.empty) this._value = state.value;
+		}
 
 		const valueText = this.empty
 			? this.placeholder
@@ -816,15 +848,16 @@ export class CompostNumberBox extends HTMLElement {
 		);
 		this.valueElement.textContent = valueText;
 		this.valueElement.classList.toggle("placeholder", this.empty);
+		if (this.empty) this.removeAttribute("value");
+		else if (this.getAttribute("value") !== String(this._value))
+			this.setAttribute("value", String(this._value));
 		this.box.id = this.idBase;
 		this.box.tabIndex = this.disabled ? -1 : 0;
 		this.box.setAttribute("aria-label", this.ariaLabelText || this.label);
 		this.box.setAttribute("aria-valuemin", String(this.min));
 		this.box.setAttribute("aria-valuemax", String(this.max));
-		this.box.setAttribute(
-			"aria-valuenow",
-			this.empty ? "" : String(this._value),
-		);
+		if (this.empty) this.box.removeAttribute("aria-valuenow");
+		else this.box.setAttribute("aria-valuenow", String(this._value));
 		if (
 			this.lastUpdateSource === "control" ||
 			document.activeElement !== this.box
@@ -840,11 +873,7 @@ export class CompostNumberBox extends HTMLElement {
 	}
 
 	getPercent() {
-		return clamp(
-			valueToNormalisedPosition(this._value, this.scaleOptions()) * 100,
-			0,
-			100,
-		);
+		return clamp((this.valueState?.position ?? 0) * 100, 0, 100);
 	}
 
 	scaleOptions() {

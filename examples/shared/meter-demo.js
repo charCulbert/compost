@@ -32,7 +32,11 @@ export function connectMeters(audio, meters) {
 	];
 	const clippedUntil = [0, 0];
 
-	const setState = (state) => meters.forEach((meter) => meter.setState(state));
+	const setState = (state) => {
+		meters.forEach((meter) => {
+			meter.setState(state);
+		});
+	};
 	setState({
 		primaryLabel: "Peak",
 		secondaryLabel: "Average",

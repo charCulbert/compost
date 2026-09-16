@@ -415,7 +415,9 @@ export class CompostEnvelopeEditor extends HTMLElement {
 			this.selectionPath(points, width, height),
 		);
 		this.segmentHighlight.setAttribute("d", "");
-		this.svg.querySelectorAll(".point").forEach((point) => point.remove());
+		this.svg.querySelectorAll(".point").forEach((point) => {
+			point.remove();
+		});
 		points.forEach((point, index) => {
 			const marker = document.createElementNS(
 				"http://www.w3.org/2000/svg",
@@ -697,7 +699,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
 				};
 			}
 		}
-		const rawTime = this.timeAtPointer(event, true);
+		const _rawTime = this.timeAtPointer(event, true);
 		const time = this.timeAtPointer(event, this.freeTime(event));
 		const curveTarget = point ? null : this.curveTargetAtPointer(event);
 		const selectedPoint =

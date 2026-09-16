@@ -79,7 +79,7 @@ export class CompostNumberBox extends HTMLElement {
 		initialValue?: string,
 		selectValue?: boolean,
 		gestureAlreadyBegun?: boolean,
-	): void;
+	): boolean;
 
 	focus(options?: FocusOptions): void;
 	blur(): void;

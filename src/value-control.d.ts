@@ -2,12 +2,40 @@ import type { ParameterCurveName } from "./parameter-scale.js";
 import type { ParameterKind } from "./utils.js";
 
 export interface ValueControlDrawState {
-	value: number;
+	value: number | null;
 	position: number;
 	valueText: string;
 	focused: boolean;
 	dragging: boolean;
 	disabled: boolean;
+}
+
+export interface ValueControlEditorParseResult {
+	valid: boolean;
+	value: number | null;
+}
+
+export interface ValueControlEditorOptions {
+	target: HTMLElement;
+	className?: string;
+	part?: string;
+	inputMode?: string;
+	enabled?: (control: ValueControl) => boolean;
+	initialValue?: (control: ValueControl) => string;
+	format?: (value: number | null, control: ValueControl) => string;
+	parse?: (
+		text: string,
+		control: ValueControl,
+	) => ValueControlEditorParseResult;
+	ariaLabel?: (control: ValueControl) => string;
+	triggers?: {
+		click?: boolean;
+		keydown?: boolean;
+		touchTap?: boolean;
+	};
+	touchTap?: boolean;
+	onStateChange?: (editing: boolean, control: ValueControl) => void;
+	restoreFocus?: (control: ValueControl) => void;
 }
 
 export interface ValueControlDragOptions {
@@ -18,6 +46,8 @@ export interface ValueControlDragOptions {
 	distance?: number;
 	/** Relative-drag multiplier while Shift is held. */
 	fineScale?: number;
+	/** Additional relative-drag multiplier, useful for hit-tested zones. */
+	scale?: number;
 	pointerLock?: boolean;
 }
 
@@ -34,7 +64,11 @@ export interface ValueControlConfiguration {
 	shape?: number | null;
 	positionStep?: number | null;
 	step?: number;
-	value?: number;
+	value?: number | null;
+	empty?: boolean;
+	allowEmpty?: boolean;
+	placeholder?: string;
+	keyboardMode?: "normalised" | "value";
 	resetValue?: number;
 	defaultValue?: number;
 	unit?: string;
@@ -45,6 +79,9 @@ export interface ValueControlConfiguration {
 	disabled?: boolean;
 	readOnly?: boolean;
 	orientation?: "horizontal" | "vertical";
+	role?: string;
+	ariaLabel?: string;
+	editor?: ValueControlEditorOptions;
 	drag?: ValueControlDragOptions;
 	formatValue?: (value: number, control: ValueControl) => string;
 	draw?: (state: ValueControlDrawState) => void;
@@ -64,6 +101,8 @@ export interface ValueControl {
 	readonly parameterID: string;
 	readonly parameterKind: ParameterKind;
 	readonly parameterValues: null;
+	readonly empty: boolean;
+	readonly editing: boolean;
 	readonly name: string;
 	readonly label: string;
 	readonly min: number;
@@ -77,12 +116,22 @@ export interface ValueControl {
 	readonly resetValue: number;
 	readonly disabled: boolean;
 	readonly readOnly: boolean;
-	readonly value: number;
-	setValue(value: number, shouldEmit?: boolean, source?: string): void;
-	/** Cancels an active gesture before applying this partial configuration. */
+	readonly value: number | null;
+	setValue(
+		value: number | null | string,
+		shouldEmit?: boolean,
+		source?: string,
+	): void;
+	/** Applies configuration; interaction-policy changes cancel active gestures. */
 	configure(options: Partial<ValueControlConfiguration>): ValueControl;
 	beginGesture(source?: string): void;
-	editValue(value: number, source?: string): void;
+	editValue(value: number | null | string, source?: string): void;
+	beginEdit(
+		initialValue?: string,
+		selectValue?: boolean,
+		gestureAlreadyBegun?: boolean,
+	): boolean;
+	finishEdit(commit?: boolean, restoreFocus?: boolean): void;
 	endGesture(cancelled?: boolean, source?: string): void;
 	reset(source?: string): void;
 	startPointerDrag(event: PointerEvent): boolean;

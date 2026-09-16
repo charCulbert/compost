@@ -608,11 +608,7 @@ export class CompostNoteEditor extends HTMLElement {
 		this.grid = this.getAttribute("grid")?.trim() || this.grid;
 		this.adaptiveGrid = this.hasAttribute("adaptive-grid");
 		this.adaptiveGridDensity = clamp(
-			numberAttr(
-				this,
-				"adaptive-grid-density",
-				DEFAULT_ADAPTIVE_GRID_DENSITY,
-			),
+			numberAttr(this, "adaptive-grid-density", DEFAULT_ADAPTIVE_GRID_DENSITY),
 			MIN_ADAPTIVE_GRID_DENSITY,
 			MAX_ADAPTIVE_GRID_DENSITY,
 		);
@@ -1533,7 +1529,11 @@ export class CompostNoteEditor extends HTMLElement {
 			new CustomEvent(type, {
 				bubbles: true,
 				composed: true,
-				detail: { start: this.rangeStart, end: this.rangeEnd, beats: this.beats },
+				detail: {
+					start: this.rangeStart,
+					end: this.rangeEnd,
+					beats: this.beats,
+				},
 			}),
 		);
 	}
@@ -2567,9 +2567,10 @@ export class CompostNoteEditor extends HTMLElement {
 						: current + increment * direction;
 			if (kind === "start") nextStart = clamp(beat, 0, nextEnd - minimum);
 			else
-				nextEnd = scope === "range"
-					? Math.max(nextStart + minimum, beat)
-					: clamp(beat, nextStart + minimum, this.beats);
+				nextEnd =
+					scope === "range"
+						? Math.max(nextStart + minimum, beat)
+						: clamp(beat, nextStart + minimum, this.beats);
 		}
 		if (nextStart === start && nextEnd === end) return;
 		if (scope === "range") {

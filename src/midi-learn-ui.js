@@ -406,7 +406,7 @@ export class MIDILearnUI {
 		);
 	}
 
-	cancel(reason, { announce = true } = {}) {
+	cancel(_reason, { announce = true } = {}) {
 		this.isExiting = true;
 		this.ignoreLearnCancelUntil = performance.now() + 500;
 		this.mappings?.cancelLearn();
@@ -663,7 +663,7 @@ export class MIDILearnUI {
 			});
 		}
 
-		const controlLabel = mappableTargetLabel(target);
+		const _controlLabel = mappableTargetLabel(target);
 		const hasMapping = Boolean(mappingLabel);
 		const mappingSpeechLabel =
 			this.mappingSpeechLabelForTarget(target) || mappingLabel;

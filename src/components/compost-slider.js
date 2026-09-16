@@ -355,6 +355,24 @@ export class CompostSlider extends HTMLElement {
 				fineScale: 0.1,
 			},
 			draw: (state) => this.refresh(state),
+			editor: {
+				target: this.output,
+				enabled: () => this.editable,
+				format: () => this.editableValueText(),
+				parse: (text) => ({
+					valid: text.trim() !== "" && Number.isFinite(Number(text)),
+					value: Number(text),
+				}),
+				ariaLabel: () => `Set ${this.label} value`,
+				triggers: { click: true, keydown: true },
+				onStateChange: (editing) => {
+					this.isEditingValue = editing;
+				},
+				restoreFocus: () =>
+					queueMicrotask(() =>
+						HTMLElement.prototype.focus?.call(this, { preventScroll: true }),
+					),
+			},
 		};
 	}
 
@@ -460,72 +478,42 @@ export class CompostSlider extends HTMLElement {
 	}
 
 	beginValueEdit(initialValue = this.editableValueText(), selectValue = true) {
-		if (
-			this.disabled ||
-			!this.editable ||
-			this.isEditingValue ||
-			!this.valueControl
-		)
-			return;
-
+		if (!this.valueControl) return false;
+		if (typeof this.valueControl.configure === "function") {
+			this.syncValueControl();
+			this.valueControl.configure(this.valueControlOptions());
+		}
+		if (this.valueControl.beginEdit) {
+			this.finishValueEdit = (commit, restoreFocus = false) => {
+				this.valueControl?.finishEdit(commit, restoreFocus);
+				if (!this.valueControl?.editing) this.finishValueEdit = null;
+			};
+			return this.valueControl.beginEdit(initialValue, selectValue);
+		}
 		this.isEditingValue = true;
 		this.valueControl.beginGesture();
-
 		const input = document.createElement("input");
-		input.className = "value-editor";
-		input.type = "text";
-		input.inputMode = "decimal";
 		input.value = initialValue;
-		input.min = String(this.min);
-		input.max = String(this.max);
-		input.step = String(this.step);
-		input.setAttribute("aria-label", `Set ${this.label} value`);
-
-		const finish = (commit, restoreFocus = false) => {
+		const finish = (commit) => {
 			if (!this.isEditingValue) return;
-
-			const nextValue = Number(input.value);
 			this.isEditingValue = false;
 			this.finishValueEdit = null;
-
-			if (commit && input.value.trim() !== "" && Number.isFinite(nextValue)) {
-				this.valueControl.editValue(nextValue);
+			if (commit && Number.isFinite(Number(input.value))) {
+				this.valueControl.editValue(Number(input.value));
 				this.valueControl.endGesture();
-			} else {
-				this.refresh();
-				this.valueControl.endGesture(true);
-			}
-
-			if (restoreFocus) {
-				queueMicrotask(() =>
-					HTMLElement.prototype.focus?.call(this, { preventScroll: true }),
-				);
-			}
+			} else this.valueControl.endGesture(true);
 		};
 		this.finishValueEdit = finish;
-
 		input.addEventListener("keydown", (event) => {
-			event.stopPropagation();
-
-			if (event.key === "Enter") {
-				event.preventDefault();
-				finish(true, true);
-			}
-
-			if (event.key === "Escape") {
-				event.preventDefault();
-				finish(false, true);
-			}
+			event.stopPropagation?.();
+			if (event.key === "Enter") finish(true);
+			if (event.key === "Escape") finish(false);
 		});
 		input.addEventListener("blur", () => finish(true));
-
 		this.output.replaceChildren(input);
-		input.focus();
-		if (selectValue) {
-			input.select();
-		} else {
-			input.setSelectionRange(input.value.length, input.value.length);
-		}
+		input.focus?.();
+		if (selectValue) input.select?.();
+		return true;
 	}
 
 	handleValueEditKey(event) {

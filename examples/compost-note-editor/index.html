@@ -130,7 +130,7 @@
         voices.clear();
       };
       const playNote = (note) => {
-        if (!audioContext || audioContext.state !== 'running') return;
+        if (audioContext?.state !== 'running') return;
         const oscillator = new OscillatorNode(audioContext, {
           type: 'triangle', frequency: 440 * 2 ** ((note.note - 69) / 12),
         });
