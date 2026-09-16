@@ -300,6 +300,42 @@ test("fast sub-threshold knob drags keep editing instead of resetting", async ({
 	expect(readings.at(-1)).toBeGreaterThan(readings[0]);
 });
 
+test("capture loss before pointerup commits a knob drag", async ({ page }) => {
+	await gotoAndWaitForCustomElements(page, "/examples/compost-knob/");
+	const control = page.locator("compost-knob").first();
+	const surface = control.locator(".dial");
+	const original = await control.evaluate((element) => element.value);
+	await control.evaluate((element) => {
+		element.captureLossEnds = [];
+		element.addEventListener("parameter-end", ({ detail }) => {
+			element.captureLossEnds.push({
+				value: detail.value,
+				cancelled: detail.cancelled,
+			});
+		});
+	});
+	const rect = await surface.boundingBox();
+	const centerX = rect.x + rect.width / 2;
+	const centerY = rect.y + rect.height / 2;
+	await page.mouse.move(centerX, centerY);
+	await page.mouse.down();
+	await page.mouse.move(centerX, centerY - 35);
+	const edited = await control.evaluate((element) => element.value);
+	expect(edited).toBeGreaterThan(original);
+
+	await surface.evaluate((element) => {
+		element.dispatchEvent(
+			new PointerEvent("lostpointercapture", { pointerId: 1 }),
+		);
+	});
+	await page.mouse.up();
+
+	await expect(control).toHaveJSProperty("value", edited);
+	expect(await control.evaluate((element) => element.captureLossEnds)).toEqual([
+		{ value: edited, cancelled: false },
+	]);
+});
+
 test("custom canvas redraws for dark mode", async ({ page }, testInfo) => {
 	await page.locator(".color-scheme-toggle").click();
 	await expect(page.locator("html")).toHaveAttribute(

@@ -757,14 +757,20 @@ export function createValueControl(element, options = {}) {
 		finishPointer(null, true);
 	}
 
-	function handleLostCapture(event) {
+	function handlePointerCancel(event) {
 		finishPointer(event, true);
+	}
+
+	function handleLostCapture(event) {
+		// Browsers can revoke capture just before pointerup. Losing event routing
+		// ends the drag, but it does not mean the user cancelled the edit.
+		finishPointer(event, false);
 	}
 
 	function addPointerListeners() {
 		ownerWindow?.addEventListener?.("pointermove", handlePointerMove);
 		ownerWindow?.addEventListener?.("pointerup", finishPointer);
-		ownerWindow?.addEventListener?.("pointercancel", handleLostCapture);
+		ownerWindow?.addEventListener?.("pointercancel", handlePointerCancel);
 		ownerWindow?.addEventListener?.("blur", cancelPointer);
 		pointer?.target?.addEventListener?.(
 			"lostpointercapture",
@@ -785,7 +791,7 @@ export function createValueControl(element, options = {}) {
 	function removePointerListeners(activeTarget = pointer?.target) {
 		ownerWindow?.removeEventListener?.("pointermove", handlePointerMove);
 		ownerWindow?.removeEventListener?.("pointerup", finishPointer);
-		ownerWindow?.removeEventListener?.("pointercancel", handleLostCapture);
+		ownerWindow?.removeEventListener?.("pointercancel", handlePointerCancel);
 		ownerWindow?.removeEventListener?.("blur", cancelPointer);
 		activeTarget?.removeEventListener?.(
 			"lostpointercapture",

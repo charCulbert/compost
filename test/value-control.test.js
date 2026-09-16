@@ -343,7 +343,7 @@ test("keyboard edits real values and ignores events from an inline editor", () =
 	assert.equal(control.value, before);
 });
 
-test("capture loss, configuration, disabled edits, and disposal settle gestures once", () => {
+test("capture loss commits, while configuration, disabled edits, and disposal settle gestures once", () => {
 	const element = new FakeElement({ role: "group" });
 	const events = recordParameterEvents(element);
 	const control = createValueControl(element, {
@@ -353,10 +353,17 @@ test("capture loss, configuration, disabled edits, and disposal settle gestures 
 	});
 
 	control.startPointerDrag(pointerEvent(7, 0, 0));
+	dispatch(element.ownerDocument.defaultView, "pointermove", {
+		pointerId: 7,
+		clientX: 20,
+		clientY: 0,
+	});
+	const editedValue = control.value;
+	assert.ok(editedValue > 0.2);
 	dispatch(element, "lostpointercapture", { pointerId: 7 });
-	assert.equal(control.value, 0.2);
+	assert.equal(control.value, editedValue);
 	assert.equal(events.filter(([type]) => type === "parameter-end").length, 1);
-	assert.equal(events.at(-1)[1].cancelled, true);
+	assert.equal(events.at(-1)[1].cancelled, false);
 
 	control.startPointerDrag(pointerEvent(8, 0, 0));
 	control.configure({ parameterID: "new", min: -1, max: 1, value: 0.5 });
@@ -378,6 +385,32 @@ test("capture loss, configuration, disabled edits, and disposal settle gestures 
 	assert.equal(events.filter(([type]) => type === "parameter-end").length, 3);
 	assert.equal(element.getAttribute("role"), "group");
 	assert.equal(control.startPointerDrag(pointerEvent(10, 0, 0)), false);
+});
+
+test("capture loss before movement preserves the following double-tap reset", () => {
+	const element = new FakeElement();
+	const events = recordParameterEvents(element);
+	const control = createValueControl(element, {
+		value: 0.8,
+		resetValue: 0.5,
+	});
+
+	control.startPointerDrag(pointerEvent(1, 10, 10));
+	dispatch(element, "lostpointercapture", { pointerId: 1 });
+	assert.equal(control.value, 0.8);
+
+	control.startPointerDrag(pointerEvent(2, 10, 10));
+	dispatch(element, "lostpointercapture", { pointerId: 2 });
+	assert.equal(control.value, 0.5);
+	assert.deepEqual(
+		events
+			.filter(([type]) => type === "parameter-end")
+			.map(([, detail]) => [detail.value, detail.cancelled]),
+		[
+			[0.8, false],
+			[0.5, false],
+		],
+	);
 });
 
 test("position taps still select a value and double-tap resets", () => {
