@@ -77,9 +77,18 @@ export class CompostEnvelopeEditor extends HTMLElement {
 		this.touchTapStart = null;
 		this.lastTouchTap = null;
 		this.suppressDoubleClickUntil = 0;
+		/** @type {{width: number, height: number}|null} */ this.renderSize = null;
 		this.resizeObserver =
 			typeof ResizeObserver === "function"
-				? new ResizeObserver(() => this.render())
+				? new ResizeObserver(() => {
+						const size = this.size();
+						if (
+							this.renderSize?.width === size.width &&
+							this.renderSize?.height === size.height
+						)
+							return;
+						this.render();
+					})
 				: null;
 
 		this.root = this.attachShadow({ mode: "open" });
@@ -397,6 +406,7 @@ export class CompostEnvelopeEditor extends HTMLElement {
 	render(points = this._points) {
 		if (!this.isConnected) return;
 		const { width, height } = this.size();
+		this.renderSize = { width, height };
 		this.paintGrid(width, height);
 		this.pointPreview.hidden = true;
 		delete this.surface.dataset.hoverTarget;

@@ -1,6 +1,6 @@
 {
 	"name": "compost",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"private": false,
 	"type": "module",
 	"description": "Customizable Web Components and intent-emitting UI controls.",

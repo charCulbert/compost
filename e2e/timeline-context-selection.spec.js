@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndWaitForCustomElements } from "./helpers/navigation.js";
 
 test("timeline context preserves a rectangle when the clip is inside it", async ({
 	page,
 }) => {
-	await page.goto("/examples/compost-timeline/");
+	await gotoAndWaitForCustomElements(page, "/examples/compost-timeline/");
 	const timeline = page.locator("compost-timeline");
 	const result = await timeline.evaluate((element) => {
 		element.setLanes([

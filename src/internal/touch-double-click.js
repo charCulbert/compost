@@ -12,6 +12,16 @@ export function installTouchDoubleClick(element, { dispatch = true } = {}) {
 	const maxDelay = DOUBLE_TAP_MS;
 	const maxDistance = DOUBLE_TAP_DISTANCE;
 	const maxTapMovement = TAP_MOVE_DISTANCE;
+	const listeners = [];
+	const addListener = (type, listener, options) => {
+		const wrapped = (event) => listener(event);
+		element.addEventListener(type, wrapped, options);
+		listeners.push({
+			type,
+			listener: wrapped,
+			capture: Boolean(options.capture),
+		});
+	};
 	const syntheticEvents = new WeakSet();
 	let start = null;
 	let previous = null;
@@ -22,7 +32,7 @@ export function installTouchDoubleClick(element, { dispatch = true } = {}) {
 			(touch) => identifier === null || touch.identifier === identifier,
 		) ?? null;
 
-	element.addEventListener(
+	addListener(
 		"touchstart",
 		(event) => {
 			if (event.touches?.length !== 1) {
@@ -57,7 +67,7 @@ export function installTouchDoubleClick(element, { dispatch = true } = {}) {
 		{ passive: false },
 	);
 
-	element.addEventListener(
+	addListener(
 		"touchmove",
 		(event) => {
 			if (!start) return;
@@ -73,7 +83,7 @@ export function installTouchDoubleClick(element, { dispatch = true } = {}) {
 		{ passive: true },
 	);
 
-	element.addEventListener(
+	addListener(
 		"touchcancel",
 		() => {
 			start = null;
@@ -82,7 +92,7 @@ export function installTouchDoubleClick(element, { dispatch = true } = {}) {
 		{ passive: true },
 	);
 
-	element.addEventListener(
+	addListener(
 		"touchend",
 		(event) => {
 			const touch = start && changedTouch(event, start.identifier);
@@ -135,7 +145,7 @@ export function installTouchDoubleClick(element, { dispatch = true } = {}) {
 		{ passive: false },
 	);
 
-	element.addEventListener(
+	addListener(
 		"dblclick",
 		(event) => {
 			if (performance.now() >= suppressUntil || syntheticEvents.has(event))
@@ -145,4 +155,9 @@ export function installTouchDoubleClick(element, { dispatch = true } = {}) {
 		},
 		{ capture: true },
 	);
+
+	return () => {
+		for (const { type, listener, capture } of listeners)
+			element.removeEventListener(type, listener, capture);
+	};
 }

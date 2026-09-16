@@ -2,4 +2,4 @@
 export function installTouchDoubleClick(
 	element: HTMLElement,
 	options?: { dispatch?: boolean },
-): void;
+): () => void;

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndWaitForCustomElements } from "./helpers/navigation.js";
 
 test.use({ baseURL: process.env.COMPOST_URL || "http://127.0.0.1:8000" });
 
@@ -7,7 +8,10 @@ test("audio editor upgrades cleanly and emits context intent from ruler and wave
 }) => {
 	const errors = [];
 	page.on("pageerror", (error) => errors.push(error.message));
-	await page.goto("/examples/compost-audio-clip-editor/");
+	await gotoAndWaitForCustomElements(
+		page,
+		"/examples/compost-audio-clip-editor/",
+	);
 	const editor = page.locator("compost-audio-clip-editor").first();
 	await expect(editor).toHaveAttribute("role", "group");
 	const details = await editor.evaluate((element) => {
@@ -37,7 +41,10 @@ test("audio editor upgrades cleanly and emits context intent from ruler and wave
 test("warp pins preview across the waveform, cancel, commit once and stay between neighbors", async ({
 	page,
 }) => {
-	await page.goto("/examples/compost-audio-clip-editor/");
+	await gotoAndWaitForCustomElements(
+		page,
+		"/examples/compost-audio-clip-editor/",
+	);
 	const editor = page.locator("compost-audio-clip-editor").first();
 	await expect(editor).toHaveAttribute("role", "group");
 	await editor.evaluate((element) => {
@@ -122,7 +129,10 @@ test("warp pins preview across the waveform, cancel, commit once and stay betwee
 test("transient suggestions remain intent only and nearby insertion snaps to the source candidate", async ({
 	page,
 }) => {
-	await page.goto("/examples/compost-audio-clip-editor/");
+	await gotoAndWaitForCustomElements(
+		page,
+		"/examples/compost-audio-clip-editor/",
+	);
 	const editor = page.locator("compost-audio-clip-editor").first();
 	await expect(editor).toHaveAttribute("role", "group");
 	await editor.evaluate((element) => {

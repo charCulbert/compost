@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndWaitForCustomElements } from "./helpers/navigation.js";
 
 test.beforeEach(async ({ page }) => {
-	await page.goto("/examples/custom-controls/");
+	await gotoAndWaitForCustomElements(page, "/examples/custom-controls/");
 	await expect(page.locator("#drive-control")).toHaveAttribute(
 		"role",
 		"slider",
@@ -125,8 +126,7 @@ test("custom canvas drag cancels once and restores both synchronized views", asy
 test("number-box uses min-anchored steps and shared typed editing", async ({
 	page,
 }) => {
-	await page.goto("/examples/compost-number-box/");
-	await page.waitForFunction(() => customElements.get("compost-number-box"));
+	await gotoAndWaitForCustomElements(page, "/examples/compost-number-box/");
 	const values = await page.evaluate(() => {
 		const box = document.createElement("compost-number-box");
 		box.setAttribute("min", "1");
@@ -281,7 +281,7 @@ test("custom controls remain usable at desktop and narrow widths", async ({
 test("fast sub-threshold knob drags keep editing instead of resetting", async ({
 	page,
 }) => {
-	await page.goto("/examples/compost-knob/");
+	await gotoAndWaitForCustomElements(page, "/examples/compost-knob/");
 	const control = page.locator("compost-knob").first();
 	const surface = control.locator(".dial");
 	const rect = await surface.boundingBox();
@@ -318,7 +318,7 @@ for (const component of ["compost-knob", "compost-slider"]) {
 	test(`${component} preserves property-driven values across connection and host updates`, async ({
 		page,
 	}) => {
-		await page.goto(`/examples/${component}/`);
+		await gotoAndWaitForCustomElements(page, `/examples/${component}/`);
 		await expect(page.locator(component).first()).toHaveAttribute(
 			"role",
 			"slider",
@@ -357,7 +357,7 @@ for (const component of ["compost-knob", "compost-slider"]) {
 	test(`${component} keeps its default appearance and cancels an active drag`, async ({
 		page,
 	}) => {
-		await page.goto(`/examples/${component}/`);
+		await gotoAndWaitForCustomElements(page, `/examples/${component}/`);
 		const control = page.locator(component).first();
 		await expect(control).toHaveAttribute("role", "slider");
 		const original = await control.evaluate((element) => element.value);

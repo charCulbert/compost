@@ -308,6 +308,7 @@ export class CompostTimeline extends HTMLElement {
 			new Map();
 		/** @type {any} */ this.pinch = null;
 		this.viewChangeTimer = null;
+		/** @type {{width: number, height: number}|null} */ this.renderSize = null;
 		/** @type {{pxPerBeat: number, scrollBeat: number}[]} */ this.zoomHistory =
 			[];
 		this.longPress = createLongPress();
@@ -588,7 +589,16 @@ export class CompostTimeline extends HTMLElement {
 		}
 		this.resizeObserver =
 			typeof ResizeObserver === "function"
-				? new ResizeObserver(() => this.render())
+				? new ResizeObserver(() => {
+						const width = this.clientWidth;
+						const height = this.clientHeight;
+						if (
+							this.renderSize?.width === width &&
+							this.renderSize?.height === height
+						)
+							return;
+						this.render();
+					})
 				: null;
 	}
 
@@ -1413,6 +1423,7 @@ export class CompostTimeline extends HTMLElement {
 
 	render() {
 		if (!this.root) return;
+		this.renderSize = { width: this.clientWidth, height: this.clientHeight };
 		this.rulerWorld.replaceChildren();
 		this.headers.replaceChildren();
 		this.lanesWorld.replaceChildren();

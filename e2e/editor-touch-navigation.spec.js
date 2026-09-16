@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndWaitForCustomElements } from "./helpers/navigation.js";
 
 const localBaseURL = process.env.COMPOST_TEST_BASE_URL ?? "";
 
@@ -6,7 +7,10 @@ for (const editorName of ["note", "audio-clip"]) {
 	test(`${editorName} editor ends pinch cleanly and recovers touch editing`, async ({
 		page,
 	}) => {
-		await page.goto(`${localBaseURL}/examples/compost-${editorName}-editor/`);
+		await gotoAndWaitForCustomElements(
+			page,
+			`${localBaseURL}/examples/compost-${editorName}-editor/`,
+		);
 		const editor = page.locator(`compost-${editorName}-editor`).first();
 		await expect(editor).toHaveAttribute("role", "group");
 
@@ -94,7 +98,10 @@ for (const editorName of ["note", "audio-clip"]) {
 		browserName,
 	}) => {
 		test.skip(browserName !== "chromium", "CDP touch input requires Chromium");
-		await page.goto(`${localBaseURL}/examples/compost-${editorName}-editor/`);
+		await gotoAndWaitForCustomElements(
+			page,
+			`${localBaseURL}/examples/compost-${editorName}-editor/`,
+		);
 		const editor = page.locator(`compost-${editorName}-editor`).first();
 		await expect(editor).toHaveAttribute("role", "group");
 		const target = editor.locator(

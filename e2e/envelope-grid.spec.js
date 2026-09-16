@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndWaitForCustomElements } from "./helpers/navigation.js";
 
 test("envelope time and value grids are opt-in and logically derived", async ({
 	page,
 }) => {
-	await page.goto("/examples/index.html");
+	await gotoAndWaitForCustomElements(page, "/examples/index.html");
 	const state = await page.evaluate(async () => {
 		await import("/src/components/compost-envelope-editor.js");
 		const editor = document.createElement("compost-envelope-editor");

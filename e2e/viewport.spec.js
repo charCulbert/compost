@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndWaitForCustomElements } from "./helpers/navigation.js";
 
 test.beforeEach(async ({ page }) => {
-	await page.goto("/e2e/fixtures/viewport.html");
+	await gotoAndWaitForCustomElements(page, "/e2e/fixtures/viewport.html");
 	await page.locator("compost-window").waitFor();
 });
 

@@ -150,6 +150,7 @@ export class CompostNoteEditor extends HTMLElement {
 			new Map();
 		/** @type {any} */ this.pinch = null;
 		this.touchNavigation = false;
+		/** @type {{width: number, height: number}|null} */ this.renderSize = null;
 		this.longPress = createLongPress();
 		/** The last marquee's extent, kept so a duplicate can space itself by the
 		 * selected time. Pitch bounds mean a box; their absence means time only.
@@ -562,7 +563,16 @@ export class CompostNoteEditor extends HTMLElement {
 		this.addEventListener("keydown", (event) => this.handleKey(event));
 		this.resizeObserver =
 			typeof ResizeObserver === "function"
-				? new ResizeObserver(this.refresh)
+				? new ResizeObserver(() => {
+						const width = this.gridWrap.clientWidth;
+						const height = this.gridWrap.clientHeight;
+						if (
+							this.renderSize?.width === width &&
+							this.renderSize?.height === height
+						)
+							return;
+						this.refresh();
+					})
 				: null;
 	}
 
@@ -1167,6 +1177,10 @@ export class CompostNoteEditor extends HTMLElement {
 
 	refresh() {
 		if (!this.gridElement || !this.isConnected) return;
+		this.renderSize = {
+			width: this.gridWrap.clientWidth,
+			height: this.gridWrap.clientHeight,
+		};
 		this.visibleKeys = this.computeVisibleKeys();
 		const px = this.pxPerBeat;
 		const width = this.beats * px;
@@ -1945,19 +1959,17 @@ export class CompostNoteEditor extends HTMLElement {
 		if (!event.shiftKey && !this.selection.has(note.id))
 			this.selection = new Set([note.id]);
 		else this.selection.add(note.id);
-		const target = /** @type {HTMLElement} */ (event.composedPath()[0]);
 		const bounds = element.getBoundingClientRect();
 		const style = getComputedStyle(element);
 		const edgeWidth = Math.min(
 			bounds.width / 3,
 			parseFloat(style.fontSize) * 0.4 + parseFloat(style.borderLeftWidth),
 		);
-		const onStartEdge =
-			target.classList.contains("rs") ||
-			event.clientX <= bounds.left + edgeWidth;
-		const onEndEdge =
-			target.classList.contains("re") ||
-			event.clientX >= bounds.right - edgeWidth;
+		// Narrow notes can be smaller than the two visual resize handles, so a
+		// body click may hit a handle even when it is not near the note's edge.
+		// Geometry, rather than the composed event target, keeps the center a move.
+		const onStartEdge = event.clientX <= bounds.left + edgeWidth;
+		const onEndEdge = event.clientX >= bounds.right - edgeWidth;
 		const selectionBefore = [...this.selection];
 		const mode = onEndEdge
 			? "len"

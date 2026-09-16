@@ -1,3 +1,4 @@
+import { installTouchDoubleClick } from "./internal/touch-double-click.js";
 import {
 	moveValueByNormalisedDelta,
 	normaliseCurveName,
@@ -82,6 +83,7 @@ export function createValueControl(element, options = {}) {
 	let editorOptions = options.editor ?? null;
 	let editorState = null;
 	let suppressDoubleClickUntil = 0;
+	let disposeTouchDoubleClick = null;
 	let rawValue = 0;
 	let rawEmpty = Boolean(options.allowEmpty && options.value === null);
 	let rawDisabled = Boolean(options.disabled ?? options.readOnly);
@@ -424,6 +426,8 @@ export function createValueControl(element, options = {}) {
 				control.startPointerDrag,
 			);
 			pointerTarget?.removeEventListener?.("dblclick", handleDoubleClick);
+			disposeTouchDoubleClick?.();
+			disposeTouchDoubleClick = null;
 			for (const [name, value] of originalAttributes)
 				setAttribute(element, name, value);
 			settling = false;
@@ -1121,6 +1125,8 @@ export function createValueControl(element, options = {}) {
 	element.addEventListener("blur", handleFocus);
 	pointerTarget?.addEventListener?.("pointerdown", control.startPointerDrag);
 	pointerTarget?.addEventListener?.("dblclick", handleDoubleClick);
+	if (pointerTarget?.addEventListener)
+		disposeTouchDoubleClick = installTouchDoubleClick(pointerTarget);
 	if (editorOptions?.triggers?.click)
 		editorOptions.target?.addEventListener?.("click", handleEditorClick);
 	refresh();

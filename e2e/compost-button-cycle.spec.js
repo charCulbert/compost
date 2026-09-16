@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndWaitForCustomElements } from "./helpers/navigation.js";
 
 test("cycle buttons expose discrete choices and silent host updates", async ({
 	page,
 }) => {
-	await page.goto("/examples/compost-button/");
+	await gotoAndWaitForCustomElements(page, "/examples/compost-button/");
 	const cycle = page.locator('compost-button[parameter-id="medium"]');
 	const button = page.getByRole("button", { name: "Medium: Tape" });
 
@@ -56,7 +57,7 @@ test("cycle buttons expose discrete choices and silent host updates", async ({
 test("cycle button pointer and keyboard presses wrap complete gestures", async ({
 	page,
 }) => {
-	await page.goto("/examples/compost-button/");
+	await gotoAndWaitForCustomElements(page, "/examples/compost-button/");
 	const cycle = page.locator('compost-button[parameter-id="medium"]');
 	const button = page.getByRole("button", { name: "Medium: Tape" });
 

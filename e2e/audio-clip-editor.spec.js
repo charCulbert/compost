@@ -1,11 +1,15 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndWaitForCustomElements } from "./helpers/navigation.js";
 
 const localBaseURL = process.env.COMPOST_TEST_BASE_URL ?? "";
 
 test("channel lanes share amplitude and time scales through zoom and replacement", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-waveform/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-waveform/`,
+	);
 	const state = await page.locator("compost-waveform").evaluate((element) => {
 		element.style.height = "202px";
 		const loud = { min: -0.8, max: 0.8 };
@@ -68,7 +72,10 @@ test("channel lanes share amplitude and time scales through zoom and replacement
 test("stereo editor shares gain and overlays and switches back to mono", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-audio-clip-editor/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-audio-clip-editor/`,
+	);
 	await expect(page.locator("[data-status]")).toContainText(
 		"first 10 seconds · stereo",
 	);
@@ -118,7 +125,10 @@ test("stereo editor shares gain and overlays and switches back to mono", async (
 test("waveform owns a clamped copy of peaks and repaints at rendered size", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-waveform/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-waveform/`,
+	);
 	const waveform = page.locator("compost-waveform");
 	await expect(waveform).toHaveAttribute("role", "img");
 
@@ -211,7 +221,10 @@ test("waveform owns a clamped copy of peaks and repaints at rendered size", asyn
 test("audio clip editor composes the waveform and edits bounded clip metadata", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-audio-clip-editor/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-audio-clip-editor/`,
+	);
 	const editor = page.locator("compost-audio-clip-editor");
 	await expect(editor).toHaveAttribute("role", "group");
 	await expect(editor.locator("compost-waveform")).toHaveCount(1);
@@ -543,7 +556,10 @@ test("audio clip editor composes the waveform and edits bounded clip metadata", 
 test("audio marker drag stays active over the waveform and ends there", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-audio-clip-editor/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-audio-clip-editor/`,
+	);
 	const editor = page.locator("compost-audio-clip-editor");
 	const handle = editor.locator(".range-handle.start");
 	const grid = editor.locator(".gridwrap");
@@ -588,7 +604,10 @@ test("audio marker drag stays active over the waveform and ends there", async ({
 test("audio clip gain scales the waveform without changing source peaks", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-audio-clip-editor/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-audio-clip-editor/`,
+	);
 	const editor = page.locator("compost-audio-clip-editor");
 	const state = await editor.evaluate((element) => {
 		element.peaks = [[{ min: -0.25, max: 0.5 }]];
@@ -622,7 +641,10 @@ test("audio clip gain scales the waveform without changing source peaks", async 
 test("note editor playback markers expose the same keyboard semantics", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-note-editor/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-note-editor/`,
+	);
 	const editor = page.locator("compost-note-editor");
 	const rangeStart = editor.locator(".range-handle.start");
 	const loopRegion = editor.locator(".region");
@@ -656,7 +678,10 @@ test("note editor playback markers expose the same keyboard semantics", async ({
 test("note editor wheel zoom stays anchored at the pointer", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-note-editor/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-note-editor/`,
+	);
 	const editor = page.locator("compost-note-editor");
 	const zoom = await editor.evaluate((element) => {
 		element.zoomReset();
@@ -687,7 +712,10 @@ test("note editor wheel zoom stays anchored at the pointer", async ({
 test("note editor keeps the effective grid readout visible during selection", async ({
 	page,
 }) => {
-	await page.goto(`${localBaseURL}/examples/compost-note-editor/`);
+	await gotoAndWaitForCustomElements(
+		page,
+		`${localBaseURL}/examples/compost-note-editor/`,
+	);
 	const editor = page.locator("compost-note-editor");
 	await editor.evaluate((element) => element.setTimeSelection(1, 5));
 	await expect(editor.locator(".division")).toHaveText("1/16");
