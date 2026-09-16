@@ -151,9 +151,7 @@ Right-click or long-press fires `<thing>-context` with
 
 Across the editors: Command/Ctrl inverts time snapping, Shift gives fine
 control on value drags and extends selection on item drags, Alt copies.
-Double-click resets a control; on touch, double-tap does. A drag that
-changes a value never counts as a tap, so quick successive drags cannot be
-mistaken for a reset.
+Double-click resets a control; on touch, double-tap does.
 
 Touch: one finger edits or selects, long-press opens context, two fingers
 pinch to zoom and pan. The note editor pinches horizontally for time and
@@ -193,72 +191,32 @@ MIDI learn; ranges follow the parameter's curve.
 
 ## Bring your own graphics
 
-Use `<compost-knob>` or `<compost-slider>` for ready-made controls, with styling
-parts and attributes for customization. For different graphics, `value-control`
-supplies the numeric behavior without supplying the drawing:
+For graphics beyond the built-in numeric controls, `value-control` supplies
+numeric dragging, keyboard input, accessibility attributes and the same parameter
+events. You supply the drawing, including visible focus.
 
 ```js
 import { createValueControl } from 'compost/value-control';
-import { createParameterController } from 'compost/parameter-controller';
 
-const parameters = createParameterController({ root: document });
 const amount = createValueControl(document.querySelector('#amount'), {
   parameterID: 'amount',
   label: 'Amount',
   min: 0,
   max: 1,
   value: 0.25,
-  resetValue: 0.25,
   step: 0.01,
-  drag: { axis: 'y', distance: 180, fineScale: 0.1 },
-  draw: ({ position, valueText, focused, dragging }) => {
-    drawAmount({ position, valueText, focused, dragging });
+  draw: ({ position, valueText, focused }) => {
+    drawAmount({ position, valueText, focused });
   },
 });
-parameters.registerControl(amount);
-
-parameters.applyValue('amount', 0.75); // Silent; updates every registered view.
-
-// When removing the view, cancel before detaching its event route.
-amount.dispose();
-parameters.unregisterControl(amount);
-// parameters.disconnect() when the whole controller is no longer needed.
+amount.setValue(0.75); // Updates silently.
+// Call amount.dispose() when removing the control.
 ```
 
-The supplied element is one focusable semantic control. Compost supplies its
-slider role, accessible name/range/value, keyboard input, gesture lifecycle, and
-shared inline-editor lifecycle. An editor adapter supplies its mounting target,
-text parsing/formatting, activation triggers, and focus return without changing
-existing styling hooks.
-You supply a meaningful label/value formatter and draw visible focus using
-`focused`. Customize the description and appearance, not away the keyboard or
-accessible equivalent. These controls are not form-associated.
-
-Several controls can share a canvas as `eventTarget`. Give each its own semantic
-element and use `pointerTarget: null`; after your hit testing selects a control,
-call its `startPointerDrag(event)`. Set `touch-action: none` on the pointer
-surface so touch gestures adjust values instead of scrolling or zooming the page.
-Their gesture states stay independent and
-their events use the same parameter payload as built-in controls. Explicit
-`registerControl()` registrations survive `refresh()`. See the
-[custom canvas example](examples/custom-controls/) for drawing, hit testing,
-sibling synchronization, and cleanup together.
-
-`setValue(value)` receives a value silently without a controller. `editValue()`
-emits an edit; `beginGesture()` and `endGesture()` bracket a custom interaction.
-`configure()` updates numeric metadata and presentation options. Relative and
-positional drags, axis, sensitivity, Shift fine adjustment, and optional pointer
-lock are configurable. Escape during a drag cancels; double-click/double-tap and
-idle Escape reset. Incoming values update the display without an event loop.
-
-When a controller supplies definitions, update shared numeric metadata with
-`parameters.setDefinitions(...)`; use `configure()` for presentation options.
-After changing a control's `parameterID`, register it again to update its route.
-
-This interface covers continuous and stepped numeric values. Drawing geometry,
-hit testing, relationships between parameters, and product-specific gestures
-remain application code. Canvas sizing, tick generation, and snapping policy are
-not part of this interface.
+Set `touch-action: none` on the drag surface. To synchronize with other controls,
+register it with `parameters.registerControl(amount)`. See the
+[custom canvas example](examples/custom-controls/) for hit testing, synchronization
+and cleanup, and the [API types](src/value-control.d.ts) for drag and editor options.
 
 ## Element notes
 
@@ -275,37 +233,13 @@ controller values update the displayed choice silently.
 `peaks = [mono]` or `peaks = [left, right]`. Decoding and peak generation
 are host policy.
 
-**`compost-spectrogram`** draws numbers that have already been produced by an
-audio analyser. A column is one vertical slice of the picture at one point in
-time. `appendColumns(values, { startTime, timeStep })` supplies those columns,
-and `frequencies` supplies the ascending centre frequency for each row.
-
-The Compost component copies the supplied data, keeps a bounded history,
-places each column by its timestamp, positions rows by frequency, maps values
-to colours, scrolls the visible `time-span`, and redraws at the rendered size.
-It does not open audio files, listen to a microphone, run an FFT, create Mel
-bands, choose a channel, smooth results or convert values to dB. The consuming
-app does that work and decides how many frequency rows to send.
-
-By default the newest column sits at the right edge. A live consumer can set
-`viewEndTime` from its audio clock on every display frame, allowing the picture
-to move smoothly between analysis columns. Holding that property steady freezes
-the view; setting it to `null` follows the newest column again.
-
-History retains at most four million scalar values or 65,536 columns. Large
-frequency arrays therefore retain fewer columns. `retainedTimeRange` reports
-the actual `{ startTime, endTime }` still available, so a consumer that needs a
-longer range can reduce its bin count or analysis cadence.
-
-Values may be amplitude, power, dB or another caller-defined quantity;
-`min-value` and `max-value` choose which values reach the ends of the colour
-ramp. `frequency-scale="mel"` positions the supplied Hz centres on a Mel axis;
-the consuming app still computes the Mel filterbank and chooses its band count.
-
-The default palette follows `Canvas` and `CanvasText`; `palette="magma"`,
-`"gray-r"` and `"coolwarm"` are built in. Set
-`--compost-spectrogram-background` and `--compost-spectrogram-ramp-0` through
-`--compost-spectrogram-ramp-4` for a custom palette.
+**`compost-spectrogram`** displays timestamped frequency columns from your
+analyser. Supply columns with `appendColumns(values, { startTime, timeStep })`
+and row frequencies with `frequencies`. It keeps a bounded history and handles
+scrolling and colour mapping; audio capture, FFT and unit conversion stay in the
+host. See the [example](examples/compost-spectrogram/) and
+[API types](src/components/compost-spectrogram.d.ts) for palettes, frequency scales
+and playback positioning.
 
 **`compost-audio-clip-editor`** wraps that waveform with clip metadata and
 editing. It has no gain control of its own: set `gain` (in dB) to the
@@ -346,10 +280,7 @@ it, Command/Ctrl+A selects the bounds within which all the clips lie.
 
 ## Working on it
 
-`npm run check` checks formatting and lint, `npm test` runs the unit tests,
-`npm run test:e2e` the Playwright suite,
-`npm run dev` serves the repo without caching. Every element has an example
-page under `examples/<element>/` with a live readout of its events;
-`node examples/check-example.mjs <element>` checks one headlessly. A
-conformance test keeps each element's `@attribute` tags and observed
-attributes in lockstep.
+`npm run dev` serves the examples in `examples/<element>/`.
+`npm run check` checks formatting and lint; `npm test` runs unit tests and
+`npm run test:e2e` runs browser tests. To check one example headlessly, run
+`node examples/check-example.mjs <element>`.
