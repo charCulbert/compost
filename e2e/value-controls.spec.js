@@ -278,6 +278,28 @@ test("custom controls remain usable at desktop and narrow widths", async ({
 	}
 });
 
+test("fast sub-threshold knob drags keep editing instead of resetting", async ({
+	page,
+}) => {
+	await page.goto("/examples/compost-knob/");
+	const control = page.locator("compost-knob").first();
+	const surface = control.locator(".dial");
+	const rect = await surface.boundingBox();
+	const centerX = rect.x + rect.width / 2;
+	const centerY = rect.y + rect.height / 2;
+
+	const readings = [];
+	for (let index = 0; index < 4; index += 1) {
+		await page.mouse.move(centerX, centerY);
+		await page.mouse.down();
+		await page.mouse.move(centerX, centerY - 2);
+		await page.mouse.up();
+		readings.push(await control.evaluate((element) => element.value));
+	}
+
+	expect(readings.at(-1)).toBeGreaterThan(readings[0]);
+});
+
 test("custom canvas redraws for dark mode", async ({ page }, testInfo) => {
 	await page.locator(".color-scheme-toggle").click();
 	await expect(page.locator("html")).toHaveAttribute(

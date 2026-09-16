@@ -208,6 +208,45 @@ test("relative drag accumulates sub-step motion and rebases on host values", () 
 	assert.equal(control.value, 8);
 });
 
+test("small relative edits are not taps or native double-click resets", () => {
+	const element = new FakeElement();
+	const control = createValueControl(element, {
+		value: 0.8,
+		resetValue: 0.5,
+		drag: { axis: "x", mode: "relative", distance: 100 },
+	});
+
+	control.startPointerDrag(pointerEvent(1, 0, 0));
+	dispatch(element.ownerDocument.defaultView, "pointermove", {
+		pointerId: 1,
+		clientX: 2,
+		clientY: 0,
+	});
+	dispatch(element.ownerDocument.defaultView, "pointerup", {
+		pointerId: 1,
+		clientX: 2,
+		clientY: 0,
+	});
+	assert.equal(control.value, 0.8200000000000001);
+
+	// A native dblclick following an edited drag must not reset it.
+	dispatch(element, "dblclick");
+	assert.equal(control.value, 0.8200000000000001);
+
+	control.startPointerDrag(pointerEvent(2, 0, 0));
+	dispatch(element.ownerDocument.defaultView, "pointermove", {
+		pointerId: 2,
+		clientX: 2,
+		clientY: 0,
+	});
+	dispatch(element.ownerDocument.defaultView, "pointerup", {
+		pointerId: 2,
+		clientX: 2,
+		clientY: 0,
+	});
+	assert.equal(control.value, 0.8400000000000001);
+});
+
 test("step quantization stays within the last legal value", () => {
 	const control = createValueControl(new FakeElement(), {
 		min: 0,
@@ -339,6 +378,31 @@ test("capture loss, configuration, disabled edits, and disposal settle gestures 
 	assert.equal(events.filter(([type]) => type === "parameter-end").length, 3);
 	assert.equal(element.getAttribute("role"), "group");
 	assert.equal(control.startPointerDrag(pointerEvent(10, 0, 0)), false);
+});
+
+test("position taps still select a value and double-tap resets", () => {
+	const element = new FakeElement();
+	const control = createValueControl(element, {
+		value: 0.2,
+		resetValue: 0.5,
+		drag: { axis: "x", mode: "position" },
+	});
+
+	control.startPointerDrag(pointerEvent(1, 80, 0));
+	dispatch(element.ownerDocument.defaultView, "pointerup", {
+		pointerId: 1,
+		clientX: 80,
+		clientY: 0,
+	});
+	assert.equal(control.value, 0.8);
+
+	control.startPointerDrag(pointerEvent(2, 80, 0));
+	dispatch(element.ownerDocument.defaultView, "pointerup", {
+		pointerId: 2,
+		clientX: 80,
+		clientY: 0,
+	});
+	assert.equal(control.value, 0.5);
 });
 
 test("pointer double-tap resets once and suppresses the following dblclick", () => {

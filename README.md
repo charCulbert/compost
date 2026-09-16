@@ -151,7 +151,9 @@ Right-click or long-press fires `<thing>-context` with
 
 Across the editors: Command/Ctrl inverts time snapping, Shift gives fine
 control on value drags and extends selection on item drags, Alt copies.
-Double-click resets a control; on touch, double-tap does.
+Double-click resets a control; on touch, double-tap does. A drag that
+changes a value never counts as a tap, so quick successive drags cannot be
+mistaken for a reset.
 
 Touch: one finger edits or selects, long-press opens context, two fingers
 pinch to zoom and pan. The note editor pinches horizontally for time and

@@ -362,6 +362,7 @@ export function createValueControl(element, options = {}) {
 				lastX: x,
 				lastY: y,
 				moved: false,
+				edited: false,
 				fineCandidate,
 				relative: drag.mode === "relative" || Boolean(event.shiftKey),
 				locked: false,
@@ -391,7 +392,7 @@ export function createValueControl(element, options = {}) {
 			refresh();
 
 			if (drag.mode === "position" && !fineCandidate && !event.shiftKey) {
-				editFromPosition(event);
+				editFromPosition(event, false);
 			}
 			if (
 				disposed ||
@@ -625,7 +626,16 @@ export function createValueControl(element, options = {}) {
 			: -finite(event.clientY, 0);
 	}
 
-	function editFromPosition(event) {
+	function editPointerValue(gesture, value, classifyAsDrag = true) {
+		const previousAppliedValue = gesture.lastAppliedValue;
+		control.editValue(value);
+		if (pointer !== gesture) return false;
+		if (classifyAsDrag && gesture.lastAppliedValue !== previousAppliedValue)
+			gesture.edited = true;
+		return true;
+	}
+
+	function editFromPosition(event, classifyAsDrag = true) {
 		const gesture = pointer;
 		const bounds = pointer?.target?.getBoundingClientRect?.();
 		if (!bounds) return;
@@ -637,8 +647,11 @@ export function createValueControl(element, options = {}) {
 		if (extent > 0) {
 			const position = clamp(offset / extent, 0, 1);
 			gesture.rawPosition = position;
-			control.editValue(normalisedPositionToValue(position, scaleOptions()));
-			if (pointer !== gesture) return;
+			editPointerValue(
+				gesture,
+				normalisedPositionToValue(position, scaleOptions()),
+				classifyAsDrag,
+			);
 		}
 	}
 
@@ -675,7 +688,8 @@ export function createValueControl(element, options = {}) {
 				0,
 				1,
 			);
-			control.editValue(
+			editPointerValue(
+				gesture,
 				normalisedPositionToValue(gesture.rawPosition, scaleOptions()),
 			);
 		}
@@ -710,7 +724,7 @@ export function createValueControl(element, options = {}) {
 			control.endGesture(true);
 			return;
 		}
-		if (!active.moved) {
+		if (!active.moved && !active.edited) {
 			const now = performance.now();
 			if (active.fineCandidate) {
 				lastClick = null;
@@ -728,7 +742,10 @@ export function createValueControl(element, options = {}) {
 				return;
 			}
 			lastClick = { time: now, x: active.startX, y: active.startY };
-		} else lastClick = null;
+		} else {
+			lastClick = null;
+			suppressDoubleClickUntil = performance.now() + DOUBLE_CLICK_MS;
+		}
 		control.endGesture();
 	}
 
@@ -1061,7 +1078,8 @@ export function createValueControl(element, options = {}) {
 			0,
 			1,
 		);
-		control.editValue(
+		editPointerValue(
+			gesture,
 			normalisedPositionToValue(gesture.rawPosition, scaleOptions()),
 		);
 	}
