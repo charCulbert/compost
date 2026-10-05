@@ -164,6 +164,8 @@ export class CompostWindow extends HTMLElement {
           --compost-window-close-color: currentColor;
           --compost-window-close-hover-color: currentColor;
           --compost-window-grip-color: color-mix(in srgb, currentColor 65%, transparent);
+          --compost-window-pin-active-color: var(--compost-accent, AccentColor);
+          --compost-window-pin-active-bg: color-mix(in srgb, var(--compost-window-pin-active-color) 16%, transparent);
           --compost-window-focus: currentColor;
           --compost-window-z-index: 900;
           position: fixed;
@@ -228,7 +230,8 @@ export class CompostWindow extends HTMLElement {
           font: inherit;
         }
 		.pin svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.35; }
-		.pin[aria-pressed="true"] { color: var(--compost-window-text); }
+		/* pinned has to read as on in either scheme, not one grey for another */
+		.pin[aria-pressed="true"] { color: var(--compost-window-pin-active-color); background: var(--compost-window-pin-active-bg); }
         /* whatever a host slots into the bar is a target too, not just the close box */
         ::slotted([slot="controls"]) {
           min-height: var(--compost-window-control-min, 0px);
