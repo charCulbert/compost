@@ -1705,6 +1705,232 @@ test("piano exposes wide key beds without clipping keys", async ({ page }) => {
 	expect(geometry.lastKeyRight).toBeLessThanOrEqual(geometry.scrollRight);
 });
 
+async function recordPianoEvents(piano) {
+	await piano.evaluate((element) => {
+		element.testEvents = [];
+		for (const type of ["note-down", "note-up"]) {
+			element.addEventListener(type, (event) =>
+				element.testEvents.push([type.slice(5), event.detail.note]),
+			);
+		}
+	});
+}
+
+async function takePianoEvents(piano) {
+	return piano.evaluate((element) => element.testEvents.splice(0));
+}
+
+test("piano places the computer keys from its range", async ({ page }) => {
+	await gotoAndWaitForCustomElements(page, "/examples/compost-piano/");
+	const piano = page.locator('compost-piano[data-option-target="piano"]');
+	await recordPianoEvents(piano);
+	for (const [rootNote, noteCount, expected] of [
+		[36, 61, 60],
+		[60, 25, 72],
+		[36, 25, 48],
+		[48, 25, 60],
+		[41, 32, 60],
+		[17, 61, 36],
+	]) {
+		await piano.evaluate(
+			(element, [root, count]) => {
+				element.setAttribute("root-note", String(root));
+				element.setAttribute("note-count", String(count));
+			},
+			[rootNote, noteCount],
+		);
+		await piano.focus();
+		await page.keyboard.press("a");
+		await page.keyboard.press("w");
+		expect(await takePianoEvents(piano)).toEqual([
+			["down", expected],
+			["up", expected],
+			["down", expected + 1],
+			["up", expected + 1],
+		]);
+	}
+
+	await page.keyboard.press("Shift+A");
+	await page.keyboard.press("z");
+	expect(await takePianoEvents(piano)).toEqual([]);
+});
+
+test("piano keys follow the 20px white-key pitch", async ({ page }) => {
+	await gotoAndWaitForCustomElements(page, "/examples/compost-piano/");
+	const geometry = await page.evaluate(() => {
+		const holder = document.createElement("div");
+		holder.style.cssText = "width: 2000px; font-size: 16px";
+		const piano = document.createElement("compost-piano");
+		piano.setAttribute("inline", "");
+		piano.setAttribute("root-note", "36");
+		piano.setAttribute("note-count", "25");
+		holder.append(piano);
+		document.body.append(holder);
+		const key = (note) =>
+			piano.shadowRoot.getElementById(`note${note}`).getBoundingClientRect();
+		const result = {
+			keyboardWidth: piano.keyboardWidth,
+			width: piano.getBoundingClientRect().width,
+			pitch: key(38).left - key(36).left,
+			blackInside: key(37).left > key(36).left && key(37).right < key(38).right,
+			blackShorter: key(37).height < key(36).height,
+		};
+		holder.style.fontSize = "32px";
+		result.scaledPitch = key(38).left - key(36).left;
+		result.scaledWidth = piano.getBoundingClientRect().width;
+		holder.remove();
+		return result;
+	});
+	expect(geometry.keyboardWidth).toBe(15 * 20 + 2);
+	expect(Math.abs(geometry.width - geometry.keyboardWidth)).toBeLessThan(1);
+	expect(geometry.pitch).toBeCloseTo(20, 1);
+	expect(geometry.blackInside).toBe(true);
+	expect(geometry.blackShorter).toBe(true);
+	expect(geometry.scaledPitch).toBeCloseTo(40, 1);
+	expect(
+		Math.abs(geometry.scaledWidth - geometry.keyboardWidth * 2),
+	).toBeLessThan(1);
+});
+
+test("piano mouse drags glide between keys and release on leaving", async ({
+	page,
+}) => {
+	await gotoAndWaitForCustomElements(page, "/examples/compost-piano/");
+	const piano = page.locator('compost-piano[data-option-target="piano"]');
+	await recordPianoEvents(piano);
+	const point = async (note, y = 0.8) => {
+		const box = await piano.locator(`#note${note}`).boundingBox();
+		return [box.x + box.width / 2, box.y + box.height * y];
+	};
+
+	await page.mouse.move(...(await point(60)));
+	expect(await takePianoEvents(piano)).toEqual([]);
+	await page.mouse.down();
+	await expect(piano.locator("#note60")).toHaveClass(/active/u);
+	await page.mouse.move(...(await point(62)));
+	await page.mouse.move(...(await point(61, 0.3)));
+	await page.mouse.up();
+	expect(await takePianoEvents(piano)).toEqual([
+		["down", 60],
+		["up", 60],
+		["down", 62],
+		["up", 62],
+		["down", 61],
+		["up", 61],
+	]);
+	expect(
+		await piano.evaluate((element) => element === document.activeElement),
+	).toBe(true);
+
+	await page.mouse.move(...(await point(64)));
+	await page.mouse.down();
+	const box = await piano.boundingBox();
+	await page.mouse.move(box.x + box.width / 2, box.y - 40);
+	expect(await takePianoEvents(piano)).toEqual([
+		["down", 64],
+		["up", 64],
+	]);
+	await page.mouse.up();
+	await page.mouse.move(...(await point(65)));
+	expect(await takePianoEvents(piano)).toEqual([]);
+});
+
+test("piano touches slide between keys and track each finger", async ({
+	page,
+}) => {
+	await gotoAndWaitForCustomElements(page, "/examples/compost-piano/");
+	const piano = page.locator('compost-piano[data-option-target="piano"]');
+	await recordPianoEvents(piano);
+	const prevented = await piano.evaluate((element) => {
+		const key = (note) => element.shadowRoot.getElementById(`note${note}`);
+		const touch = (identifier, note) => {
+			const box = key(note).getBoundingClientRect();
+			return {
+				identifier,
+				target: key(60),
+				clientX: box.left + box.width / 2,
+				clientY: box.bottom - 5,
+			};
+		};
+		const send = (type, touches) => {
+			const event = new Event(type, { bubbles: true, cancelable: true });
+			Object.defineProperty(event, "changedTouches", { value: touches });
+			touches[0].target.dispatchEvent(event);
+			return event.defaultPrevented;
+		};
+		const results = [];
+		results.push(send("touchstart", [{ ...touch(1, 60), target: key(60) }]));
+		results.push(send("touchstart", [{ ...touch(2, 67), target: key(67) }]));
+		results.push(send("touchmove", [touch(1, 64)]));
+		results.push(send("touchend", [touch(1, 64)]));
+		results.push(send("touchcancel", [{ ...touch(2, 67), target: key(67) }]));
+		return results;
+	});
+	expect(prevented).toEqual([true, true, true, true, true]);
+	expect(await takePianoEvents(piano)).toEqual([
+		["down", 60],
+		["down", 67],
+		["up", 60],
+		["down", 64],
+		["up", 64],
+		["up", 67],
+	]);
+});
+
+test("piano incoming MIDI lights keys silently and focus loss releases notes", async ({
+	page,
+}) => {
+	await gotoAndWaitForCustomElements(page, "/examples/compost-piano/");
+	const piano = page.locator('compost-piano[data-option-target="piano"]');
+	await recordPianoEvents(piano);
+
+	const lit = await piano.evaluate((element) => {
+		element.handleMIDIMessage([0x91, 64, 100]);
+		element.handleExternalMIDI(new Uint8Array([0x90, 65, 1]));
+		element.handleMIDIMessage((0x90 << 16) | (66 << 8) | 90);
+		element.handleMIDIMessage([0x90]);
+		element.handleMIDIMessage([0xb0, 64, 127]);
+		const before = [64, 65, 66].map((note) => element.isNoteActive(note));
+		element.handleMIDIMessage([0x80, 65, 0]);
+		element.handleMIDIMessage([0x90, 66, 0]);
+		return { before, after: [64, 65, 66].map((n) => element.isNoteActive(n)) };
+	});
+	expect(lit).toEqual({
+		before: [true, true, true],
+		after: [true, false, false],
+	});
+	await expect(piano.locator("#note64")).toHaveClass(/active/u);
+	expect(await takePianoEvents(piano)).toEqual([]);
+
+	await piano.focus();
+	await page.keyboard.down("a");
+	await page.keyboard.down("s");
+	await page.locator("[data-piano-root]").focus();
+	expect(await takePianoEvents(piano)).toEqual([
+		["down", 72],
+		["down", 74],
+		["up", 72],
+		["up", 74],
+	]);
+	await expect(piano.locator("#note64")).not.toHaveClass(/active/u);
+	await page.keyboard.up("a");
+	await page.keyboard.up("s");
+	expect(await takePianoEvents(piano)).toEqual([]);
+
+	await piano.focus();
+	await page.keyboard.down("d");
+	const events = await piano.evaluate((element) => {
+		element.allNotesOff();
+		element.allNotesOff();
+		return element.testEvents.splice(0);
+	});
+	expect(events).toEqual([
+		["down", 76],
+		["up", 76],
+	]);
+	await page.keyboard.up("d");
+});
+
 test("buttons expose real trigger and switch behavior", async ({ page }) => {
 	await gotoAndWaitForCustomElements(page, "/examples/compost-button/");
 	const ping = page.locator('compost-button[parameter-id="ping"]');

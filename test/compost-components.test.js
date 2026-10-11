@@ -291,33 +291,32 @@ test("an interrupted audio context resumes from the next user start gesture", as
 	assert.deepEqual(events, []);
 });
 
-test("piano touch drag transfers the active note between keys", () => {
+function pianoWithAttributes(attributes) {
 	const piano = Object.create(CompostPiano.prototype);
-	const events = [];
-	Object.assign(piano, {
-		touchNotes: new Map([[1, 60]]),
-		root: { elementFromPoint: (x) => ({ note: x < 20 ? 60 : 62 }) },
-		getNoteFromElement: (element) => element.note,
-		isPlayableNote: (note) => note >= 0,
-		addKeyboardNote: (note) => events.push(["down", note]),
-		removeKeyboardNote: (note) => events.push(["up", note]),
+	piano.getAttribute = (name) => attributes[name] ?? null;
+	return piano;
+}
+
+test("piano clamps and defaults its range", () => {
+	assert.deepEqual(pianoWithAttributes({}).config, {
+		noteCount: 61,
+		rootNote: 36,
+		keyMap:
+			"KeyA KeyW KeyS KeyE KeyD KeyF KeyT KeyG KeyY KeyH KeyU KeyJ KeyK KeyO KeyL KeyP Semicolon",
 	});
-	const event = {
-		cancelable: true,
-		changedTouches: [{ identifier: 1, clientX: 25, clientY: 10 }],
-		preventDefault() {
-			this.defaultPrevented = true;
-		},
-	};
+	const high = pianoWithAttributes({ "root-note": "200", "note-count": "50" });
+	assert.equal(high.config.rootNote, 127);
+	assert.equal(high.config.noteCount, 1);
+	const empty = pianoWithAttributes({ "root-note": "", "note-count": "x" });
+	assert.equal(empty.config.rootNote, 36);
+	assert.equal(empty.config.noteCount, 61);
 
-	piano.handleTouchMove(event);
-
-	assert.deepEqual(events, [
-		["up", 60],
-		["down", 62],
-	]);
-	assert.equal(piano.touchNotes.get(1), 62);
-	assert.equal(event.defaultPrevented, true);
+	const piano = pianoWithAttributes({ "root-note": "60", "note-count": "25" });
+	assert.equal(piano.isPlayableNote(60), true);
+	assert.equal(piano.isPlayableNote(84), true);
+	assert.equal(piano.isPlayableNote(85), false);
+	assert.equal(piano.isPlayableNote(59), false);
+	assert.equal(piano.isPlayableNote(60.5), false);
 });
 
 test("scope keeps signal acquisition, policy, and palette choices outside the display", () => {

@@ -15,12 +15,6 @@ export interface PianoNoteDetail {
  * @attribute inline - full-width inline layout
  */
 export class CompostPiano extends HTMLElement {
-	constructor(options?: {
-		naturalNoteWidth?: number;
-		accidentalWidth?: number;
-		accidentalPercentageHeight?: number;
-	});
-
 	/** The rendered keyboard's width in 16px reference units, set after each render. */
 	keyboardWidth: number;
 
