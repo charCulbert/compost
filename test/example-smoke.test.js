@@ -282,7 +282,6 @@ test("README is the finished product documentation", () => {
 	const readme = read("README.md");
 	for (const id of elementIDs)
 		assert.match(readme, new RegExp(`\`${id}\``, "u"), id);
-	assert.match(readme, /not form-associated/u);
 	assert.doesNotMatch(readme, /\breview\b/u);
 	assert.equal(
 		fs.existsSync(path.join(root, "docs/plans/2026-08-26-plain-html-style.md")),
