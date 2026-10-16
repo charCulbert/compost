@@ -662,6 +662,8 @@ export function createValueControl(element, options = {}) {
 	function handlePointerMove(event) {
 		if (!pointer || event.pointerId !== pointer.pointerID || pointer.locked)
 			return;
+		// No button down: the release happened where this page never saw it.
+		if (event.buttons === 0) return finishPointer(event);
 		const gesture = pointer;
 		const x = finite(event.clientX, gesture.lastX);
 		const y = finite(event.clientY, gesture.lastY);

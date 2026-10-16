@@ -361,6 +361,9 @@ export class CompostWindow extends HTMLElement {
 		this.header.addEventListener("pointercancel", (event) =>
 			this.endDrag(event),
 		);
+		this.header.addEventListener("lostpointercapture", (event) =>
+			this.endDrag(event),
+		);
 		this.grip.addEventListener("pointerdown", (event) =>
 			this.beginResize(event),
 		);
@@ -369,6 +372,9 @@ export class CompostWindow extends HTMLElement {
 		);
 		this.grip.addEventListener("pointerup", (event) => this.endResize(event));
 		this.grip.addEventListener("pointercancel", (event) =>
+			this.endResize(event),
+		);
+		this.grip.addEventListener("lostpointercapture", (event) =>
 			this.endResize(event),
 		);
 		this.addEventListener("pointerdown", () => this.raise());
@@ -676,6 +682,8 @@ export class CompostWindow extends HTMLElement {
 	/** @param {PointerEvent} event */
 	moveDrag(event) {
 		if (!this.drag || event.pointerId !== this.drag.pointerId) return;
+		// No button down: the release happened where this page never saw it.
+		if (event.buttons === 0) return this.endDrag(event);
 		this.moveTo(
 			this.drag.left + event.clientX - this.drag.x,
 			this.drag.top + event.clientY - this.drag.y,
@@ -711,6 +719,7 @@ export class CompostWindow extends HTMLElement {
 	/** @param {PointerEvent} event */
 	moveResize(event) {
 		if (!this.resize || event.pointerId !== this.resize.pointerId) return;
+		if (event.buttons === 0) return this.endResize(event);
 		const chrome = this.chromeSize();
 		const size = constrainedSize({
 			width: this.resize.width + event.clientX - this.resize.x,
