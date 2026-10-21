@@ -2,6 +2,10 @@ import { clamp, defineElement } from "../utils.js";
 
 let nextPopupID = 1;
 
+// WebKit leaves the Popover API off in apps built against an SDK older than
+// macOS 14, as many DAWs are; there the menu shows and hides with `hidden`.
+const hasPopover = typeof HTMLElement.prototype.showPopover === "function";
+
 export function popupPlacement({
 	trigger,
 	viewportWidth,
@@ -204,6 +208,7 @@ export class CompostPopup extends HTMLElement {
 
 		this.menu = /** @type {HTMLElement} */ (this.root.querySelector(".menu"));
 		this.menu.id = this.listID;
+		if (!hasPopover) this.menu.hidden = true;
 		this.menu.addEventListener("pointerdown", (event) => {
 			// keep focus where it was; the pick happens on the click
 			event.preventDefault();
@@ -236,7 +241,8 @@ export class CompostPopup extends HTMLElement {
 	}
 
 	get isOpen() {
-		return this.menu?.matches(":popover-open") ?? false;
+		if (!this.menu) return false;
+		return hasPopover ? this.menu.matches(":popover-open") : !this.menu.hidden;
 	}
 
 	get value() {
@@ -396,11 +402,8 @@ export class CompostPopup extends HTMLElement {
 		this.refresh();
 		this.anchorRequest = request;
 		if (!this.isOpen) {
-			try {
-				this.menu.showPopover();
-			} catch {
-				this.menu.hidden = false;
-			}
+			if (hasPopover) this.menu.showPopover();
+			else this.menu.hidden = false;
 			document.addEventListener(
 				"pointerdown",
 				this.handleDocumentPointerDown,
@@ -438,11 +441,8 @@ export class CompostPopup extends HTMLElement {
 			if (this.hasAttribute("open")) this.removeAttribute("open");
 			return;
 		}
-		try {
-			this.menu.hidePopover();
-		} catch {
-			this.menu.hidden = true;
-		}
+		if (hasPopover) this.menu.hidePopover();
+		else this.menu.hidden = true;
 		this.teardownListeners();
 		if (this.hasAttribute("open")) this.removeAttribute("open");
 		this.dispatchEvent(
