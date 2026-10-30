@@ -1781,7 +1781,7 @@ test("piano keys follow the 20px white-key pitch", async ({ page }) => {
 		holder.remove();
 		return result;
 	});
-	expect(geometry.keyboardWidth).toBe(15 * 20 + 2);
+	expect(geometry.keyboardWidth).toBe(15 * 20);
 	expect(Math.abs(geometry.width - geometry.keyboardWidth)).toBeLessThan(1);
 	expect(geometry.pitch).toBeCloseTo(20, 1);
 	expect(geometry.blackInside).toBe(true);

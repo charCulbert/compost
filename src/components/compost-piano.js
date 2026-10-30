@@ -16,7 +16,6 @@ const DEFAULT_KEY_MAP =
 // Geometry is worked out in reference units: 1 unit is 1px at a 16px host
 // font size, so a length of n units is written to CSS as n / 16 em.
 const UNITS_PER_EM = 16;
-const EDGE_MARGIN = 1;
 
 // Where each pitch class sits within its group of white keys. C, D and E form
 // one group; F, G, A and B the other.
@@ -314,10 +313,10 @@ export class CompostPiano extends HTMLElement {
 
 		const left = Math.min(...keys.map((key) => key.left));
 		const right = Math.max(...keys.map((key) => key.left + key.width));
-		for (const key of keys) key.left += EDGE_MARGIN - left;
+		for (const key of keys) key.left -= left;
 		return {
 			keys,
-			width: Math.ceil(right - left + 2 * EDGE_MARGIN),
+			width: right - left,
 		};
 	}
 
