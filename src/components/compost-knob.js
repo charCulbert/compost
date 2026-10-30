@@ -118,12 +118,12 @@ export class CompostKnob extends HTMLElement {
               transparent 270deg);
           -webkit-mask:
             radial-gradient(farthest-side,
-              transparent calc(100% - var(--knob-ring-stroke-width)),
-              #000 calc(100% - var(--knob-ring-stroke-width)));
+              transparent calc(100% - var(--knob-ring-stroke-width) - 1px),
+              #000 calc(100% - var(--knob-ring-stroke-width) - 0.5px));
           mask:
             radial-gradient(farthest-side,
-              transparent calc(100% - var(--knob-ring-stroke-width)),
-              #000 calc(100% - var(--knob-ring-stroke-width)));
+              transparent calc(100% - var(--knob-ring-stroke-width) - 1px),
+              #000 calc(100% - var(--knob-ring-stroke-width) - 0.5px));
           pointer-events: none;
         }
         :host([disabled]) .knob {
@@ -155,9 +155,22 @@ export class CompostKnob extends HTMLElement {
           box-sizing: border-box;
           position: absolute;
           inset: var(--knob-cap-inset);
-          border: 1px solid currentColor;
+          border: 1px solid transparent;
           border-radius: 50%;
           z-index: 1;
+        }
+        /* The cap's outline, on the ring's box so the two are always concentric. */
+        .dial::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          pointer-events: none;
+          background: radial-gradient(farthest-side,
+            transparent calc(100% - var(--knob-cap-inset) - 1.25px),
+            currentColor calc(100% - var(--knob-cap-inset) - 0.75px),
+            currentColor calc(100% - var(--knob-cap-inset) - 0.25px),
+            transparent calc(100% - var(--knob-cap-inset) + 0.25px));
         }
         .cap::before {
           content: "";
