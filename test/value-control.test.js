@@ -688,3 +688,66 @@ test("event reentrancy settles without stale edits or replacement gestures", () 
 	configureControl.dispose();
 	assert.equal(restarted, false);
 });
+
+test("the value editor closes on an unchanged entry and a field left alone changes nothing", () => {
+	const element = new FakeElement();
+	element.ownerDocument.createElement = () => {
+		const listeners = new Map();
+		return {
+			value: "",
+			setAttribute() {},
+			addEventListener(type, listener) {
+				listeners.set(type, listener);
+			},
+			focus() {},
+			select() {},
+			setSelectionRange() {},
+			dispatch(type) {
+				listeners.get(type)?.({ key: type, stopPropagation() {} });
+			},
+		};
+	};
+	const target = new FakeElement();
+	target.replaceChildren = (child) => {
+		target.child = child;
+	};
+	const control = createValueControl(element, {
+		parameterID: "edit",
+		min: 0,
+		max: 1,
+		value: 0.123,
+		editor: {
+			target,
+			format: () => "0.12",
+			parse: (text) => ({
+				valid: true,
+				value: text === "0.12" ? 0.12 : Number(text),
+			}),
+		},
+	});
+	const events = recordParameterEvents(element);
+
+	control.beginEdit();
+	assert.equal(target.child.value, "0.12");
+	target.child.dispatch("blur");
+	assert.equal(control.editing, false);
+	assert.equal(control.value, 0.123);
+	assert.equal(events.at(-1)[1].cancelled, true);
+
+	let draws = 0;
+	control.configure({
+		draw: () => {
+			draws += 1;
+		},
+	});
+	draws = 0;
+	control.beginEdit();
+	target.child.value = "0.123";
+	target.child.dispatch("blur");
+	assert.equal(control.value, 0.123);
+	assert.ok(
+		draws > 0,
+		"an unchanged value still redraws, which closes the field",
+	);
+	control.dispose();
+});

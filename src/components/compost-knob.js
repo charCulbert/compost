@@ -309,6 +309,18 @@ export class CompostKnob extends HTMLElement {
 		this.valueControlConfigurationKey = this.configurationKey();
 	}
 
+	/** See formatValue in compost-knob.d.ts. */
+	get formatValue() {
+		return this.valueFormatter ?? null;
+	}
+
+	set formatValue(format) {
+		this.valueFormatter = format;
+		this.valueControl?.configure({
+			formatValue: format ? (value) => format(value) : false,
+		});
+	}
+
 	valueControlOptions(value) {
 		return {
 			parameterID: this.parameterID,
@@ -326,6 +338,9 @@ export class CompostKnob extends HTMLElement {
 			resetValue: this.resetValue,
 			unit: this.unit,
 			text: this.valueText,
+			formatValue: this.valueFormatter
+				? (next) => this.valueFormatter(next)
+				: false,
 			displayFractionDigits: this.displayFractionDigits,
 			minLabel: this.minLabel,
 			maxLabel: this.maxLabel,
@@ -344,10 +359,16 @@ export class CompostKnob extends HTMLElement {
 				target: this.valueElement,
 				enabled: () => this.editable,
 				format: () => this.editableValueText(),
-				parse: (text) => ({
-					valid: text.trim() !== "" && Number.isFinite(Number(text)),
-					value: Number(text),
-				}),
+				parse: (text) => {
+					if (this.parseEditText) {
+						const value = this.parseEditText(text);
+						return { valid: Number.isFinite(value), value };
+					}
+					return {
+						valid: text.trim() !== "" && Number.isFinite(Number(text)),
+						value: Number(text),
+					};
+				},
 				ariaLabel: () => `Set ${this.label} value`,
 				triggers: { click: true, keydown: true },
 				onStateChange: (editing) => {
@@ -460,6 +481,7 @@ export class CompostKnob extends HTMLElement {
 	}
 
 	editableValueText() {
+		if (this.formatEditText) return String(this.formatEditText(this.value));
 		return formatNumber(this.value, this.step, this.displayFractionDigits);
 	}
 

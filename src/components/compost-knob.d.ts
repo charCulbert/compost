@@ -48,6 +48,12 @@ export class CompostKnob extends HTMLElement {
 	resetValue: number;
 	minLabel: string;
 	maxLabel: string;
+	/** The readout for a value, in place of the number and unit. */
+	formatValue: ((value: number) => string) | null;
+	/** The text the value field opens on, in place of the bare number. */
+	formatEditText: ((value: number) => string) | null;
+	/** Reads a typed entry: a number, or null to refuse it. In place of `Number(text)`. */
+	parseEditText: ((text: string) => number | null) | null;
 
 	get value(): number;
 	set value(value: number);

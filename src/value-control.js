@@ -964,7 +964,8 @@ export function createValueControl(element, options = {}) {
 		input.value = String(text);
 		if (editor.ariaLabel)
 			input.setAttribute("aria-label", String(editor.ariaLabel(control)));
-		const state = { input };
+		// A field left as it opened changes nothing, even if its text is a rounding of the value.
+		const state = { input, openedOn: selectValue ? input.value : null };
 		editorState = state;
 		editor.onStateChange?.(true, control);
 		const finish = (commit, restoreFocus = false) =>
@@ -996,8 +997,9 @@ export function createValueControl(element, options = {}) {
 			value: Number(state.input.value),
 		};
 		editor?.onStateChange?.(false, control);
-		if (commit && parsed.valid) {
+		if (commit && parsed.valid && state.input.value !== state.openedOn) {
 			control.editValue(parsed.value, "control");
+			refresh();
 			control.endGesture(false, "control");
 		} else {
 			refresh();
