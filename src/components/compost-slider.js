@@ -559,15 +559,6 @@ export class CompostSlider extends HTMLElement {
 	}
 
 	refreshEditableValue() {
-		if (!this.editable) {
-			this.output.removeAttribute("role");
-			this.output.removeAttribute("tabindex");
-			this.output.removeAttribute("aria-label");
-			this.output.removeAttribute("title");
-			return;
-		}
-
-		this.output.removeAttribute("role");
 		this.output.removeAttribute("tabindex");
 		this.output.removeAttribute("aria-label");
 		this.output.removeAttribute("title");

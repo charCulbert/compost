@@ -1755,6 +1755,16 @@ test("piano places the computer keys from its range", async ({ page }) => {
 	expect(await takePianoEvents(piano)).toEqual([]);
 });
 
+test("a slider's value is not a live region, editable or not", async ({
+	page,
+}) => {
+	await gotoAndWaitForCustomElements(page, "/examples/compost-slider/");
+	const slider = page.locator("compost-slider").first();
+	await expect(slider.locator("output")).toHaveAttribute("role", "none");
+	await slider.evaluate((element) => element.setAttribute("editable", ""));
+	await expect(slider.locator("output")).toHaveAttribute("role", "none");
+});
+
 test("piano keys follow the 20px white-key pitch", async ({ page }) => {
 	await gotoAndWaitForCustomElements(page, "/examples/compost-piano/");
 	const geometry = await page.evaluate(() => {
