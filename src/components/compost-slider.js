@@ -228,7 +228,7 @@ export class CompostSlider extends HTMLElement {
         }
       </style>
       <div class="panel" part="panel">
-        <span class="row" part="row"><span class="label" part="label"></span><output part="value"></output></span>
+        <span class="row" part="row"><span class="label" part="label"></span><output part="value" role="none"></output></span>
         <div class="range-input" part="input" aria-hidden="true">
           <span class="track" part="track"></span>
           <span class="fill" part="fill"></span>
