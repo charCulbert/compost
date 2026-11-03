@@ -29,6 +29,7 @@ export type { ParameterEventDetail } from "../utils.js";
  * @attribute parameter-kind - 'continuous', 'discrete' or 'trigger' override
  * @attribute disabled
  * @attribute pointer-lock - locks the pointer during drags so it cannot leave the knob
+ * @attribute sweep - degrees the pointer turns from min to max, centred on the top (default 270)
  */
 export class CompostKnob extends HTMLElement {
 	name: string;
@@ -48,6 +49,7 @@ export class CompostKnob extends HTMLElement {
 	resetValue: number;
 	minLabel: string;
 	maxLabel: string;
+	sweep: number;
 	/** The readout for a value, in place of the number and unit. */
 	formatValue: ((value: number) => string) | null;
 	/** The text the value field opens on, in place of the bare number. */

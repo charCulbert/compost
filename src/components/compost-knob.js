@@ -28,6 +28,7 @@ export class CompostKnob extends HTMLElement {
 			"max-label",
 			"disabled",
 			"pointer-lock",
+			"sweep",
 		];
 	}
 
@@ -52,6 +53,7 @@ export class CompostKnob extends HTMLElement {
 		this.resetValue = 0.5;
 		this.minLabel = "";
 		this.maxLabel = "";
+		this.sweep = 270;
 		this.inputID = `compost-knob-${nextKnobID++}`;
 		this.labelID = `${this.inputID}-label`;
 		this.lastUpdateSource = "control";
@@ -98,6 +100,7 @@ export class CompostKnob extends HTMLElement {
         .dial {
           --arc-ratio: 0;
           --arc: 0deg;
+          --sweep: 270deg;
           width: calc(var(--knob-dial-size) * var(--knob-scale));
           height: calc(var(--knob-dial-size) * var(--knob-scale));
           border-radius: 50%;
@@ -112,10 +115,10 @@ export class CompostKnob extends HTMLElement {
           inset: 0;
           border-radius: 50%;
           background:
-            conic-gradient(from -135deg,
+            conic-gradient(from calc(var(--sweep) / -2),
               var(--_accent) 0deg var(--arc),
-              var(--_track) var(--arc) 270deg,
-              transparent 270deg);
+              var(--_track) var(--arc) var(--sweep),
+              transparent var(--sweep));
           -webkit-mask:
             radial-gradient(farthest-side,
               transparent calc(100% - var(--knob-ring-stroke-width) - 1px),
@@ -308,6 +311,8 @@ export class CompostKnob extends HTMLElement {
 		this.resetValue = numberAttr(this, "reset-value", this.resetValue);
 		this.minLabel = this.getAttribute("min-label") ?? "";
 		this.maxLabel = this.getAttribute("max-label") ?? "";
+		this.sweep = Math.min(360, Math.max(0, numberAttr(this, "sweep", 270)));
+		this.refresh();
 		const value = numberAttr(this, "value", this.value);
 		if (!this.valueControl) {
 			this.disconnectedValue = value;
@@ -547,8 +552,9 @@ export class CompostKnob extends HTMLElement {
 		const normalised = state.position;
 		const arcRatio = Math.min(1, Math.max(0, normalised));
 		this.dial.style.setProperty("--arc-ratio", String(arcRatio));
-		this.dial.style.setProperty("--arc", `${arcRatio * 270}deg`);
-		this.cap.style.transform = `rotate(${-135 + normalised * 270}deg)`;
+		this.dial.style.setProperty("--sweep", `${this.sweep}deg`);
+		this.dial.style.setProperty("--arc", `${arcRatio * this.sweep}deg`);
+		this.cap.style.transform = `rotate(${(normalised - 0.5) * this.sweep}deg)`;
 		this.labelElement.textContent = this.label;
 		this.labelElement.id = this.labelID;
 		if (!this.isEditingValue) {
